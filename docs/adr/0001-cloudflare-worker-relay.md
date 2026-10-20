@@ -13,6 +13,7 @@ Mac 上的收集器需要把用量資料送到 iPhone。限制：不使用付費
 |---|---|---|
 | iCloud Drive 檔案 | 不用架伺服器 | iOS App 讀 iCloud 需 iCloud capability，免費帳號不支援 |
 | Mac 本機 HTTP + Tailscale | 資料不經第三方 | Mac 關機就讀不到；手機需裝 VPN |
+| Secret GitHub Gist（[intelQong 的做法](../04-related-work.md#5-中繼方案的補充)） | 不需額外服務帳號 | 取得連結者皆可讀；無法分開讀寫權限 |
 | **Cloudflare Worker + KV** | 免費、隨處可讀、Mac 關機仍有最後一筆 | 多一個部署元件，需處理驗證 |
 
 ## 決定

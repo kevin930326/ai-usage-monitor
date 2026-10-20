@@ -44,6 +44,7 @@
 
 ```json
 {
+  "schema_version": 1,
   "updated_at": "2026-10-20T09:30:00Z",
   "providers": {
     "claude": {
@@ -65,6 +66,7 @@
 }
 ```
 
+- `schema_version`：欄位有不相容變更時遞增，iOS 端遇到不支援的版本就提示更新 App（FR-13，v0.2 實作）。
 - `resets_at` 存絕對時間（UTC ISO 8601），iOS 端用 `Text(date, style: .relative)` 自動倒數。
 - 失敗的 provider：`windows` 為空陣列、`error` 為簡短訊息。
 
