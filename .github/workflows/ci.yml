@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# 同一個 PR 有新 push 時取消舊的 run，避免佔用 macOS runner 排隊名額。
+# main 的 push 以 run_id 分組，每次都獨立執行、不會被取消。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   collector:
     name: collector (Python ${{ matrix.python }})
