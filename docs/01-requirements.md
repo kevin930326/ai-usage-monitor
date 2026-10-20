@@ -68,6 +68,15 @@
 
 完全不依賴 Mac 的雲端收集方案仍在評估中，見 [ADR-0003](adr/0003-cloud-collector.md)。
 
+### 3.4 Apple Watch
+
+| ID | 需求 | 優先度 | 里程碑 |
+|---|---|---|---|
+| FR-27 | iPhone 的 Live Activity 出現在 Apple Watch 智慧型堆疊，提供手錶專用的精簡版面，顯示最吃緊的額度 | Should | v0.4 |
+| FR-28 | 錶面複雜功能：顯示最吃緊額度的剩餘 % 與分級顏色（圓形、矩形、單行三種尺寸） | Could | v1.4 |
+| FR-29 | 手錶 App：列出所有服務的可見額度與重置倒數 | Could | v1.4 |
+| FR-30 | 手錶從 iPhone 取得中繼網址與讀取密鑰（WatchConnectivity），不需在手錶上輸入 | Could | v1.4 |
+
 ## 4. 非功能需求
 
 | ID | 需求 |
@@ -75,10 +84,10 @@
 | NFR-1 安全 | OAuth token 不得離開 Mac；repo 內不得含任何密鑰 |
 | NFR-2 安全 | 中繼 API 讀寫使用不同密鑰 |
 | NFR-3 成本 | 全部使用免費方案（免費 Apple ID、Cloudflare 免費額度） |
-| NFR-4 相容 | iOS 17 以上（互動式 Live Activity 需要） |
+| NFR-4 相容 | iOS 17 以上（互動式 Live Activity 需要）；watchOS 11 以上（Live Activity 顯示於手錶需要） |
 | NFR-5 維護 | 每家服務為獨立 provider，API 變動只需修改單一模組 |
 | NFR-6 透明 | README 提供隱私與安全章節，列出所有上傳的資料與網路請求 |
-| NFR-7 重用 | iOS 與 Mac 共用同一個 Swift Package（資料模型、解析、顏色規則） |
+| NFR-7 重用 | iOS、watchOS 與 Mac 共用同一個 Swift Package（資料模型、解析、顏色規則） |
 | NFR-8 耗能 | Mac App 的動畫只在面板開啟時執行，關閉時不佔 CPU／GPU |
 
 ## 5. 已知限制
