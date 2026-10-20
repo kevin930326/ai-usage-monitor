@@ -25,6 +25,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [系統架構](docs/02-architecture.md) | 元件、資料格式、失敗處理 |
 | [開發流程](docs/03-development-workflow.md) | 分支、commit、PR 規範 |
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
+| [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 
 ## 專案結構
@@ -33,7 +34,14 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 collector/   Mac 端用量收集器 (Python)
 relay/       Cloudflare Worker 中繼 API
 apple/       UsageKit 共用套件、iOS App + Live Activity、Mac 選單列 App、Apple Watch App
-docs/        需求、架構、ADR
+fixtures/    三個元件測試共用的範例 usage.json
+scripts/     verify-all.sh：一次跑完所有測試與 Debug／Release 建置
+docs/        需求、架構、ADR、手動測試清單
+```
+
+```bash
+scripts/verify-all.sh              # 全部測試 + iOS／Mac／手錶的 Debug 與 Release 建置 + Release 不含 Debug 程式碼的檢查
+SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 測試
 ```
 
 ## 隱私與安全
