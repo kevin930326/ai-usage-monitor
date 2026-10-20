@@ -14,7 +14,7 @@ struct LockScreenActivityView: View {
     private var stale: Bool { systemStale || state.isStale(at: now) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             if let tightest = state.tightest(at: now) {
                 TightestHeader(item: tightest, mode: state.mode, stale: stale, now: now)
             }
@@ -23,7 +23,8 @@ struct LockScreenActivityView: View {
             }
             ActivityFooter(updatedAt: state.updatedAt, stale: stale)
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 
@@ -35,23 +36,22 @@ struct TightestHeader: View {
     let now: Date
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
+        // 單行標題，讓整張卡片維持在鎖定畫面約 160pt 的高度內
+        HStack(alignment: .center, spacing: 10) {
+            Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
+                .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(ActivityStyle.tint(item.window, stale: stale, now: now))
+            VStack(alignment: .leading, spacing: 0) {
                 Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
-                    .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(ActivityStyle.tint(item.window, stale: stale, now: now))
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(mode.label)
+                    .font(.caption.weight(.semibold))
+                Text("\(mode.label) · 最吃緊")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                ResetLabel(window: item.window, now: now)
-                    .font(.caption)
             }
+            Spacer()
+            ResetLabel(window: item.window, now: now)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -93,7 +93,7 @@ struct MiniWindowGauge: View {
     private var pct: Double { window.displayedPct(mode, at: now) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Text(window.label)
                     .foregroundStyle(.secondary)
@@ -106,7 +106,7 @@ struct MiniWindowGauge: View {
             ProgressView(value: pct, total: 100)
                 .tint(ActivityStyle.tint(window, stale: stale, now: now))
             ResetLabel(window: window, now: now)
-                .font(.system(size: 10))
+                .font(.system(size: 9))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
