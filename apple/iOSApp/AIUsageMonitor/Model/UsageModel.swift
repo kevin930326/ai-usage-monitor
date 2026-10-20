@@ -13,10 +13,16 @@ final class UsageModel {
     private(set) var isStartingActivity = false
 
     var relayURL: String {
-        didSet { UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey) }
+        didSet {
+            UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey)
+            WatchSettingsSync.shared.send(url: relayURL, token: readToken)
+        }
     }
     var readToken: String {
-        didSet { KeychainStore.write(readToken, account: UsageSource.readTokenAccount) }
+        didSet {
+            KeychainStore.write(readToken, account: UsageSource.readTokenAccount)
+            WatchSettingsSync.shared.send(url: relayURL, token: readToken)
+        }
     }
     /// 已用／剩餘（FR-17），同時套用到 Live Activity。
     var displayMode: UsageDisplayMode {
