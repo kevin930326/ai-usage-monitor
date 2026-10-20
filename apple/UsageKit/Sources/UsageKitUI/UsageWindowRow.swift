@@ -46,6 +46,8 @@ public struct UsageWindowRow: View {
                 (Text("重置 ") + Text(resetsAt, style: .relative))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    // 最大字級時換行，不要截成「重置 1小時39…」
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .accessibilityElement(children: .combine)

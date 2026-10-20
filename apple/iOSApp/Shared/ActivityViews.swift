@@ -69,6 +69,9 @@ struct ProviderActivityRow: View {
         HStack(alignment: .top, spacing: 10) {
             Text(provider.displayName)
                 .font(.caption.weight(.semibold))
+                // 最大字級時縮小，不要在字中間換行（「Claud／e」）
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
                 .frame(width: 52, alignment: .leading)
             if let error = provider.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
