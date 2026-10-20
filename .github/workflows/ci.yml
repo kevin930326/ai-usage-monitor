@@ -32,6 +32,20 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest -v
 
+  usagekit:
+    name: UsageKit (Swift)
+    # macOS runner 經常排不到（容量不足被取消），改用 Linux 容器；
+    # SwiftUI 元件只在 Apple 平台編譯，由本機建置 iOS App 確認
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    defaults:
+      run:
+        working-directory: apple/UsageKit
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test
+
   relay:
     name: relay (Worker)
     runs-on: ubuntu-latest
