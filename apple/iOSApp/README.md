@@ -13,6 +13,17 @@
 
 配對的 Apple Watch 會在智慧型堆疊顯示同一張卡片，使用手錶專用的精簡版面（`WatchActivityView`，只顯示最吃緊的一項，FR-27）。這需要 `supplementalActivityFamilies`（iOS 18 API），所以 Widget 擴充的最低支援是 iOS 18；App 本身仍可在 iOS 17 執行，但不會出現 Live Activity。
 
+## 捷徑：讓卡片整天顯示
+
+Live Activity 最長 8 小時。App 提供捷徑動作「重新啟動用量監看」（`RestartUsageActivityIntent`），會結束舊卡片、抓最新資料後開一張新的，不需要打開 App。安裝 App 後就會出現在捷徑 App，也可以對 Siri 說「重新啟動 AI 用量」。
+
+設定定時自動化（在 iPhone 上操作）：
+
+1. 打開「捷徑」App →「自動化」→ 右上角「+」
+2. 選「特定時間」，例如 08:00，重複「每天」，選「立即執行」
+3. 加入動作「重新啟動用量監看」
+4. 再建立一個 16:00 的相同自動化，兩張卡片就能涵蓋 08:00–24:00
+
 讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。
 
 ## 建置
@@ -58,6 +69,8 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 | `error` | Codex 失敗、Claude 正常 |
 | `reset` | Claude 5 小時額度的重置時間已過 |
 | `used` | 顯示已用 % |
+
+另外設定 `AUM_DEMO_ACTION=restart` 時，開卡一秒後會再執行一次捷徑動作，並把前後的卡片 ID 寫到 `Documents/restart-log.json`。
 
 ```bash
 SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
