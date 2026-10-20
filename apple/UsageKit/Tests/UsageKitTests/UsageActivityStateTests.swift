@@ -103,6 +103,33 @@ import Testing
         #expect(try state.encodedSize() < UsageActivityState.maxEncodedBytes)
     }
 
+    @Test func encodedStateWithEveryCollectorWindowFitsWithHeadroom() throws {
+        // 收集器能產生的所有額度：Claude 5 小時、每週與各模型每週上限（假設全部改為可見），
+        // Codex 主要與次要視窗；每個服務都附最長的錯誤訊息。
+        // ActivityKit 的 4KB 包含固定屬性（UsageActivityAttributes），預留 512 bytes。
+        let models = ["Opus", "Sonnet", "Fable", "Haiku", "Opus Plan"]
+        let resets = Date(timeIntervalSince1970: 1_800_000_000)
+        let claude = ProviderUsage(
+            plan: "Max 20x",
+            error: String(repeating: "錯", count: 500),
+            windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 99.9, resetsAt: resets),
+                      UsageWindow(id: "weekly", label: "每週", usedPct: 99.9, resetsAt: resets)]
+                + models.map { UsageWindow(id: "weekly_\($0.lowercased())", label: "每週 \($0)", usedPct: 99.9, resetsAt: resets) }
+        )
+        let codex = ProviderUsage(
+            plan: "Enterprise",
+            error: String(repeating: "錯", count: 500),
+            windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 99.9, resetsAt: resets),
+                      UsageWindow(id: "weekly", label: "每週", usedPct: 99.9, resetsAt: resets)]
+        )
+        let snapshot = UsageSnapshot(updatedAt: resets, providers: ["claude": claude, "codex": codex])
+        let state = UsageActivityState(snapshot: snapshot, mode: .remaining)
+        #expect(state.providers.flatMap(\.windows).count == 9)
+        let size = try state.encodedSize()
+        print("UsageActivityState worst-case encoded size: \(size) bytes")
+        #expect(size < UsageActivityState.maxEncodedBytes - 512, "encoded \(size) bytes")
+    }
+
     @Test func codableRoundTrip() throws {
         let state = UsageActivityState(snapshot: snap, mode: .used)
         let data = try JSONEncoder().encode(state)
