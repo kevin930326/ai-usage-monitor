@@ -9,20 +9,22 @@
 | Live Activity（鎖定畫面） | 最吃緊的一項大字顯示、各服務各額度的進度條與重置倒數、更新時間與「更新」按鈕；過期資料轉灰並標示「資料已過期」；單一服務失敗只在該列顯示錯誤；重置時間已過顯示「已重置」 |
 | 動態島 | 精簡：服務標示（Claude「CL」、Codex「CX」）+ 最吃緊的百分比；展開：與鎖定畫面相同的內容 |
 
-主畫面的「Live Activity」區塊可開始、更新、結束卡片。卡片上的「更新」按鈕是 `RefreshUsageIntent`（LiveActivityIntent），由系統在 App 程序中執行，不需要打開 App。Live Activity 最長顯示 8 小時，之後需要從 App 重新開始。
+主畫面的「Live Activity」區塊可開始、更新、結束卡片。卡片上的「更新」按鈕是 `RefreshUsageIntent`（LiveActivityIntent），由系統在 App 程序中執行，不需要打開 App。Live Activity 最長顯示 8 小時，之後可從 App 或下方的捷徑重新開始。
 
 配對的 Apple Watch 會在智慧型堆疊顯示同一張卡片，使用手錶專用的精簡版面（`WatchActivityView`，只顯示最吃緊的一項，FR-27）。這需要 `supplementalActivityFamilies`（iOS 18 API），所以 Widget 擴充的最低支援是 iOS 18；App 本身仍可在 iOS 17 執行，但不會出現 Live Activity。
 
 ## 捷徑：讓卡片整天顯示
 
-Live Activity 最長 8 小時。App 提供捷徑動作「重新啟動用量監看」（`RestartUsageActivityIntent`），會結束舊卡片、抓最新資料後開一張新的，不需要打開 App。安裝 App 後就會出現在捷徑 App，也可以對 Siri 說「重新啟動 AI 用量」。
+Live Activity 最長 8 小時。App 提供捷徑動作「重新啟動用量監看」（`RestartUsageActivityIntent`），會抓最新資料、開一張新卡片，成功後才結束舊卡片（抓資料或開卡失敗時舊卡片保留），不需要打開 App。安裝 App 後就會出現在捷徑 App，也可以對 Siri 說「重新啟動 AI 用量」。
 
-設定定時自動化（在 iPhone 上操作）：
+設定定時自動化（在 iPhone 上操作，與 [ADR-0002](../../docs/adr/0002-shortcut-restart-live-activity.md) 相同為 3 個、間隔 ≤ 8 小時）：
 
-1. 打開「捷徑」App →「自動化」→ 右上角「+」
-2. 選「特定時間」，例如 08:00，重複「每天」，選「立即執行」
+1. 打開「捷徑」App →「自動化」→ 右上角「+」（還沒有任何自動化時是「新增自動化」按鈕）
+2. 選「特定時間」07:00，重複「每天」，選「立即執行」，並關閉「執行時通知」（否則每次都會跳出橫幅）
 3. 加入動作「重新啟動用量監看」
-4. 再建立一個 16:00 的相同自動化，兩張卡片就能涵蓋 08:00–24:00
+4. 以相同方式建立 15:00 與 23:00 兩個自動化，三張卡片接力即可整天顯示
+
+即使從多工畫面關閉 App，自動化仍會在背景執行。重新開機後尚未解鎖前，Keychain 中的讀取密鑰無法讀取，該次自動化會失敗、舊卡片保留，解鎖後下一次自動化即恢復。iOS 17 不支援（Widget 擴充需要 iOS 18），捷徑會回報「Live Activity 需要 iOS 18 以上」。
 
 讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。
 

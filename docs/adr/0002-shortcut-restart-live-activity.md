@@ -17,7 +17,7 @@ iOS 的 Live Activity 最長約 8 小時後會被系統結束。希望卡片能�
 
 ## 決定
 
-App 提供 `RestartUsageActivityIntent`（結束舊卡片 → 抓資料 → 開新卡片），使用者在捷徑 App 建立 3 個間隔 ≤ 8 小時的定時自動化。數字更新由卡片上的 `RefreshUsageIntent` 按鈕處理；重置倒數由 SwiftUI 依絕對時間自動計算。
+App 提供 `RestartUsageActivityIntent`（抓資料 → 開新卡片 → 結束舊卡片；任一步失敗時保留舊卡片），使用者在捷徑 App 建立 3 個間隔 ≤ 8 小時的定時自動化。數字更新由卡片上的 `RefreshUsageIntent` 按鈕處理；重置倒數由 SwiftUI 依絕對時間自動計算。
 
 ## 影響
 
