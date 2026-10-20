@@ -156,6 +156,47 @@ extension ActivityFooter where Trailing == EmptyView {
     }
 }
 
+/// Apple Watch 智慧型堆疊的精簡版面：只顯示最吃緊的一項（FR-27）。
+struct WatchActivityView: View {
+    let state: UsageActivityState
+    var systemStale = false
+    var now: Date = .now
+
+    private var stale: Bool { systemStale || state.isStale(at: now) }
+
+    var body: some View {
+        if let item = state.tightest(at: now) {
+            let pct = item.window.displayedPct(state.mode, at: now)
+            HStack(spacing: 8) {
+                Gauge(value: pct, in: 0...100) {
+                    EmptyView()
+                } currentValueLabel: {
+                    Text("\(Int(pct.rounded()))")
+                        .font(.system(.body, design: .rounded).weight(.bold).monospacedDigit())
+                }
+                .gaugeStyle(.accessoryCircularCapacity)
+                .tint(ActivityStyle.tint(item.window, stale: stale, now: now))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(ProviderInfo.displayName(item.provider)) \(item.window.label)")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(state.mode.label) \(Int(pct.rounded()))%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    ResetLabel(window: item.window, now: now)
+                        .font(.caption2)
+                        .foregroundStyle(stale ? .orange : .secondary)
+                }
+            }
+            .padding(8)
+        } else {
+            Label("沒有資料", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .padding(8)
+        }
+    }
+}
+
 enum ActivityStyle {
     /// 依剩餘比例上色（FR-16）；資料過期一律灰色（FR-11）。
     static func tint(_ window: UsageWindow, stale: Bool, now: Date) -> Color {
