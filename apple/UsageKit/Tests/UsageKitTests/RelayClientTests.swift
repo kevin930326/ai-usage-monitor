@@ -61,10 +61,15 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         await #expect(throws: RelayError.decoding(.unsupportedSchema(2))) { try await client().fetch() }
     }
 
-    @Test(arguments: ["http://insecure.example", "", "https://"])
+    @Test(arguments: ["http://insecure.example", "", "https://", "  https:///  "])
     func rejectsInvalidURLs(url: String) {
         #expect(throws: RelayError.invalidURL) {
             try RelayClient(urlString: url, readToken: "t")
         }
+    }
+
+    @Test(arguments: ["relay.example.dev", "relay.example.dev/", "https://relay.example.dev//", " relay.example.dev "])
+    func normalizesUserInput(url: String) throws {
+        #expect(try RelayClient(urlString: url, readToken: "t").baseURL.absoluteString == "https://relay.example.dev")
     }
 }

@@ -35,11 +35,15 @@ public struct RelayClient: Sendable {
     /// 接受使用者輸入的網址字串，補上 https:// 並去掉結尾斜線。
     public init(urlString: String, readToken: String, session: URLSession = .shared) throws {
         var s = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
-        while s.hasSuffix("/") { s.removeLast() }
+        // 先補 scheme 再去斜線，否則 "https://" 會被削成 "https:" 再補成 "https://https:"
         if !s.contains("://") { s = "https://" + s }
-        guard let url = URL(string: s), url.scheme == "https", url.host() != nil else {
+        guard var components = URLComponents(string: s),
+              components.scheme == "https",
+              let host = components.host, !host.isEmpty else {
             throw RelayError.invalidURL
         }
+        while components.path.hasSuffix("/") { components.path.removeLast() }
+        guard let url = components.url else { throw RelayError.invalidURL }
         self.init(baseURL: url, readToken: readToken, session: session)
     }
 
