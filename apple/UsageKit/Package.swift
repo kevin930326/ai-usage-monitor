@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "UsageKit",
     defaultLocalization: "zh-Hant",
-    platforms: [.iOS(.v17), .macOS(.v14)],
+    platforms: [.iOS(.v17), .macOS(.v14), .watchOS(.v11)],
     products: [
         .library(name: "UsageKit", targets: ["UsageKit"]),
         .library(name: "UsageKitUI", targets: ["UsageKitUI"]),
