@@ -68,7 +68,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 |---|---|
 | 錶面複雜功能 | WidgetKit `accessoryCircular`／`accessoryRectangular`／`accessoryInline`，顯示最吃緊額度的剩餘 % 與顏色（FR-28） |
 | 手錶 App | 列出所有可見額度與重置倒數（FR-29） |
-| 設定同步 | iPhone App 以 WatchConnectivity 傳送中繼網址與讀取密鑰，手錶存入自己的 Keychain（FR-30） |
+| 設定同步 | iPhone App 以 WatchConnectivity 的 application context 傳送中繼網址與讀取密鑰，手錶存入自己的 Keychain（FR-30）；系統會在兩端另存最後一份 context |
 
 - 資料來源：手錶直接呼叫中繼 `GET /usage`（透過 iPhone 或 Wi-Fi 連網），使用 UsageKit 的 `RelayClient`。
 - 複雜功能的更新時機由 watchOS 決定；重置倒數依絕對時間在手錶上自行計算。
