@@ -1,0 +1,13 @@
+name = "ai-usage-relay"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# 部署前先建立 KV：npx wrangler kv namespace create USAGE_KV
+# 再把輸出的 id 填到下面
+[[kv_namespaces]]
+binding = "USAGE_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# READ_TOKEN / WRITE_TOKEN 用 secret 設定，不寫在這裡：
+#   npx wrangler secret put READ_TOKEN
+#   npx wrangler secret put WRITE_TOKEN
