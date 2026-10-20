@@ -36,8 +36,8 @@ window.barTone(stale: false, at: .now)   // .provider / .critical / .stale（FR-
 ```bash
 swift test   # 需要 Xcode（Swift Testing）；只有 Command Line Tools 時可用 swift build 確認編譯
 
-# 在 Linux 容器中執行（與 CI 相同）
-docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2 swift test
+# 在 Linux 容器中執行（與 CI 相同）；掛載整個 repo，因為 FixtureTests 會讀根目錄的 fixtures/
+docker run --rm -v "$PWD/../..":/repo -w /repo/apple/UsageKit swift:6.2 swift test
 ```
 
 CI 在 Linux 的 `swift:6.2` 容器中執行。Linux 沒有 SwiftUI，`UsageKitUI` 以 `#if canImport(SwiftUI)` 包住，在 Linux 上會編譯成空模組；畫面元件由建置 iOS App 確認。

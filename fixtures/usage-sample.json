@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-21T03:00:00Z",
+  "providers": {
+    "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "5 小時",
+          "used_pct": 62.5,
+          "resets_at": "2026-10-21T03:30:00Z",
+          "hidden": false
+        },
+        {
+          "id": "weekly",
+          "label": "每週",
+          "used_pct": 35.0,
+          "resets_at": "2026-10-24T03:00:00Z",
+          "hidden": false
+        },
+        {
+          "id": "weekly_opus",
+          "label": "每週 Opus",
+          "used_pct": 97.0,
+          "resets_at": "2026-10-24T03:00:00Z",
+          "hidden": true
+        },
+        {
+          "id": "weekly_fable",
+          "label": "每週 Fable",
+          "used_pct": 0.0,
+          "resets_at": null,
+          "hidden": true
+        }
+      ]
+    },
+    "codex": {
+      "plan": null,
+      "error": "token 過期，請在 Mac 重新登入 Codex",
+      "windows": []
+    }
+  }
+}
