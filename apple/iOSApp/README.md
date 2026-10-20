@@ -26,7 +26,7 @@ Live Activity 最長 8 小時。App 提供捷徑動作「重新啟動用量監�
 
 即使從多工畫面關閉 App，自動化仍會在背景執行。重新開機後尚未解鎖前，Keychain 中的讀取密鑰無法讀取，該次自動化會失敗、舊卡片保留，解鎖後下一次自動化即恢復。iOS 17 不支援（Widget 擴充需要 iOS 18），捷徑會回報「Live Activity 需要 iOS 18 以上」。
 
-讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。
+讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。儲存設定時會以 WatchConnectivity 傳給已安裝的 [Apple Watch App](../WatchApp/)。
 
 ## 建置
 
