@@ -6,11 +6,10 @@ import WidgetKit
 
 struct UsageLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        // FR-27 手錶精簡版面需要 `.supplementalActivityFamilies([.small])`（iOS 18 API）。
-        // 部署目標為 iOS 17 時無法以 #available 條件套用（WidgetConfiguration 不支援分支），
-        // 因此暫不開啟；watchOS 11 仍會以動態島的 compact 版面顯示卡片。
-        // 若決定擴充最低支援 iOS 18：把 UsageWidget 的部署目標改為 18.0 並在下一行加上該修飾器。
+        // .small：Apple Watch 智慧型堆疊用手錶專用的精簡版面（FR-27）。
+        // 此 API 需要 iOS 18，所以 Widget 擴充的部署目標是 18.0（App 本身仍支援 iOS 17）。
         UsageActivityConfiguration.make()
+            .supplementalActivityFamilies([.small])
     }
 }
 
@@ -74,20 +73,6 @@ enum UsageActivityConfiguration {
 
 /// 依 activityFamily 選擇版面：手錶（.small）用精簡版，其他用完整鎖定畫面。
 struct ActivityContentView: View {
-    let state: UsageActivityState
-    let systemStale: Bool
-
-    var body: some View {
-        if #available(iOS 18.0, *) {
-            FamilyAwareActivityView(state: state, systemStale: systemStale)
-        } else {
-            LockScreenActivityView(state: state, systemStale: systemStale)
-        }
-    }
-}
-
-@available(iOS 18.0, *)
-private struct FamilyAwareActivityView: View {
     let state: UsageActivityState
     let systemStale: Bool
     @Environment(\.activityFamily) private var family

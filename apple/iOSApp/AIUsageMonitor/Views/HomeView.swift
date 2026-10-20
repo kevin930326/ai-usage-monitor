@@ -130,7 +130,11 @@ private struct LiveActivitySection: View {
 
     var body: some View {
         Section {
-            if model.liveActivityRunning {
+            if #unavailable(iOS 18.0) {
+                // Widget 擴充最低支援 iOS 18（FR-27），iOS 17 上卡片不會出現
+                Label("Live Activity 需要 iOS 18 以上", systemImage: "info.circle")
+                    .foregroundStyle(.secondary)
+            } else if model.liveActivityRunning {
                 Button("更新卡片", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
                 Button("結束卡片", systemImage: "stop.circle", role: .destructive) { Task { await model.endLiveActivity() } }
             } else {

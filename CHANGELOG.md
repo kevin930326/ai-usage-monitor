@@ -4,12 +4,15 @@
 
 ## [Unreleased]
 
+### Changed
+- Live Activity 的 Widget 擴充最低支援 iOS 18（手錶版面需要），App 本身仍支援 iOS 17
+
 ### Added
 - ADR-0004（提議中）：用量歷史資料的存放方式，比較本機檔案、中繼保存多筆與兩者並用，列出待決定問題（#23）
 - iOS Live Activity：鎖定畫面與動態島顯示各服務各額度、最吃緊的一項、重置倒數與更新時間；依剩餘比例上色；過期資料轉灰；單一服務失敗不影響另一服務（FR-8, FR-11, FR-12, FR-15, FR-16）
 - Live Activity 上的「更新」按鈕，不開 App 即可更新（FR-9）
 - 重置時間已過的額度顯示「已重置」（FR-26）；可切換顯示已用或剩餘 %（FR-17）
-- Apple Watch 智慧型堆疊用的精簡版面（尚未啟用，需 iOS 18，FR-27）
+- Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27）
 - UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式
 - iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖
 

@@ -73,6 +73,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMonitor.UsageWidget
+        # supplementalActivityFamilies（FR-27 手錶版面）需要 iOS 18；App 本身仍支援 iOS 17
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES

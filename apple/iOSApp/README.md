@@ -11,7 +11,7 @@
 
 主畫面的「Live Activity」區塊可開始、更新、結束卡片。卡片上的「更新」按鈕是 `RefreshUsageIntent`（LiveActivityIntent），由系統在 App 程序中執行，不需要打開 App。Live Activity 最長顯示 8 小時，之後需要從 App 重新開始。
 
-Apple Watch 智慧型堆疊的精簡版面（FR-27）已寫好（`WatchActivityView`），但 `supplementalActivityFamilies` 需要 iOS 18，目前部署目標是 iOS 17，所以尚未啟用，見 `UsageWidget/UsageLiveActivity.swift` 的說明。
+配對的 Apple Watch 會在智慧型堆疊顯示同一張卡片，使用手錶專用的精簡版面（`WatchActivityView`，只顯示最吃緊的一項，FR-27）。這需要 `supplementalActivityFamilies`（iOS 18 API），所以 Widget 擴充的最低支援是 iOS 18；App 本身仍可在 iOS 17 執行，但不會出現 Live Activity。
 
 讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。
 
