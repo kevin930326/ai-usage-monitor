@@ -9,6 +9,7 @@
 - ADR-0003（提議中）：雲端排程收集，列出決定前需驗證的問題（#15）
 - Apple Watch 規劃：需求 FR-27 ~ FR-30，v0.4 加入手錶版 Live Activity，新增里程碑 v1.4（#17）
 - UsageKit 共用 Swift Package：資料模型、`schema_version` 檢查、最吃緊額度、顏色分級、`RelayClient`、`UsageWindowRow`；CI 新增 `swift test`（#12, #14）
+- iOS App 主畫面與設定：顯示各服務剩餘額度與重置倒數、最吃緊額度、資料過期提示，讀取密鑰存於 Keychain（#13）
 
 ### Changed
 - CI：同一個 PR 有新 push 時自動取消舊的 run（#20）
