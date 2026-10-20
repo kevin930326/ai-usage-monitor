@@ -63,7 +63,7 @@ struct UsageWidgetView: View {
     private var footer: some View {
         Group {
             if isSample {
-                Text("範例資料 · 開啟選單列 App")
+                Text("範例資料 · 未連結 App Group")
                     .foregroundStyle(.secondary)
             } else {
                 UpdatedText(updatedAt: snapshot.updatedAt, stale: stale)

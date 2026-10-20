@@ -37,10 +37,12 @@ struct UsageTimelineProvider: TimelineProvider {
         completion(entry(at: .now, family: context.family))
     }
 
-    /// 每 15 分鐘一筆，讓過期變灰與「已重置」在沒有新資料時也會出現；App 有新資料時會要求重新整理。
+    /// 每 15 分鐘一筆，另在重置與資料過期的時間點各一筆，讓「已重置」與轉灰準時出現；
+    /// App 有新資料時會（節流後）要求重新整理。
     func getTimeline(in context: Context, completion: @escaping (Timeline<UsageEntry>) -> Void) {
         let now = Date.now
-        let entries = (0..<4).map { entry(at: now.addingTimeInterval(Double($0) * 900), family: context.family) }
+        let entries = UsageTimelineSchedule.entryDates(now: now, snapshot: SharedSnapshot.load())
+            .map { entry(at: $0, family: context.family) }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(3600))))
     }
 

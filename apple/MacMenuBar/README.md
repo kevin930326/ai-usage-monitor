@@ -12,9 +12,12 @@
 
 ## 資料來源
 
-讀取 `~/Library/Application Support/AIUsageMonitor/usage.json`，規則與收集器相同：設定環境變數 `AI_USAGE_MONITOR_HOME` 時改讀該資料夾。收集器以「寫暫存檔再改名」更新檔案，App 監看所在資料夾（改名後監看檔案本身會失效），另有 60 秒輪詢備援，並每分鐘重新判斷過期與重置。
+讀取 `~/Library/Application Support/AIUsageMonitor/usage.json`，規則與收集器相同：設定環境變數 `AI_USAGE_MONITOR_HOME` 時改讀該資料夾。收集器以「寫暫存檔再改名」更新檔案，App 監看所在資料夾（改名後監看檔案本身會失效）。另有每 60 秒的計時器重新判斷過期與重置；只有在監看失效時（資料夾還不存在，或被刪除後重建）才改為每 60 秒讀檔，並在資料夾出現後重新監看。
 
-App 不開沙盒，才能讀取 `~/Library/Application Support`。桌面小工具必須在沙盒中執行，讀不到這個資料夾，所以 App 每次讀到新資料會複製一份到 App Group 容器（`group.io.github.kevin930326.AIUsageMonitor`）給小工具。App Group 需要以 Apple 帳號（Team）簽署；以「Sign to Run Locally」建置時小工具只會顯示範例資料。
+App 不開沙盒，才能讀取 `~/Library/Application Support`。桌面小工具必須在沙盒中執行，讀不到這個資料夾，所以 App 讀到新資料時會複製一份到 App Group 容器（`~/Library/Group Containers/group.io.github.kevin930326.AIUsageMonitor/usage.json`）給小工具。
+
+- App Group 需要以 Apple 帳號（Team）簽署。App 只有在自己帶有該 App Group entitlement 時才寫入；以「Sign to Run Locally」建置時不寫入（macOS 15 對未授權存取群組容器會跳出詢問），小工具顯示「範例資料 · 未連結 App Group」。
+- 收集器每 5 分鐘寫一次，若每次都要求小工具重新整理，一天約 288 次，超過 WidgetKit 的每日預算（約 40～70 次）。App 只在小工具看得到的數字或錯誤改變、且距上次至少 15 分鐘時重新整理，數字沒變時每 25 分鐘一次（避免小工具上的資料時間超過 30 分鐘而誤顯示過期）。小工具的時間軸每 15 分鐘一筆，另在重置與過期時間點各加一筆。
 
 ## 建置
 
@@ -25,7 +28,16 @@ xcodegen generate
 open AIUsageMenuBar.xcodeproj
 ```
 
-預設以「Sign to Run Locally」（`CODE_SIGN_IDENTITY = -`）簽署，不需要 Apple 帳號。要讓桌面小工具讀到真實資料，在 Xcode 的 Signing & Capabilities 為兩個 target 選自己的 Team，並加入上述 App Group。
+預設以「Sign to Run Locally」（`CODE_SIGN_IDENTITY = -`）簽署，不需要 Apple 帳號。要讓桌面小工具讀到真實資料，需以自己的 Team 簽署並為兩個 target 加入 App Group。在 Xcode 的 Signing & Capabilities 加入的設定會在下次 `xcodegen generate` 時被覆寫，請改在 `project.yml` 設定（`AIUsageMenuBar` 需要新增 `entitlements` 區塊，小工具在既有的 `properties` 加一行）：
+
+```yaml
+    entitlements:
+      path: AIUsageMenuBar/AIUsageMenuBar.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+```
+
+並把 `CODE_SIGN_IDENTITY` 改為 `Apple Development`、`CODE_SIGN_STYLE` 改為 `Automatic`，再以 `DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate` 產生專案。
 
 命令列建置：
 
