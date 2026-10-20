@@ -8,11 +8,11 @@ import UsageKitUI
 /// 鎖定畫面卡片（FR-8、11、12、15、16、17、26）。
 struct LockScreenActivityView: View {
     let state: UsageActivityState
-    /// ActivityKit 的 `context.isStale`：超過 staleDate 時系統設為 true
-    var systemStale = false
     var now: Date = .now
 
-    private var stale: Bool { systemStale || state.isStale(at: now) }
+    // 只看資料時間（FR-11）。ActivityKit 的 `context.isStale` 在 staleDate 到時變成 true，
+    // 但 staleDate 也可能是下一個重置時間，那時資料仍是新的，不能拿來判斷過期。
+    private var stale: Bool { state.isStale(at: now) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -162,10 +162,9 @@ extension ActivityFooter where Trailing == EmptyView {
 /// Apple Watch 智慧型堆疊的精簡版面：只顯示最吃緊的一項（FR-27）。
 struct WatchActivityView: View {
     let state: UsageActivityState
-    var systemStale = false
     var now: Date = .now
 
-    private var stale: Bool { systemStale || state.isStale(at: now) }
+    private var stale: Bool { state.isStale(at: now) }
 
     var body: some View {
         if let item = state.tightest(at: now) {

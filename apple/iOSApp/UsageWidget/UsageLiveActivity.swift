@@ -17,10 +17,11 @@ struct UsageLiveActivity: Widget {
 enum UsageActivityConfiguration {
     static func make() -> some WidgetConfiguration {
         ActivityConfiguration(for: UsageActivityAttributes.self) { context in
-            ActivityContentView(state: context.state, systemStale: context.isStale)
+            ActivityContentView(state: context.state)
         } dynamicIsland: { context in
             let state = context.state
-            let stale = context.isStale || state.isStale()
+            // context.isStale 只用來觸發重繪，過期與否看資料時間（見 LockScreenActivityView）
+            let stale = state.isStale()
             let tightest = state.tightest()
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -74,15 +75,14 @@ enum UsageActivityConfiguration {
 /// 依 activityFamily 選擇版面：手錶（.small）用精簡版，其他用完整鎖定畫面。
 struct ActivityContentView: View {
     let state: UsageActivityState
-    let systemStale: Bool
     @Environment(\.activityFamily) private var family
 
     var body: some View {
         switch family {
         case .small:
-            WatchActivityView(state: state, systemStale: systemStale)
+            WatchActivityView(state: state)
         default:
-            LockScreenActivityView(state: state, systemStale: systemStale)
+            LockScreenActivityView(state: state)
         }
     }
 }
