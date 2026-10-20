@@ -15,7 +15,7 @@ public struct UsageFileLocator: Sendable {
     }
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment,
-                homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
+                homeDirectory: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) {
         if let custom = environment[Self.homeEnvironmentKey], !custom.isEmpty {
             directory = URL(fileURLWithPath: custom, isDirectory: true)
         } else {
