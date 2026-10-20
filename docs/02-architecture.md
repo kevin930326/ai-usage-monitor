@@ -76,18 +76,20 @@ apple/
   "updated_at": "2026-10-20T09:30:00Z",
   "providers": {
     "claude": {
-      "plan": "Team",
+      "plan": "Max",
       "error": null,
       "windows": [
-        { "id": "five_hour", "label": "5 小時", "used_pct": 0,  "resets_at": "2026-10-20T10:00:00Z" },
-        { "id": "weekly",    "label": "每週",   "used_pct": 63, "resets_at": "2026-10-26T15:00:00Z" }
+        { "id": "five_hour",    "label": "5 小時",     "used_pct": 0,  "resets_at": "2026-10-20T10:00:00Z", "hidden": false },
+        { "id": "weekly",       "label": "每週",       "used_pct": 63, "resets_at": "2026-10-26T15:00:00Z", "hidden": false },
+        { "id": "weekly_fable", "label": "每週 Fable", "used_pct": 5,  "resets_at": "2026-10-26T15:00:00Z", "hidden": true }
       ]
     },
     "codex": {
-      "plan": "Pro Lite",
+      "plan": "Team",
       "error": null,
       "windows": [
-        { "id": "weekly", "label": "每週", "used_pct": 41, "resets_at": "2026-10-27T01:00:00Z" }
+        { "id": "five_hour", "label": "5 小時", "used_pct": 0,  "resets_at": "2026-10-20T14:00:00Z", "hidden": false },
+        { "id": "weekly",    "label": "每週",   "used_pct": 41, "resets_at": "2026-10-27T01:00:00Z", "hidden": false }
       ]
     }
   }
@@ -96,6 +98,7 @@ apple/
 
 - `schema_version`：欄位有不相容變更時遞增，iOS 端遇到不支援的版本就提示更新 App（FR-13，v0.2 實作）。
 - `resets_at` 存絕對時間（UTC ISO 8601），iOS 端用 `Text(date, style: .relative)` 自動倒數。
+- `hidden`：次要額度（如各模型的每週上限），iOS／Mac 端預設不顯示（FR-14）。
 - 失敗的 provider：`windows` 為空陣列、`error` 為簡短訊息。
 
 ## 4. 失敗處理
