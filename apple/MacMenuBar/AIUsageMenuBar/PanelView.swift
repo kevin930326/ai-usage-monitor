@@ -1,5 +1,6 @@
 import SwiftUI
 import UsageKit
+import UsageKitUI
 
 /// 點開選單列後的面板（FR-22）：所有額度、進度條、重置倒數、更新時間。
 struct PanelView: View {
@@ -26,7 +27,7 @@ struct PanelView: View {
             if let error = store.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(UsageColors.notice)
                 Text(store.locator.usageFile.path)
                     .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
@@ -61,7 +62,7 @@ private struct TightestRow: View {
         HStack(alignment: .center, spacing: 12) {
             Text("\(Int(item.window.effectiveRemainingPct(at: now).rounded()))%")
                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(stale ? .secondary : item.window.effectiveSeverity(at: now).color)
+                .foregroundStyle(stale ? .secondary : .primary)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
                     .font(.callout.weight(.semibold))

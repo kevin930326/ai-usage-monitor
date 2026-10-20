@@ -28,7 +28,7 @@ struct UsageWidgetView: View {
                     .foregroundStyle(.secondary)
                 Text("\(Int(item.window.effectiveRemainingPct(at: now).rounded()))%")
                     .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
-                    .foregroundStyle(stale ? .secondary : item.window.effectiveSeverity(at: now).color)
+                    .foregroundStyle(stale ? .secondary : .primary)
                 Text("剩餘").font(.caption2).foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 ResetText(window: item.window, now: now)

@@ -7,12 +7,14 @@ import UsageKitUI
 /// 一個額度：名稱、剩餘 %、進度條、重置倒數或「已重置」。
 struct WindowGauge: View {
     let window: UsageWindow
+    let provider: String
     var stale = false
     var now: Date = .now
     var compact = false
 
     private var pct: Double { window.effectiveRemainingPct(at: now) }
-    private var tint: Color { stale ? .secondary : window.effectiveSeverity(at: now).color }
+    /// 進度條顏色（FR-16）；百分比文字一律 primary
+    private var tint: Color { UsageColors.bar(window, provider: provider, stale: stale, now: now) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 2 : 4) {
@@ -22,7 +24,6 @@ struct WindowGauge: View {
                 Spacer(minLength: 4)
                 Text("\(Int(pct.rounded()))%")
                     .font((compact ? Font.caption : .callout).weight(.semibold).monospacedDigit())
-                    .foregroundStyle(tint)
             }
             UsageBar(fraction: pct / 100, tint: tint)
                 .frame(height: compact ? 4 : 6)
@@ -78,7 +79,7 @@ struct UpdatedText: View {
         } icon: {
             Image(systemName: stale ? "exclamationmark.circle" : "clock")
         }
-        .foregroundStyle(stale ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+        .foregroundStyle(stale ? AnyShapeStyle(UsageColors.notice) : AnyShapeStyle(.secondary))
     }
 }
 
@@ -106,23 +107,13 @@ struct ProviderBlock: View {
             if let error = provider.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(UsageColors.notice)
                     .lineLimit(2)
             } else {
                 ForEach(provider.visibleWindows) { window in
-                    WindowGauge(window: window, stale: stale, now: now, compact: compact)
+                    WindowGauge(window: window, provider: key, stale: stale, now: now, compact: compact)
                 }
             }
-        }
-    }
-}
-
-extension UsageSeverity {
-    var nsColor: NSColor {
-        switch self {
-        case .normal: .systemGreen
-        case .warning: .systemOrange
-        case .critical: .systemRed
         }
     }
 }

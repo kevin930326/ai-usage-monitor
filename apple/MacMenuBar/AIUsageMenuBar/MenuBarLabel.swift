@@ -1,15 +1,17 @@
 import AppKit
 import SwiftUI
 import UsageKit
+import UsageKitUI
 
-/// 選單列圖示：彩色圓點 + 最吃緊額度的剩餘 %（FR-21）；過期時圓點轉灰。
+/// 選單列圖示：圓點 + 最吃緊額度的剩餘 %（FR-21）。
+/// 圓點與進度條同規則（FR-16）：該服務的識別色、剩餘 < 20% 紅色、過期灰色。
 struct MenuBarLabel: View {
     let store: UsageStore
 
     var body: some View {
         if let snapshot = store.snapshot, let item = snapshot.tightestWindow(at: store.now) {
             let stale = snapshot.isStale(now: store.now)
-            let color = stale ? NSColor.systemGray : item.window.effectiveSeverity(at: store.now).nsColor
+            let color = NSColor(UsageColors.bar(item.window, provider: item.provider, stale: stale, now: store.now))
             Image(nsImage: StatusDot.image(color: color))
             Text("\(Int(item.window.effectiveRemainingPct(at: store.now).rounded()))%")
         } else {
