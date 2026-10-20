@@ -49,7 +49,7 @@ Live Activity 以 `.supplementalActivityFamilies([.small])` 提供手錶版面�
 ### 2.5 共用套件 UsageKit (`apple/UsageKit/`)
 Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台加入 watchOS）：
 - `UsageSnapshot` 等資料模型與 JSON 解析（含 `schema_version` 檢查）
-- 最吃緊額度的挑選邏輯、顏色分級規則（FR-15、FR-16）
+- 最吃緊額度的挑選邏輯、顏色規則與色值（FR-15、FR-16）
 - 共用的 SwiftUI 元件：額度進度條、重置倒數
 
 ### 2.6 Mac 選單列 App (`apple/MacMenuBar/`，v1.2)

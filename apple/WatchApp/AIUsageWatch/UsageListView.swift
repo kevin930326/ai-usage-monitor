@@ -43,7 +43,7 @@ private struct UsageList: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(Int(item.window.effectiveRemainingPct(at: now).rounded()))%")
                                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
-                                .foregroundStyle(stale ? .gray : item.window.effectiveSeverity(at: now).color)
+                                .foregroundStyle(stale ? .secondary : .primary)
                             Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label) 剩餘")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -56,10 +56,10 @@ private struct UsageList: View {
                             if let error = provider.error {
                                 Label(error, systemImage: "exclamationmark.triangle.fill")
                                     .font(.footnote)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(UsageColors.notice)
                             } else {
                                 ForEach(provider.visibleWindows) { window in
-                                    WatchWindowRow(window: window, stale: stale, now: now)
+                                    WatchWindowRow(window: window, provider: key, stale: stale, now: now)
                                 }
                             }
                         }
@@ -74,9 +74,9 @@ private struct UsageList: View {
                         }
                     }
                     .font(.footnote)
-                    .foregroundStyle(stale ? .orange : .secondary)
+                    .foregroundStyle(stale ? UsageColors.notice : .secondary)
                     if let errorMessage {
-                        Text(errorMessage).font(.footnote).foregroundStyle(.red)
+                        Text(errorMessage).font(.footnote).foregroundStyle(UsageColors.notice)
                     }
                 }
             }
@@ -86,11 +86,13 @@ private struct UsageList: View {
 
 private struct WatchWindowRow: View {
     let window: UsageWindow
+    let provider: String
     let stale: Bool
     let now: Date
 
     private var pct: Double { window.effectiveRemainingPct(at: now) }
-    private var tint: Color { stale ? .gray : window.effectiveSeverity(at: now).color }
+    /// 進度條顏色（FR-16）；百分比文字一律 primary
+    private var tint: Color { UsageColors.bar(window, provider: provider, stale: stale, now: now) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -99,7 +101,6 @@ private struct WatchWindowRow: View {
                 Spacer()
                 Text("\(Int(pct.rounded()))%")
                     .monospacedDigit()
-                    .foregroundStyle(tint)
             }
             Gauge(value: pct, in: 0...100) { EmptyView() }
                 .gaugeStyle(.linearCapacity)
