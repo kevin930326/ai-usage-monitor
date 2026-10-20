@@ -6,7 +6,8 @@ import WidgetKit
 struct UsageLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: UsageActivityAttributes.self) { context in
-            Text("AI 用量")
+            LockScreenActivityView(state: context.state, systemStale: context.isStale)
+                .activityBackgroundTint(Color(.systemBackground).opacity(0.85))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) { Text("AI 用量") }
