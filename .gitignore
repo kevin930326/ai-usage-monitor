@@ -1,0 +1,30 @@
+# Secrets — 任何金鑰、token 都不能進 repo
+.env
+.env.*
+!.env.example
+*.secret
+*.pem
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / Cloudflare Worker
+node_modules/
+.wrangler/
+.dev.vars
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
+
+# macOS
+.DS_Store
