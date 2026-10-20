@@ -24,7 +24,8 @@ node_modules/
 .build/
 .swiftpm/
 
-# Xcode
+# Xcode（專案由 XcodeGen 從 project.yml 產生）
+apple/iOSApp/*.xcodeproj/
 xcuserdata/
 DerivedData/
 *.xcuserstate

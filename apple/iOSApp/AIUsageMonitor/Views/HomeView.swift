@@ -1,0 +1,164 @@
+import SwiftUI
+import UsageKit
+import UsageKitUI
+
+struct HomeView: View {
+    @Environment(UsageModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showSettings = false
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("AI 用量")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("設定", systemImage: "gearshape") { showSettings = true }
+                    }
+                }
+                .sheet(isPresented: $showSettings) {
+                    SettingsView()
+                }
+        }
+        .task { await model.refresh() }
+        // 從背景回到前景時自動更新
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.refresh() } }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if !model.isConfigured {
+            ContentUnavailableView {
+                Label("尚未設定中繼", systemImage: "antenna.radiowaves.left.and.right.slash")
+            } description: {
+                Text("輸入 Cloudflare Worker 網址與讀取密鑰後，就能看到 Claude 與 Codex 的用量。")
+            } actions: {
+                Button("前往設定") { showSettings = true }
+                    .buttonStyle(.borderedProminent)
+            }
+        } else if let snapshot = model.snapshot {
+            UsageList(snapshot: snapshot, errorMessage: model.errorMessage)
+                .refreshable { await model.refresh() }
+        } else if let error = model.errorMessage {
+            ContentUnavailableView {
+                Label("無法取得用量", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("重試") { Task { await model.refresh() } }
+            }
+        } else {
+            ProgressView("讀取中…")
+        }
+    }
+}
+
+private struct UsageList: View {
+    let snapshot: UsageSnapshot
+    let errorMessage: String?
+
+    private var stale: Bool { snapshot.isStale() }
+
+    var body: some View {
+        List {
+            if let errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                        .font(.footnote)
+                }
+            }
+
+            if let tightest = snapshot.tightestWindow {
+                Section("最吃緊") {
+                    TightestCard(item: tightest, dimmed: stale)
+                }
+            }
+
+            ForEach(snapshot.orderedProviderKeys, id: \.self) { key in
+                if let provider = snapshot.providers[key] {
+                    ProviderSection(key: key, provider: provider, dimmed: stale)
+                }
+            }
+
+            Section {
+                UpdatedFooter(updatedAt: snapshot.updatedAt, stale: stale)
+            }
+        }
+    }
+}
+
+private struct TightestCard: View {
+    let item: ProviderWindow
+    let dimmed: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("剩餘")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("\(Int(item.window.remainingPct.rounded()))%")
+                .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(dimmed ? .secondary : item.window.severity.color)
+            UsageWindowRow(window: item.window, dimmed: dimmed)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct ProviderSection: View {
+    let key: String
+    let provider: ProviderUsage
+    let dimmed: Bool
+
+    var body: some View {
+        Section {
+            if let error = provider.error {
+                // 單一服務失敗不影響其他服務（FR-12）
+                Label(error, systemImage: "xmark.octagon")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(provider.visibleWindows) { window in
+                    UsageWindowRow(window: window, dimmed: dimmed)
+                        .padding(.vertical, 2)
+                }
+            }
+        } header: {
+            HStack {
+                Text(ProviderInfo.displayName(key))
+                if let plan = provider.plan {
+                    Text(plan)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.quaternary, in: Capsule())
+                }
+            }
+        }
+    }
+}
+
+private struct UpdatedFooter: View {
+    let updatedAt: Date
+    let stale: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: stale ? "clock.badge.exclamationmark" : "clock")
+            (Text("更新於 ") + Text(updatedAt, style: .relative) + Text("前"))
+            if stale {
+                Text("· Mac 可能已關機").foregroundStyle(.orange)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+}
