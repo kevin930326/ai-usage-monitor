@@ -12,17 +12,11 @@ final class UsageModel {
     private(set) var liveActivityError: String?
     private(set) var isStartingActivity = false
 
-    var relayURL: String {
-        didSet {
-            UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey)
-            WatchSettingsSync.shared.send(url: relayURL, token: readToken)
-        }
+    private(set) var relayURL: String {
+        didSet { UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey) }
     }
-    var readToken: String {
-        didSet {
-            KeychainStore.write(readToken, account: UsageSource.readTokenAccount)
-            WatchSettingsSync.shared.send(url: relayURL, token: readToken)
-        }
+    private(set) var readToken: String {
+        didSet { KeychainStore.write(readToken, account: UsageSource.readTokenAccount) }
     }
     /// 已用／剩餘（FR-17），同時套用到 Live Activity。
     var displayMode: UsageDisplayMode {
@@ -71,6 +65,14 @@ final class UsageModel {
         }
         // 卡片可能已被滑掉或超過 8 小時被系統結束
         liveActivityRunning = LiveActivityController.isRunning
+    }
+
+    /// 設定畫面的「儲存」：兩個值都存好後才同步到手錶一次（FR-30）。
+    /// 分開送會先送出「新網址＋舊密鑰」，手錶可能短暫顯示「讀取密鑰錯誤」。
+    func saveSettings(url: String, token: String) {
+        relayURL = url
+        readToken = token
+        WatchSettingsSync.shared.send(url: url, token: token)
     }
 
     /// 設定畫面的「測試連線」，成功時順便更新主畫面。
