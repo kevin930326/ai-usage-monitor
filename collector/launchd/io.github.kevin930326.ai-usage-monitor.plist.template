@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 由 scripts/install-launchd.sh 填入 __PLACEHOLDER__ 後安裝到 ~/Library/LaunchAgents -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.github.kevin930326.ai-usage-monitor</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>-m</string>
+        <string>usage_collector</string>
+        <string>--write-local</string>
+        <string>--upload</string>
+        <string>--quiet</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__COLLECTOR_DIR__</string>
+
+    <!-- 每 5 分鐘執行一次，登入時也先跑一次 -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/collector.log</string>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/collector.log</string>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

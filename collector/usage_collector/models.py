@@ -3,10 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+# 輸出 JSON 有不相容變更時遞增（FR-13）
+SCHEMA_VERSION = 1
+
 
 def iso_utc(dt: datetime) -> str:
     """統一輸出成 2026-10-20T09:30:00Z 格式。"""
     return dt.astimezone(timezone.utc).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_iso(value: str) -> datetime:
+    """Python 3.10 的 fromisoformat 不認得結尾的 Z，先換成 +00:00。"""
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    return datetime.fromisoformat(value)
 
 
 @dataclass
@@ -15,6 +25,7 @@ class Window:
     label: str
     used_pct: float
     resets_at: datetime | None
+    hidden: bool = False  # 次要額度（如各模型的每週上限），iOS 端預設不顯示
 
     def to_dict(self) -> dict:
         return {
@@ -22,6 +33,7 @@ class Window:
             "label": self.label,
             "used_pct": round(self.used_pct, 1),
             "resets_at": iso_utc(self.resets_at) if self.resets_at else None,
+            "hidden": self.hidden,
         }
 
 
