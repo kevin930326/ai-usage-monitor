@@ -10,6 +10,7 @@ final class UsageModel {
     private(set) var isLoading = false
     private(set) var liveActivityRunning = LiveActivityController.isRunning
     private(set) var liveActivityError: String?
+    private(set) var isStartingActivity = false
 
     var relayURL: String {
         didSet { UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey) }
@@ -62,6 +63,8 @@ final class UsageModel {
             // 保留上一次成功的資料，只顯示錯誤
             errorMessage = error.localizedDescription
         }
+        // 卡片可能已被滑掉或超過 8 小時被系統結束
+        liveActivityRunning = LiveActivityController.isRunning
     }
 
     /// 設定畫面的「測試連線」，成功時順便更新主畫面。
@@ -79,6 +82,10 @@ final class UsageModel {
     // MARK: Live Activity（FR-8）
 
     func startLiveActivity() async {
+        // 連點時第二次直接忽略（第一次還在抓資料）
+        guard !isStartingActivity else { return }
+        isStartingActivity = true
+        defer { isStartingActivity = false }
         do {
             let snap = try await fetch()
             snapshot = snap

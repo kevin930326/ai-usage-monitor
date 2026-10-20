@@ -8,7 +8,12 @@ enum LiveActivityController {
     typealias UsageActivity = Activity<UsageActivityAttributes>
 
     static var activities: [UsageActivity] { UsageActivity.activities }
-    static var isRunning: Bool { !activities.isEmpty }
+    /// `Activity.activities` 也包含已結束（8 小時上限、被滑掉）但尚未移除的卡片，只算還在顯示的
+    static var isRunning: Bool {
+        activities.contains { $0.activityState == .active || $0.activityState == .stale }
+    }
+    /// 開卡途中（等待 ActivityKit）再收到開卡要求時拒絕，避免連點或捷徑同時觸發留下兩張卡片
+    private static var isReplacing = false
 
     nonisolated static func content(for snapshot: UsageSnapshot, mode: UsageDisplayMode) -> ActivityContent<UsageActivityState> {
         let state = UsageActivityState(snapshot: snapshot, mode: mode)
@@ -16,17 +21,23 @@ enum LiveActivityController {
         return ActivityContent(state: state, staleDate: state.staleDate())
     }
 
-    /// 開一張新卡片；已有卡片時先全部結束，保持只有一張。
+    /// 開一張新卡片，成功後再結束其他卡片，保持只有一張；開卡失敗時舊卡片保留。
     @discardableResult
     static func start(snapshot: UsageSnapshot, mode: UsageDisplayMode, demoScenario: String? = nil) async throws -> UsageActivity {
-        await endAll()
-        let activity = try UsageActivity.request(
-            attributes: UsageActivityAttributes(demoScenario: demoScenario),
-            content: content(for: snapshot, mode: mode),
-            pushType: nil
-        )
-        ActivityLog.record("start", activity: activity, updatedAt: snapshot.updatedAt)
-        return activity
+        guard !isReplacing else { throw LiveActivityError.busy }
+        isReplacing = true
+        defer { isReplacing = false }
+        return try await ActivityReplacement.replace {
+            let activity = try UsageActivity.request(
+                attributes: UsageActivityAttributes(demoScenario: demoScenario),
+                content: content(for: snapshot, mode: mode),
+                pushType: nil
+            )
+            ActivityLog.record("start", activity: activity, updatedAt: snapshot.updatedAt)
+            return activity
+        } endOthers: { activity in
+            await endAll(except: activity.id)
+        }
     }
 
     // Activity 不是 Sendable，更新與結束都在非隔離的情境逐一處理，避免跨 actor 傳遞
@@ -37,8 +48,8 @@ enum LiveActivityController {
         }
     }
 
-    nonisolated static func endAll() async {
-        for activity in UsageActivity.activities {
+    nonisolated static func endAll(except keepID: String? = nil) async {
+        for activity in UsageActivity.activities where activity.id != keepID {
             await activity.end(nil, dismissalPolicy: .immediate)
             ActivityLog.record("end", activity: activity, updatedAt: nil)
         }
@@ -49,6 +60,16 @@ enum LiveActivityController {
         guard let activity = activities.first else { return }
         let snapshot = try await UsageSource.fetch(demoScenario: activity.attributes.demoScenario)
         await update(snapshot: snapshot, mode: activity.content.state.mode)
+    }
+}
+
+enum LiveActivityError: LocalizedError {
+    case busy
+
+    var errorDescription: String? {
+        switch self {
+        case .busy: "正在開啟卡片，請稍候"
+        }
     }
 }
 

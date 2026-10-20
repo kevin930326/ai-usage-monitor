@@ -139,6 +139,7 @@ private struct LiveActivitySection: View {
                 Button("結束卡片", systemImage: "stop.circle", role: .destructive) { Task { await model.endLiveActivity() } }
             } else {
                 Button("在鎖定畫面顯示", systemImage: "lock.rectangle.on.rectangle") { Task { await model.startLiveActivity() } }
+                    .disabled(model.isStartingActivity)
             }
             if let error = model.liveActivityError {
                 Text(error).font(.footnote).foregroundStyle(.red)
