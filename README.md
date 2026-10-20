@@ -1,6 +1,6 @@
 # AI Usage Monitor
 
-在 iPhone 鎖定畫面用 Live Activity 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。
+在 iPhone 鎖定畫面用 Live Activity 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。之後也會推出 Mac 選單列版本，與 iPhone 共用同一套 Swift 程式碼。
 
 > 🚧 開發中，進度見 [CHANGELOG](CHANGELOG.md)。
 
@@ -22,6 +22,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [需求規格](docs/01-requirements.md) | 功能需求、非功能需求、範圍 |
 | [系統架構](docs/02-architecture.md) | 元件、資料格式、失敗處理 |
 | [開發流程](docs/03-development-workflow.md) | 分支、commit、PR 規範 |
+| [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 
 ## 專案結構
@@ -29,7 +30,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 ```
 collector/   Mac 端用量收集器 (Python)
 relay/       Cloudflare Worker 中繼 API
-ios/         iOS App + Live Activity Widget
+apple/       UsageKit 共用套件、iOS App + Live Activity、Mac 選單列 App
 docs/        需求、架構、ADR
 ```
 

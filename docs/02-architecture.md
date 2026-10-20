@@ -9,7 +9,10 @@
 │      ├ Claude provider      │ 只送 │ KV 存最新一筆 usage.json   │      │                                 │
 │      └ Codex provider       │ 數字 └───────────────────────────┘      │ Live Activity「更新」按鈕         │
 │   OAuth token 永遠留在 Mac   │                                         │   └ RefreshUsageIntent          │
-└─────────────────────────────┘                                         └─────────────────────────────────┘
+│        │ 寫入本機檔案         │                                         └─────────────────────────────────┘
+│        ▼                    │
+│   usage.json ──▶ 選單列 App │  （v1.2，與 iOS App 共用 UsageKit）
+└─────────────────────────────┘
 ```
 
 ## 2. 元件
@@ -19,6 +22,7 @@
 - 每家服務一個 provider，介面一致：輸入無，輸出 `ProviderUsage` 或錯誤。
 - 每次執行都重新讀取 token，**不自行刷新 token**，避免與 Claude Code / Codex CLI 互搶。
 - 由 launchd 每 5 分鐘觸發。
+- 除了上傳中繼 API，也寫入本機 `~/Library/Application Support/AIUsageMonitor/usage.json`（先寫暫存檔再改名，避免讀到寫一半的檔案），供 Mac 選單列 App 讀取（FR-20）。
 
 ### 2.2 中繼 API (`relay/`)
 - Cloudflare Worker + KV。
@@ -26,7 +30,7 @@
 - `GET /usage`：需 `Authorization: Bearer <READ_TOKEN>`。
 - 理由見 [ADR-0001](adr/0001-cloudflare-worker-relay.md)。
 
-### 2.3 iOS App (`ios/`)
+### 2.3 iOS App (`apple/iOSApp/`)
 | 部分 | 作用 |
 |---|---|
 | `UsageService` | 呼叫 `GET /usage`，讀取密鑰存於 Keychain |
@@ -40,10 +44,35 @@
 ### 2.4 捷徑自動化
 `AppShortcutsProvider` 公開「重新啟動用量監看」，於捷徑 App 建立 3 個定時自動化（間隔 ≤ 8 小時）。理由見 [ADR-0002](adr/0002-shortcut-restart-live-activity.md)。
 
+### 2.5 共用套件 UsageKit (`apple/UsageKit/`)
+Swift Package，iOS App 與 Mac App 共用（NFR-7）：
+- `UsageSnapshot` 等資料模型與 JSON 解析（含 `schema_version` 檢查）
+- 最吃緊額度的挑選邏輯、顏色分級規則（FR-15、FR-16）
+- 共用的 SwiftUI 元件：額度進度條、重置倒數
+
+### 2.6 Mac 選單列 App (`apple/MacMenuBar/`，v1.2)
+| 部分 | 作用 |
+|---|---|
+| 選單列圖示 | `MenuBarExtra` 顯示最吃緊額度的 % 與顏色（FR-21） |
+| 面板 | `.window` 樣式，顯示所有額度、進度條、倒數、更新時間與趨勢圖（FR-22、FR-23） |
+| 桌面小工具 | WidgetKit Extension（FR-24） |
+| 動態視覺 | SwiftUI 動畫／Metal shader／SceneKit，只在面板開啟時執行（FR-25） |
+
+- 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。
+- 以「Sign to Run Locally」簽署，不需付費帳號，也沒有 7 天期限。
+
+```
+apple/
+├── UsageKit/      # 共用 Swift Package
+├── iOSApp/        # iPhone App + Live Activity Widget
+└── MacMenuBar/    # Mac 選單列 App + 桌面小工具
+```
+
 ## 3. 資料格式
 
 ```json
 {
+  "schema_version": 1,
   "updated_at": "2026-10-20T09:30:00Z",
   "providers": {
     "claude": {
@@ -65,6 +94,7 @@
 }
 ```
 
+- `schema_version`：欄位有不相容變更時遞增，iOS 端遇到不支援的版本就提示更新 App（FR-13，v0.2 實作）。
 - `resets_at` 存絕對時間（UTC ISO 8601），iOS 端用 `Text(date, style: .relative)` 自動倒數。
 - 失敗的 provider：`windows` 為空陣列、`error` 為簡短訊息。
 
