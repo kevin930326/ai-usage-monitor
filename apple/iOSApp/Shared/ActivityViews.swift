@@ -207,10 +207,11 @@ struct RefreshButton: View {
                 .font(.caption2.weight(.semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(.white.opacity(0.15), in: Capsule())
+                // 依外觀自動調整，淺色鎖定畫面也看得到（白字會消失在淺色背景上）
+                .background(.quaternary, in: Capsule())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
     }
 }
 
