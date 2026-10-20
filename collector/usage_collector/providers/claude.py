@@ -16,11 +16,11 @@ from ..models import ProviderError, ProviderUsage, Window
 KEYCHAIN_SERVICE = "Claude Code-credentials"
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 
-# API 欄位 → 顯示名稱；不在表內的欄位不顯示
-WINDOW_LABELS = {
-    "five_hour": "5 小時",
-    "seven_day": "每週",
-    "seven_day_opus": "每週 Opus",
+# API 欄位 → (統一 id, 顯示名稱)；不在表內的欄位不顯示
+WINDOWS = {
+    "five_hour": ("five_hour", "5 小時"),
+    "seven_day": ("weekly", "每週"),
+    "seven_day_opus": ("weekly_opus", "每週 Opus"),
 }
 
 
@@ -43,12 +43,12 @@ def read_credentials() -> dict:
 
 def parse(body: dict, plan: str | None) -> ProviderUsage:
     windows = []
-    for key, label in WINDOW_LABELS.items():
+    for key, (wid, label) in WINDOWS.items():
         w = body.get(key)
         if not w:
             continue
         resets_at = datetime.fromisoformat(w["resets_at"]) if w.get("resets_at") else None
-        windows.append(Window(key, label, float(w.get("utilization") or 0), resets_at))
+        windows.append(Window(wid, label, float(w.get("utilization") or 0), resets_at))
     if not windows:
         raise ProviderError("回應中沒有用量資料，API 可能已變更")
     return ProviderUsage(plan=plan, windows=windows)

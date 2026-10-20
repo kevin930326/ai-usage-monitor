@@ -31,6 +31,8 @@ def read_tokens(path: Path = AUTH_PATH) -> dict:
 def window_label(seconds: int) -> tuple[str, str]:
     if seconds == 7 * 24 * 3600:
         return "weekly", "每週"
+    if seconds == 5 * 3600:
+        return "five_hour", "5 小時"
     hours = round(seconds / 3600)
     return f"{hours}h", f"{hours} 小時"
 

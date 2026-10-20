@@ -28,7 +28,7 @@ class ClaudeParseTest(unittest.TestCase):
     def test_parses_windows_and_skips_null(self):
         usage = claude.parse(CLAUDE_BODY, "Team").to_dict()
         self.assertEqual(usage["plan"], "Team")
-        self.assertEqual([w["id"] for w in usage["windows"]], ["five_hour", "seven_day"])
+        self.assertEqual([w["id"] for w in usage["windows"]], ["five_hour", "weekly"])
         self.assertEqual(usage["windows"][0]["resets_at"], "2026-10-20T10:00:00Z")
         self.assertEqual(usage["windows"][1]["used_pct"], 63.0)
 
@@ -42,7 +42,7 @@ class CodexParseTest(unittest.TestCase):
         usage = codex.parse(CODEX_BODY).to_dict()
         self.assertEqual(usage["plan"], "Pro")
         self.assertEqual([(w["id"], w["label"]) for w in usage["windows"]],
-                         [("5h", "5 小時"), ("weekly", "每週")])
+                         [("five_hour", "5 小時"), ("weekly", "每週")])
         self.assertEqual(usage["windows"][1]["used_pct"], 41.0)
 
     def test_missing_auth_file(self):
