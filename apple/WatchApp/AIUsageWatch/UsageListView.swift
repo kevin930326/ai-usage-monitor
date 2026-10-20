@@ -22,7 +22,14 @@ struct UsageListView: View {
             UsageList(snapshot: snapshot, errorMessage: model.errorMessage)
                 .refreshable { await model.refresh() }
         } else if let error = model.errorMessage {
-            ContentUnavailableView("無法取得用量", systemImage: "exclamationmark.triangle", description: Text(error))
+            ContentUnavailableView {
+                Label("無法取得用量", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("重試") { Task { await model.refresh() } }
+                    .disabled(model.isLoading)
+            }
         } else {
             ProgressView()
         }

@@ -6,6 +6,7 @@
 |---|---|
 | 手錶 App | 最吃緊的一項大字顯示，各服務各額度的進度條與重置倒數、更新時間；過期轉灰、重置後顯示「已重置」（FR-29） |
 | 錶面複雜功能 | 圓形（容量環 + 服務標示 CL／CX + %）、矩形（名稱 + % + 進度條）、單行（名稱 + %），顯示最吃緊額度的剩餘 %；顏色依 FR-16（服務識別色、剩餘 < 20% 紅色、過期灰色）（FR-28） |
+| 更新時機 | 打開 App、回到前景、錯誤畫面的「重試」，以及背景重新整理（`WKApplicationRefreshBackgroundTask`，約每 30 分鐘）。每次成功都存到 App Group 並呼叫 `reloadAllTimelines` |
 | 設定同步 | iPhone App 儲存中繼設定時，以 WatchConnectivity 的 application context 傳到手錶，手錶不需要輸入（FR-30） |
 
 手錶直接呼叫中繼 API（UsageKit `RelayClient`），讀取密鑰存在手錶的 Keychain（WatchConnectivity 也會保留最後一份 application context）。複雜功能透過 App Group（`group.io.github.kevin930326.AIUsageMonitor`，已寫在 `project.yml` 的 entitlements）讀取手錶 App 存下的最後一份資料；實機需以 Team 簽署，未簽署時複雜功能顯示「--」。
@@ -36,7 +37,14 @@ SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER=1 \
 xcrun simctl get_app_container <手錶 UDID> io.github.kevin930326.AIUsageMonitor.watchkitapp data
 ```
 
+## 背景重新整理
+
+`WatchAppDelegate` 在啟動時排程下一次背景重新整理（30 分鐘後），每次執行完：抓中繼 → 存 App Group → `reloadAllTimelines` → 排程下一次 → `setTaskCompletedWithSnapshot`。實際執行時間由 watchOS 決定：每小時最多約 4 次，複雜功能在目前錶面上時比較準時，低電量時會延後。
+
+30 分鐘與「資料已過期」的門檻相同，所以背景更新延後時複雜功能可能短暫顯示灰色；縮短間隔會用掉更多複雜功能的重新整理預算（每天約 48 次背景更新各重新整理一次）。
+
 ## 尚未驗證
 
 - WatchConnectivity 實際傳輸需要配對的 iPhone 與 Apple Watch（模擬器配對未測試）
 - 複雜功能實際加到錶面需要 App Group 簽署
+- 背景重新整理的實際頻率：模擬器無法觸發 `WKApplicationRefreshBackgroundTask`，需在實機錶面放上複雜功能、觀察一晚
