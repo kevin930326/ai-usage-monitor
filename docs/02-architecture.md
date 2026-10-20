@@ -41,11 +41,13 @@
 
 兩個 Intent 皆為 `LiveActivityIntent`，在背景執行不開 App；資料透過 ActivityKit state 傳給 Widget，不需 App Group。
 
+Live Activity 以 `.supplementalActivityFamilies([.small])` 提供手錶版面，watchOS 11 以上會自動出現在 Apple Watch 智慧型堆疊（FR-27），不需要另外的手錶 App。
+
 ### 2.4 捷徑自動化
 `AppShortcutsProvider` 公開「重新啟動用量監看」，於捷徑 App 建立 3 個定時自動化（間隔 ≤ 8 小時）。理由見 [ADR-0002](adr/0002-shortcut-restart-live-activity.md)。
 
 ### 2.5 共用套件 UsageKit (`apple/UsageKit/`)
-Swift Package，iOS App 與 Mac App 共用（NFR-7）：
+Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台加入 watchOS）：
 - `UsageSnapshot` 等資料模型與 JSON 解析（含 `schema_version` 檢查）
 - 最吃緊額度的挑選邏輯、顏色分級規則（FR-15、FR-16）
 - 共用的 SwiftUI 元件：額度進度條、重置倒數
@@ -61,10 +63,21 @@ Swift Package，iOS App 與 Mac App 共用（NFR-7）：
 - 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。
 - 以「Sign to Run Locally」簽署，不需付費帳號，也沒有 7 天期限。
 
+### 2.7 Apple Watch (`apple/WatchApp/`，v1.4)
+| 部分 | 作用 |
+|---|---|
+| 錶面複雜功能 | WidgetKit `accessoryCircular`／`accessoryRectangular`／`accessoryInline`，顯示最吃緊額度的剩餘 % 與顏色（FR-28） |
+| 手錶 App | 列出所有可見額度與重置倒數（FR-29） |
+| 設定同步 | iPhone App 以 WatchConnectivity 傳送中繼網址與讀取密鑰，手錶存入自己的 Keychain（FR-30） |
+
+- 資料來源：手錶直接呼叫中繼 `GET /usage`（透過 iPhone 或 Wi-Fi 連網），使用 UsageKit 的 `RelayClient`。
+- 複雜功能的更新時機由 watchOS 決定；重置倒數依絕對時間在手錶上自行計算。
+
 ```
 apple/
 ├── UsageKit/      # 共用 Swift Package
-├── iOSApp/        # iPhone App + Live Activity Widget
+├── iOSApp/        # iPhone App + Live Activity Widget（含手錶版面）
+├── WatchApp/      # Apple Watch App + 錶面複雜功能（v1.4）
 └── MacMenuBar/    # Mac 選單列 App + 桌面小工具
 ```
 
