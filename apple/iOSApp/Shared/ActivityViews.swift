@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import UsageKit
 import UsageKitUI
@@ -21,7 +22,9 @@ struct LockScreenActivityView: View {
             ForEach(state.providers) { provider in
                 ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
-            ActivityFooter(updatedAt: state.updatedAt, stale: stale)
+            ActivityFooter(updatedAt: state.updatedAt, stale: stale) {
+                RefreshButton()
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -194,6 +197,21 @@ struct WatchActivityView: View {
                 .font(.caption)
                 .padding(8)
         }
+    }
+}
+
+/// 觸發 `RefreshUsageIntent` 的按鈕（FR-9）。
+struct RefreshButton: View {
+    var body: some View {
+        Button(intent: RefreshUsageIntent()) {
+            Label("更新", systemImage: "arrow.clockwise")
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.white.opacity(0.15), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
     }
 }
 
