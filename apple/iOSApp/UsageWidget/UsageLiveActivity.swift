@@ -55,9 +55,10 @@ enum UsageActivityConfiguration {
                 }
             } compactLeading: {
                 if let tightest {
+                    // 服務以文字與識別色區分（FR-16），不用官方 logo
                     Text(ProviderInfo.shortName(tightest.provider))
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(ActivityStyle.tint(tightest.window, stale: stale, now: .now))
+                        .foregroundStyle(stale ? Color.gray : UsageColors.providerMark(tightest.provider))
                 }
             } compactTrailing: {
                 if let tightest {
@@ -96,6 +97,5 @@ private struct PercentText: View {
     var body: some View {
         Text("\(Int(item.window.displayedPct(mode, at: .now).rounded()))%")
             .font(.system(size: size, weight: .bold, design: .rounded).monospacedDigit())
-            .foregroundStyle(ActivityStyle.tint(item.window, stale: stale, now: .now))
     }
 }

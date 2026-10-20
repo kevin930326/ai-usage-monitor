@@ -1,5 +1,6 @@
 import SwiftUI
 import UsageKit
+import UsageKitUI
 
 struct SettingsView: View {
     @Environment(UsageModel.self) private var model
@@ -57,9 +58,9 @@ struct SettingsView: View {
 
                     switch testResult {
                     case .success:
-                        Label("連線成功", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("連線成功", systemImage: "checkmark.circle.fill")
                     case .failure(let message):
-                        Label(message, systemImage: "xmark.circle.fill").foregroundStyle(.red)
+                        Label(message, systemImage: "xmark.circle.fill").foregroundStyle(UsageColors.notice)
                     case nil:
                         EmptyView()
                     }

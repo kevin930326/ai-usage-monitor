@@ -83,8 +83,8 @@ let sampleJSON = """
     }
 
     @Test(arguments: [
-        (100.0, UsageSeverity.normal), (51.0, .normal), (50.0, .warning),
-        (20.0, .warning), (19.9, .critical), (0.0, .critical),
+        (100.0, UsageSeverity.normal), (51.0, .normal), (50.0, .normal),
+        (20.0, .normal), (19.9, .critical), (0.0, .critical),
     ])
     func severityThresholds(remaining: Double, expected: UsageSeverity) {
         #expect(UsageSeverity(remainingPct: remaining) == expected)

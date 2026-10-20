@@ -43,7 +43,6 @@ struct TightestHeader: View {
         HStack(alignment: .center, spacing: 10) {
             Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
                 .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(ActivityStyle.tint(item.window, stale: stale, now: now))
             VStack(alignment: .leading, spacing: 0) {
                 Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
                     .font(.caption.weight(.semibold))
@@ -74,12 +73,12 @@ struct ProviderActivityRow: View {
             if let error = provider.error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(UsageColors.notice)
                     .lineLimit(2)
                 Spacer(minLength: 0)
             } else {
                 ForEach(provider.windows) { window in
-                    MiniWindowGauge(window: window, mode: mode, stale: stale, now: now)
+                    MiniWindowGauge(window: window, provider: provider.key, mode: mode, stale: stale, now: now)
                 }
             }
         }
@@ -89,6 +88,7 @@ struct ProviderActivityRow: View {
 /// 單一額度：名稱、百分比、進度條、重置倒數。
 struct MiniWindowGauge: View {
     let window: UsageWindow
+    let provider: String
     let mode: UsageDisplayMode
     let stale: Bool
     let now: Date
@@ -103,11 +103,10 @@ struct MiniWindowGauge: View {
                 Spacer(minLength: 2)
                 Text("\(Int(pct.rounded()))%")
                     .monospacedDigit()
-                    .foregroundStyle(ActivityStyle.tint(window, stale: stale, now: now))
             }
             .font(.caption2.weight(.medium))
             ProgressView(value: pct, total: 100)
-                .tint(ActivityStyle.tint(window, stale: stale, now: now))
+                .tint(UsageColors.bar(window, provider: provider, stale: stale, now: now))
             ResetLabel(window: window, now: now)
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
@@ -149,7 +148,7 @@ struct ActivityFooter<Trailing: View>: View {
             trailing
         }
         .font(.caption2)
-        .foregroundStyle(stale ? .orange : .secondary)
+        .foregroundStyle(stale ? UsageColors.notice : .secondary)
     }
 }
 
@@ -177,7 +176,7 @@ struct WatchActivityView: View {
                         .font(.system(.body, design: .rounded).weight(.bold).monospacedDigit())
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .tint(ActivityStyle.tint(item.window, stale: stale, now: now))
+                .tint(UsageColors.bar(item.window, provider: item.provider, stale: stale, now: now))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("\(ProviderInfo.displayName(item.provider)) \(item.window.label)")
                         .font(.caption.weight(.semibold))
@@ -187,7 +186,7 @@ struct WatchActivityView: View {
                         .foregroundStyle(.secondary)
                     ResetLabel(window: item.window, now: now)
                         .font(.caption2)
-                        .foregroundStyle(stale ? .orange : .secondary)
+                        .foregroundStyle(stale ? UsageColors.notice : .secondary)
                 }
             }
             .padding(8)
@@ -212,12 +211,5 @@ struct RefreshButton: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
-    }
-}
-
-enum ActivityStyle {
-    /// 依剩餘比例上色（FR-16）；資料過期一律灰色（FR-11）。
-    static func tint(_ window: UsageWindow, stale: Bool, now: Date) -> Color {
-        stale ? .gray : window.effectiveSeverity(at: now).color
     }
 }

@@ -73,7 +73,7 @@ private struct UsageList: View {
             if let errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(UsageColors.notice)
                         .font(.footnote)
                 }
             }
@@ -117,8 +117,8 @@ private struct TightestCard: View {
             }
             Text("\(Int(item.window.displayedPct(mode, at: .now).rounded()))%")
                 .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(dimmed ? .secondary : item.window.effectiveSeverity(at: .now).color)
-            UsageWindowRow(window: item.window, display: mode, dimmed: dimmed)
+                .foregroundStyle(dimmed ? .secondary : .primary)
+            UsageWindowRow(window: item.window, provider: item.provider, display: mode, dimmed: dimmed)
         }
         .padding(.vertical, 4)
     }
@@ -142,7 +142,7 @@ private struct LiveActivitySection: View {
                     .disabled(model.isStartingActivity)
             }
             if let error = model.liveActivityError {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(UsageColors.notice)
             }
         } header: {
             Text("Live Activity")
@@ -166,7 +166,7 @@ private struct ProviderSection: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(provider.visibleWindows) { window in
-                    UsageWindowRow(window: window, display: mode, dimmed: dimmed)
+                    UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed)
                         .padding(.vertical, 2)
                 }
             }
@@ -194,7 +194,7 @@ private struct UpdatedFooter: View {
             Image(systemName: stale ? "clock.badge.exclamationmark" : "clock")
             (Text("更新於 ") + Text(updatedAt, style: .relative) + Text("前"))
             if stale {
-                Text("· Mac 可能已關機").foregroundStyle(.orange)
+                Text("· Mac 可能已關機").foregroundStyle(UsageColors.notice)
             }
         }
         .font(.footnote)
