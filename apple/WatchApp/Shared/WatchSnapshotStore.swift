@@ -18,10 +18,7 @@ enum WatchSnapshotStore {
     }
 
     static func save(_ snapshot: UsageSnapshot) {
-        guard let url else { return }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(snapshot) else { return }
+        guard let url, let data = try? UsageEncoder.encode(snapshot) else { return }
         try? data.write(to: url, options: .atomic)
     }
 }

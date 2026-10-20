@@ -49,7 +49,8 @@ final class WatchModel {
         }
     }
 
-    /// iPhone 傳來的中繼設定（FR-30）。密鑰只存 Keychain。
+    /// iPhone 傳來的中繼設定（FR-30）。App 自己只把密鑰存在 Keychain；
+    /// WatchConnectivity 另會保留最後一份 application context（系統行為）。
     private func apply(url: String, token: String) {
         guard url != relayURL || token != readToken else { return }
         relayURL = url

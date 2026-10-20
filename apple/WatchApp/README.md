@@ -8,7 +8,7 @@
 | 錶面複雜功能 | 圓形（容量環 + %）、矩形（名稱 + % + 進度條）、單行（名稱 + %），顯示最吃緊額度的剩餘 % 與分級顏色（FR-28） |
 | 設定同步 | iPhone App 儲存中繼設定時，以 WatchConnectivity 的 application context 傳到手錶，手錶不需要輸入（FR-30） |
 
-手錶直接呼叫中繼 API（UsageKit `RelayClient`），讀取密鑰存在手錶的 Keychain。複雜功能透過 App Group（`group.io.github.kevin930326.AIUsageMonitor`）讀取手錶 App 存下的最後一份資料，App Group 需要以 Team 簽署；未簽署時複雜功能顯示「--」。
+手錶直接呼叫中繼 API（UsageKit `RelayClient`），讀取密鑰存在手錶的 Keychain（WatchConnectivity 也會保留最後一份 application context）。複雜功能透過 App Group（`group.io.github.kevin930326.AIUsageMonitor`，已寫在 `project.yml` 的 entitlements）讀取手錶 App 存下的最後一份資料；實機需以 Team 簽署，未簽署時複雜功能顯示「--」。
 
 ## 建置
 
