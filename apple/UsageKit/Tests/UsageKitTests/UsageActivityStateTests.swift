@@ -55,6 +55,20 @@ import Testing
         #expect(state.staleDate(now: updated) == updated.addingTimeInterval(30 * 60))
     }
 
+    @Test func staleDateSkipsPassedExpiry() {
+        // 45 分鐘前的資料：過期時間已過，改用下一個重置時間（sample 最早 19:00）
+        let now = updated.addingTimeInterval(45 * 60)
+        let state = UsageActivityState(snapshot: snap, mode: .remaining)
+        let next = state.staleDate(now: now)
+        #expect(next != nil)
+        #expect(next! > now)
+    }
+
+    @Test func staleDateIsNilWhenEverythingPassed() {
+        let state = UsageActivityState(snapshot: snap, mode: .remaining)
+        #expect(state.staleDate(now: updated.addingTimeInterval(30 * 24 * 3600)) == nil)
+    }
+
     @Test func partialFailureKeepsHealthyProvider() {
         var s = snap
         s.providers["codex"] = ProviderUsage(error: "token 過期，請在 Mac 上重新登入 Codex", windows: [])

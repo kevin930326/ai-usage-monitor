@@ -70,16 +70,13 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
 
     /// 交給 ActivityKit 的 `staleDate`：Live Activity 不會依時間自動重繪，
     /// 系統在這個時間點把卡片標為 stale 並重繪，畫面才會改成灰色或「已重置」。
-    /// 取「資料過期時間」與「下一個尚未到的重置時間」中較早者。
-    public func staleDate(now: Date = .now) -> Date {
+    /// 取「資料過期時間」與「下一個尚未到的重置時間」中較早且還沒到的那個；
+    /// 都已過去時回傳 nil。已經過期的資料若仍給過去的時間，系統會直接把卡片從鎖定畫面拿掉，
+    /// 而畫面本身已會依 `updatedAt` 顯示「資料已過期」。
+    public func staleDate(now: Date = .now) -> Date? {
         let expiry = updatedAt.addingTimeInterval(UsageSnapshot.staleAfter)
-        let nextReset = providers
-            .flatMap(\.windows)
-            .compactMap(\.resetsAt)
-            .filter { $0 > now }
-            .min()
-        guard let nextReset else { return expiry }
-        return min(expiry, nextReset)
+        let resets = providers.flatMap(\.windows).compactMap(\.resetsAt)
+        return ([expiry] + resets).filter { $0 > now }.min()
     }
 
     public func encodedSize() throws -> Int {
