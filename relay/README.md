@@ -45,6 +45,10 @@ npm run deploy                              # 會印出 https://ai-usage-relay.<
 curl -i https://ai-usage-relay.<帳號>.workers.dev/usage -H "Authorization: Bearer <READ_TOKEN>"
 ```
 
+第一次部署到新的 workers.dev 子網域時，HTTPS 憑證可能要等 1～數分鐘才生效，期間會看到 TLS handshake 失敗（curl 回 `000`），稍等即可。
+
+`wrangler.toml` 填入自己的 KV id 後，若不想讓這個改動出現在 git 中，可以執行 `git update-index --skip-worktree relay/wrangler.toml`。
+
 ## 免費額度
 
 KV 免費方案每天 1,000 次寫入。收集器每 5 分鐘上傳一次，每天約 288 次，在額度內。
