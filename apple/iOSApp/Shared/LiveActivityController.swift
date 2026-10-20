@@ -55,6 +55,16 @@ enum LiveActivityController {
         }
     }
 
+    /// 捷徑「重新啟動用量監看」（FR-10）：沿用舊卡片的示範情境，結束所有舊卡片後開一張新的。
+    static func restart() async throws {
+        let old = activities
+        let before = old.map(\.id)
+        let demoScenario = old.first?.attributes.demoScenario
+        let snapshot = try await UsageSource.fetch(demoScenario: demoScenario)
+        let activity = try await start(snapshot: snapshot, mode: UsageSource.displayMode, demoScenario: demoScenario)
+        ActivityLog.recordRestart(before: before, after: activity.id)
+    }
+
     /// 卡片上的「更新」按鈕（FR-9）：重新抓資料後更新所有卡片。
     static func refresh() async throws {
         guard let activity = activities.first else { return }
@@ -91,6 +101,24 @@ enum ActivityLog {
             "at": iso.string(from: .now),
         ])
         if let data = try? JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url, options: .atomic)
+        }
+        #endif
+    }
+
+    /// DEBUG：重新啟動前後的卡片 ID 與目前卡片數，寫到 Documents/restart-log.json。
+    static func recordRestart(before: [String], after: String) {
+        #if DEBUG
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appending(path: "restart-log.json")
+        let current = Activity<UsageActivityAttributes>.activities.filter { $0.activityState == .active }.map(\.id)
+        let entry: [String: Any] = [
+            "before": before,
+            "after": after,
+            "active": current,
+            "at": ISO8601DateFormatter().string(from: .now),
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: entry, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url, options: .atomic)
         }
         #endif
