@@ -55,7 +55,7 @@ enum UsageActivityConfiguration {
                 }
             } compactLeading: {
                 if let tightest {
-                    Text(ProviderInfo.displayName(tightest.provider).prefix(1))
+                    Text(ProviderInfo.shortName(tightest.provider))
                         .font(.caption.weight(.bold))
                         .foregroundStyle(ActivityStyle.tint(tightest.window, stale: stale, now: .now))
                 }

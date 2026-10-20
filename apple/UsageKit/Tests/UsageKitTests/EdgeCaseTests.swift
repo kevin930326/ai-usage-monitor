@@ -124,6 +124,16 @@ import Testing
         #expect(!state.hasPartialFailure)
     }
 
+    // MARK: 服務標示
+
+    @Test func shortNamesTellProvidersApart() {
+        #expect(ProviderInfo.shortName("claude") == "CL")
+        #expect(ProviderInfo.shortName("codex") == "CX")
+        #expect(ProviderInfo.shortName("claude") != ProviderInfo.shortName("codex"))
+        #expect(ProviderInfo.shortName("gemini") == "GE")
+        #expect(ProviderInfo.shortName("x") == "X")
+    }
+
     // MARK: 單一服務失敗（FR-12）
 
     @Test func allProvidersFailingIsNotPartialFailure() {

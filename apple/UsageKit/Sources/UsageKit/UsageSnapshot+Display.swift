@@ -49,4 +49,14 @@ public enum ProviderInfo {
         default: key.prefix(1).uppercased() + key.dropFirst()
         }
     }
+
+    /// 動態島精簡版面與錶面圓形複雜功能用的兩個字母標示。
+    /// Claude 與 Codex 都是 C 開頭，只取首字母無法分辨。
+    public static func shortName(_ key: String) -> String {
+        switch key {
+        case "claude": "CL"
+        case "codex": "CX"
+        default: String(key.prefix(2)).uppercased()
+        }
+    }
 }
