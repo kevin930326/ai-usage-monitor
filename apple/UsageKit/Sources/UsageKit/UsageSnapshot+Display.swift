@@ -1,0 +1,52 @@
+import Foundation
+
+/// 某個服務的某個額度，用來表示「最吃緊的額度」。
+public struct ProviderWindow: Equatable, Sendable {
+    public var provider: String
+    public var window: UsageWindow
+}
+
+public extension UsageSnapshot {
+    /// 固定順序：已知服務在前，其他依名稱排序。
+    static let knownProviderOrder = ["claude", "codex"]
+
+    var orderedProviderKeys: [String] {
+        providers.keys.sorted { a, b in
+            let ia = Self.knownProviderOrder.firstIndex(of: a) ?? Int.max
+            let ib = Self.knownProviderOrder.firstIndex(of: b) ?? Int.max
+            return ia == ib ? a < b : ia < ib
+        }
+    }
+
+    /// 所有服務的可見額度中，剩餘最少的一項（FR-15）；同分時取較早重置的。
+    var tightestWindow: ProviderWindow? {
+        orderedProviderKeys
+            .flatMap { key in
+                (providers[key]?.error == nil ? providers[key]?.visibleWindows ?? [] : [])
+                    .map { ProviderWindow(provider: key, window: $0) }
+            }
+            .min { a, b in
+                if a.window.remainingPct != b.window.remainingPct {
+                    return a.window.remainingPct < b.window.remainingPct
+                }
+                return (a.window.resetsAt ?? .distantFuture) < (b.window.resetsAt ?? .distantFuture)
+            }
+    }
+
+    /// 超過門檻沒更新就視為過期（FR-11），例如 Mac 關機。
+    static let staleAfter: TimeInterval = 30 * 60
+
+    func isStale(now: Date = .now) -> Bool {
+        now.timeIntervalSince(updatedAt) > Self.staleAfter
+    }
+}
+
+public enum ProviderInfo {
+    public static func displayName(_ key: String) -> String {
+        switch key {
+        case "claude": "Claude"
+        case "codex": "Codex"
+        default: key.prefix(1).uppercased() + key.dropFirst()
+        }
+    }
+}

@@ -20,6 +20,10 @@ node_modules/
 .wrangler/
 .dev.vars
 
+# Swift Package Manager
+.build/
+.swiftpm/
+
 # Xcode
 xcuserdata/
 DerivedData/

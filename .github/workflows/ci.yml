@@ -32,6 +32,17 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest -v
 
+  usagekit:
+    name: UsageKit (Swift)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apple/UsageKit
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test
+
   relay:
     name: relay (Worker)
     runs-on: ubuntu-latest
