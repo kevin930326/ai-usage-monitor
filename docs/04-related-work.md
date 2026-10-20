@@ -39,6 +39,8 @@
 
 **差異點：目前沒有同時支援 Claude 與 Codex 的 iPhone Live Activity 方案。**
 
+Mac 選單列已有多個成熟專案，因此本專案的 Mac 版（v1.2）不以功能數量取勝，重點放在：與 iPhone 共用同一個 Swift Package（NFR-7），以及面板的動態視覺（FR-25）。
+
 ## 4. 借鏡的功能
 
 | 功能 | 來源 | 採用 | 對應需求 |
@@ -51,6 +53,9 @@
 | 用完時間預測（只在早於重置時顯示） | LimitHUD、Maciek | ✅ v1.1 | FR-18 |
 | 額度不足／恢復通知，含冷卻避免重複 | LimitHUD | ✅ v1.1 | FR-19 |
 | README 隱私與安全章節 | Usage4Claude、intelQong | ✅ v1.0 | NFR-6 |
+| Mac 選單列圖示 + 點開的詳細面板 | Usage4Claude、LimitHUD、richhickson | ✅ v1.2 | FR-21、FR-22 |
+| 用量趨勢圖（sparkline） | LimitHUD | ✅ v1.2 | FR-23 |
+| 卡片上的動態角色／動畫 | LimitHUD、intelQong | ✅ v1.3（改為 3D 視覺） | FR-25 |
 | Claude 服務中斷通知 | richhickson | ⏸ 暫不採用 | — |
 | 多帳號切換 | CodeZeno、headroom | ❌ 不採用 | 個人工具，不在範圍內 |
 | 支援更多服務（Cursor、Copilot 等） | CodeZeno | ❌ 不採用 | 專注 Claude 與 Codex；provider 架構保留擴充空間 |
