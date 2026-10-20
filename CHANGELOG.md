@@ -5,5 +5,6 @@
 ## [Unreleased]
 
 ### Added
+- Mac 收集器：Claude 與 Codex provider，輸出統一格式 JSON（#1）
 - 需求規格、系統架構、開發流程文件
 - ADR-0001 中繼方案、ADR-0002 Live Activity 重開策略
