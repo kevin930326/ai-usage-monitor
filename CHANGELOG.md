@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
 ### Added
+- Mac 收集器：Claude 與 Codex provider，輸出統一格式 JSON（#1, #2）
 - 需求規格、系統架構、開發流程文件
 - ADR-0001 中繼方案、ADR-0002 Live Activity 重開策略
+
+[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/kevin930326/ai-usage-monitor/releases/tag/v0.1.0
