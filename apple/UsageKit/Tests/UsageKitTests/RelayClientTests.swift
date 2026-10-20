@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking // Linux 上 URLSession 在這個模組
+#endif
 import Testing
 @testable import UsageKit
 

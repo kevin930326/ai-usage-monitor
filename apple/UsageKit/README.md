@@ -33,6 +33,9 @@ window.severity                // .normal / .warning / .critical（FR-16）
 
 ```bash
 swift test   # 需要 Xcode（Swift Testing）；只有 Command Line Tools 時可用 swift build 確認編譯
+
+# 在 Linux 容器中執行（與 CI 相同）
+docker run --rm -v "$PWD":/pkg -w /pkg swift:6.2 swift test
 ```
 
-CI 在 macOS runner 上執行。
+CI 在 Linux 的 `swift:6.2` 容器中執行。Linux 沒有 SwiftUI，`UsageKitUI` 以 `#if canImport(SwiftUI)` 包住，在 Linux 上會編譯成空模組；畫面元件由建置 iOS App 確認。
