@@ -4,7 +4,7 @@
 
 在 iPhone 鎖定畫面用 Live Activity 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。之後也會推出 Mac 選單列版本，與 iPhone 共用同一套 Swift 程式碼。
 
-> 🚧 開發中（目前 v0.2：Mac 收集器 + 中繼 API 已可運作），進度見 [CHANGELOG](CHANGELOG.md)。
+> 🚧 開發中（目前 v0.3：Mac 收集器、中繼 API 與 iOS App 主畫面已可運作，下一步是鎖定畫面 Live Activity），進度見 [CHANGELOG](CHANGELOG.md)。
 
 ## 系統概觀
 

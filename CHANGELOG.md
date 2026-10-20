@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
 ### Added
 - Mac 離線處理：需求 FR-26（重置後顯示「已重置」）、已知限制、讓 Mac 保持清醒的說明（#15）
 - ADR-0003（提議中）：雲端排程收集，列出決定前需驗證的問題（#15）
@@ -13,6 +15,7 @@
 
 ### Changed
 - CI：同一個 PR 有新 push 時自動取消舊的 run（#20）
+- CI：UsageKit 測試改在 Linux 的 `swift:6.2` 容器執行，避免 macOS runner 容量不足被取消（#14）
 
 ## [0.2.0] - 2026-10-21
 
@@ -35,6 +38,7 @@
 - 需求規格、系統架構、開發流程文件
 - ADR-0001 中繼方案、ADR-0002 Live Activity 重開策略
 
-[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kevin930326/ai-usage-monitor/releases/tag/v0.1.0
