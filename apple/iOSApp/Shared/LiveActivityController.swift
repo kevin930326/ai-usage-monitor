@@ -57,11 +57,15 @@ enum LiveActivityController {
 
     /// 捷徑「重新啟動用量監看」（FR-10）：沿用舊卡片的示範情境，結束所有舊卡片後開一張新的。
     static func restart() async throws {
+        // Widget 擴充最低支援 iOS 18（FR-27）：iOS 17 上開卡不會顯示，不能回報成功
+        guard #available(iOS 18, *) else { throw LiveActivityError.needsIOS18 }
         let old = activities
         let before = old.map(\.id)
         let demoScenario = old.first?.attributes.demoScenario
+        // 沿用舊卡片的顯示模式（與「更新」按鈕相同），沒有舊卡片時用設定值
+        let mode = old.first?.content.state.mode ?? UsageSource.displayMode
         let snapshot = try await UsageSource.fetch(demoScenario: demoScenario)
-        let activity = try await start(snapshot: snapshot, mode: UsageSource.displayMode, demoScenario: demoScenario)
+        let activity = try await start(snapshot: snapshot, mode: mode, demoScenario: demoScenario)
         ActivityLog.recordRestart(before: before, after: activity.id)
     }
 
@@ -75,10 +79,12 @@ enum LiveActivityController {
 
 enum LiveActivityError: LocalizedError {
     case busy
+    case needsIOS18
 
     var errorDescription: String? {
         switch self {
         case .busy: "正在開啟卡片，請稍候"
+        case .needsIOS18: "Live Activity 需要 iOS 18 以上"
         }
     }
 }
