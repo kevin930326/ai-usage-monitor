@@ -12,7 +12,8 @@ public struct UsageWindowRow: View {
     let display: Display
     var dimmed: Bool
 
-    public init(window: UsageWindow, display: Display = .used, dimmed: Bool = false) {
+    // 預設顯示剩餘，與分級顏色（依剩餘比例）一致
+    public init(window: UsageWindow, display: Display = .remaining, dimmed: Bool = false) {
         self.window = window
         self.display = display
         self.dimmed = dimmed
@@ -32,7 +33,7 @@ public struct UsageWindowRow: View {
                     .foregroundStyle(tint)
                     .contentTransition(.numericText(value: pct))
             }
-            ProgressView(value: window.usedPct, total: 100)
+            ProgressView(value: pct, total: 100)
                 .tint(tint)
             if let resetsAt = window.resetsAt {
                 // relative 樣式會自己倒數，不需要重新抓資料
@@ -52,7 +53,7 @@ struct UsageWindowRow_Previews: PreviewProvider {
         VStack(spacing: 20) {
             UsageWindowRow(window: UsageWindow(id: "five_hour", label: "5 小時", usedPct: 24, resetsAt: .now.addingTimeInterval(3600)))
             UsageWindowRow(window: UsageWindow(id: "weekly", label: "每週", usedPct: 63, resetsAt: .now.addingTimeInterval(86400 * 3)))
-            UsageWindowRow(window: UsageWindow(id: "weekly", label: "每週", usedPct: 91), display: .remaining)
+            UsageWindowRow(window: UsageWindow(id: "weekly", label: "每週", usedPct: 91), display: .used)
         }
         .padding()
     }
