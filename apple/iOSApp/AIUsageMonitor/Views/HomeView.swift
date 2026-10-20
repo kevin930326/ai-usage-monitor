@@ -20,7 +20,13 @@ struct HomeView: View {
                     SettingsView()
                 }
         }
-        .task { await model.refresh() }
+        .task {
+            await model.refresh()
+            #if DEBUG
+            // 示範模式啟動時直接開一張卡片，方便截圖
+            if model.demoScenario != nil { await model.startLiveActivity() }
+            #endif
+        }
         // 從背景回到前景時自動更新
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await model.refresh() } }
@@ -39,7 +45,7 @@ struct HomeView: View {
                     .buttonStyle(.borderedProminent)
             }
         } else if let snapshot = model.snapshot {
-            UsageList(snapshot: snapshot, errorMessage: model.errorMessage)
+            UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode)
                 .refreshable { await model.refresh() }
         } else if let error = model.errorMessage {
             ContentUnavailableView {
@@ -58,6 +64,7 @@ struct HomeView: View {
 private struct UsageList: View {
     let snapshot: UsageSnapshot
     let errorMessage: String?
+    let mode: UsageDisplayMode
 
     private var stale: Bool { snapshot.isStale() }
 
@@ -71,11 +78,13 @@ private struct UsageList: View {
                 }
             }
 
-            if let tightest = snapshot.tightestWindow {
+            if let tightest = snapshot.tightestWindow(at: .now) {
                 Section("最吃緊") {
-                    TightestCard(item: tightest, dimmed: stale)
+                    TightestCard(item: tightest, mode: mode, dimmed: stale)
                 }
             }
+
+            LiveActivitySection()
 
             ForEach(snapshot.orderedProviderKeys, id: \.self) { key in
                 if let provider = snapshot.providers[key] {
@@ -92,6 +101,7 @@ private struct UsageList: View {
 
 private struct TightestCard: View {
     let item: ProviderWindow
+    let mode: UsageDisplayMode
     let dimmed: Bool
 
     var body: some View {
@@ -101,16 +111,39 @@ private struct TightestCard: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("剩餘")
+                Text(mode.label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("\(Int(item.window.remainingPct.rounded()))%")
+            Text("\(Int(item.window.displayedPct(mode, at: .now).rounded()))%")
                 .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(dimmed ? .secondary : item.window.severity.color)
+                .foregroundStyle(dimmed ? .secondary : item.window.effectiveSeverity(at: .now).color)
             UsageWindowRow(window: item.window, dimmed: dimmed)
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// 開始／結束鎖定畫面卡片（FR-8）。
+private struct LiveActivitySection: View {
+    @Environment(UsageModel.self) private var model
+
+    var body: some View {
+        Section {
+            if model.liveActivityRunning {
+                Button("更新卡片", systemImage: "arrow.clockwise") { Task { await model.refresh() } }
+                Button("結束卡片", systemImage: "stop.circle", role: .destructive) { Task { await model.endLiveActivity() } }
+            } else {
+                Button("在鎖定畫面顯示", systemImage: "lock.rectangle.on.rectangle") { Task { await model.startLiveActivity() } }
+            }
+            if let error = model.liveActivityError {
+                Text(error).font(.footnote).foregroundStyle(.red)
+            }
+        } header: {
+            Text("Live Activity")
+        } footer: {
+            Text("卡片最多顯示 8 小時，結束後可從這裡或捷徑重新開始。")
+        }
     }
 }
 

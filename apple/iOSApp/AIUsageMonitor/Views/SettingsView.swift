@@ -1,4 +1,5 @@
 import SwiftUI
+import UsageKit
 
 struct SettingsView: View {
     @Environment(UsageModel.self) private var model
@@ -29,6 +30,17 @@ struct SettingsView: View {
                     Text("中繼 API")
                 } footer: {
                     Text("密鑰只存在這台 iPhone 的 Keychain。請使用讀取密鑰，不要填寫入密鑰。")
+                }
+
+                Section {
+                    Picker("顯示", selection: Bindable(model).displayMode) {
+                        ForEach(UsageDisplayMode.allCases, id: \.self) { Text("\($0.label) %").tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("百分比")
+                } footer: {
+                    Text("App 與 Live Activity 都會依此顯示已用或剩餘的百分比。")
                 }
 
                 Section {
