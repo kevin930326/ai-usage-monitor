@@ -24,6 +24,12 @@ final class UsageModel {
     init() {
         relayURL = UserDefaults.standard.string(forKey: Self.relayURLKey) ?? ""
         readToken = KeychainStore.read(Self.readTokenAccount) ?? ""
+        #if DEBUG
+        // 開發用：以環境變數覆寫設定（只在記憶體中），方便在模擬器測試而不必手動輸入密鑰
+        let env = ProcessInfo.processInfo.environment
+        if let url = env["AUM_RELAY_URL"], !url.isEmpty { relayURL = url }
+        if let token = env["AUM_READ_TOKEN"], !token.isEmpty { readToken = token }
+        #endif
     }
 
     func refresh() async {
