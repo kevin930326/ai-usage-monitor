@@ -15,7 +15,7 @@ import UsageKit
 let client = try RelayClient(urlString: "ai-usage-relay.<帳號>.workers.dev", readToken: token)
 let snapshot = try await client.fetch()
 
-snapshot.tightestWindow        // 所有可見額度中剩餘最少的一項（FR-15）
+snapshot.tightestWindow(at: .now)  // 所有可見額度中剩餘最少的一項，已重置的視為 100%（FR-15、FR-26）
 snapshot.isStale()             // 超過 30 分鐘沒更新（FR-11）
 window.barTone(stale: false, at: .now)   // .provider / .critical / .stale（FR-16）
 ```
