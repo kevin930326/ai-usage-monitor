@@ -9,7 +9,7 @@
 | v0.1 | Mac 收集器：終端機印出統一格式 JSON | FR-1 ~ FR-3 |
 | v0.2 | launchd 排程 + 中繼 API + 本機 usage.json | FR-4 ~ FR-6, FR-13, FR-14, FR-20 |
 | v0.3 | iOS App 主畫面顯示用量 | FR-7 |
-| v0.4 | Live Activity + 更新按鈕 | FR-8, FR-9, FR-11, FR-12, FR-15 ~ FR-17 |
+| v0.4 | Live Activity + 更新按鈕 | FR-8, FR-9, FR-11, FR-12, FR-15 ~ FR-17, FR-26 |
 | v0.5 | 捷徑 Intent + 自動化 | FR-10 |
 | v1.0 | 文件、截圖、Demo GIF、隱私章節 | NFR-6 |
 | v1.1 | 用完時間預測、門檻通知 | FR-18, FR-19 |
