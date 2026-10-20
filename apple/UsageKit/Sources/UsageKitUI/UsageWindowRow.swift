@@ -4,26 +4,23 @@
 import SwiftUI
 import UsageKit
 
-/// 一個額度：名稱、百分比、進度條、重置倒數。
+/// 一個額度：名稱、百分比、進度條、重置倒數；重置時間已過顯示「已重置」（FR-26）。
 public struct UsageWindowRow: View {
-    public enum Display: Sendable {
-        case used
-        case remaining
-    }
-
     let window: UsageWindow
-    let display: Display
+    let display: UsageDisplayMode
     var dimmed: Bool
+    var now: Date
 
     // 預設顯示剩餘，與分級顏色（依剩餘比例）一致
-    public init(window: UsageWindow, display: Display = .remaining, dimmed: Bool = false) {
+    public init(window: UsageWindow, display: UsageDisplayMode = .remaining, dimmed: Bool = false, now: Date = .now) {
         self.window = window
         self.display = display
         self.dimmed = dimmed
+        self.now = now
     }
 
-    private var pct: Double { display == .used ? window.usedPct : window.remainingPct }
-    private var tint: Color { dimmed ? .secondary : window.severity.color }
+    private var pct: Double { window.displayedPct(display, at: now) }
+    private var tint: Color { dimmed ? .secondary : window.effectiveSeverity(at: now).color }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -38,7 +35,11 @@ public struct UsageWindowRow: View {
             }
             ProgressView(value: pct, total: 100)
                 .tint(tint)
-            if let resetsAt = window.resetsAt {
+            if window.isReset(at: now) {
+                Text("已重置")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let resetsAt = window.resetsAt {
                 // relative 樣式會自己倒數，不需要重新抓資料
                 (Text("重置 ") + Text(resetsAt, style: .relative))
                     .font(.caption)
@@ -46,7 +47,7 @@ public struct UsageWindowRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(window.label)，\(display == .used ? "已用" : "剩餘") \(Int(pct.rounded()))%")
+        .accessibilityLabel("\(window.label)，\(display.label) \(Int(pct.rounded()))%")
     }
 }
 

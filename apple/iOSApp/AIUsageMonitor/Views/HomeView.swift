@@ -88,7 +88,7 @@ private struct UsageList: View {
 
             ForEach(snapshot.orderedProviderKeys, id: \.self) { key in
                 if let provider = snapshot.providers[key] {
-                    ProviderSection(key: key, provider: provider, dimmed: stale)
+                    ProviderSection(key: key, provider: provider, mode: mode, dimmed: stale)
                 }
             }
 
@@ -118,7 +118,7 @@ private struct TightestCard: View {
             Text("\(Int(item.window.displayedPct(mode, at: .now).rounded()))%")
                 .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(dimmed ? .secondary : item.window.effectiveSeverity(at: .now).color)
-            UsageWindowRow(window: item.window, dimmed: dimmed)
+            UsageWindowRow(window: item.window, display: mode, dimmed: dimmed)
         }
         .padding(.vertical, 4)
     }
@@ -154,6 +154,7 @@ private struct LiveActivitySection: View {
 private struct ProviderSection: View {
     let key: String
     let provider: ProviderUsage
+    let mode: UsageDisplayMode
     let dimmed: Bool
 
     var body: some View {
@@ -164,7 +165,7 @@ private struct ProviderSection: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(provider.visibleWindows) { window in
-                    UsageWindowRow(window: window, dimmed: dimmed)
+                    UsageWindowRow(window: window, display: mode, dimmed: dimmed)
                         .padding(.vertical, 2)
                 }
             }
