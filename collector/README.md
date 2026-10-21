@@ -22,6 +22,23 @@ python3 -m usage_collector --write-local --upload --quiet   # launchd 用的組�
 
 第一次讀取 Keychain 時，macOS 可能會詢問是否允許，選「永遠允許」。
 
+### Claude token 過期時自動續期
+
+Claude 的 token 只有幾小時有效期，平常由 Claude Code 在下次使用時續期。收集器讀到的 token 已過期或 5 分鐘內到期時，會執行一次
+
+```bash
+claude -p /usage --safe-mode --no-session-persistence
+```
+
+讓 Claude Code 自己續期，再重新讀取 Keychain。收集器本身不發送刷新請求、不寫入憑證。
+
+- 在暫存資料夾執行、stdin 關閉、30 秒逾時；不呼叫模型，不消耗額度。
+- claude 的完整路徑由 `scripts/install-launchd.sh` 偵測後寫進 `config.json` 的 `claude_path`（launchd 的 PATH 找不到 claude）；找不到就不嘗試。手動執行時退回 PATH。
+- 最多每 30 分鐘嘗試一次；過期且續期失敗超過 30 分鐘時發一次 macOS 通知（同一次過期只通知一次），此時開一次 Claude Code 即可。
+- 這依賴 Claude Code 未寫入文件的行為，理由、實測與失效時的備案見 [ADR-0005](../docs/adr/0005-delegate-claude-token-refresh.md)。
+
+日誌中看到 `已委派 Claude Code 續期（completed）` 且之後沒有「token 已過期」，代表續期成功；`failed` 或 `timed_out` 代表 claude 執行失敗或逾時。
+
 結束碼：至少一個服務成功且上傳沒有失敗為 `0`，否則為 `1`。錯誤訊息帶時間戳記輸出到 stderr。
 
 ### 檔案位置
@@ -29,7 +46,8 @@ python3 -m usage_collector --write-local --upload --quiet   # launchd 用的組�
 | 檔案 | 位置 | 內容 |
 |---|---|---|
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個） |
-| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址 |
+| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 完整路徑 |
+| 續期狀態 | `~/Library/Application Support/AIUsageMonitor/claude-refresh.json` | 上次委派續期的時間與通知紀錄（不含 token） |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
 | 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
 
@@ -52,7 +70,7 @@ scripts/install-launchd.sh     # 安裝：登入時與每 5 分鐘執行一次
 scripts/uninstall-launchd.sh   # 移除
 ```
 
-安裝腳本會把 [plist 範本](launchd/) 填入目前的 Python 與資料夾路徑後放到 `~/Library/LaunchAgents/`。移動 repo 資料夾或更換 Python 後要重新執行安裝。
+安裝腳本會把 [plist 範本](launchd/) 填入目前的 Python 與資料夾路徑後放到 `~/Library/LaunchAgents/`，並把 claude 的完整路徑寫進 `config.json`。移動 repo 資料夾、更換 Python 或 claude 的安裝位置後要重新執行安裝。
 
 ## 讓 Mac 保持清醒
 
@@ -75,7 +93,7 @@ python3 -m unittest -v
 ## 設計重點
 
 - **token 不離開本機**：只輸出百分比與重置時間；錯誤訊息不含例外內容。
-- **不自行刷新 token**：避免與 Claude Code / Codex CLI 互搶，過期時提示使用者開一次原程式。
+- **不自行刷新 token**：避免與 Claude Code / Codex CLI 互搶。Claude token 快過期時委派 Claude Code 續期，仍失敗才提示使用者開一次原程式（[ADR-0005](../docs/adr/0005-delegate-claude-token-refresh.md)）。
 - **provider 互相隔離**：單一服務失敗只會讓該服務的 `error` 有值。
 - **原子寫入**：本機快照先寫暫存檔再改名，讀取端不會讀到寫一半的檔案。
 - **新增服務**：在 `usage_collector/providers/` 新增模組並實作 `fetch() -> ProviderUsage`，再到 `providers/__init__.py` 註冊。

@@ -10,8 +10,8 @@ fi
 
 CONFIG_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMonitor}"
 mkdir -p "$CONFIG_DIR"
-python3 -c 'import json,sys; json.dump({"relay_url": sys.argv[1].rstrip("/")}, open(sys.argv[2], "w"), indent=2)' \
-    "$1" "$CONFIG_DIR/config.json"
+# 合併寫入，保留安裝腳本寫的 claude_path 等其他設定
+python3 "$(dirname "$0")/update-config.py" "$CONFIG_DIR/config.json" relay_url "${1%/}"
 echo "已寫入：$CONFIG_DIR/config.json"
 
 # -w 放最後且不給值，security 會提示輸入，密鑰不會留在 shell 歷史紀錄
