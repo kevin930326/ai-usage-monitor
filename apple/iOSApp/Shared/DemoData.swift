@@ -12,6 +12,9 @@ enum DemoData {
         case reset    // Claude 5 小時的重置時間已過（FR-26）
         case used     // 顯示已用 %（FR-17）
         case codex    // Codex 最吃緊：動態島與錶面顯示 Codex 圖示
+        case claudeOnly = "claude-only"  // 只用 Claude：收集器沒有啟用 Codex
+        case codexOnly = "codex-only"    // 只用 Codex：收集器沒有啟用 Claude
+        case noProviders = "none"  // 收集器沒有啟用任何服務
     }
 
     static var current: Scenario? {
@@ -41,7 +44,14 @@ enum DemoData {
                 UsageWindow(id: "five_hour", label: "5 小時", usedPct: scenario == .codex ? 81 : 12, resetsAt: at(240)),
                 UsageWindow(id: "weekly", label: "每週", usedPct: 48, resetsAt: at(5 * 24 * 60)),
             ])
-        return UsageSnapshot(updatedAt: updatedAt, providers: ["claude": claude, "codex": codex])
+        // 未啟用的服務不在 providers 裡（不是錯誤）
+        let providers: [String: ProviderUsage] = switch scenario {
+        case .claudeOnly: ["claude": claude]
+        case .codexOnly: ["codex": codex]
+        case .noProviders: [:]
+        default: ["claude": claude, "codex": codex]
+        }
+        return UsageSnapshot(updatedAt: updatedAt, providers: providers)
     }
 }
 #endif

@@ -35,9 +35,17 @@ public extension UsageSnapshot {
     func isStale(now: Date = .now, after threshold: TimeInterval = staleAfter) -> Bool {
         now.timeIntervalSince(updatedAt) > threshold
     }
+
+    /// 收集器沒有啟用任何服務（Mac 上還沒登入 Claude Code 或 Codex CLI）。
+    /// 只用其中一個服務時 `providers` 只有一個 key，這是正常狀態，不是錯誤。
+    var hasNoProviders: Bool { providers.isEmpty }
 }
 
 public enum ProviderInfo {
+    /// 沒有啟用任何服務時的提示（`UsageSnapshot.hasNoProviders`）。
+    public static let noProvidersTitle = "沒有啟用任何服務"
+    public static let noProvidersHint = "在 Mac 登入 Claude Code 或 Codex CLI 後，重新執行收集器的安裝腳本。"
+
     public static func displayName(_ key: String) -> String {
         switch key {
         case "claude": "Claude"

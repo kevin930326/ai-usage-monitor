@@ -89,6 +89,12 @@ private struct UsageList: View {
                 }
             }
 
+            if snapshot.hasNoProviders {
+                Section {
+                    NoProvidersNotice()
+                }
+            }
+
             LiveActivitySection()
 
             ForEach(snapshot.orderedProviderKeys, id: \.self) { key in

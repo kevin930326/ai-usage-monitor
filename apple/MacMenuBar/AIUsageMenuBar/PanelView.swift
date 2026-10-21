@@ -20,6 +20,9 @@ struct PanelView: View {
                         ProviderBlock(key: key, provider: provider, stale: stale, now: store.now)
                     }
                 }
+                if snapshot.hasNoProviders {
+                    NoProvidersNotice()
+                }
                 Divider()
                 UpdatedText(updatedAt: snapshot.updatedAt, stale: stale)
                     .font(.caption)

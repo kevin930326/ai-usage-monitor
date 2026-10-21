@@ -21,6 +21,9 @@ struct LockScreenActivityView<Trailing: View>: View {
             if let tightest = state.tightest(at: now) {
                 TightestHeader(item: tightest, mode: state.mode, stale: stale, now: now)
             }
+            if state.providers.isEmpty {
+                NoProvidersNotice()
+            }
             ForEach(state.providers) { provider in
                 ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
@@ -210,6 +213,9 @@ struct WatchActivityView: View {
                 }
             }
             .padding(8)
+        } else if state.providers.isEmpty {
+            NoProvidersNotice(showsHint: false)
+                .padding(8)
         } else {
             Label("沒有資料", systemImage: "exclamationmark.triangle")
                 .font(.caption)

@@ -34,6 +34,8 @@ struct UsageWidgetView: View {
                 ResetText(window: item.window, now: now)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+            } else if snapshot.hasNoProviders {
+                NoProvidersNotice()
             } else {
                 Label("沒有資料", systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -53,6 +55,9 @@ struct UsageWidgetView: View {
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
+            }
+            if snapshot.hasNoProviders {
+                NoProvidersNotice()
             }
             Spacer(minLength: 0)
             footer

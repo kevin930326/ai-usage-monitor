@@ -64,6 +64,12 @@ describe("POST /usage", () => {
     assert.equal((await call("POST", "write-secret", JSON.stringify(rest))).status, 422);
   });
 
+  it("接受沒有啟用任何服務的快照（providers 為空物件不是錯誤）", async () => {
+    const empty = { ...SNAPSHOT, providers: {} };
+    assert.equal((await call("POST", "write-secret", JSON.stringify(empty))).status, 204);
+    assert.deepEqual(await (await call("GET", "read-secret")).json(), empty);
+  });
+
   it("拒絕過大的內容", async () => {
     const big = JSON.stringify({ ...SNAPSHOT, pad: "x".repeat(MAX_BODY_BYTES) });
     assert.equal((await call("POST", "write-secret", big)).status, 413);

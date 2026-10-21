@@ -8,6 +8,8 @@
 - iPhone 主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行），kind `UsageHomeWidget`，放在既有的 `UsageWidget` 擴充；小工具自己以共用的 Keychain 讀取密鑰呼叫中繼，每 25 分鐘重新整理（資料過期時每小時），重置與過期時間點放在 timeline
 - UsageKitUI `ProviderIcon`：原創服務圖示（Claude 八芒星、Codex 六瓣雲鏤空 `>_`），三個平台共用，template 繪製並套服務識別色，附 VoiceOver 名稱
 - iOS／watchOS Debug 示範情境 `codex`（Codex 最吃緊）；手錶 `AUM_RENDER` 另輸出圓形複雜功能的淺色與主題色模擬
+- 只用 Claude 或只用 Codex 的使用者：收集器 `config.json` 新增 `enabled_providers`，`install-launchd.sh` 依 Mac 上的登入資訊自動偵測並印出結果；未啟用的服務不出現在 `providers`、不算錯誤、不寫日誌。沒有這個欄位時全部啟用（舊安裝不變）
+- 各平台在只有一個服務時不留空位（iPhone 大型小工具改放大最吃緊一項、額度單欄），沒有任何服務時顯示「沒有啟用任何服務」提示；Debug 示範情境 `claude-only`、`codex-only`、`none`
 - `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
 
 ### Changed

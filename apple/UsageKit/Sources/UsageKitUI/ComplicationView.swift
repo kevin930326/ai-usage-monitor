@@ -32,8 +32,9 @@ public struct ComplicationView: View {
         return UsageColors.bar(item.window, provider: item.provider, stale: stale, now: now)
     }
     private var pctText: String { item.map { _ in "\(Int(pct.rounded()))" } ?? "--" }
+    private var noProviders: Bool { snapshot?.hasNoProviders ?? false }
     private var title: String {
-        guard let item else { return "AI 用量" }
+        guard let item else { return noProviders ? ProviderInfo.noProvidersTitle : "AI 用量" }
         return "\(ProviderInfo.displayName(item.provider)) \(item.window.label)"
     }
 
@@ -61,25 +62,44 @@ public struct ComplicationView: View {
             .gaugeStyle(.accessoryCircularCapacity)
             .tint(tint)
         case .accessoryInline:
-            Text(item == nil ? "AI 用量 --" : "\(title) \(pctText)%")
+            Text(item == nil ? "AI 用量 \(noProviders ? ProviderInfo.noProvidersTitle : "--")" : "\(title) \(pctText)%")
         default:
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .widgetAccentable()
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text("\(pctText)%")
-                        .font(.title3.weight(.semibold).monospacedDigit())
-                    Text(stale && item != nil ? "已過期" : mode.label)
+            if noProviders {
+                // 沒有百分比可顯示，不畫空的進度條
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("AI 用量")
+                        .font(.headline)
+                        .widgetAccentable()
+                    Text(ProviderInfo.noProvidersTitle)
+                        .font(.caption)
+                    Text("請在 Mac 登入服務")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Gauge(value: pct, in: 0...100) { EmptyView() }
-                    .gaugeStyle(.accessoryLinearCapacity)
-                    .tint(tint)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                rectangular
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var rectangular: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.headline)
+                .widgetAccentable()
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(pctText)%")
+                    .font(.title3.weight(.semibold).monospacedDigit())
+                Text(stale && item != nil ? "已過期" : mode.label)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Gauge(value: pct, in: 0...100) { EmptyView() }
+                .gaugeStyle(.accessoryLinearCapacity)
+                .tint(tint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

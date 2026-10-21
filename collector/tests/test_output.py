@@ -17,7 +17,7 @@ OK_PROVIDERS = {"a": mock.Mock(fetch=mock.Mock(return_value=ProviderUsage(plan="
 class SchemaTest(unittest.TestCase):
     def test_snapshot_has_schema_version(self):
         with mock.patch.dict(cli.PROVIDERS, OK_PROVIDERS, clear=True):
-            self.assertEqual(cli.collect()["schema_version"], SCHEMA_VERSION)
+            self.assertEqual(cli.collect(["a"])["schema_version"], SCHEMA_VERSION)
 
     def test_parse_iso_accepts_z_suffix(self):
         self.assertEqual(parse_iso("2026-10-20T10:00:00Z"), parse_iso("2026-10-20T10:00:00+00:00"))
@@ -73,6 +73,7 @@ class MainTest(unittest.TestCase):
     def run_main(self, *args):
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.dict(cli.PROVIDERS, OK_PROVIDERS, clear=True), \
+             mock.patch.object(cli, "enabled_providers", return_value=["a"]), \
              redirect_stdout(out), redirect_stderr(err):
             code = cli.main(list(args))
         return code, out.getvalue(), err.getvalue()

@@ -57,6 +57,11 @@ private struct UsageList: View {
                         }
                     }
                 }
+                if snapshot.hasNoProviders {
+                    Section {
+                        NoProvidersNotice()
+                    }
+                }
                 ForEach(snapshot.orderedProviderKeys, id: \.self) { key in
                     if let provider = snapshot.providers[key] {
                         Section(ProviderInfo.displayName(key)) {

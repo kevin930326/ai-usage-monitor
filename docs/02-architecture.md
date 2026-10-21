@@ -22,6 +22,7 @@
 - 每家服務一個 provider，介面一致：輸入無，輸出 `ProviderUsage` 或錯誤。
 - 每次執行都重新讀取 token，**不自行刷新 token**，避免與 Claude Code / Codex CLI 互搶。
 - Claude token 已過期或距離 `expiresAt` 不到 5 分鐘時，委派 Claude Code 續期：在暫存資料夾執行一次 `claude -p /usage --safe-mode --no-session-persistence`（不呼叫模型、不消耗額度），再重新讀取 Keychain。最多每 30 分鐘嘗試一次；續期失敗超過 30 分鐘發一次 macOS 通知。claude 的完整路徑由安裝腳本寫進 `config.json`。理由與風險見 [ADR-0005](adr/0005-delegate-claude-token-refresh.md)。
+- 只收集啟用的服務：`config.json` 的 `enabled_providers`（例如 `["claude"]`）由安裝腳本依 Mac 上的登入資訊偵測後寫入（Keychain 有 `Claude Code-credentials` → claude；有 `~/.codex/auth.json` → codex）。未啟用的服務不查詢、不輸出、不寫日誌；已啟用但讀不到登入資訊才是錯誤（該服務的 `error`）。沒有設定檔或沒有這個欄位時全部啟用，舊安裝不受影響。
 - Codex 的 access token 有效期 10 天，Codex CLI 約每 8 天主動續期，目前不需要委派（同見 ADR-0005）。
 - 由 launchd 每 5 分鐘觸發。
 - 除了上傳中繼 API，也寫入本機 `~/Library/Application Support/AIUsageMonitor/usage.json`（先寫暫存檔再改名，避免讀到寫一半的檔案），供 Mac 選單列 App 讀取（FR-20）。
@@ -115,6 +116,7 @@ apple/
 - `resets_at` 存絕對時間（UTC ISO 8601），iOS 端用 `Text(date, style: .relative)` 自動倒數。
 - `hidden`：次要額度（如各模型的每週上限），iOS／Mac 端預設不顯示（FR-14）。
 - 失敗的 provider：`windows` 為空陣列、`error` 為簡短訊息。
+- `providers` 只包含收集器啟用的服務，可能只有一個或是空物件；這不是錯誤，也不是格式變更，`schema_version` 不變。各平台照常顯示現有的服務，不為缺少的服務留空位；`providers` 為空時顯示「沒有啟用任何服務」的提示。
 
 ## 4. 失敗處理
 
@@ -122,5 +124,6 @@ apple/
 |---|---|
 | Mac 關機、睡眠或離線 | 顯示最後一筆與「更新於 N 分鐘前」，超過 30 分鐘變灰（手錶 45 分鐘，FR-11）；重置時間已過的額度標示「已重置」（FR-26） |
 | 某家 API 改版或失敗 | 該欄顯示「—」，另一家照常 |
+| 使用者沒有用某個服務 | 安裝腳本不啟用它，`providers` 中沒有該服務，畫面上不出現、不算錯誤 |
 | Live Activity 被系統結束 | 下次捷徑排程重開 |
 | 免費帳號簽署過期 | 以 Xcode 重新安裝 |

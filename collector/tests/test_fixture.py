@@ -25,7 +25,7 @@ class SharedFixtureTest(unittest.TestCase):
         codex = mock.Mock(fetch=mock.Mock(side_effect=ProviderError("token 過期，請在 Mac 重新登入 Codex")))
         providers = {"claude": mock.Mock(fetch=mock.Mock(return_value=claude)), "codex": codex}
         with mock.patch.dict(cli.PROVIDERS, providers, clear=True):
-            snapshot = cli.collect()
+            snapshot = cli.collect(list(providers))
         # updated_at 是執行當下的時間，其餘欄位要完全相同
         self.assertEqual(snapshot["schema_version"], self.fixture["schema_version"])
         self.assertEqual(snapshot["providers"], self.fixture["providers"])
