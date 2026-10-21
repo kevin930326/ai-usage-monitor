@@ -28,6 +28,8 @@ struct HomeEntry: TimelineEntry {
     let mode: UsageDisplayMode
     /// 沒有資料可顯示時的原因（尚未設定、抓取失敗）
     var message: String?
+    /// 有舊資料可顯示、但這次抓不到新資料的原因，顯示在頁尾
+    var refreshError: String?
 }
 
 struct HomeTimelineProvider: TimelineProvider {
@@ -58,7 +60,8 @@ struct HomeTimelineProvider: TimelineProvider {
             let interval = stale ? Self.staleRefreshInterval : Self.refreshInterval
             // 重置與過期的時間點各一筆（不扣次數），讓「已重置」與轉灰準時出現
             let entries = UsageTimelineSchedule.entryDates(now: now, snapshot: entry.snapshot, horizon: interval)
-                .map { HomeEntry(date: $0, snapshot: entry.snapshot, mode: entry.mode, message: entry.message) }
+                .map { HomeEntry(date: $0, snapshot: entry.snapshot, mode: entry.mode, message: entry.message,
+                                 refreshError: entry.refreshError) }
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(interval))))
         }
     }
@@ -81,7 +84,8 @@ struct HomeTimelineProvider: TimelineProvider {
             // 沒網路、重新開機後尚未解鎖（讀不到 Keychain）等：顯示最後一份，畫面依資料時間轉灰
             let cached = SharedStore.loadSnapshot()
             return HomeEntry(date: now, snapshot: cached, mode: mode,
-                             message: cached == nil ? error.localizedDescription : nil)
+                             message: cached == nil ? error.localizedDescription : nil,
+                             refreshError: cached == nil ? nil : error.localizedDescription)
         }
     }
 
@@ -100,14 +104,16 @@ struct HomeTimelineProvider: TimelineProvider {
     }
 }
 
-/// 小工具上的「更新」按鈕。執行完 WidgetKit 會重新整理時間軸（`getTimeline` 重新抓中繼），
-/// 按鈕觸發的重新整理不扣每日次數。
+/// 小工具上的「更新」按鈕：要求重新整理時間軸，`getTimeline` 會重新抓中繼。
+/// 不能只回傳 `.result()` 等系統自己重新整理：實測（iOS 27 模擬器）按鈕執行完系統不會呼叫 `getTimeline`，
+/// 畫面停在舊資料。使用者按的才會呼叫，每天幾次，不影響 WidgetKit 的每日次數。
 struct ReloadUsageWidgetIntent: AppIntent {
     static let title: LocalizedStringResource = "更新 AI 用量小工具"
     static let isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
-        .result()
+        WidgetCenter.shared.reloadTimelines(ofKind: SharedStore.widgetKind)
+        return .result()
     }
 }
 
@@ -122,7 +128,7 @@ struct HomeWidgetView: View {
                              staleAfter: UsageSnapshot.staleAfter, now: entry.date)
         default:
             if let snapshot = entry.snapshot {
-                let state = UsageActivityState(snapshot: snapshot, mode: entry.mode)
+                let state = UsageActivityState(snapshot: snapshot, mode: entry.mode).withRefreshError(entry.refreshError)
                 switch family {
                 case .systemSmall:
                     SmallUsageView(state: state, now: entry.date)
@@ -190,7 +196,7 @@ private struct SmallUsageView: View {
                     .font(.caption)
             }
             Spacer(minLength: 0)
-            ActivityFooter(updatedAt: state.updatedAt, stale: stale)
+            ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -246,7 +252,7 @@ private struct LargeUsageView: View {
                 }
             }
             Spacer(minLength: 0)
-            ActivityFooter(updatedAt: state.updatedAt, stale: stale) {
+            ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError) {
                 RefreshButton(intent: ReloadUsageWidgetIntent())
             }
         }

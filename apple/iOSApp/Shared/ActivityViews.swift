@@ -24,7 +24,7 @@ struct LockScreenActivityView<Trailing: View>: View {
             ForEach(state.providers) { provider in
                 ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
-            ActivityFooter(updatedAt: state.updatedAt, stale: stale) {
+            ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError) {
                 trailing
             }
         }
@@ -141,31 +141,40 @@ struct ResetLabel: View {
     }
 }
 
-/// 更新時間；過期時提示 Mac 可能離線（FR-11）。
+/// 更新時間；過期時提示 Mac 可能離線（FR-11），「更新」抓不到資料時在後面加上原因。
 struct ActivityFooter<Trailing: View>: View {
     let updatedAt: Date
     let stale: Bool
+    var refreshError: String? = nil
     @ViewBuilder var trailing: Trailing
+
+    private var warning: Bool { stale || refreshError != nil }
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: stale ? "exclamationmark.circle" : "clock")
-            if stale {
-                Text("資料已過期 · ") + Text(updatedAt, style: .time) + Text(" 更新")
-            } else {
-                Text(updatedAt, style: .time) + Text(" 更新")
+            Image(systemName: warning ? "exclamationmark.circle" : "clock")
+            Group {
+                if let refreshError {
+                    // 仍顯示資料時間（沿用的舊資料），原因放後面，太長就截掉
+                    Text(updatedAt, style: .time) + Text(" 更新 · 更新失敗：\(refreshError)")
+                } else if stale {
+                    Text("資料已過期 · ") + Text(updatedAt, style: .time) + Text(" 更新")
+                } else {
+                    Text(updatedAt, style: .time) + Text(" 更新")
+                }
             }
-            Spacer()
+            .lineLimit(1)
+            Spacer(minLength: 4)
             trailing
         }
         .font(.caption2)
-        .foregroundStyle(stale ? UsageColors.notice : .secondary)
+        .foregroundStyle(warning ? UsageColors.notice : .secondary)
     }
 }
 
 extension ActivityFooter where Trailing == EmptyView {
-    init(updatedAt: Date, stale: Bool) {
-        self.init(updatedAt: updatedAt, stale: stale) { EmptyView() }
+    init(updatedAt: Date, stale: Bool, refreshError: String? = nil) {
+        self.init(updatedAt: updatedAt, stale: stale, refreshError: refreshError) { EmptyView() }
     }
 }
 

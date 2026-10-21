@@ -50,7 +50,7 @@ enum UsageActivityConfiguration {
                         ForEach(state.providers) { provider in
                             ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: .now)
                         }
-                        ActivityFooter(updatedAt: state.updatedAt, stale: stale) { RefreshButton() }
+                        ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError) { RefreshButton() }
                     }
                 }
             } compactLeading: {

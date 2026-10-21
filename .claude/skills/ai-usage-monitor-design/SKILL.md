@@ -118,6 +118,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
   來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/Shared/UsageViews.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
 - **一律顯示最後更新時間**；過期時改為「資料已過期 · HH:mm 更新」（門檻見第 4 節）。錶面空間不足的複雜功能以灰色表示過期。
   來源：`ActivityViews.swift`（`ActivityFooter`）、`apple/MacMenuBar/Shared/UsageViews.swift`（`UpdatedText`）、`apple/iOSApp/AIUsageMonitor/Views/HomeView.swift`（`UpdatedFooter`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
+- **「更新」按鈕抓不到新資料**：卡片與小工具保留舊資料，頁尾改為「HH:mm 更新 · 更新失敗：原因」（提示色，單行截斷），下次成功就清掉。不能按了沒反應：使用者分不出是網路、密鑰還是中繼的問題。小工具的按鈕要自己呼叫 `WidgetCenter.reloadTimelines`，按鈕執行完系統不一定會重新整理時間軸。
+  來源：`UsageActivityState.swift`（`refreshError`、`withRefreshError`）、`ActivityViews.swift`（`ActivityFooter`）、`LiveActivityController.refresh()`、`UsageHomeWidget.swift`（`ReloadUsageWidgetIntent`、`HomeEntry.refreshError`）。
 
 ## 7. 平台限制
 
