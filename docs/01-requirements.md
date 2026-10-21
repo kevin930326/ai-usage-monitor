@@ -10,10 +10,11 @@
 - Claude：5 小時視窗、每週視窗的使用率與重置時間
 - Codex：每週視窗（及有提供的其他視窗）的使用率與重置時間
 - iPhone 鎖定畫面／動態島的 Live Activity 顯示
+- iPhone 主畫面與鎖定畫面小工具（FR-31、FR-32）
 - 手動更新按鈕、捷徑定時重開
 
 **不包含**
-- Android、iPhone 主畫面小工具（可列為未來擴充）
+- Android（可列為未來擴充）
 - 多使用者、帳號系統、多帳號切換
 - Claude 與 Codex 以外的服務（provider 架構保留擴充空間）
 - APNs 遠端推播（需付費帳號，列為未來擴充）
@@ -78,6 +79,17 @@ FR-18、FR-19、FR-23 所需的歷史資料存放方式評估中，見 [ADR-0004
 | FR-28 | 錶面複雜功能：顯示最吃緊額度的剩餘 % 與服務標示，顏色依 FR-16（圓形、矩形、單行三種尺寸） | Could | v1.4 |
 | FR-29 | 手錶 App：列出所有服務的可見額度與重置倒數 | Could | v1.4 |
 | FR-30 | 手錶從 iPhone 取得中繼網址與讀取密鑰（WatchConnectivity），不需在手錶上輸入 | Could | v1.4 |
+
+### 3.5 iPhone 小工具
+
+| ID | 需求 | 優先度 | 里程碑 |
+|---|---|---|---|
+| FR-31 | iPhone 主畫面小工具（小、中、大）：小為最吃緊的一項，中與 Live Activity 卡片相同，大為最吃緊一項加上所有額度；中、大有「更新」按鈕。顯示規則同 FR-11、FR-12、FR-15～FR-17、FR-26 | Could | v0.6 |
+| FR-32 | iPhone 鎖定畫面小工具（圓形、矩形、單行）：顯示最吃緊額度的 % 與服務圖示，鎖定時也看得到 | Could | v0.6 |
+
+- **資料來源**：小工具自己以 App 的讀取密鑰（共用的 Keychain 項目）呼叫中繼 `GET /usage`，不必等 App 開啟；網址與顯示模式放在 App Group 的 UserDefaults，最後一份資料存在 App Group 的 `usage.json`，抓不到中繼時顯示它並依資料時間轉灰。密鑰仍只在 Keychain（NFR-1）。
+- **更新預算**：WidgetKit 每天約 40～70 次。小工具每 25 分鐘重新整理（資料過期時每小時），App 在背景取得新資料時另外 reload，一般約 51 次／天、最多約 63 次；重置與過期時間點放在 timeline，不扣次數。計算見 [`apple/iOSApp/README.md`](../apple/iOSApp/README.md#重新整理次數)。
+- **部署目標**：與 Live Activity 同一個 Widget 擴充（iOS 18 以上），App 本身仍支援 iOS 17。
 
 ## 4. 非功能需求
 

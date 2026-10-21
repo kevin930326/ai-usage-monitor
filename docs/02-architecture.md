@@ -38,11 +38,11 @@
 |---|---|
 | `UsageService` | 呼叫 `GET /usage`，讀取密鑰存於 Keychain |
 | `UsageAttributes` | Live Activity 資料結構，App 與 Widget 共用 |
-| Widget Extension | 只負責繪製鎖定畫面／動態島卡片 |
+| Widget Extension | 繪製鎖定畫面／動態島卡片；主畫面與鎖定畫面小工具 `UsageHomeWidget`（FR-31、FR-32）也在這個擴充，自己呼叫中繼 |
 | `RefreshUsageIntent` | 「更新」按鈕：抓資料後 `activity.update()` |
 | `RestartUsageActivityIntent` | 捷徑用：抓資料、開新卡片，成功後才結束舊卡片 |
 
-兩個 Intent 皆為 `LiveActivityIntent`，在背景執行不開 App；資料透過 ActivityKit state 傳給 Widget，不需 App Group。
+兩個 Intent 皆為 `LiveActivityIntent`，在背景執行不開 App；Live Activity 的資料透過 ActivityKit state 傳給 Widget。主畫面與鎖定畫面小工具不經過 ActivityKit：網址、顯示模式與最後一份資料放在 App Group，讀取密鑰放在 App 與擴充共用的 Keychain 項目（見 [`apple/iOSApp/README.md`](../apple/iOSApp/README.md#主畫面與鎖定畫面小工具)）。
 
 Live Activity 以 `.supplementalActivityFamilies([.small])` 提供手錶版面，watchOS 11 以上會自動出現在 Apple Watch 智慧型堆疊（FR-27），不需要另外的手錶 App。
 
