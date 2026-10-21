@@ -35,7 +35,7 @@ public struct AdaptiveColor: Hashable, Sendable {
 }
 
 /// App、Live Activity、Mac、手錶共用的顏色（FR-16）。SwiftUI 的 `Color` 在 UsageKitUI 的 `UsageColors`。
-/// 服務以文字與識別色區分，不使用 Anthropic、OpenAI 的官方 logo。
+/// 服務以原創圖示（UsageKitUI 的 `ProviderIcon`）與識別色區分，不使用 Anthropic、OpenAI 的官方 logo。
 public enum UsagePalette {
     /// 服務識別色。深色外觀為原色（Claude 珊瑚橘 #D97757、Codex 青綠 #5CC2B1）；
     /// 淺色外觀調暗，讓進度條與文字在白色背景上也清楚。

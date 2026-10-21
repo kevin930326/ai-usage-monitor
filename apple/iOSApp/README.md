@@ -71,6 +71,7 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 | `error` | Codex 失敗、Claude 正常 |
 | `reset` | Claude 5 小時額度的重置時間已過 |
 | `used` | 顯示已用 % |
+| `codex` | Codex 最吃緊（動態島顯示 Codex 圖示） |
 
 另外設定 `AUM_DEMO_ACTION=restart` 時，開卡一秒後會再執行一次捷徑動作，並把前後的卡片 ID 寫到 `Documents/restart-log.json`。
 

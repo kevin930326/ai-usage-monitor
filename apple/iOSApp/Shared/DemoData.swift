@@ -11,6 +11,7 @@ enum DemoData {
         case error    // Codex 失敗、Claude 正常（FR-12）
         case reset    // Claude 5 小時的重置時間已過（FR-26）
         case used     // 顯示已用 %（FR-17）
+        case codex    // Codex 最吃緊：動態島與錶面顯示 Codex 圖示
     }
 
     static var current: Scenario? {
@@ -37,7 +38,7 @@ enum DemoData {
         let codex = scenario == .error
             ? ProviderUsage(plan: "Team", error: "token 過期，請在 Mac 重新登入 Codex")
             : ProviderUsage(plan: "Team", windows: [
-                UsageWindow(id: "five_hour", label: "5 小時", usedPct: 12, resetsAt: at(240)),
+                UsageWindow(id: "five_hour", label: "5 小時", usedPct: scenario == .codex ? 81 : 12, resetsAt: at(240)),
                 UsageWindow(id: "weekly", label: "每週", usedPct: 48, resetsAt: at(5 * 24 * 60)),
             ])
         return UsageSnapshot(updatedAt: updatedAt, providers: ["claude": claude, "codex": codex])

@@ -5,7 +5,7 @@
 | 部分 | 內容 |
 |---|---|
 | 手錶 App | 最吃緊的一項大字顯示，各服務各額度的進度條與重置倒數、更新時間；過期轉灰、重置後顯示「已重置」（FR-29） |
-| 錶面複雜功能 | 圓形（容量環 + 服務標示 CL／CX + %）、矩形（名稱 + % + 進度條）、單行（名稱 + %），顯示最吃緊額度的剩餘 %；顏色依 FR-16（服務識別色、剩餘 < 20% 紅色、過期灰色）（FR-28） |
+| 錶面複雜功能 | 圓形（容量環 + 服務圖示 + %）、矩形（名稱 + % + 進度條）、單行（名稱 + %），顯示最吃緊額度的剩餘 %；顏色依 FR-16（服務識別色、剩餘 < 20% 紅色、過期灰色）（FR-28） |
 | 更新時機 | 打開 App、回到前景、錯誤畫面的「重試」，以及背景重新整理（`WKApplicationRefreshBackgroundTask`，約每 30 分鐘）。每次成功都存到 App Group 並呼叫 `reloadAllTimelines` |
 | 設定同步 | iPhone App 儲存中繼設定時，以 WatchConnectivity 的 application context 傳到手錶，手錶不需要輸入（FR-30） |
 
@@ -28,8 +28,8 @@ Debug 版本支援：
 
 | 變數 | 作用 |
 |---|---|
-| `AUM_DEMO=<情境>` | 使用假資料、不連網，情境與 iOS 相同（`normal`、`stale`、`error`、`reset`、`used`） |
-| `AUM_RENDER=1` | 把三種複雜功能以 ImageRenderer 輸出到 App 容器的 `Documents/complication-*.png` |
+| `AUM_DEMO=<情境>` | 使用假資料、不連網，情境與 iOS 相同（`normal`、`stale`、`error`、`reset`、`used`、`codex`） |
+| `AUM_RENDER=1` | 把三種複雜功能以 ImageRenderer 輸出到 App 容器的 `Documents/complication-*.png`；圓形另有淺色背景（`-circular-light`）與模擬單色／主題色錶面（`-circular-tinted`）兩張 |
 
 ```bash
 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER=1 \
