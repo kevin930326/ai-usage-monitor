@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var token = ""
     @State private var testResult: TestResult?
     @State private var testing = false
+    @State private var saveError: String?
 
     // 貼上的值常帶前後空白或換行，判斷、測試與儲存都用去除後的值
     private var cleanURL: String { RelayInput.clean(url) }
@@ -69,6 +70,12 @@ struct SettingsView: View {
                         EmptyView()
                     }
                 }
+
+                if let saveError {
+                    Section {
+                        Label(saveError, systemImage: "xmark.circle.fill").foregroundStyle(UsageColors.notice)
+                    }
+                }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -99,7 +106,13 @@ struct SettingsView: View {
     }
 
     private func save() {
-        model.saveSettings(url: cleanURL, token: cleanToken)
+        do {
+            try model.saveSettings(url: cleanURL, token: cleanToken)
+        } catch {
+            // 沒存成功就留在設定畫面，舊密鑰仍可用
+            saveError = error.localizedDescription
+            return
+        }
         dismiss()
         Task { await model.refresh() }
     }
