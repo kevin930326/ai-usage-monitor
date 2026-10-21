@@ -7,8 +7,11 @@
       偵測不到時改看鑰匙圈中 Apple Development 憑證的 OU。只有一個 Team 時印出，否則結束碼 1。
   reinstall_ios_helper.py iphones <devicectl-devices.json>
       印出實體 iPhone，每行「UDID<TAB>名稱<TAB>連線方式」。
-  reinstall_ios_helper.py due <state.json> <天數>
-      距上次成功已達指定天數（或從未成功）時結束碼 0，否則 1。
+  reinstall_ios_helper.py plan <state.json> <天數> <快到期天數> <捷徑時間,...> <提前分鐘> <時段分鐘>
+      launchd 用：決定這次檢查要不要重新安裝，印出一行：
+        skip                 還不需要，或不在捷徑前的時段
+        window<TAB>HH:MM     滿 <天數>，且在捷徑 HH:MM 前 <提前分鐘> 起的 <時段分鐘> 內
+        overdue              滿 <快到期天數> 或從未成功：不挑時間
   reinstall_ios_helper.py success <state.json>
       記錄成功並清除失敗狀態。
   reinstall_ios_helper.py failure <state.json> <小時>
@@ -18,6 +21,8 @@
 
 環境變數 AUM_NOW（Unix 秒）可覆寫現在時間，測試重試與通知用。
 """
+from __future__ import annotations
+
 import json
 import os
 import plistlib
@@ -26,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -101,9 +107,29 @@ def save(path: Path, state: dict) -> None:
     os.replace(tmp, path)
 
 
-def cmd_due(path: str, days: str) -> int:
+def shortcut_window(at: datetime, times: str, lead: float, width: float) -> str | None:
+    """at 落在某個捷徑時間前 lead 分鐘起、寬 width 分鐘的時段時，回傳該捷徑時間。"""
+    for hhmm in times.split(","):
+        hour, minute = map(int, hhmm.split(":"))
+        for day in (at.date(), at.date() + timedelta(days=1)):  # 23:00 前的時段可能跨午夜
+            shortcut = datetime(day.year, day.month, day.day, hour, minute)
+            start = shortcut - timedelta(minutes=lead)
+            if start <= at < start + timedelta(minutes=width):
+                return f"{hour:02d}:{minute:02d}"
+    return None
+
+
+def cmd_plan(path: str, days: str, overdue_days: str, times: str, lead: str, width: str) -> int:
     last = load(Path(path)).get("last_success")
-    return 0 if last is None or now() - last >= float(days) * 86400 else 1
+    age = None if last is None else now() - last
+    if age is None or age >= float(overdue_days) * 86400:
+        print("overdue")
+    elif age >= float(days) * 86400 and \
+            (shortcut := shortcut_window(datetime.fromtimestamp(now()), times, float(lead), float(width))):
+        print(f"window\t{shortcut}")
+    else:
+        print("skip")
+    return 0
 
 
 def cmd_success(path: str) -> int:
@@ -131,7 +157,7 @@ def cmd_scheduled() -> int:
     return subprocess.call(["/bin/bash", str(script), "--if-due"])
 
 
-COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "due": cmd_due,
+COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "plan": cmd_plan,
             "success": cmd_success, "failure": cmd_failure, "scheduled": cmd_scheduled}
 
 if __name__ == "__main__":

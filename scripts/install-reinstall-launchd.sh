@@ -1,5 +1,5 @@
 #!/bin/bash
-# 安裝 launchd 排程：每 6 天重新簽署並安裝 iOS App，失敗時每 3 小時重試（scripts/reinstall-ios.sh）
+# 安裝 launchd 排程：每 20 分鐘檢查，滿 6 天後在捷徑自動化前的時段重新簽署並安裝 iOS App（scripts/reinstall-ios.sh）
 set -euo pipefail
 
 LABEL="io.github.kevin930326.ai-usage-monitor.reinstall"

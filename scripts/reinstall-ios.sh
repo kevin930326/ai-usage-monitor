@@ -1,9 +1,14 @@
 #!/bin/bash
 # 重新簽署並透過網路把 iOS App 安裝到 iPhone。
-# 免費 Apple ID（Personal Team）簽署的 App 7 天後失效，launchd 每 6 天執行一次（見 scripts/install-reinstall-launchd.sh）。
+# 免費 Apple ID（Personal Team）簽署的 App 7 天後失效。launchd 每 20 分鐘呼叫一次 --if-due
+# （見 scripts/install-reinstall-launchd.sh），由 reinstall_ios_helper.py plan 決定要不要裝：
+#   - 未滿 6 天：不做事
+#   - 滿 6 天：只在捷徑自動化前的時段（SHORTCUT_TIMES 前 25～5 分鐘）安裝，裝完不打開 App，
+#     重新安裝結束的鎖定畫面卡片由接著執行的捷徑「重新啟動用量監看」開回來
+#   - 滿 6.5 天（快到期）或從未成功：不挑時間，裝完打開 App 把卡片開回來
 #
-#   scripts/reinstall-ios.sh            # 立即建置並安裝
-#   scripts/reinstall-ios.sh --if-due   # launchd 用：距上次成功未滿 6 天就不做事
+#   scripts/reinstall-ios.sh            # 立即建置並安裝，裝完打開 App
+#   scripts/reinstall-ios.sh --if-due   # launchd 用
 #
 # 簽署使用 Xcode 已登入的 Apple ID（-allowProvisioningUpdates），腳本內不放任何帳號或密碼。
 # Team ID 與 iPhone UDID 存在 config.json（不進版控）：
@@ -23,6 +28,11 @@ DERIVED="$HOME/Library/Caches/AIUsageMonitor/DerivedData"
 HELPER=(python3 "$REPO/scripts/reinstall_ios_helper.py")
 UPDATE_CONFIG=(python3 "$REPO/collector/scripts/update-config.py" "$CONFIG")
 INTERVAL_DAYS=6
+OVERDUE_DAYS=6.5
+# 要與 iPhone 捷徑 App 的定時自動化相同（apple/iOSApp/README.md「捷徑：讓卡片整天顯示」）
+SHORTCUT_TIMES="07:00,15:00,23:00"
+LEAD_MINUTES=25    # 時段從捷徑前 25 分鐘開始
+WINDOW_MINUTES=20  # 寬 20 分鐘，與檢查間隔相同，Mac 醒著時每個時段剛好檢查一次；留 5 分鐘給建置與安裝
 NOTIFY_AFTER_HOURS=24
 TITLE="AI 用量"
 BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
@@ -49,8 +59,13 @@ fail() {  # fail <結束碼> <訊息>
     exit "$1"
 }
 
-if [ "${1:-}" = "--if-due" ] && ! "${HELPER[@]}" due "$STATE" "$INTERVAL_DAYS"; then
-    exit 0
+MODE=manual
+if [ "${1:-}" = "--if-due" ]; then
+    PLAN=$("${HELPER[@]}" plan "$STATE" "$INTERVAL_DAYS" "$OVERDUE_DAYS" "$SHORTCUT_TIMES" \
+        "$LEAD_MINUTES" "$WINDOW_MINUTES") || exit 4
+    MODE=${PLAN%%$'\t'*}
+    [ "$MODE" = skip ] && exit 0
+    NEXT_SHORTCUT=${PLAN##*$'\t'}
 fi
 
 # 同時只跑一個（手動與 launchd 可能重疊）
@@ -61,7 +76,7 @@ if ! mkdir "$LOCK" 2>/dev/null; then
 fi
 trap 'rmdir "$LOCK"' EXIT
 
-log "開始重新安裝（$REPO @ $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)）"
+log "開始重新安裝（${MODE}，$REPO @ $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)）"
 
 # 1. Team ID：config.json 優先，沒有就偵測後寫入
 TEAM=$(config_get development_team)
@@ -109,9 +124,14 @@ fi
 EXPIRES=$(date -v+7d '+%m/%d')
 log "安裝成功，簽署約在 ${EXPIRES} 到期"
 
-# 5. 重新安裝會結束鎖定畫面的 Live Activity。打開 App 並帶參數，讓 App 在前景把卡片開回來。
-#    手機鎖定時打不開；簽署已經更新，仍算成功，卡片等下一次捷徑自動化重開。
-if xcrun devicectl device process launch --device "$UDID" --terminate-existing --timeout 60 \
+# 5. 重新安裝會結束鎖定畫面的 Live Activity。
+#    捷徑前的時段：幾分鐘後的捷徑自動化會把卡片開回來，不打開 App 以免打擾。
+#    其他情況：打開 App 並帶參數，讓 App 在前景把卡片開回來。手機鎖定時打不開；
+#    簽署已經更新，仍算成功，卡片等下一次捷徑自動化重開。
+if [ "$MODE" = window ]; then
+    log "鎖定畫面卡片會由 ${NEXT_SHORTCUT} 的捷徑自動化開回來"
+    notify "已重新安裝 iPhone App（簽署約在 ${EXPIRES} 到期），鎖定畫面卡片會在 ${NEXT_SHORTCUT} 回來"
+elif xcrun devicectl device process launch --device "$UDID" --terminate-existing --timeout 60 \
         "$BUNDLE_ID" -- --start-live-activity >>"$LOG" 2>&1; then
     log "已打開 App 並重開鎖定畫面卡片"
     notify "已重新安裝 iPhone App，簽署約在 ${EXPIRES} 到期"
