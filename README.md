@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml)
 
-在 iPhone 鎖定畫面用 Live Activity 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。Mac 選單列 App 與桌面小工具直接讀取本機資料，與 iPhone 共用同一套 Swift 程式碼。
+在 iPhone 鎖定畫面用 Live Activity、或用主畫面與鎖定畫面小工具，隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。Mac 選單列 App 與桌面小工具直接讀取本機資料，與 iPhone 共用同一套 Swift 程式碼。
 
 > 🚧 開發中（目前 v0.5：Mac 收集器、中繼 API、iOS App、鎖定畫面 Live Activity 與捷徑已可運作；Mac 選單列 App 與 Apple Watch App 為預覽版，下一步是實機驗證與文件（v1.0）），進度見 [CHANGELOG](CHANGELOG.md)。
 
@@ -56,6 +56,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | Mac 收集器 | `https://chatgpt.com/backend-api/wham/usage` | Codex CLI 的 token（`~/.codex/auth.json`） | 取得 Codex 用量 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
+| iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰（與 App 共用的 Keychain 項目） | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘，受 watchOS 預算限制） |
 | Mac 選單列 App、桌面小工具、Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀本機檔案或 App 傳來的資料 | — |
 
@@ -71,8 +72,9 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | Mac | `~/Library/Logs/AIUsageMonitor/collector.log` | 收集器 log（錯誤訊息，不含 token） |
 | Mac | App Group `~/Library/Group Containers/group.io.github.kevin930326.AIUsageMonitor/usage.json` | 快照複本給桌面小工具；只有以 Team 簽署、帶 App Group entitlement 時才寫入 |
 | Cloudflare | Worker KV `latest`；Worker secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新快照；兩把密鑰 |
-| iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰 |
-| iPhone | UserDefaults | 中繼網址、顯示已用／剩餘 |
+| iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組（App 自己的 application identifier）共用同一個項目 |
+| iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults 與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示）。舊版存在 App 自己的 UserDefaults，第一次啟動時複製過來 |
+| iPhone | 主畫面／鎖定畫面小工具 | 各額度百分比與重置時間；**鎖定畫面小工具鎖定時也看得到** |
 | iPhone | Live Activity 內容（鎖定畫面、動態島） | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
 | iPhone、Apple Watch | WatchConnectivity application context | 中繼網址與**讀取密鑰**。由系統存在兩端 App 的容器中（不在 Keychain），供手錶下次啟動時取得（FR-30） |
 | Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults | 讀取密鑰、中繼網址 |

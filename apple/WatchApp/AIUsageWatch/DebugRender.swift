@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import UsageKit
+import UsageKitUI
 import WidgetKit
 
 /// 開發用：`AUM_RENDER=1` 時把三種複雜功能以 ImageRenderer 輸出到 App 容器的 Documents，

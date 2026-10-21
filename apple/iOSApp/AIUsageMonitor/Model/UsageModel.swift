@@ -13,7 +13,7 @@ final class UsageModel {
     private(set) var isStartingActivity = false
 
     private(set) var relayURL: String {
-        didSet { UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey) }
+        didSet { SharedStore.defaults.set(relayURL, forKey: UsageSource.relayURLKey) }
     }
     private(set) var readToken: String {
         didSet { KeychainStore.write(readToken, account: UsageSource.readTokenAccount) }
@@ -22,6 +22,7 @@ final class UsageModel {
     var displayMode: UsageDisplayMode {
         didSet {
             UsageSource.displayMode = displayMode
+            SharedStore.publish(nil)
             Task { await updateLiveActivity() }
         }
     }
@@ -38,6 +39,11 @@ final class UsageModel {
         let demo = DemoData.current
         demoScenario = demo?.rawValue
         displayMode = demo.map(DemoData.mode) ?? UsageSource.displayMode
+        // 小工具讀不到 App 的環境變數，示範情境經由 App Group 傳過去
+        if SharedStore.demoScenario != demoScenario {
+            SharedStore.demoScenario = demoScenario
+            SharedStore.publish(nil)
+        }
         #else
         demoScenario = nil
         displayMode = UsageSource.displayMode
@@ -57,6 +63,7 @@ final class UsageModel {
         do {
             snapshot = try await fetch()
             errorMessage = nil
+            SharedStore.publish(snapshot)
             // App 開啟時順便更新卡片（FR-8）
             await updateLiveActivity()
         } catch {
@@ -73,6 +80,7 @@ final class UsageModel {
         relayURL = url
         readToken = token
         WatchSettingsSync.shared.send(url: url, token: token)
+        SharedStore.publish(nil)
     }
 
     /// 設定畫面的「測試連線」，成功時順便更新主畫面。
@@ -97,6 +105,7 @@ final class UsageModel {
         do {
             let snap = try await fetch()
             snapshot = snap
+            SharedStore.publish(snap)
             try await LiveActivityController.start(snapshot: snap, mode: displayMode, demoScenario: demoScenario)
             liveActivityError = nil
         } catch {

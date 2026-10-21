@@ -5,10 +5,12 @@ import UsageKitUI
 
 // Live Activity 的畫面元件。放在 Shared/ 讓 App 也能渲染同一份畫面（除錯與文件截圖用）。
 
-/// 鎖定畫面卡片（FR-8、11、12、15、16、17、26）。
-struct LockScreenActivityView: View {
+/// 鎖定畫面卡片（FR-8、11、12、15、16、17、26）。中型主畫面小工具也用這個版面，
+/// 頁尾右側換成小工具自己的按鈕。
+struct LockScreenActivityView<Trailing: View>: View {
     let state: UsageActivityState
     var now: Date = .now
+    @ViewBuilder var trailing: Trailing
 
     // 只看資料時間（FR-11）。ActivityKit 的 `context.isStale` 在 staleDate 到時變成 true，
     // 但 staleDate 也可能是下一個重置時間，那時資料仍是新的，不能拿來判斷過期。
@@ -23,11 +25,17 @@ struct LockScreenActivityView: View {
                 ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
             ActivityFooter(updatedAt: state.updatedAt, stale: stale) {
-                RefreshButton()
+                trailing
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+extension LockScreenActivityView where Trailing == RefreshButton {
+    init(state: UsageActivityState, now: Date = .now) {
+        self.init(state: state, now: now) { RefreshButton() }
     }
 }
 
@@ -201,10 +209,12 @@ struct WatchActivityView: View {
     }
 }
 
-/// 觸發 `RefreshUsageIntent` 的按鈕（FR-9）。
+/// 「更新」按鈕（FR-9）：卡片上觸發 `RefreshUsageIntent`，主畫面小工具傳入自己的 Intent。
 struct RefreshButton: View {
+    var intent: any AppIntent = RefreshUsageIntent()
+
     var body: some View {
-        Button(intent: RefreshUsageIntent()) {
+        Button(intent: intent) {
             Label("更新", systemImage: "arrow.clockwise")
                 .font(.caption2.weight(.semibold))
                 .padding(.horizontal, 10)

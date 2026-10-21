@@ -65,6 +65,7 @@ enum LiveActivityController {
         // 沿用舊卡片的顯示模式（與「更新」按鈕相同），沒有舊卡片時用設定值
         let mode = old.first?.content.state.mode ?? UsageSource.displayMode
         let snapshot = try await UsageSource.fetch(demoScenario: demoScenario)
+        SharedStore.publish(snapshot)
         let activity = try await start(snapshot: snapshot, mode: mode, demoScenario: demoScenario)
         ActivityLog.recordRestart(before: before, after: activity.id)
     }
@@ -73,6 +74,7 @@ enum LiveActivityController {
     static func refresh() async throws {
         guard let activity = activities.first else { return }
         let snapshot = try await UsageSource.fetch(demoScenario: activity.attributes.demoScenario)
+        SharedStore.publish(snapshot)
         await update(snapshot: snapshot, mode: activity.content.state.mode)
     }
 }

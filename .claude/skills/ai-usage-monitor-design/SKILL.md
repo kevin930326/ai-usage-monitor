@@ -59,7 +59,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 | 平台 | 門檻 | 常數 |
 |---|---|---|
-| iPhone App、Live Activity、Mac 選單列與桌面小工具 | 30 分鐘 | `UsageSnapshot.staleAfter` |
+| iPhone App、Live Activity、iPhone 主畫面／鎖定畫面小工具、Mac 選單列與桌面小工具 | 30 分鐘 | `UsageSnapshot.staleAfter` |
 | Apple Watch App 與錶面複雜功能 | 45 分鐘 | `UsageSnapshot.watchStaleAfter` |
 
 手錶較長是因為背景重新整理約每 30 分鐘一次，且時間由 watchOS 決定（見 `apple/WatchApp/README.md`）。Timeline 的重新整理時間點要用和畫面相同的門檻。
@@ -77,7 +77,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | watchOS App | `io.github.kevin930326.AIUsageMonitor.watchkitapp` |
 | 錶面複雜功能 | `io.github.kevin930326.AIUsageMonitor.watchkitapp.UsageComplications` |
 | App Group | `group.io.github.kevin930326.AIUsageMonitor` |
-| 小工具 kind | Mac `UsageDesktopWidget`、手錶 `UsageComplication` |
+| 小工具 kind | Mac `UsageDesktopWidget`、手錶 `UsageComplication`、iPhone 主畫面／鎖定畫面 `UsageHomeWidget` |
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
 
@@ -109,6 +109,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | `staleDate` 不可落在過去 | 給過去的時間，系統會直接把卡片從鎖定畫面移除；取資料過期時間與下一個重置時間中較早且尚未到的，都過去就給 `nil` | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
 | Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |
 | Mac 桌面小工具 reload 最短 25 分鐘 | 內容有變且距上次 ≥ 25 分鐘，或距上次已達 25 分鐘才 `reloadAllTimelines`；每天 ≤ 58 次。收集器每 5 分鐘寫一次，每次都 reload 會用掉約 288 次 | `apple/UsageKit/Sources/UsageKit/WidgetSupport.swift`（`WidgetReloadThrottle`）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift` |
+| iPhone 主畫面小工具 reload 25 分鐘 | 小工具自己抓中繼，每 25 分鐘（資料過期時 60 分鐘）；App 背景取得新資料時另外 reload（約 5 次／天），前景與按鈕 Intent 不扣次數。一般約 51 次／天、最多約 63 次 | `apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`refreshInterval`）、`apple/iOSApp/Shared/SharedStore.swift`（`publish`）、`apple/iOSApp/README.md`「重新整理次數」 |
 | 手錶背景更新約 30 分鐘 | 每次背景更新 reload 一次複雜功能，約 48 次／天；實際時間由 watchOS 決定，過期門檻因此是 45 分鐘 | `apple/WatchApp/AIUsageWatch/AIUsageWatchApp.swift`（`backgroundInterval`） |
 | WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`WidgetReloadThrottle` 註解、`UsageTimelineSchedule.entryDates`） |
 | Mac 動畫與 3D 效果只在面板開啟時執行 | 面板關閉時不能佔 CPU／GPU；計時器允許系統合併喚醒（FR-25、NFR-8）。FR-25 尚未實作，實作時要遵守 | `docs/01-requirements.md`（FR-25、NFR-8）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
@@ -126,6 +127,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
    回到主畫面，卡片會縮成動態島精簡版。情境：`normal`（Claude 最吃緊）、`codex`（Codex 最吃緊）、`stale`、`error`、`reset`、`used`。
    - `xcrun simctl io screenshot` **拍不到動態島內容**，要用模擬器控制工具的截圖。
    - 深色、淺色各拍一次：`xcrun simctl ui booted appearance dark|light`。
+   - **主畫面小工具**：示範情境會經由 App Group 傳給小工具。回到主畫面長按「AI 用量」圖示選尺寸（或編輯 →「加入小工具」），用 `xcrun simctl io booted screenshot` 截圖（主畫面拍得到）；長按小工具可直接換尺寸。
 3. **手錶複雜功能**：錶面無法以程式設定，改用 Debug 的 `AUM_RENDER=1` 以 ImageRenderer 輸出：
    ```bash
    SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER=1 xcrun simctl launch <手錶 UDID> io.github.kevin930326.AIUsageMonitor.watchkitapp

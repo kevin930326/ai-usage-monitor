@@ -33,6 +33,13 @@ targets:
       - package: UsageKit
         product: UsageKitUI
       - target: UsageWidget
+    # App Group：中繼網址、顯示模式與最後一份資料給小工具讀；Keychain 群組是 App 自己的
+    # application identifier，小工具讀得到既有的讀取密鑰。免費 Apple ID 的描述檔也包含這兩項
+    entitlements:
+      path: AIUsageMonitor/AIUsageMonitor.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+        keychain-access-groups: [$(AppIdentifierPrefix)io.github.kevin930326.AIUsageMonitor]
     info:
       path: AIUsageMonitor/Info.plist
       properties:
@@ -49,7 +56,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
 
-  # Live Activity 的鎖定畫面／動態島／手錶版面（FR-8、FR-27）
+  # Live Activity 的鎖定畫面／動態島／手錶版面（FR-8、FR-27），以及主畫面／鎖定畫面小工具
   UsageWidget:
     type: app-extension
     platform: iOS
@@ -61,6 +68,11 @@ targets:
         product: UsageKit
       - package: UsageKit
         product: UsageKitUI
+    entitlements:
+      path: UsageWidget/UsageWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+        keychain-access-groups: [$(AppIdentifierPrefix)io.github.kevin930326.AIUsageMonitor]
     info:
       path: UsageWidget/Info.plist
       properties:
