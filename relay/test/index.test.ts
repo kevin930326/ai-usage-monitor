@@ -70,6 +70,13 @@ describe("POST /usage", () => {
     assert.deepEqual(await (await call("GET", "read-secret")).json(), empty);
   });
 
+  it("LIMITS 允許的最大快照不會被 body 上限擋下", async () => {
+    const window = (i: number) => ({ id: `weekly_model_${i}`, label: `每週 Model ${i}`, used_pct: 100, resets_at: "2026-10-21T05:00:00Z", hidden: true });
+    const provider = { plan: "Max", error: null, windows: Array.from({ length: 16 }, (_, i) => window(i)) };
+    const full = { ...SNAPSHOT, providers: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`provider_${i}`, provider])) };
+    assert.equal((await call("POST", "write-secret", JSON.stringify(full))).status, 204);
+  });
+
   it("拒絕過大的內容", async () => {
     const big = JSON.stringify({ ...SNAPSHOT, pad: "x".repeat(MAX_BODY_BYTES) });
     assert.equal((await call("POST", "write-secret", big)).status, 413);

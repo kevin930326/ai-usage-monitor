@@ -17,7 +17,8 @@ export interface Env {
 }
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1];
-export const MAX_BODY_BYTES = 16 * 1024;
+// 要裝得下 LIMITS 允許的最大快照（8 個服務 × 16 個額度約 18 KB），實際快照約 1～2 KB
+export const MAX_BODY_BYTES = 64 * 1024;
 const LATEST_KEY = "latest";
 
 function json(body: unknown, status = 200): Response {
