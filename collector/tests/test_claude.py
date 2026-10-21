@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import stat
@@ -5,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from usage_collector import __main__ as cli
@@ -193,6 +195,30 @@ class ClaudeFetchTest(unittest.TestCase):
         with FakeClaude(script="sleep 5"), mock.patch.object(claude, "TIMEOUT", 0.3), \
              self.assertRaisesRegex(ProviderError, "逾時"):
             claude.fetch()
+
+    def test_claude_output_stays_out_of_the_log(self):
+        # 日誌（launchd 導到 collector.log）只會有固定的錯誤訊息：claude 的 stderr、
+        # auth status 的輸出（含 email）都不能進去
+        script = "echo 'person@example.com' >&2; [ \"$1\" = auth ] && exit 0; exit 3"
+        out, err = io.StringIO(), io.StringIO()
+        with FakeClaude(script=script), mock.patch.object(cli, "enabled_providers", return_value=["claude"]), \
+             redirect_stdout(out), redirect_stderr(err):
+            code = cli.main(["--compact"])
+        self.assertEqual(code, 1)
+        self.assertIn("claude: Claude Code 執行 /usage 失敗（結束碼 3）", err.getvalue())
+        for secret in ("person@example.com", "@", "Organization", "/Users/example"):
+            self.assertNotIn(secret, err.getvalue())
+            self.assertNotIn(secret, out.getvalue())
+
+    def test_unparsable_plan_is_dropped_quietly(self):
+        # auth status 印出非 JSON 或含個資的錯誤時：plan 為 None、不寫日誌、用量照常
+        script = "if [ \"$1\" = auth ]; then echo 'error: person@example.com not logged in' >&2; echo 'not json'; exit 1; fi"
+        err = io.StringIO()
+        with FakeClaude(script=script), redirect_stderr(err):
+            usage = claude.fetch()
+        self.assertIsNone(usage.plan)
+        self.assertEqual(len(usage.windows), 3)
+        self.assertEqual(err.getvalue(), "")
 
     def test_non_zero_exit_hides_stderr(self):
         with FakeClaude(script="echo 'person@example.com' >&2; exit 3"), \
