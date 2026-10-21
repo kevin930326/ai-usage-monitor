@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 
 from . import local_store, relay
+from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS
 
@@ -26,11 +27,6 @@ def collect() -> dict:
         "updated_at": iso_utc(datetime.now(timezone.utc)),
         "providers": providers,
     }
-
-
-def log(message: str) -> None:
-    # launchd 會把 stderr 導到日誌檔，加上時間方便追查
-    print(f"[{iso_utc(datetime.now(timezone.utc))}] {message}", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

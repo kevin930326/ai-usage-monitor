@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 
+from .. import claude_refresh
 from ..http import get_json
 from ..models import ProviderError, ProviderUsage, Window, parse_iso
 
@@ -33,9 +33,6 @@ def read_credentials() -> dict:
         oauth = json.loads(result.stdout)["claudeAiOauth"]
     except (json.JSONDecodeError, KeyError):
         raise ProviderError("尚未在終端機登入 Claude Code") from None
-    # 不自行刷新 token，避免和 Claude Code 互搶；過期就等 Claude Code 下次啟動時續期
-    if oauth.get("expiresAt") and oauth["expiresAt"] / 1000 < time.time():
-        raise ProviderError("token 已過期，開一次 Claude Code 即可自動續期")
     return oauth
 
 
@@ -69,7 +66,8 @@ def parse_scoped_limits(limits: list) -> list[Window]:
 
 
 def fetch() -> ProviderUsage:
-    oauth = read_credentials()
+    # 不自行刷新 token，避免和 Claude Code 互搶；快過期時委派 Claude Code 續期後重新讀取（ADR-0005）
+    oauth = claude_refresh.ensure_fresh(read_credentials(), read_credentials)
     body = get_json(USAGE_URL, {
         "Authorization": f"Bearer {oauth['accessToken']}",
         "anthropic-beta": "oauth-2025-04-20",

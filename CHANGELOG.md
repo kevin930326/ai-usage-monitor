@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）
+
+### Changed
+- `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
+
 ## [0.5.0] - 2026-10-21
 
 涵蓋路線圖 v0.4（Live Activity）與 v0.5（捷徑）兩個里程碑，沒有單獨發布 v0.4.0。Mac 選單列 App（v1.2）與 Apple Watch App（v1.4）一起合併，以預覽版提供：需要 Team 簽署與 App Group，尚未在實機驗證。
