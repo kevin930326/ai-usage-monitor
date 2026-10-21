@@ -1,6 +1,6 @@
 import Foundation
 
-/// 顯示「已用 %」或「剩餘 %」（FR-17）。
+/// 顯示「已用 %」或「剩餘 %」（FR-17）。只用在 iPhone（App、Live Activity、iPhone 小工具），Mac 與手錶固定顯示剩餘。
 public enum UsageDisplayMode: String, Codable, CaseIterable, Sendable {
     case used
     case remaining

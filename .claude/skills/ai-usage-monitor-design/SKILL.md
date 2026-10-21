@@ -110,8 +110,9 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
 - **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
   來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
-- **每個額度顯示**：名稱、剩餘或已用 %（依使用者設定，FR-17，預設剩餘）、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
+- **每個額度顯示**：名稱、剩餘或已用 %、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
   來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`）。
+- **已用／剩餘設定只在 iPhone**（FR-17，預設剩餘）：iPhone App、Live Activity（含手錶智慧型堆疊的版面）與 iPhone 主畫面／鎖定畫面小工具依設定，用 `displayedPct(mode, at:)`。Mac 選單列、面板、桌面小工具，以及手錶 App 與錶面複雜功能**固定顯示剩餘 %**（`effectiveRemainingPct`；`ComplicationView` 用預設的 `.remaining`），設定不會同步到 Mac 或手錶。
 - **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
   來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。
 - **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大最吃緊的一項、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
