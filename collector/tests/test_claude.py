@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import stat
@@ -5,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from usage_collector import __main__ as cli
@@ -55,6 +57,45 @@ class ClaudeParseTest(unittest.TestCase):
             ("weekly_opus", "每週 Opus", 97.0, None, True),
         ])
 
+    def test_model_scope_becomes_a_safe_window_id(self):
+        # id 只含 [a-z0-9_]，relay 與 App 都好處理；顯示名稱保留原文；all models 不分大小寫
+        cases = {
+            "Opus": ("weekly_opus", "每週 Opus", True),
+            "Sonnet only": ("weekly_sonnet", "每週 Sonnet", True),
+            "Sonnet 4.5 only": ("weekly_sonnet_4_5", "每週 Sonnet 4.5", True),
+            "Claude 3.5 Sonnet": ("weekly_claude_3_5_sonnet", "每週 Claude 3.5 Sonnet", True),
+            "All models": ("weekly", "每週", False),
+        }
+        for scope, expected in cases.items():
+            with self.subTest(scope):
+                self.assertEqual(claude.window_for(scope), expected)
+
+    def test_strange_or_long_scope_is_a_format_change(self):
+        # 其他字元、空字串或超過 32 字：不讓它變成快照裡的 id／label（relay 會因長度拒絕整份快照）
+        for scope in ("模型 A", "Opus; rm -rf", "x" * 33, " only", ""):
+            with self.subTest(scope), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse(f"Current session: 1% used\nCurrent week ({scope}): 2% used\n", None, RECORDED_AT)
+
+    def test_duplicate_window_is_a_format_change(self):
+        for text in ("Current session: 1% used\nCurrent session: 2% used\n",
+                     "Current session: 1% used\nCurrent week (Opus): 2% used\nCurrent week (Opus only): 3% used\n"):
+            with self.subTest(text), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse(text, None, RECORDED_AT)
+
+    def test_ansi_colour_codes_are_ignored(self):
+        # 整行被色碼包住時不能把那個額度悄悄略過；色碼只包數字時也要解得出來
+        plain = claude.parse(fixture("usage-max.txt"), None, RECORDED_AT)
+        coloured = fixture("usage-max.txt").replace(
+            "Current session: 45% used", "\x1b[1mCurrent session: \x1b[33m45%\x1b[0m used\x1b[0m").replace(
+            "Current week (all models): 12% used", "\x1b[1mCurrent week (all models): 12% used\x1b[0m")
+        self.assertEqual(coloured.count("\x1b"), 6)  # 確定測試資料真的有被改到
+        self.assertEqual(claude.parse(coloured, None, RECORDED_AT).to_dict(), plain.to_dict())
+
+    def test_reset_hour_must_be_1_to_12(self):
+        for text in ("Oct 22 at 0am (Asia/Taipei)", "Oct 22 at 13pm (Asia/Taipei)", "Oct 22 at 99pm (Asia/Taipei)"):
+            with self.subTest(text), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse_reset(text, RECORDED_AT)
+
     def test_reset_variants(self):
         cases = {
             "Oct 22 at 1am (Asia/Taipei)": "2026-10-21T17:00:00Z",
@@ -83,8 +124,9 @@ class ClaudeParseTest(unittest.TestCase):
                      "Current session: -5% used",
                      "Current session: nan% used",
                      "Current session: twelve% used",
-                     "Current week (all models): 12 % used"):
-            with self.subTest(line), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                     "Current week (all models): 12 % used",
+                     "Current session: " + "9" * 400 + "% used"):   # float() 會變成 inf
+            with self.subTest(line[:60]), self.assertRaisesRegex(ProviderError, "格式已改變"):
                 claude.parse(line, None, RECORDED_AT)
 
     def test_bad_hidden_scoped_line_is_error_not_skipped(self):
@@ -149,7 +191,8 @@ class FakeClaude:
 
 class ClaudeFetchTest(unittest.TestCase):
     def test_fetch_runs_claude_and_reads_plan(self):
-        with FakeClaude() as fake:
+        with FakeClaude(script="[ \"$NO_COLOR\" = 1 ] || exit 96; [ -z \"$FORCE_COLOR\" ] || exit 95") as fake, \
+             mock.patch.dict(os.environ, {"FORCE_COLOR": "1"}):
             usage = claude.fetch()
             cwd = fake.cwd_marker.read_text().strip()
         self.assertEqual(usage.plan, "Max")
@@ -194,6 +237,30 @@ class ClaudeFetchTest(unittest.TestCase):
              self.assertRaisesRegex(ProviderError, "逾時"):
             claude.fetch()
 
+    def test_claude_output_stays_out_of_the_log(self):
+        # 日誌（launchd 導到 collector.log）只會有固定的錯誤訊息：claude 的 stderr、
+        # auth status 的輸出（含 email）都不能進去
+        script = "echo 'person@example.com' >&2; [ \"$1\" = auth ] && exit 0; exit 3"
+        out, err = io.StringIO(), io.StringIO()
+        with FakeClaude(script=script), mock.patch.object(cli, "enabled_providers", return_value=["claude"]), \
+             redirect_stdout(out), redirect_stderr(err):
+            code = cli.main(["--compact"])
+        self.assertEqual(code, 1)
+        self.assertIn("claude: Claude Code 執行 /usage 失敗（結束碼 3）", err.getvalue())
+        for secret in ("person@example.com", "@", "Organization", "/Users/example"):
+            self.assertNotIn(secret, err.getvalue())
+            self.assertNotIn(secret, out.getvalue())
+
+    def test_unparsable_plan_is_dropped_quietly(self):
+        # auth status 印出非 JSON 或含個資的錯誤時：plan 為 None、不寫日誌、用量照常
+        script = "if [ \"$1\" = auth ]; then echo 'error: person@example.com not logged in' >&2; echo 'not json'; exit 1; fi"
+        err = io.StringIO()
+        with FakeClaude(script=script), redirect_stderr(err):
+            usage = claude.fetch()
+        self.assertIsNone(usage.plan)
+        self.assertEqual(len(usage.windows), 3)
+        self.assertEqual(err.getvalue(), "")
+
     def test_non_zero_exit_hides_stderr(self):
         with FakeClaude(script="echo 'person@example.com' >&2; exit 3"), \
              self.assertRaises(ProviderError) as ctx:
@@ -216,6 +283,11 @@ class ResolveClaudePathTest(unittest.TestCase):
                 self.assertEqual(claude.resolve_claude_path(config), str(exe))
             with mock.patch.dict(os.environ, {"PATH": "/nonexistent"}):
                 self.assertIsNone(claude.resolve_claude_path(Path(d) / "missing.json"))
+                # claude_path 不是字串：當成沒設定，不丟 TypeError
+                for bad in ([str(exe)], {"path": str(exe)}, 3, True):
+                    config.write_text(json.dumps({"claude_path": bad}))
+                    with self.subTest(bad=bad):
+                        self.assertIsNone(claude.resolve_claude_path(config))
 
 
 if __name__ == "__main__":

@@ -25,9 +25,11 @@ fi
 
 # 只收集這台 Mac 登入過的服務，沒用的服務不會在 App 上顯示成錯誤。
 # 一個都沒偵測到時不寫入，收集器維持全部啟用，登入後不必重新安裝也能開始收集。
+# 找不到 claude 指令時 Claude 的登入狀態是「不知道」而不是「沒登入」：也不寫入，
+# 不然原本啟用的 Claude 會被悄悄關掉（收集器仍會每 5 分鐘記錄「找不到 claude 執行檔」）。
 DETECTED="$("$COLLECTOR_DIR/scripts/detect-providers.sh" "$CLAUDE")"
 has_provider() { printf '%s\n' "$DETECTED" | grep -qx "$1"; }
-if [ -n "$DETECTED" ]; then
+if [ -n "$DETECTED" ] && [ -n "$CLAUDE" ]; then
     ENABLED="$(printf '%s\n' "$DETECTED" | "$PYTHON" -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))')"
     "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" --json "$CONFIG_DIR/config.json" enabled_providers "$ENABLED"
 fi
@@ -44,16 +46,24 @@ launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$TARGET"
 
 echo "已安裝：$TARGET"
+if [ -z "$CLAUDE" ]; then
+    echo
+    echo "⚠️  找不到 claude 指令，無法取得 Claude 用量，也沒有更動 config.json 的 enabled_providers。"
+    echo "   請把 claude 加進 PATH（或裝在 ~/.local/bin、/opt/homebrew/bin）後重新執行這個腳本。"
+    echo
+fi
 if [ -z "$DETECTED" ]; then
     echo
     echo "⚠️  沒有偵測到任何登入資訊。請先在終端機執行 claude 並 /login，或執行 codex login。"
     echo "   在那之前收集器會照常排程，但只會記錄「找不到登入資訊」；登入後下一次執行就會開始收集。"
     echo
 else
-    if has_provider claude; then
+    if [ -z "$CLAUDE" ]; then
+        echo "Claude 用量：不確定（找不到 claude 指令，enabled_providers 維持原設定）"
+    elif has_provider claude; then
         echo "Claude 用量：啟用（Claude Code 已登入）"
     else
-        echo "Claude 用量：未啟用（${CLAUDE:+Claude Code 沒有登入}${CLAUDE:-找不到 claude 指令}）"
+        echo "Claude 用量：未啟用（Claude Code 沒有登入）"
     fi
     if has_provider codex; then
         echo "Codex 用量：啟用（找到 ~/.codex/auth.json）"

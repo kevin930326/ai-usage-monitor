@@ -31,6 +31,20 @@ class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_SameOriginRedirectHandler)
 
 
+def _reason(e: urllib.error.HTTPError) -> str:
+    """4xx 回應若帶我們自己的 `{"error": "…"}`（中繼 API 的驗證訊息），把原因附在錯誤後面，
+    否則日誌只有「HTTP 422」看不出哪個欄位被拒。只取短的純文字，不帶其他內容。"""
+    if not 400 <= e.code < 500:
+        return ""
+    try:
+        reason = json.loads(e.read(2048)).get("error")
+    except (ValueError, AttributeError, OSError):
+        return ""
+    if not isinstance(reason, str) or not reason or len(reason) > 200 or "\n" in reason:
+        return ""
+    return f"：{reason}"
+
+
 def request_json(url: str, headers: dict[str, str], body: dict | None = None, timeout: float = 15) -> dict:
     data = None
     headers = {"User-Agent": USER_AGENT, **headers}
@@ -47,7 +61,7 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
             raise ProviderError(f"伺服器要求重新導向（HTTP {e.code}），已停止") from None
         if e.code in (401, 403):
             raise ProviderError(f"驗證失敗 (HTTP {e.code})，請重新登入") from None
-        raise ProviderError(f"HTTP {e.code}") from None
+        raise ProviderError(f"HTTP {e.code}{_reason(e)}") from None
     except urllib.error.URLError:
         raise ProviderError("網路錯誤") from None
     except json.JSONDecodeError:

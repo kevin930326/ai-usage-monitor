@@ -17,7 +17,8 @@ export interface Env {
 }
 
 export const SUPPORTED_SCHEMA_VERSIONS = [1];
-export const MAX_BODY_BYTES = 16 * 1024;
+// 要裝得下 LIMITS 允許的最大快照（8 個服務 × 16 個額度約 18 KB），實際快照約 1～2 KB
+export const MAX_BODY_BYTES = 64 * 1024;
 const LATEST_KEY = "latest";
 
 function json(body: unknown, status = 200): Response {
@@ -54,14 +55,18 @@ async function authorized(request: Request, expected: string): Promise<boolean> 
 // 上限遠大於實際用量（目前 2 個服務、每個最多約 6 個額度），只為擋下明顯錯誤的內容
 export const LIMITS = { providers: 8, windows: 16, plan: 64, error: 500, id: 64, label: 64, maxPct: 1000 };
 const PROVIDER_KEY = /^[a-z0-9_-]{1,32}$/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+// 收集器輸出整秒的 ISO 8601；不收小數秒，iOS 17／macOS 14 的 ISO8601DateFormatter 解不出來
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/;
 
 type Fields = Record<string, unknown>;
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const isObject = (v: unknown): v is Fields => typeof v === "object" && v !== null && !Array.isArray(v);
-const isDate = (v: unknown): v is string => typeof v === "string" && ISO_DATE.test(v) && !Number.isNaN(Date.parse(v));
+// Date.parse 會把 2 月 30 日自動進位成 3 月 2 日，所以日期部分再以 UTC 來回一次確認真的存在
+const isDate = (v: unknown): v is string =>
+  typeof v === "string" && ISO_DATE.test(v) && !Number.isNaN(Date.parse(v)) &&
+  new Date(`${v.slice(0, 10)}T00:00:00Z`).toISOString().slice(0, 10) === v.slice(0, 10);
 const isText = (v: unknown, max: number) => typeof v === "string" && v.length <= max;
 
 /** 字串或 null 的選填欄位：存在才保留，型別或長度不對時回傳錯誤訊息。 */

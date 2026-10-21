@@ -1,4 +1,5 @@
 import Foundation
+import UsageKit
 import WatchConnectivity
 
 /// 把中繼網址與讀取密鑰送到配對的 Apple Watch（FR-30），手錶上不需要輸入。
@@ -7,7 +8,7 @@ import WatchConnectivity
 /// - 手錶 App 開啟時會向 iPhone 要設定（`didReceiveMessage` 的 replyHandler 回覆），
 ///   iPhone App 沒在執行時系統會在背景喚醒它。
 /// - iPhone 儲存設定時，若手錶 App 正開著（`isReachable`）就直接送過去。
-/// 手錶端見 apple/WatchApp/AIUsageWatch/SettingsReceiver.swift。
+/// 訊息格式與判斷在 UsageKit 的 `WatchSettingsMessage`（可測試）；手錶端見 apple/WatchApp/AIUsageWatch/SettingsReceiver.swift。
 final class WatchSettingsSync: NSObject, WCSessionDelegate, @unchecked Sendable {
     static let shared = WatchSettingsSync()
 
@@ -21,8 +22,10 @@ final class WatchSettingsSync: NSObject, WCSessionDelegate, @unchecked Sendable 
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isWatchAppInstalled, session.isReachable else { return }
+        let message = WatchSettingsMessage.settings(url: url, token: token)
+        guard !message.isEmpty else { return }
         // 送不到沒關係：手錶下次開啟時會自己來要
-        session.sendMessage(Self.settingsMessage(url: url, token: token), replyHandler: nil, errorHandler: nil)
+        session.sendMessage(message, replyHandler: nil, errorHandler: nil)
     }
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
@@ -31,10 +34,7 @@ final class WatchSettingsSync: NSObject, WCSessionDelegate, @unchecked Sendable 
 
     /// 手錶 App 開啟時來要設定。iPhone 還沒設定時回空字典，手錶維持「請在 iPhone 設定」。
     func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
-        guard message[Self.requestKey] as? Bool == true else { return replyHandler([:]) }
-        let url = UsageSource.relayURL
-        let token = UsageSource.readToken
-        replyHandler(url.isEmpty || token.isEmpty ? [:] : Self.settingsMessage(url: url, token: token))
+        replyHandler(WatchSettingsMessage.reply(to: message, url: UsageSource.relayURL, token: UsageSource.readToken))
     }
 
     /// 配對了另一支手錶或手錶 App 剛安裝：清掉舊版留下的 context
@@ -52,15 +52,10 @@ final class WatchSettingsSync: NSObject, WCSessionDelegate, @unchecked Sendable 
     /// 舊版以 application context 傳送，系統會一直保留最後一份（含讀取密鑰）。
     /// 以空的 context 覆蓋，兩端保存的副本都會被取代。
     private func clearLegacyContext(_ session: WCSession) {
-        guard session.activationState == .activated, session.isPaired, session.isWatchAppInstalled,
-              !session.applicationContext.isEmpty else { return }
+        guard WatchSettingsMessage.shouldClearLegacyContext(
+            activated: session.activationState == .activated, paired: session.isPaired,
+            watchAppInstalled: session.isWatchAppInstalled, contextIsEmpty: session.applicationContext.isEmpty
+        ) else { return }
         try? session.updateApplicationContext([:])
-    }
-
-    /// 手錶要設定時送的鍵，見 SettingsReceiver.requestSettings()
-    static let requestKey = "requestSettings"
-
-    private static func settingsMessage(url: String, token: String) -> [String: Any] {
-        ["relayURL": url, "readToken": token]
     }
 }

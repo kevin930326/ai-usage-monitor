@@ -21,23 +21,27 @@
 - iPhone App 與 Widget 擴充加入 App Group 與 Keychain 群組（免費 Apple ID 也可簽署）；中繼網址與顯示模式改存 App Group 的 UserDefaults，第一次啟動時自動從舊位置複製
 - 錶面的 `ComplicationView` 移到 UsageKitUI，加入顯示模式與過期門檻參數，iPhone 鎖定畫面小工具共用
 - 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
+- ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新
+- `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ### Fixed
+- 整合後審查（#37／#38／#39／#40 合併後）：
+  - 收集器：`/usage` 額度行的百分比位數多到溢位、重置時間的小時不在 1～12、同一個額度印兩行、模型名稱含奇怪字元或超過 32 字，一律回報格式改變；各模型額度的 id 改為 `[a-z0-9_]`（`Sonnet 4.5 only` → `weekly_sonnet_4_5`）；解析前去除終端機色碼並以 `NO_COLOR` 執行 claude；`config.json` 的 `claude_path` 不是字串時當成沒設定
+  - 收集器：中繼回 4xx 時把它的錯誤原因附在日誌（之前只有「HTTP 422」）
+  - 安裝腳本：找不到 `claude` 指令時不再把 `enabled_providers` 改成只有 Codex（Claude 的登入狀態是「不知道」，維持原設定並提示）
+  - 中繼：body 上限提高到 64 KiB（原本 16 KiB 裝不下 LIMITS 允許的最大快照）；拒絕含小數秒的時間（iOS 17／macOS 14 解不出來）與不存在的日期（2 月 30 日）；需重新部署 Worker
+  - 手錶／iPhone：sendMessage 設定同步的訊息格式移到 UsageKit `WatchSettingsMessage` 並加上測試；fixture 測試改經真正的 `/usage` 解析器產生快照
 - 中繼：依 schema 驗證上傳的快照（`providers` 必須是物件、百分比、日期、字串長度、數量上限），並只保存白名單欄位，其他欄位移除；需重新部署 Worker（C-12）
 - Live Activity：重置時間早於資料過期時間時，卡片不再永遠不轉灰；`staleDate` 在過期前一律給過期時間，過期前的重置在同一次重繪顯示（最多晚 30 分鐘）（C-01）
 - 自動重裝：程序被強制結束後殘留的鎖不再永久停止重裝；鎖內記錄 PID，程序已不存在、舊版無 PID 或超過 2 小時的鎖會被接手（C-02）
 - 收集器：含 Bearer 密鑰的請求只跟隨同來源（scheme、主機、port 相同）的重新導向，最多 3 次（C-03）
-- 收集器：API 缺少或格式錯誤的百分比回報為格式錯誤，不再當成 0% 已用；隱藏的各模型額度格式錯誤時只略過該項（C-04）；改用 Claude Code `/usage` 輸出後（ADR-0006），額度行缺少或認不得百分比時整個回報格式錯誤，同樣不會變成 0%
+- 收集器：缺少或格式錯誤的百分比回報為格式錯誤，不再當成 0% 已用（C-04）。Codex 以 API 欄位驗證；Claude 改用 `/usage` 輸出後（ADR-0006）以額度行驗證，任何一行認不得就整個回報格式改變，不略過
 - iPhone／手錶：讀取密鑰改為先更新、不存在才新增，寫入失敗時保留舊密鑰並顯示錯誤，不同步到手錶（C-05）
 - iPhone App 停在前景時每分鐘重算過期、已重置、百分比與最吃緊一項（C-07）
 - 資料時間比裝置時間晚超過過期門檻時視為過期，Mac 時鐘快了也不會讓舊資料一直顯示成新的（C-09）
 - 手錶背景重新整理排程失敗時延後 1、5、15 分鐘重試，App 回到前景時也重新排程（C-10）
 - 自動重裝腳本全程使用 launchd 指定的 Python，不再依 PATH 找 `python3`（C-13）
 - 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）（之後由 ADR-0006 取代，見 Changed）
-
-### Changed
-- ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新
-- `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ## [0.5.0] - 2026-10-21
 

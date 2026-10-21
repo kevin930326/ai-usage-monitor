@@ -1,10 +1,12 @@
 import json
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
 from usage_collector import __main__ as cli
-from usage_collector.models import ProviderError, ProviderUsage, Window, parse_iso
+from usage_collector.models import ProviderError
+from usage_collector.providers import claude
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "usage-sample.json"
 
@@ -16,14 +18,18 @@ class SharedFixtureTest(unittest.TestCase):
         self.fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
     def test_collect_produces_the_fixture(self):
-        claude = ProviderUsage(plan="Max", windows=[
-            Window("five_hour", "5 小時", 62.5, parse_iso("2026-10-21T03:30:00Z")),
-            Window("weekly", "每週", 35.0, parse_iso("2026-10-24T03:00:00Z")),
-            Window("weekly_opus", "每週 Opus", 97.0, parse_iso("2026-10-24T03:00:00Z"), hidden=True),
-            Window("weekly_fable", "每週 Fable", 0.0, None, hidden=True),
-        ])
-        codex = mock.Mock(fetch=mock.Mock(side_effect=ProviderError("token 過期，請在 Mac 重新登入 Codex")))
-        providers = {"claude": mock.Mock(fetch=mock.Mock(return_value=claude)), "codex": codex}
+        # Claude 端經過真正的 /usage 文字解析（window_for 改 id／label 推導時這裡會跟著紅），
+        # 時間用 UTC 寫、以 UTC 解析，與 fixture 的 Z 時間相同
+        text = ("Current session: 62.5% used · resets Oct 21 at 3:30am (UTC)\n"
+                "Current week (all models): 35% used · resets Oct 24 at 3am (UTC)\n"
+                "Current week (Opus): 97% used · resets Oct 24 at 3am (UTC)\n"
+                "Current week (Fable): 0% used\n")
+        now = datetime(2026, 10, 21, 3, 0, tzinfo=timezone.utc)
+        claude_usage = claude.parse(text, "Max", now)
+        providers = {
+            "claude": mock.Mock(fetch=mock.Mock(return_value=claude_usage)),
+            "codex": mock.Mock(fetch=mock.Mock(side_effect=ProviderError("token 過期，請在 Mac 重新登入 Codex"))),
+        }
         with mock.patch.dict(cli.PROVIDERS, providers, clear=True):
             snapshot = cli.collect(list(providers))
         # updated_at 是執行當下的時間，其餘欄位要完全相同

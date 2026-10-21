@@ -20,7 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .. import paths
-from ..models import ProviderError, ProviderUsage, Window
+from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 # --safe-mode 略過 hooks、外掛、MCP 與自訂指令；--no-session-persistence 不在 `claude --resume` 留下紀錄
 USAGE_ARGS = ("-p", "/usage", "--safe-mode", "--no-session-persistence", "--output-format", "json")
@@ -37,6 +37,8 @@ RESET_RE = re.compile(r"^(?P<month>[A-Z][a-z]{2}) (?P<day>\d{1,2})(?:, (?P<year>
                       r"(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s?(?P<ampm>[ap]m)(?: \((?P<tz>[^)]+)\))?$",
                       re.IGNORECASE)
 MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+# 終端機色碼（stdout 不是 TTY 時 Claude Code 不會印，但 FORCE_COLOR 之類的環境變數可能強制上色）
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def resolve_claude_path(config_path: Path | None = None) -> str | None:
@@ -46,6 +48,8 @@ def resolve_claude_path(config_path: Path | None = None) -> str | None:
         path = json.loads((config_path or paths.CONFIG_PATH).read_text()).get("claude_path")
     except (FileNotFoundError, json.JSONDecodeError, AttributeError):
         path = None
+    if not isinstance(path, str):
+        path = None  # config.json 被改成別的型別時當成沒設定，不讓 os.access 丟 TypeError
     path = path or shutil.which("claude")
     return path if path and os.access(path, os.X_OK) else None
 
@@ -54,7 +58,10 @@ def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:
     # 暫存資料夾：不載入任何專案的 CLAUDE.md；stdin 關閉：-p 在 stdin 是開著的管線時會等待輸入
     with tempfile.TemporaryDirectory(prefix="aum-claude-") as cwd:
         try:
-            return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL,
+            # NO_COLOR：輸出不帶色碼，解析才不會把被色碼包住的額度行當成一般文字略過
+            env = {**os.environ, "NO_COLOR": "1"}
+            env.pop("FORCE_COLOR", None)
+            return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
                                   capture_output=True, text=True, timeout=TIMEOUT)
         except subprocess.TimeoutExpired:
             raise ProviderError(f"Claude Code 執行逾時（{TIMEOUT:g} 秒）") from None
@@ -84,6 +91,8 @@ def parse_reset(text: str, now: datetime) -> datetime:
         tz = ZoneInfo(m["tz"]) if m["tz"] else now.astimezone().tzinfo
     except (ZoneInfoNotFoundError, ValueError):
         raise ProviderError(FORMAT_CHANGED) from None
+    if not 1 <= int(m["hour"]) <= 12:
+        raise ProviderError(FORMAT_CHANGED)  # 12 小時制沒有 0am／13pm
     hour = int(m["hour"]) % 12 + (12 if m["ampm"].lower() == "pm" else 0)
     year = int(m["year"]) if m["year"] else now.astimezone(tz).year
     try:
@@ -93,20 +102,29 @@ def parse_reset(text: str, now: datetime) -> datetime:
         raise ProviderError(FORMAT_CHANGED) from None
 
 
+# 模型名稱只會是字母、數字、空白、點與連字號（Fable、Sonnet 4.5、Opus）；其他字元或太長都視為格式改變。
+# 上限遠小於 relay 的 id／label 64 字，避免一個奇怪的額度行讓整份快照上傳被拒
+SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .-]{0,31}$")
+
+
 def window_for(scope: str | None) -> tuple[str, str, bool]:
-    """額度行 → (統一 id, 顯示名稱, hidden)。各模型的每週額度（FR-14）列為 hidden。"""
+    """額度行 → (統一 id, 顯示名稱, hidden)。各模型的每週額度（FR-14）列為 hidden。
+    id 只含 [a-z0-9_]（`Sonnet 4.5 only` → `weekly_sonnet_4_5`），顯示名稱保留原文。"""
     if scope is None:
         return "five_hour", "5 小時", False
-    if scope == "all models":
+    if scope.casefold() == "all models":
         return "weekly", "每週", False
-    name = scope.removesuffix(" only")
-    return f"weekly_{name.lower()}", f"每週 {name}", True
+    name = scope.removesuffix(" only").strip()
+    if not SCOPE_RE.match(name):
+        raise ProviderError(FORMAT_CHANGED)
+    slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return f"weekly_{slug}", f"每週 {name}", True
 
 
 def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderUsage:
     now = now or datetime.now(timezone.utc)
     windows = []
-    for line in text.splitlines():
+    for line in ANSI_RE.sub("", text).splitlines():
         line = line.strip()
         if not line.startswith("Current "):
             continue
@@ -115,7 +133,13 @@ def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderU
             raise ProviderError(FORMAT_CHANGED)
         wid, label, hidden = window_for(m["scope"])
         resets_at = parse_reset(m["reset"], now) if m["reset"] else None
-        windows.append(Window(wid, label, float(m["pct"]), resets_at, hidden=hidden))
+        try:
+            pct = parse_pct(float(m["pct"]))  # 位數多到變成 inf 時同樣視為格式改變，不寫出不合法的 JSON
+        except ProviderError:
+            raise ProviderError(FORMAT_CHANGED) from None
+        if any(w.id == wid for w in windows):
+            raise ProviderError(FORMAT_CHANGED)  # 同一個額度印了兩行：不猜哪一行才對
+        windows.append(Window(wid, label, pct, resets_at, hidden=hidden))
 
     if not any(w.id in ("five_hour", "weekly") for w in windows):
         if windows:
