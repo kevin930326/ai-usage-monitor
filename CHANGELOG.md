@@ -21,6 +21,8 @@
 - iPhone App 與 Widget 擴充加入 App Group 與 Keychain 群組（免費 Apple ID 也可簽署）；中繼網址與顯示模式改存 App Group 的 UserDefaults，第一次啟動時自動從舊位置複製
 - 錶面的 `ComplicationView` 移到 UsageKitUI，加入顯示模式與過期門檻參數，iPhone 鎖定畫面小工具共用
 - 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
+- ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新
+- `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ### Fixed
 - 中繼：依 schema 驗證上傳的快照（`providers` 必須是物件、百分比、日期、字串長度、數量上限），並只保存白名單欄位，其他欄位移除；需重新部署 Worker（C-12）
@@ -34,10 +36,6 @@
 - 手錶背景重新整理排程失敗時延後 1、5、15 分鐘重試，App 回到前景時也重新排程（C-10）
 - 自動重裝腳本全程使用 launchd 指定的 Python，不再依 PATH 找 `python3`（C-13）
 - 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）（之後由 ADR-0006 取代，見 Changed）
-
-### Changed
-- ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新
-- `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ## [0.5.0] - 2026-10-21
 
