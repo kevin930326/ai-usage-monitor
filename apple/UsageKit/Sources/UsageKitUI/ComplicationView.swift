@@ -1,18 +1,32 @@
+// SwiftUI 只有 Apple 平台有；Linux CI 只編譯、測試 UsageKit
+#if canImport(SwiftUI) && canImport(WidgetKit)
+
 import SwiftUI
 import UsageKit
-import UsageKitUI
 import WidgetKit
 
-/// 錶面複雜功能（FR-28）：最吃緊額度的剩餘 %，進度條與服務標示用 FR-16 的顏色。
-/// 尺寸以參數傳入，App 也能用 ImageRenderer 輸出同一個畫面。
-struct ComplicationView: View {
+/// 錶面複雜功能（FR-28）與 iPhone 鎖定畫面小工具共用：最吃緊額度的百分比，
+/// 進度條與服務標示用 FR-16 的顏色。尺寸以參數傳入，App 也能用 ImageRenderer 輸出同一個畫面。
+/// 過期門檻依平台傳入：手錶 `UsageSnapshot.watchStaleAfter`、iPhone `UsageSnapshot.staleAfter`（FR-11）。
+public struct ComplicationView: View {
     let snapshot: UsageSnapshot?
     let family: WidgetFamily
-    var now: Date = .now
+    var mode: UsageDisplayMode
+    var staleAfter: TimeInterval
+    var now: Date
+
+    public init(snapshot: UsageSnapshot?, family: WidgetFamily, mode: UsageDisplayMode = .remaining,
+                staleAfter: TimeInterval = UsageSnapshot.watchStaleAfter, now: Date = .now) {
+        self.snapshot = snapshot
+        self.family = family
+        self.mode = mode
+        self.staleAfter = staleAfter
+        self.now = now
+    }
 
     private var item: ProviderWindow? { snapshot?.tightestWindow(at: now) }
-    private var stale: Bool { snapshot?.isStale(now: now, after: UsageSnapshot.watchStaleAfter) ?? true }
-    private var pct: Double { item?.window.effectiveRemainingPct(at: now) ?? 0 }
+    private var stale: Bool { snapshot?.isStale(now: now, after: staleAfter) ?? true }
+    private var pct: Double { item?.window.displayedPct(mode, at: now) ?? 0 }
     private var tint: Color {
         guard let item else { return UsageColors.stale }
         return UsageColors.bar(item.window, provider: item.provider, stale: stale, now: now)
@@ -23,7 +37,7 @@ struct ComplicationView: View {
         return "\(ProviderInfo.displayName(item.provider)) \(item.window.label)"
     }
 
-    var body: some View {
+    public var body: some View {
         switch family {
         case .accessoryCircular:
             Gauge(value: pct, in: 0...100) {
@@ -56,7 +70,7 @@ struct ComplicationView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(pctText)%")
                         .font(.title3.weight(.semibold).monospacedDigit())
-                    Text(stale && item != nil ? "已過期" : "剩餘")
+                    Text(stale && item != nil ? "已過期" : mode.label)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -68,3 +82,5 @@ struct ComplicationView: View {
         }
     }
 }
+
+#endif

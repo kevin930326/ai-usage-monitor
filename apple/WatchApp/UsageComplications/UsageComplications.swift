@@ -1,5 +1,6 @@
 import SwiftUI
 import UsageKit
+import UsageKitUI
 import WidgetKit
 
 @main

@@ -7,7 +7,9 @@
 | 主畫面 | 最吃緊的一項額度、各服務的所有額度（剩餘 %、進度條、重置倒數）、最後更新時間；超過 30 分鐘未更新提示 Mac 可能已關機；下拉或回到前景時重新整理 |
 | 設定 | 中繼網址與讀取密鑰、測試連線、顯示「已用 %」或「剩餘 %」 |
 | Live Activity（鎖定畫面） | 最吃緊的一項大字顯示、各服務各額度的進度條與重置倒數、更新時間與「更新」按鈕；過期資料轉灰並標示「資料已過期」；單一服務失敗只在該列顯示錯誤；重置時間已過顯示「已重置」 |
-| 動態島 | 精簡：服務標示（Claude「CL」、Codex「CX」）+ 最吃緊的百分比；展開：與鎖定畫面相同的內容 |
+| 動態島 | 精簡：服務圖示 + 最吃緊的百分比；展開：與鎖定畫面相同的內容 |
+| 主畫面小工具 | 小：最吃緊的一項大字（服務圖示、%、進度條、重置倒數、更新時間）；中：與 Live Activity 卡片相同的版面；大：最吃緊的一項 + 每個服務的所有額度。中、大有「更新」按鈕 |
+| 鎖定畫面小工具 | 圓形（容量環 + 服務圖示 + %）、矩形、單行，與手錶複雜功能共用 UsageKitUI 的 `ComplicationView`（過期門檻改用 iPhone 的 30 分鐘） |
 
 主畫面的「Live Activity」區塊可開始、更新、結束卡片。卡片上的「更新」按鈕是 `RefreshUsageIntent`（LiveActivityIntent），由系統在 App 程序中執行，不需要打開 App。Live Activity 最長顯示 8 小時，之後可從 App 或下方的捷徑重新開始。
 
@@ -26,7 +28,32 @@ Live Activity 最長 8 小時。App 提供捷徑動作「重新啟動用量監�
 
 即使從多工畫面關閉 App，自動化仍會在背景執行。重新開機後尚未解鎖前，Keychain 中的讀取密鑰無法讀取，該次自動化會失敗、舊卡片保留，解鎖後下一次自動化即恢復。iOS 17 不支援（Widget 擴充需要 iOS 18），捷徑會回報「Live Activity 需要 iOS 18 以上」。
 
-讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址存在 UserDefaults。儲存設定時會以 WatchConnectivity 的 application context 傳給已安裝的 [Apple Watch App](../WatchApp/)；系統會在 iPhone 與手錶各保留最後一份 context（不在 Keychain），詳見[隱私與安全](../../README.md#隱私與安全)。
+讀取密鑰存在 iPhone 的 Keychain（`AfterFirstUnlockThisDeviceOnly`），網址與顯示模式存在 App Group 的 UserDefaults（舊版存在 App 自己的 UserDefaults，第一次啟動時複製過來）。儲存設定時會以 WatchConnectivity 的 application context 傳給已安裝的 [Apple Watch App](../WatchApp/)；系統會在 iPhone 與手錶各保留最後一份 context（不在 Keychain），詳見[隱私與安全](../../README.md#隱私與安全)。
+
+## 主畫面與鎖定畫面小工具
+
+小工具（kind `UsageHomeWidget`）放在既有的 `UsageWidget` 擴充裡，與 Live Activity 同一個 bundle，不需要新的 App ID（免費 Apple ID 每 7 天最多建立 10 個）。長按主畫面 →「編輯」→「加入小工具」→「AI 用量」，或長按 App 圖示直接選尺寸。
+
+小工具自己呼叫中繼，不必等 App 開啟：
+
+- **網址與顯示模式**：App Group `group.io.github.kevin930326.AIUsageMonitor` 的 UserDefaults
+- **讀取密鑰**：仍只在 Keychain。App 與擴充的 `keychain-access-groups` 都是 App 自己的 application identifier（`<Team ID>.io.github.kevin930326.AIUsageMonitor`），也就是舊版寫入密鑰時的預設群組，所以不用搬移，小工具直接讀得到
+- **最後一份資料**：App Group 的 `usage.json`。小工具抓不到中繼（沒網路、重新開機後尚未解鎖讀不到 Keychain）時顯示這份，畫面依資料時間轉灰
+
+免費 Apple ID（Personal Team）的佈建描述檔也包含 App Group 與 Keychain 共享（已用 `-allowProvisioningUpdates` 實際簽署確認），兩項都寫在 `project.yml` 的 entitlements。
+
+### 重新整理次數
+
+WidgetKit 每個小工具每天約 40～70 次重新整理。Timeline 中預先排好的時間點不扣次數，所以重置與資料過期（30 分鐘）的時間點都放在 timeline 裡，讓「已重置」與轉灰準時出現；重置倒數用 `Text(date, style: .relative)` 由系統自己數。
+
+| 來源 | 次數／天 | 說明 |
+|---|---|---|
+| 小工具自己排程（資料新） | 最多 58 | 每 25 分鐘。收集器每 5 分鐘上傳，抓到的資料最多 5 分鐘舊，25 分鐘後重新整理時還沒超過 30 分鐘門檻，兩次之間不會誤顯示「已過期」 |
+| 小工具自己排程（資料已過期） | 每小時 1 | Mac 關機或睡眠時放慢；例如每晚 8 小時可省下約 11 次 |
+| App 在背景取得新資料 | 約 5 | 捷徑「重新啟動用量監看」每天 3 次、卡片上的「更新」 |
+| App 在前景、小工具上的「更新」按鈕 | 不扣 | WidgetKit 不計算 App 在前景與按鈕 Intent 觸發的重新整理 |
+
+一般情況（Mac 每晚睡 8 小時）約 38 + 8 + 5 ≈ 51 次；Mac 整天開著最多約 63 次。超過預算時系統會延後更新，畫面會依資料時間轉灰並顯示「資料已過期」，不會顯示錯誤的數字。
 
 ## 建置
 
@@ -78,5 +105,7 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 ```bash
 SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
 ```
+
+示範情境也會寫進 App Group，主畫面／鎖定畫面小工具同樣只顯示假資料（以非示範模式重新啟動 App 即恢復）。截圖見 [`docs/screenshots/ios-widget/`](../../docs/screenshots/ios-widget/)。
 
 情境存在 Live Activity 的屬性中，所以按卡片上的「更新」也會使用同一份假資料。每次開始、更新、結束卡片都會寫入 App 容器的 `Documents/activity-log.json`（只有 Debug 版本）。

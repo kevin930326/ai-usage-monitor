@@ -5,11 +5,14 @@
 ## [Unreleased]
 
 ### Added
+- iPhone 主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行），kind `UsageHomeWidget`，放在既有的 `UsageWidget` 擴充；小工具自己以共用的 Keychain 讀取密鑰呼叫中繼，每 25 分鐘重新整理（資料過期時每小時），重置與過期時間點放在 timeline
 - UsageKitUI `ProviderIcon`：原創服務圖示（Claude 八芒星、Codex 六瓣雲鏤空 `>_`），三個平台共用，template 繪製並套服務識別色，附 VoiceOver 名稱
 - iOS／watchOS Debug 示範情境 `codex`（Codex 最吃緊）；手錶 `AUM_RENDER` 另輸出圓形複雜功能的淺色與主題色模擬
 - `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
 
 ### Changed
+- iPhone App 與 Widget 擴充加入 App Group 與 Keychain 群組（免費 Apple ID 也可簽署）；中繼網址與顯示模式改存 App Group 的 UserDefaults，第一次啟動時自動從舊位置複製
+- 錶面的 `ComplicationView` 移到 UsageKitUI，加入顯示模式與過期門檻參數，iPhone 鎖定畫面小工具共用
 - 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
 
 ### Fixed
