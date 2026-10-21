@@ -75,6 +75,53 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor \
   -destination 'platform=iOS Simulator,name=<模擬器名稱>' build
 ```
 
+## 每週自動重新安裝（免費 Apple ID）
+
+以免費 Apple ID（Personal Team）簽署的 App 7 天後就無法開啟。`scripts/reinstall-ios.sh` 會重新簽署並透過網路裝到 iPhone，搭配 launchd 每 6 天自動執行。
+
+第一次設定：
+
+1. 在 Xcode → Settings → Accounts 登入 Apple ID，並用 Xcode 把 App 裝到 iPhone 一次（手機會詢問是否信任這台 Mac）。
+2. 在 Xcode 的 Devices and Simulators 視窗勾選該 iPhone 的「Connect via network」，之後不必接線。
+3. 手機在旁邊並解鎖，先手動執行一次：
+   ```bash
+   scripts/reinstall-ios.sh
+   ```
+   第一次執行會偵測 Team ID 與 iPhone，寫入 `~/Library/Application Support/AIUsageMonitor/config.json` 的 `development_team` 與 `iphone_udid`（合併寫入，不會動到收集器的 `relay_url`、`claude_path`；不進版控）。連過多台 iPhone 或登入多個 Team 時不會自動選，請手動把值寫進 config.json。
+4. 安裝排程：
+   ```bash
+   scripts/install-reinstall-launchd.sh
+   ```
+
+排程的運作方式：
+
+- 每 3 小時檢查一次，距上次成功滿 6 天才重新建置與安裝；失敗時下一次檢查（3 小時後）就會重試，直到成功為止。
+- 安裝成功時發 macOS 通知；同一輪連續失敗超過 1 天時再通知一次（不會每次重試都通知）。
+- 簽署使用 Xcode 已登入的 Apple ID（`xcodebuild -allowProvisioningUpdates`），腳本內沒有帳號或密碼。建置的是 Release（不含示範模式）。
+
+限制：
+
+- 手機要與 Mac 在同一個網路，且是醒著的；鎖定或休眠時安裝可能失敗，會在 3 小時後重試。Mac 睡眠時排程不會執行，醒來後才補做。
+- 腳本只重新安裝 iPhone App，手錶 App（`apple/WatchApp`）仍需用 Xcode 手動安裝。
+- Xcode 的 Apple ID 登入過期時建置會失敗，需要重新登入。
+
+查看日誌：
+
+```bash
+tail -n 20 ~/Library/Logs/AIUsageMonitor/reinstall.log        # 每次執行的結果
+tail -n 50 ~/Library/Logs/AIUsageMonitor/reinstall-build.log  # 最近一次 xcodebuild 的完整輸出
+```
+
+結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤。上次成功與失敗的時間記在 `~/Library/Application Support/AIUsageMonitor/reinstall-state.json`。
+
+移除排程（不會刪除設定與日誌）：
+
+```bash
+scripts/uninstall-reinstall-launchd.sh
+```
+
+排程執行的是安裝時所在資料夾裡的腳本；搬移 repo 後要重新執行 `scripts/install-reinstall-launchd.sh`。
+
 ## 開發用：預先填入設定
 
 模擬器的文字輸入不太穩定。Debug 版本會讀取下列環境變數，覆寫設定（只存在記憶體，不寫入 Keychain）：

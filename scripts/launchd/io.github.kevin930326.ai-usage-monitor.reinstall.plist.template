@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 由 scripts/install-reinstall-launchd.sh 填入 __PLACEHOLDER__ 後安裝到 ~/Library/LaunchAgents -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.github.kevin930326.ai-usage-monitor.reinstall</string>
+
+    <!-- --if-due：距上次成功未滿 6 天就直接結束 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__REPO__/scripts/reinstall-ios.sh</string>
+        <string>--if-due</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <!-- launchd 的 PATH 只有系統目錄，要加上 xcodegen 所在的資料夾 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+    </dict>
+
+    <!-- 每 3 小時檢查一次：滿 6 天才重新安裝，失敗時下一次檢查就會重試，直到成功 -->
+    <key>StartInterval</key>
+    <integer>10800</integer>
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/reinstall-launchd.log</string>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/reinstall-launchd.log</string>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
