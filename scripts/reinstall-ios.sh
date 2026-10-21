@@ -25,8 +25,11 @@ LOG_DIR="$HOME/Library/Logs/AIUsageMonitor"
 LOG="$LOG_DIR/reinstall.log"
 BUILD_LOG="$LOG_DIR/reinstall-build.log"
 DERIVED="$HOME/Library/Caches/AIUsageMonitor/DerivedData"
-HELPER=(python3 "$REPO/scripts/reinstall_ios_helper.py")
-UPDATE_CONFIG=(python3 "$REPO/collector/scripts/update-config.py" "$CONFIG")
+# launchd 經由 reinstall_ios_helper.py scheduled 執行時，AUM_PYTHON 是 plist 指定的 Python（與收集器相同）；
+# 全程沿用它，不再依 PATH 找 python3（launchd 的 PATH 不一定含那個資料夾）
+PYTHON="${AUM_PYTHON:-python3}"
+HELPER=("$PYTHON" "$REPO/scripts/reinstall_ios_helper.py")
+UPDATE_CONFIG=("$PYTHON" "$REPO/collector/scripts/update-config.py" "$CONFIG")
 INTERVAL_DAYS=6
 OVERDUE_DAYS=6.5
 # 要與 iPhone 捷徑 App 的定時自動化相同（apple/iOSApp/README.md「捷徑：讓卡片整天顯示」）
@@ -44,7 +47,7 @@ notify() {  # 用參數傳文字，避免引號被當成 AppleScript
               -e 'end run' "$1" "$TITLE" >/dev/null 2>&1 || true
 }
 config_get() {
-    python3 -c 'import json,sys
+    "$PYTHON" -c 'import json,sys
 try: print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")
 except (FileNotFoundError, ValueError): print("")' "$CONFIG" "$1"
 }

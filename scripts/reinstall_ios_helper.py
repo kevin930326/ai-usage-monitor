@@ -154,7 +154,9 @@ def cmd_scheduled() -> int:
     # repo 在 ~/Documents（macOS 隱私保護的資料夾）。launchd 直接執行 /bin/bash 會被拒絕讀取，
     # 由 python3 啟動 bash 時，存取權限算在 python3 上，與收集器的 launchd 工作相同
     script = Path(__file__).resolve().parent / "reinstall-ios.sh"
-    return subprocess.call(["/bin/bash", str(script), "--if-due"])
+    # 腳本內的輔助程式沿用這個 Python（launchd plist 指定的那個），不再依 PATH 找 python3
+    return subprocess.call(["/bin/bash", str(script), "--if-due"],
+                           env={**os.environ, "AUM_PYTHON": sys.executable})
 
 
 COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "plan": cmd_plan,

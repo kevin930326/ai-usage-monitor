@@ -1,22 +1,23 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "reinstall-ios.sh"
+HELPER = SCRIPT.with_name("reinstall_ios_helper.py")
 
 
-class ReinstallLockTest(unittest.TestCase):
-    """scripts/reinstall-ios.sh 的鎖：同時只跑一個，但程序被強制結束後留下的鎖不能讓之後的排程永遠跳過。
-
-    以假的 xcrun 讓腳本在取得鎖之後的第一步（列出裝置）就失敗（結束碼 2），
-    不建置、不連手機，也不讀真正的 config.json（HOME 指向臨時資料夾）。
-    """
+class ReinstallScriptTestCase(unittest.TestCase):
+    """以假的 xcrun 讓 scripts/reinstall-ios.sh 在取得鎖之後的第一步（列出裝置）就失敗（結束碼 2），
+    不建置、不連手機，也不讀真正的 config.json（HOME 指向臨時資料夾）。"""
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -33,6 +34,7 @@ class ReinstallLockTest(unittest.TestCase):
             fake = bin_dir / tool
             fake.write_text("#!/bin/sh\nexit 1\n")
             fake.chmod(0o755)
+        self.bin_dir = bin_dir
         self.env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
 
     def tearDown(self):
@@ -44,6 +46,10 @@ class ReinstallLockTest(unittest.TestCase):
 
     def log_text(self) -> str:
         return self.log.read_text() if self.log.exists() else ""
+
+
+class ReinstallLockTest(ReinstallScriptTestCase):
+    """鎖：同時只跑一個，但程序被強制結束後留下的鎖不能讓之後的排程永遠跳過（C-02）。"""
 
     def dead_pid(self) -> int:
         proc = subprocess.Popen(["true"])
@@ -101,6 +107,28 @@ class ReinstallLockTest(unittest.TestCase):
         result = self.run_script()
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertFalse(self.lock.exists())
+
+
+class ReinstallPythonTest(ReinstallScriptTestCase):
+    """C-13：launchd 以安裝時偵測到的 Python 啟動，腳本內的輔助程式也要用同一個，不能再依 PATH 找 python3。"""
+
+    def test_script_uses_python_from_environment(self):
+        marker = Path(self.dir.name) / "path-python-used"
+        fake = self.bin_dir / "python3"
+        fake.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 1\n")
+        fake.chmod(0o755)
+        self.env["AUM_PYTHON"] = sys.executable
+        result = self.run_script()
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertFalse(marker.exists(), "不應使用 PATH 中的 python3")
+
+    def test_scheduled_passes_its_own_python(self):
+        spec = importlib.util.spec_from_file_location("reinstall_ios_helper", HELPER)
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        with mock.patch.object(helper.subprocess, "call", return_value=0) as call:
+            self.assertEqual(helper.cmd_scheduled(), 0)
+        self.assertEqual(call.call_args.kwargs["env"]["AUM_PYTHON"], sys.executable)
 
 
 if __name__ == "__main__":
