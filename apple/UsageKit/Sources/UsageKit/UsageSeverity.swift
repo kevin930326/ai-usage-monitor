@@ -1,20 +1,12 @@
-/// 依剩餘比例分級（FR-16）：> 50% 正常、20–50% 警告、< 20% 危險。
+/// 依剩餘比例分級（FR-16）：< 20% 危險（進度條紅色），其他為正常（進度條用服務識別色）。
 public enum UsageSeverity: Int, Comparable, Sendable {
     case normal
-    case warning
     case critical
 
-    public static let warningBelow: Double = 50
     public static let criticalBelow: Double = 20
 
     public init(remainingPct: Double) {
-        if remainingPct < Self.criticalBelow {
-            self = .critical
-        } else if remainingPct <= Self.warningBelow {
-            self = .warning
-        } else {
-            self = .normal
-        }
+        self = remainingPct < Self.criticalBelow ? .critical : .normal
     }
 
     public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }

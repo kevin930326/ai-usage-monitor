@@ -4,8 +4,18 @@
 
 ## [Unreleased]
 
+### Changed
+- 顏色規則（FR-16）：進度條改用服務識別色（Claude 珊瑚橘、Codex 青綠），剩餘 < 20% 才轉紅；百分比文字一律 primary；「資料已過期」等提示文字共用同一個顏色，對比度符合 WCAG AA。色值集中在 UsageKit `UsagePalette` 與 UsageKitUI `UsageColors`
+- Live Activity 的 Widget 擴充最低支援 iOS 18（手錶版面需要），App 本身仍支援 iOS 17
+
 ### Added
-- ADR-0004（提議中）：用量歷史資料的存放方式，比較本機檔案、中繼保存多筆與兩者並用，列出待決定問題
+- ADR-0004（提議中）：用量歷史資料的存放方式，比較本機檔案、中繼保存多筆與兩者並用，列出待決定問題（#23）
+- iOS Live Activity：鎖定畫面與動態島顯示各服務各額度、最吃緊的一項、重置倒數與更新時間；進度條使用服務識別色、剩餘 < 20% 轉紅；過期資料轉灰；動態島以「CL」「CX」區分服務；單一服務失敗不影響另一服務（FR-8, FR-11, FR-12, FR-15, FR-16）
+- Live Activity 上的「更新」按鈕，不開 App 即可更新（FR-9）
+- 重置時間已過的額度顯示「已重置」（FR-26）；可切換顯示已用或剩餘 %（FR-17）
+- Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27）
+- UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式
+- iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖
 
 ## [0.3.0] - 2026-10-21
 

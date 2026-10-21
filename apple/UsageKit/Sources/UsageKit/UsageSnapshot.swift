@@ -38,7 +38,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable {
     public var visibleWindows: [UsageWindow] { windows.filter { !$0.hidden } }
 }
 
-public struct UsageWindow: Codable, Equatable, Identifiable, Sendable {
+public struct UsageWindow: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var label: String
     public var usedPct: Double

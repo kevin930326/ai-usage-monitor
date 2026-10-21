@@ -1,4 +1,6 @@
 import SwiftUI
+import UsageKit
+import UsageKitUI
 
 struct SettingsView: View {
     @Environment(UsageModel.self) private var model
@@ -32,6 +34,17 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("顯示", selection: Bindable(model).displayMode) {
+                        ForEach(UsageDisplayMode.allCases, id: \.self) { Text("\($0.label) %").tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("百分比")
+                } footer: {
+                    Text("App 與 Live Activity 都會依此顯示已用或剩餘的百分比。")
+                }
+
+                Section {
                     Button {
                         Task { await test() }
                     } label: {
@@ -45,9 +58,9 @@ struct SettingsView: View {
 
                     switch testResult {
                     case .success:
-                        Label("連線成功", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        Label("連線成功", systemImage: "checkmark.circle.fill")
                     case .failure(let message):
-                        Label(message, systemImage: "xmark.circle.fill").foregroundStyle(.red)
+                        Label(message, systemImage: "xmark.circle.fill").foregroundStyle(UsageColors.notice)
                     case nil:
                         EmptyView()
                     }

@@ -1,0 +1,57 @@
+import Foundation
+import Testing
+@testable import UsageKit
+
+@Suite struct ResetAndModeTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func window(used: Double, resetsIn offset: TimeInterval?) -> UsageWindow {
+        UsageWindow(id: "five_hour", label: "5 小時", usedPct: used, resetsAt: offset.map { now.addingTimeInterval($0) })
+    }
+
+    @Test func windowIsResetAfterResetTime() {
+        #expect(window(used: 80, resetsIn: -1).isReset(at: now))
+        #expect(window(used: 80, resetsIn: 0).isReset(at: now))
+        #expect(!window(used: 80, resetsIn: 60).isReset(at: now))
+        #expect(!window(used: 80, resetsIn: nil).isReset(at: now))
+    }
+
+    @Test func resetWindowShowsZeroUsed() {
+        let w = window(used: 80, resetsIn: -60)
+        #expect(w.effectiveUsedPct(at: now) == 0)
+        #expect(w.effectiveRemainingPct(at: now) == 100)
+        #expect(w.effectiveSeverity(at: now) == .normal)
+    }
+
+    @Test func activeWindowKeepsPercentage() {
+        let w = window(used: 85, resetsIn: 600)
+        #expect(w.effectiveUsedPct(at: now) == 85)
+        #expect(w.effectiveRemainingPct(at: now) == 15)
+        #expect(w.effectiveSeverity(at: now) == .critical)
+    }
+
+    @Test func effectivePercentagesAreClamped() {
+        #expect(window(used: 130, resetsIn: 60).effectiveUsedPct(at: now) == 100)
+        #expect(window(used: -5, resetsIn: 60).effectiveRemainingPct(at: now) == 100)
+    }
+
+    @Test(arguments: [(UsageDisplayMode.used, 30.0), (.remaining, 70.0)])
+    func displayedPctFollowsMode(mode: UsageDisplayMode, expected: Double) {
+        #expect(window(used: 30, resetsIn: 60).displayedPct(mode, at: now) == expected)
+    }
+
+    @Test func displayModeLabels() {
+        #expect(UsageDisplayMode.used.label == "已用")
+        #expect(UsageDisplayMode.remaining.label == "剩餘")
+    }
+
+    @Test func tightestTreatsResetWindowAsFull() {
+        let snap = UsageSnapshot(updatedAt: now, providers: [
+            "claude": ProviderUsage(windows: [window(used: 95, resetsIn: -60)]),
+            "codex": ProviderUsage(windows: [UsageWindow(id: "weekly", label: "每週", usedPct: 40, resetsAt: now.addingTimeInterval(3600))]),
+        ])
+        // 舊邏輯會挑 Claude 95%；重置後應改挑 Codex
+        #expect(snap.tightestWindow?.provider == "claude")
+        #expect(snap.tightestWindow(at: now)?.provider == "codex")
+    }
+}

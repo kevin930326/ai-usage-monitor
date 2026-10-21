@@ -8,22 +8,40 @@ final class UsageModel {
     private(set) var snapshot: UsageSnapshot?
     private(set) var errorMessage: String?
     private(set) var isLoading = false
+    private(set) var liveActivityRunning = LiveActivityController.isRunning
+    private(set) var liveActivityError: String?
+    private(set) var isStartingActivity = false
 
     var relayURL: String {
-        didSet { UserDefaults.standard.set(relayURL, forKey: Self.relayURLKey) }
+        didSet { UserDefaults.standard.set(relayURL, forKey: UsageSource.relayURLKey) }
     }
     var readToken: String {
-        didSet { KeychainStore.write(readToken, account: Self.readTokenAccount) }
+        didSet { KeychainStore.write(readToken, account: UsageSource.readTokenAccount) }
+    }
+    /// 已用／剩餘（FR-17），同時套用到 Live Activity。
+    var displayMode: UsageDisplayMode {
+        didSet {
+            UsageSource.displayMode = displayMode
+            Task { await updateLiveActivity() }
+        }
     }
 
-    var isConfigured: Bool { !relayURL.isEmpty && !readToken.isEmpty }
+    /// DEBUG 示範情境（環境變數 AUM_DEMO），有值時只用假資料、不連網。
+    let demoScenario: String?
 
-    private static let relayURLKey = "relayURL"
-    private static let readTokenAccount = "relay-read-token"
+    var isConfigured: Bool { demoScenario != nil || (!relayURL.isEmpty && !readToken.isEmpty) }
 
     init() {
-        relayURL = UserDefaults.standard.string(forKey: Self.relayURLKey) ?? ""
-        readToken = KeychainStore.read(Self.readTokenAccount) ?? ""
+        relayURL = UsageSource.relayURL
+        readToken = UsageSource.readToken
+        #if DEBUG
+        let demo = DemoData.current
+        demoScenario = demo?.rawValue
+        displayMode = demo.map(DemoData.mode) ?? UsageSource.displayMode
+        #else
+        demoScenario = nil
+        displayMode = UsageSource.displayMode
+        #endif
         #if DEBUG
         // 開發用：以環境變數覆寫設定（只在記憶體中），方便在模擬器測試而不必手動輸入密鑰
         let env = ProcessInfo.processInfo.environment
@@ -37,12 +55,16 @@ final class UsageModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            snapshot = try await makeClient().fetch()
+            snapshot = try await fetch()
             errorMessage = nil
+            // App 開啟時順便更新卡片（FR-8）
+            await updateLiveActivity()
         } catch {
             // 保留上一次成功的資料，只顯示錯誤
             errorMessage = error.localizedDescription
         }
+        // 卡片可能已被滑掉或超過 8 小時被系統結束
+        liveActivityRunning = LiveActivityController.isRunning
     }
 
     /// 設定畫面的「測試連線」，成功時順便更新主畫面。
@@ -57,7 +79,36 @@ final class UsageModel {
         }
     }
 
-    private func makeClient() throws -> RelayClient {
-        try RelayClient(urlString: relayURL, readToken: readToken)
+    // MARK: Live Activity（FR-8）
+
+    func startLiveActivity() async {
+        // 連點時第二次直接忽略（第一次還在抓資料）
+        guard !isStartingActivity else { return }
+        isStartingActivity = true
+        defer { isStartingActivity = false }
+        do {
+            let snap = try await fetch()
+            snapshot = snap
+            try await LiveActivityController.start(snapshot: snap, mode: displayMode, demoScenario: demoScenario)
+            liveActivityError = nil
+        } catch {
+            liveActivityError = error.localizedDescription
+        }
+        liveActivityRunning = LiveActivityController.isRunning
+    }
+
+    func endLiveActivity() async {
+        await LiveActivityController.endAll()
+        liveActivityRunning = LiveActivityController.isRunning
+    }
+
+    private func updateLiveActivity() async {
+        guard let snapshot, LiveActivityController.isRunning else { return }
+        await LiveActivityController.update(snapshot: snapshot, mode: displayMode)
+    }
+
+    private func fetch() async throws -> UsageSnapshot {
+        if demoScenario != nil { return try await UsageSource.fetch(demoScenario: demoScenario) }
+        return try await RelayClient(urlString: relayURL, readToken: readToken).fetch()
     }
 }

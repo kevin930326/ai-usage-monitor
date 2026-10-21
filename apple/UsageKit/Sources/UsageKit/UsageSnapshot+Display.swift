@@ -19,18 +19,10 @@ public extension UsageSnapshot {
     }
 
     /// 所有服務的可見額度中，剩餘最少的一項（FR-15）；同分時取較早重置的。
+    /// 不考慮重置時間，畫面上請用 `tightestWindow(at:)`（FR-26）。
     var tightestWindow: ProviderWindow? {
-        orderedProviderKeys
-            .flatMap { key in
-                (providers[key]?.error == nil ? providers[key]?.visibleWindows ?? [] : [])
-                    .map { ProviderWindow(provider: key, window: $0) }
-            }
-            .min { a, b in
-                if a.window.remainingPct != b.window.remainingPct {
-                    return a.window.remainingPct < b.window.remainingPct
-                }
-                return (a.window.resetsAt ?? .distantFuture) < (b.window.resetsAt ?? .distantFuture)
-            }
+        // 在 distantPast 時沒有額度已重置，結果等同只看 remainingPct
+        tightestWindow(at: .distantPast)
     }
 
     /// 超過門檻沒更新就視為過期（FR-11），例如 Mac 關機。
@@ -47,6 +39,16 @@ public enum ProviderInfo {
         case "claude": "Claude"
         case "codex": "Codex"
         default: key.prefix(1).uppercased() + key.dropFirst()
+        }
+    }
+
+    /// 動態島精簡版面與錶面圓形複雜功能用的兩個字母標示。
+    /// Claude 與 Codex 都是 C 開頭，只取首字母無法分辨。
+    public static func shortName(_ key: String) -> String {
+        switch key {
+        case "claude": "CL"
+        case "codex": "CX"
+        default: String(key.prefix(2)).uppercased()
         }
     }
 }
