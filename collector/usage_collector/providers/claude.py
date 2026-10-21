@@ -10,7 +10,7 @@ import subprocess
 
 from .. import claude_refresh
 from ..http import get_json
-from ..models import ProviderError, ProviderUsage, Window, parse_iso
+from ..models import ProviderError, ProviderUsage, Window, parse_iso, parse_pct
 
 KEYCHAIN_SERVICE = "Claude Code-credentials"
 USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
@@ -43,7 +43,7 @@ def parse(body: dict, plan: str | None) -> ProviderUsage:
         if not w:
             continue
         resets_at = parse_iso(w["resets_at"]) if w.get("resets_at") else None
-        windows.append(Window(wid, label, float(w.get("utilization") or 0), resets_at))
+        windows.append(Window(wid, label, parse_pct(w.get("utilization")), resets_at))
     if not windows:
         raise ProviderError("回應中沒有用量資料，API 可能已變更")
     windows.extend(parse_scoped_limits(body.get("limits") or []))
@@ -59,9 +59,12 @@ def parse_scoped_limits(limits: list) -> list[Window]:
         name = (((item.get("scope") or {}).get("model") or {}).get("display_name"))
         if not name:
             continue
+        try:
+            pct = parse_pct(item.get("percent"))
+        except ProviderError:
+            continue  # 隱藏的次要額度格式不對時只略過這一項，不讓整個服務失敗
         resets_at = parse_iso(item["resets_at"]) if item.get("resets_at") else None
-        windows.append(Window(f"weekly_{name.lower()}", f"每週 {name}",
-                              float(item.get("percent") or 0), resets_at, hidden=True))
+        windows.append(Window(f"weekly_{name.lower()}", f"每週 {name}", pct, resets_at, hidden=True))
     return windows
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -17,6 +18,16 @@ def parse_iso(value: str) -> datetime:
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     return datetime.fromisoformat(value)
+
+
+def parse_pct(value: object) -> float:
+    """API 回應中的使用百分比。缺少、null 或不是有限的非負數時報錯：
+    不能當成 0（畫面會顯示「完全沒用」），NaN 也會讓輸出的 JSON 不合法。
+    超過 100（超額）照實傳出，顯示端會限制在 0～100。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) \
+            or not math.isfinite(value) or value < 0:
+        raise ProviderError("用量百分比缺少或格式不正確，API 可能已變更")
+    return float(value)
 
 
 @dataclass
