@@ -40,12 +40,12 @@ import Testing
         #expect(state.staleDate(now: updated) == updated.addingTimeInterval(30 * 60))
     }
 
-    @Test func staleDateIsNextResetWhenSooner() {
+    @Test func staleDateKeepsExpiryWhenResetIsSooner() {
+        // C-01：staleDate 只會觸發一次重繪。給重置時間的話，重置後就沒有事件讓卡片在 30 分鐘時轉灰
         var s = snap
-        let soon = updated.addingTimeInterval(10 * 60)
-        s.providers["codex"]?.windows[0].resetsAt = soon
+        s.providers["codex"]?.windows[0].resetsAt = updated.addingTimeInterval(10 * 60)
         let state = UsageActivityState(snapshot: s, mode: .remaining)
-        #expect(state.staleDate(now: updated) == soon)
+        #expect(state.staleDate(now: updated) == updated.addingTimeInterval(30 * 60))
     }
 
     @Test func staleDateIgnoresPastResets() {

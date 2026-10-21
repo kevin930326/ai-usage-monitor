@@ -37,15 +37,28 @@ import Testing
 
     // MARK: 過期判斷（FR-11）
 
-    @Test func staleDateAtResetDoesNotMeanDataIsStale() throws {
-        // 10 分鐘後重置：ActivityKit 會在那時把卡片標為 stale，但資料只過了 10 分鐘
+    @Test func redrawAtExpiryShowsBothResetAndStale() throws {
+        // C-01：10 分鐘後重置、30 分鐘後過期。卡片只會在 staleDate 重繪一次，
+        // 這一次必須落在過期時間，畫面才會轉灰；重置在同一次重繪中一併顯示
         let resetsAt = now.addingTimeInterval(10 * 60)
         let state = UsageActivityState(snapshot: snapshot(updatedAt: now, [
             "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: resetsAt)]),
         ]), mode: .remaining)
         let staleDate = try #require(state.staleDate(now: now))
-        #expect(staleDate == resetsAt)
-        #expect(!state.isStale(at: staleDate))
+        #expect(staleDate == now.addingTimeInterval(UsageSnapshot.staleAfter))
+        #expect(state.isStale(at: staleDate.addingTimeInterval(0.001)))
+        let tightest = try #require(state.tightest(at: staleDate))
+        #expect(tightest.window.isReset(at: staleDate))
+        #expect(tightest.window.displayedPct(.remaining, at: staleDate) == 100)
+    }
+
+    @Test func staleDateFallsBackToNextResetOnceExpired() {
+        // 過期後才更新卡片（例如按「更新」但中繼仍是舊資料）：下一次重繪留給重置
+        let resetsAt = now.addingTimeInterval(2 * 3600)
+        let state = UsageActivityState(snapshot: snapshot(updatedAt: now, [
+            "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: resetsAt)]),
+        ]), mode: .remaining)
+        #expect(state.staleDate(now: now.addingTimeInterval(45 * 60)) == resetsAt)
     }
 
     @Test func updatedAtLaterThanDeviceClockIsNotStale() {
