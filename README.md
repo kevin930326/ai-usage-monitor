@@ -92,7 +92,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults 與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示）。舊版存在 App 自己的 UserDefaults，第一次啟動時複製過來 |
 | iPhone | 主畫面／鎖定畫面小工具 | 各額度百分比與重置時間；**鎖定畫面小工具鎖定時也看得到** |
 | iPhone | Live Activity 內容（鎖定畫面、動態島） | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
-| iPhone、Apple Watch | WatchConnectivity application context | 中繼網址與**讀取密鑰**。由系統存在兩端 App 的容器中（不在 Keychain），供手錶下次啟動時取得（FR-30） |
+| iPhone → Apple Watch | WatchConnectivity `sendMessage`（不保存） | 中繼網址與**讀取密鑰**。手錶 App 開啟時向 iPhone 要、或 iPhone 儲存設定時手錶 App 正開著才傳送；系統不保存訊息，兩端只存在各自的 Keychain（FR-30）。舊版留下的 application context 會在 iPhone App 啟動時以空內容覆蓋 |
 | Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults | 讀取密鑰、中繼網址 |
 | Apple Watch | App Group `group.io.github.kevin930326.AIUsageMonitor` 的 `usage.json` | 最新快照，給錶面複雜功能讀取；**錶面上隨時看得到**百分比 |
 
@@ -100,7 +100,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 ### 已知取捨
 
-- 讀取密鑰經 WatchConnectivity 傳到手錶時，系統會保留最後一份 application context，因此除了 Keychain 之外還有一份在系統管理的儲存區。讀取密鑰只能讀取用量百分比；若在意，可在 Cloudflare 更換 `READ_TOKEN` 後重新設定。
+- 手錶的設定只在手錶 App 開啟、且 iPhone 在附近時同步（`sendMessage` 需要兩端可連線）。在 iPhone 改了網址或密鑰後，要打開一次手錶 App 才會套用；在那之前手錶的背景更新仍用舊設定。
 - Mac 選單列 App 不開沙盒（需要讀取 `~/Library/Application Support`），以 Sign to Run Locally 簽署、未開 Hardened Runtime。它不連網，也不讀任何 token。
 
 ## 免責聲明

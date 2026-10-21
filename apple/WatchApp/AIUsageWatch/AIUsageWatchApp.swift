@@ -20,6 +20,7 @@ struct AIUsageWatchApp: App {
         // 打開 App 與回到前景時都更新（第一次 .active 也算，所以不必在 .task 再抓一次）
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
+            delegate.model.requestSettings()
             Task { await delegate.model.refresh() }
         }
     }

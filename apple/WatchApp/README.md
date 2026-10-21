@@ -7,9 +7,9 @@
 | 手錶 App | 最吃緊的一項大字顯示，各服務各額度的進度條與重置倒數、更新時間；過期轉灰、重置後顯示「已重置」（FR-29） |
 | 錶面複雜功能 | 圓形（容量環 + 服務圖示 + %）、矩形（名稱 + % + 進度條）、單行（名稱 + %），顯示最吃緊額度的剩餘 %；顏色依 FR-16（服務識別色、剩餘 < 20% 紅色、過期灰色）（FR-28） |
 | 更新時機 | 打開 App、回到前景、錯誤畫面的「重試」，以及背景重新整理（`WKApplicationRefreshBackgroundTask`，約每 30 分鐘）。每次成功都存到 App Group 並呼叫 `reloadAllTimelines` |
-| 設定同步 | iPhone App 儲存中繼設定時，以 WatchConnectivity 的 application context 傳到手錶，手錶不需要輸入（FR-30） |
+| 設定同步 | 手錶 App 開啟、回到前景時以 WatchConnectivity 的 `sendMessage` 向 iPhone 要中繼設定；iPhone 儲存設定時手錶 App 正開著也會直接收到。手錶不需要輸入（FR-30） |
 
-手錶直接呼叫中繼 API（UsageKit `RelayClient`），讀取密鑰存在手錶的 Keychain（WatchConnectivity 也會保留最後一份 application context）。複雜功能透過 App Group（`group.io.github.kevin930326.AIUsageMonitor`，已寫在 `project.yml` 的 entitlements）讀取手錶 App 存下的最後一份資料；實機需以 Team 簽署，未簽署時複雜功能顯示「--」。
+手錶直接呼叫中繼 API（UsageKit `RelayClient`），讀取密鑰只存在手錶的 Keychain（`sendMessage` 不被系統保存）。複雜功能透過 App Group（`group.io.github.kevin930326.AIUsageMonitor`，已寫在 `project.yml` 的 entitlements）讀取手錶 App 存下的最後一份資料；實機需以 Team 簽署，未簽署時複雜功能顯示「--」。
 
 ## 建置
 
