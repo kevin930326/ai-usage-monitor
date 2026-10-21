@@ -4,25 +4,36 @@
 
 ## [Unreleased]
 
-### Changed
-- 顏色規則（FR-16）：進度條改用服務識別色（Claude 珊瑚橘、Codex 青綠），剩餘 < 20% 才轉紅；百分比文字一律 primary；「資料已過期」等提示文字共用同一個顏色，對比度符合 WCAG AA。色值集中在 UsageKit `UsagePalette` 與 UsageKitUI `UsageColors`
-- Live Activity 的 Widget 擴充最低支援 iOS 18（手錶版面需要），App 本身仍支援 iOS 17
+## [0.5.0] - 2026-10-21
+
+涵蓋路線圖 v0.4（Live Activity）與 v0.5（捷徑）兩個里程碑，沒有單獨發布 v0.4.0。Mac 選單列 App（v1.2）與 Apple Watch App（v1.4）一起合併，以預覽版提供：需要 Team 簽署與 App Group，尚未在實機驗證。
 
 ### Added
+- iOS Live Activity：鎖定畫面與動態島顯示各服務各額度、最吃緊的一項、重置倒數與更新時間；進度條使用服務識別色、剩餘 < 20% 轉紅；過期資料轉灰；動態島以「CL」「CX」區分服務；單一服務失敗不影響另一服務（FR-8, FR-11, FR-12, FR-15, FR-16，#24）
+- Live Activity 上的「更新」按鈕，不開 App 即可更新（FR-9，#24）
+- 重置時間已過的額度顯示「已重置」（FR-26）；可切換顯示已用或剩餘 %（FR-17）（#24）
+- Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27，#24）
+- 捷徑動作「重新啟動用量監看」，可搭配定時自動化（07:00、15:00、23:00）突破 Live Activity 8 小時上限（FR-10，#25）
+- UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式、`UsagePalette`（色值與對比度計算）（#24）
+- iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖（只在 Debug 建置）（#24）
+- 預覽：Mac 選單列 App，選單列顯示最吃緊額度的剩餘 % 與顏色，面板列出所有額度、進度條、重置倒數與更新時間，監看本機 `usage.json`（FR-21, FR-22，#26）
+- 預覽：Mac 桌面小工具（小、中兩種尺寸；需 Team 簽署與 App Group 才能顯示真實資料，FR-24）；最短每 25 分鐘重新整理一次，一天最多 58 次（#26）
+- UsageKit：`UsageFileLocator`，與收集器相同的 `usage.json` 路徑規則（#26）
+- 預覽：Apple Watch App，列出所有可見額度與重置倒數（FR-29）；錶面複雜功能顯示最吃緊額度（圓形、矩形、單行，FR-28）；約每 30 分鐘背景重新整理（#27）
+- iPhone 以 WatchConnectivity 把中繼設定傳到手錶（FR-30，尚未以實機驗證，#27）
+- UsageKit 支援 watchOS 11（#27）
 - ADR-0004（提議中）：用量歷史資料的存放方式，比較本機檔案、中繼保存多筆與兩者並用，列出待決定問題（#23）
-- iOS Live Activity：鎖定畫面與動態島顯示各服務各額度、最吃緊的一項、重置倒數與更新時間；進度條使用服務識別色、剩餘 < 20% 轉紅；過期資料轉灰；動態島以「CL」「CX」區分服務；單一服務失敗不影響另一服務（FR-8, FR-11, FR-12, FR-15, FR-16）
-- Live Activity 上的「更新」按鈕，不開 App 即可更新（FR-9）
-- 重置時間已過的額度顯示「已重置」（FR-26）；可切換顯示已用或剩餘 %（FR-17）
-- Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27）
-- UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式
-- iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖
-- Mac 選單列 App：選單列顯示最吃緊額度的剩餘 % 與顏色，面板列出所有額度、進度條、重置倒數與更新時間，監看本機 `usage.json`（FR-21, FR-22）
-- Mac 桌面小工具（小、中兩種尺寸；需 Team 簽署與 App Group 才能顯示真實資料，FR-24）
-- UsageKit：`UsageFileLocator`，與收集器相同的 `usage.json` 路徑規則
-- Apple Watch App：列出所有可見額度與重置倒數（FR-29）；錶面複雜功能顯示最吃緊額度（圓形、矩形、單行，FR-28）
-- iPhone 以 WatchConnectivity 把中繼設定傳到手錶（FR-30，尚未以實機驗證）
-- UsageKit 支援 watchOS 11
-- 捷徑動作「重新啟動用量監看」，可搭配定時自動化突破 Live Activity 8 小時上限（FR-10）
+- README「隱私與安全」章節：網路請求、資料存放位置與已知取捨（NFR-6，#27）
+- 共用範例資料 `fixtures/usage-sample.json`，收集器、relay 與 UsageKit 各有測試讀同一份；`scripts/verify-all.sh` 一次跑完測試與三個 App 的 Debug／Release 建置；實機手動測試清單 `docs/manual-test-checklist.md`（#27）
+
+### Changed
+- 顏色規則（FR-16）：進度條改用服務識別色（Claude 珊瑚橘、Codex 青綠），剩餘 < 20% 才轉紅；百分比文字一律 primary；「資料已過期」等提示文字共用同一個顏色，對比度符合 WCAG AA。色值集中在 UsageKit `UsagePalette` 與 UsageKitUI `UsageColors`（#24）
+- Live Activity 的 Widget 擴充最低支援 iOS 18（手錶版面需要），App 本身仍支援 iOS 17（#24）
+- 手錶 App 與錶面複雜功能的過期門檻為 45 分鐘（背景更新約每 30 分鐘且常延後）；iPhone、Mac 與 Live Activity 維持 30 分鐘（FR-11，#27）
+- iOS、Mac、watchOS App 版本號改為 0.5.0；收集器版本改為 0.5.0
+
+### Fixed
+- 收集器：空的 `AI_USAGE_MONITOR_HOME` 視為未設定，與 App 行為一致（#26）
 
 ## [0.3.0] - 2026-10-21
 
@@ -58,7 +69,8 @@
 - 需求規格、系統架構、開發流程文件
 - ADR-0001 中繼方案、ADR-0002 Live Activity 重開策略
 
-[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.3.0...v0.5.0
 [0.3.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kevin930326/ai-usage-monitor/releases/tag/v0.1.0
