@@ -142,6 +142,73 @@ class DetectProvidersTest(unittest.TestCase):
         self.assertEqual(self.detect(None, True), ["codex"])
 
 
+class InstallLaunchdTest(unittest.TestCase):
+    """install-launchd.sh 寫 enabled_providers 的規則：找不到 claude 指令時 Claude 的狀態是「不知道」，
+    不能把原本啟用的 Claude 關掉。launchctl／plutil 用假的取代，不會真的安裝。
+    注意：腳本也會找 /opt/homebrew/bin/claude 與 /usr/local/bin/claude，這台機器若裝在那裡，
+    「找不到 claude」的案例會變成找得到。"""
+
+    def install(self, *, claude_found: bool, claude_logged_in: bool = True, codex: bool,
+                existing: dict | None = None) -> tuple[dict, str]:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            home, bin_dir, config_dir = root / "home", root / "bin", root / "config"
+            for p in (home, bin_dir, config_dir):
+                p.mkdir()
+            for name in ("launchctl", "plutil"):  # 不真的安裝 launchd 工作
+                fake = bin_dir / name
+                fake.write_text("#!/bin/bash\nexit 0\n")
+                fake.chmod(0o755)
+            (bin_dir / "python3").symlink_to(sys.executable)
+            if claude_found:
+                fake = bin_dir / "claude"
+                fake.write_text("#!/bin/bash\n"
+                                '[ "$1 $2" = "auth status" ] || exit 98\n'
+                                'echo \'{"loggedIn": true, "email": "person@example.com"}\'\n'
+                                f"exit {0 if claude_logged_in else 1}\n")
+                fake.chmod(0o755)
+            if codex:
+                (home / ".codex").mkdir()
+                (home / ".codex" / "auth.json").write_text("{}")
+            if existing is not None:
+                (config_dir / "config.json").write_text(json.dumps(existing))
+            env = {"HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AI_USAGE_MONITOR_HOME": str(config_dir),
+                   "LANG": "en_US.UTF-8"}
+            result = subprocess.run([str(SCRIPTS / "install-launchd.sh")], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            config_path = config_dir / "config.json"
+            config = json.loads(config_path.read_text()) if config_path.exists() else {}
+        self.assertNotIn("@", result.stdout)
+        return config, result.stdout
+
+    def test_detected_services_are_written(self):
+        config, out = self.install(claude_found=True, codex=True)
+        self.assertEqual(config["enabled_providers"], ["claude", "codex"])
+        self.assertTrue(config["claude_path"].endswith("/bin/claude"))
+        self.assertIn("Claude 用量：啟用", out)
+        self.assertIn("Codex 用量：啟用", out)
+
+    def test_logged_out_claude_is_disabled(self):
+        config, out = self.install(claude_found=True, claude_logged_in=False, codex=True)
+        self.assertEqual(config["enabled_providers"], ["codex"])
+        self.assertIn("Claude 用量：未啟用（Claude Code 沒有登入）", out)
+
+    def test_missing_claude_binary_keeps_existing_providers(self):
+        # 重新執行安裝時 shell 找不到 claude：既有的 Claude 啟用不能被悄悄關掉
+        existing = {"relay_url": "https://relay.example", "enabled_providers": ["claude", "codex"]}
+        config, out = self.install(claude_found=False, codex=True, existing=existing)
+        self.assertEqual(config, existing)
+        self.assertIn("找不到 claude 指令", out)
+        self.assertIn("Claude 用量：不確定", out)
+        self.assertIn("Codex 用量：啟用", out)
+
+    def test_missing_claude_binary_leaves_defaults_alone(self):
+        config, out = self.install(claude_found=False, codex=True)
+        self.assertNotIn("enabled_providers", config)
+        self.assertNotIn("claude_path", config)
+        self.assertIn("找不到 claude 指令", out)
+
+
 class UpdateConfigJsonTest(unittest.TestCase):
     def test_json_value_merges_without_dropping_other_keys(self):
         with tempfile.TemporaryDirectory() as d:
