@@ -25,6 +25,12 @@
 - `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ### Fixed
+- 整合後審查（#37／#38／#39／#40 合併後）：
+  - 收集器：`/usage` 額度行的百分比位數多到溢位、重置時間的小時不在 1～12、同一個額度印兩行、模型名稱含奇怪字元或超過 32 字，一律回報格式改變；各模型額度的 id 改為 `[a-z0-9_]`（`Sonnet 4.5 only` → `weekly_sonnet_4_5`）；解析前去除終端機色碼並以 `NO_COLOR` 執行 claude；`config.json` 的 `claude_path` 不是字串時當成沒設定
+  - 收集器：中繼回 4xx 時把它的錯誤原因附在日誌（之前只有「HTTP 422」）
+  - 安裝腳本：找不到 `claude` 指令時不再把 `enabled_providers` 改成只有 Codex（Claude 的登入狀態是「不知道」，維持原設定並提示）
+  - 中繼：body 上限提高到 64 KiB（原本 16 KiB 裝不下 LIMITS 允許的最大快照）；拒絕含小數秒的時間（iOS 17／macOS 14 解不出來）與不存在的日期（2 月 30 日）；需重新部署 Worker
+  - 手錶／iPhone：sendMessage 設定同步的訊息格式移到 UsageKit `WatchSettingsMessage` 並加上測試；fixture 測試改經真正的 `/usage` 解析器產生快照
 - 中繼：依 schema 驗證上傳的快照（`providers` 必須是物件、百分比、日期、字串長度、數量上限），並只保存白名單欄位，其他欄位移除；需重新部署 Worker（C-12）
 - Live Activity：重置時間早於資料過期時間時，卡片不再永遠不轉灰；`staleDate` 在過期前一律給過期時間，過期前的重置在同一次重繪顯示（最多晚 30 分鐘）（C-01）
 - 自動重裝：程序被強制結束後殘留的鎖不再永久停止重裝；鎖內記錄 PID，程序已不存在、舊版無 PID 或超過 2 小時的鎖會被接手（C-02）
