@@ -17,7 +17,7 @@ enum LiveActivityController {
 
     nonisolated static func content(for snapshot: UsageSnapshot, mode: UsageDisplayMode) -> ActivityContent<UsageActivityState> {
         let state = UsageActivityState(snapshot: snapshot, mode: mode)
-        // staleDate 讓系統在資料過期或額度重置時重繪卡片（FR-11、FR-26）
+        // staleDate 讓系統在資料過期時重繪卡片（FR-11）；已過期的資料改在下一次重置時重繪（FR-26）
         return ActivityContent(state: state, staleDate: state.staleDate())
     }
 

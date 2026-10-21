@@ -59,10 +59,16 @@ final class WatchModel {
         // 較舊的 iPhone App 可能送來帶換行的值，存之前再清一次
         let url = RelayInput.clean(rawURL), token = RelayInput.clean(rawToken)
         guard url != relayURL || token != readToken else { return }
+        do {
+            try KeychainStore.write(token, account: "relay-read-token")
+        } catch {
+            // 沒存成功就沿用舊設定；iPhone 下次送設定時會再試
+            errorMessage = error.localizedDescription
+            return
+        }
         relayURL = url
         readToken = token
         UserDefaults.standard.set(url, forKey: "relayURL")
-        KeychainStore.write(token, account: "relay-read-token")
         Task { await refresh() }
     }
 

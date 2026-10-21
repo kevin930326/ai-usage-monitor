@@ -11,6 +11,7 @@
 | v0.3 | iOS App 主畫面顯示用量 | FR-7 |
 | v0.4 | Live Activity + 更新按鈕（含 Apple Watch 版面） | FR-8, FR-9, FR-11, FR-12, FR-15 ~ FR-17, FR-26, FR-27 |
 | v0.5 | 捷徑 Intent + 自動化 | FR-10 |
+| v0.6 | iPhone 主畫面／鎖定畫面小工具 | FR-31, FR-32 |
 | v1.0 | 文件、截圖、Demo GIF、隱私章節 | NFR-6 |
 | v1.1 | 用完時間預測、門檻通知 | FR-18, FR-19 |
 | v1.2 | Mac 選單列 App + 桌面小工具 | FR-21 ~ FR-24, NFR-7 |

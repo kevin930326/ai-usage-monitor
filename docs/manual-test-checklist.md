@@ -9,7 +9,7 @@
 
 | # | 操作步驟 | 預期結果 | 結果 |
 |---|---|---|---|
-| 0.1 | 三個專案都選自己的 Team：`DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate`（iOSApp、WatchApp；MacMenuBar 見 2.1） | 建置時不再出現「requires a development team」 | |
+| 0.1 | 三個專案都選自己的 Team：`DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate`（iOSApp、WatchApp；MacMenuBar 用 `--spec project.team.yml`，見 `apple/MacMenuBar/README.md`「以 Team 簽署」） | 建置時不再出現「requires a development team」 | |
 | 0.2 | Xcode → 手錶 App、`UsageComplications`、Mac `UsageDesktopWidget` 的 Signing & Capabilities 檢查 App Group | 三個 target 都列出 `group.io.github.kevin930326.AIUsageMonitor`，且沒有紅色錯誤 | |
 | 0.3 | Mac 終端機：`launchctl list \| grep ai-usage-monitor` | 有一行；`usage.json` 5 分鐘內有更新（`stat -f %Sm ~/Library/Application\ Support/AIUsageMonitor/usage.json`） | |
 
@@ -30,6 +30,8 @@
 | 1.11 | 設定 → 輔助使用 → 顯示與文字大小 → 更大字體開到最大，看鎖定畫面卡片 | 文字沒有被截斷到無法辨識；重置倒數仍可讀 | |
 | 1.12 | 切換深色／淺色外觀 | 卡片在兩種外觀下文字與進度條都清楚；進度條是服務識別色（Claude 珊瑚橘、Codex 青綠），百分比文字不帶顏色 | |
 | 1.13 | 用到某個額度剩餘低於 20%（或等真實情況出現） | 只有該額度的進度條變紅；20–50% 仍是服務識別色；「資料已過期」等提示是同一種橘色 | |
+| 1.14 | 主畫面加入「AI 用量」小、中、大三種小工具，鎖定畫面加入圓形、矩形、單行（FR-31、FR-32） | 顯示真實資料（與 App 相同），中、大按「更新」後更新時間變成現在 | |
+| 1.15 | Mac 收集器停止 30 分鐘以上後看主畫面與鎖定畫面小工具 | 轉灰並顯示「資料已過期」；收集器恢復後 30 分鐘內恢復 | |
 
 ## 2. 捷徑自動化（FR-10）
 
@@ -60,10 +62,10 @@
 
 | # | 操作步驟 | 預期結果 | 結果 |
 |---|---|---|---|
-| 4.1 | `apple/MacMenuBar` 選 Team 後建置並執行 | 選單列出現圓點與最吃緊的剩餘 %：圓點是該服務的識別色，剩餘 < 20% 時為紅色 | |
+| 4.1 | `apple/MacMenuBar` 以 `project.team.yml` 產生專案後建置並執行 | 選單列出現圓點與最吃緊的剩餘 %：圓點是該服務的識別色，剩餘 < 20% 時為紅色 | |
 | 4.2 | 點選單列圖示 | 面板列出所有額度、進度條（服務識別色）、重置倒數、更新時間；淺色與深色外觀都清楚 | |
 | 4.3 | 收集器下一次寫入（最多 5 分鐘） | 面板與選單列在幾秒內反映新數字 | |
-| 4.4 | 桌面右鍵 → 編輯小工具 → 加入「AI 用量」小、中尺寸 | 小工具顯示真實資料（不是範例）；若顯示「範例資料」代表 App Group 沒有生效 | |
+| 4.4 | 以 `DEVELOPMENT_TEAM=<Team ID> xcodegen generate --spec project.team.yml` 產生專案並執行 → 桌面右鍵 → 編輯小工具 → 加入「AI 用量」小、中尺寸；7 天後再看一次 | `codesign -d --entitlements` 兩個 bundle 都有 App Group；小工具顯示真實資料（不是範例），若顯示「範例資料」代表 App Group 沒有生效；記下 Personal Team 簽署 7 天後是否仍能開啟 | |
 | 4.5 | 活動監視器觀察 AIUsageMenuBar，面板關閉時閒置 5 分鐘 | CPU 接近 0%；能耗影響為「低」 | |
 
 ## 5. 隱私與安全抽查
@@ -72,3 +74,16 @@
 |---|---|---|---|
 | 5.1 | iPhone 設定頁輸入密鑰後，從多工畫面看 App 縮圖 | 密鑰欄位為遮蔽顯示 | |
 | 5.2 | Xcode → Window → Devices → 手錶 App 的 Console 篩選 `AIUsage` | log 中沒有中繼網址的密鑰或 `Bearer` | |
+
+## 6. Codex 審查後的補充驗證
+
+自動測試已涵蓋邏輯，以下是需要實機、真實排程或無法以程式製造的情境（`~/Documents/ai-usage-monitor-work/reviews/codex-review-triage.md`）。
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 6.1 | 某個 5 小時額度在資料更新後 30 分鐘內重置時開卡片，之後不按「更新」、不開 App（C-01） | 重置時卡片可能仍顯示舊百分比；資料更新 30 分鐘後卡片轉灰、顯示「資料已過期」並同時顯示「已重置」與 100% | |
+| 6.2 | 設定頁改讀取密鑰後儲存，再打開手錶 App（C-05） | 設定頁正常關閉、iPhone 與手錶都改用新密鑰；Keychain 寫入失敗無法在實機製造，失敗路徑由 `KeychainWriteTests` 涵蓋 | |
+| 6.3 | 手錶 App 開過一次後不再打開，戴 2 小時；之後打開 App 再關閉（C-10） | 複雜功能持續更新；Xcode 主控台沒有「背景重新整理排程失敗」，若出現則之後數分鐘內有重試 | |
+| 6.4 | `security lock-keychain ~/Library/Keychains/login.keychain-db` 後 `launchctl kickstart gui/$(id -u)/io.github.kevin930326.ai-usage-monitor`，看 `collector.log` 與 `ps` | 收集器在數秒內結束並記錄錯誤，不會卡住等待互動；之後解鎖鑰匙圈恢復正常（審查「不確定項目」：`security` 沒有 timeout） | |
+| 6.5 | 自動重裝在以下情境各執行一次 `scripts/reinstall-ios.sh`：中繼離線、讀取密鑰錯誤、設定 → Live Activity 關閉、手機鎖定 | 通知文字與實際結果一致：卡片沒有開回來時不應通知「已重開」（審查「不確定項目」，目前只確認 App 程序有啟動） | |
+| 6.6 | 自動重裝執行中 `kill -9` 該 bash 程序（`pgrep -f reinstall-ios.sh`），再執行一次（C-02） | 第二次在 `reinstall.log` 記錄「清除殘留的鎖」並繼續重新安裝 | |

@@ -1,4 +1,5 @@
 import SwiftUI
+import UsageKit
 
 @main
 struct AIUsageWatchApp: App {
@@ -17,11 +18,13 @@ struct AIUsageWatchApp: App {
                     #endif
                 }
         }
-        // 打開 App 與回到前景時都更新（第一次 .active 也算，所以不必在 .task 再抓一次）
+        // 打開 App 與回到前景時都更新（第一次 .active 也算，所以不必在 .task 再抓一次）。
+        // 同時重排背景更新：先前排程失敗而中斷時，從這裡接回來
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             delegate.model.requestSettings()
             Task { await delegate.model.refresh() }
+            delegate.scheduleBackgroundRefresh()
         }
     }
 }
@@ -33,6 +36,7 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     static let backgroundInterval: TimeInterval = 30 * 60
 
     let model = WatchModel()
+    private var scheduling: Task<Void, Never>?
 
     func applicationDidFinishLaunching() {
         scheduleBackgroundRefresh()
@@ -53,14 +57,27 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
         }
     }
 
-    /// 同一時間只會有一個排程，重複呼叫會取代前一個
-    private func scheduleBackgroundRefresh() {
-        WKApplication.shared().scheduleBackgroundRefresh(
-            withPreferredDate: Date(timeIntervalSinceNow: Self.backgroundInterval),
-            userInfo: nil
-        ) { error in
-            if let error {
-                print("背景重新整理排程失敗：\(error.localizedDescription)")
+    /// 同一時間只會有一個排程，重複呼叫會取代前一個。排程失敗時依 `BackgroundRefreshRetry`
+    /// 延後重試（最多 3 次），否則背景更新會中斷到使用者再打開 App。
+    func scheduleBackgroundRefresh() {
+        scheduling?.cancel()
+        scheduling = Task {
+            await BackgroundRefreshRetry.schedule {
+                // 已有較新的排程要求時停止重試
+                guard !Task.isCancelled else { return true }
+                return await withCheckedContinuation { continuation in
+                    WKApplication.shared().scheduleBackgroundRefresh(
+                        withPreferredDate: Date(timeIntervalSinceNow: Self.backgroundInterval),
+                        userInfo: nil
+                    ) { error in
+                        if let error {
+                            print("背景重新整理排程失敗：\(error.localizedDescription)")
+                        }
+                        continuation.resume(returning: error == nil)
+                    }
+                }
+            } sleep: { delay in
+                try? await Task.sleep(for: .seconds(delay))
             }
         }
     }

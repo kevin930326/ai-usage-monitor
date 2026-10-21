@@ -25,8 +25,11 @@ LOG_DIR="$HOME/Library/Logs/AIUsageMonitor"
 LOG="$LOG_DIR/reinstall.log"
 BUILD_LOG="$LOG_DIR/reinstall-build.log"
 DERIVED="$HOME/Library/Caches/AIUsageMonitor/DerivedData"
-HELPER=(python3 "$REPO/scripts/reinstall_ios_helper.py")
-UPDATE_CONFIG=(python3 "$REPO/collector/scripts/update-config.py" "$CONFIG")
+# launchd 經由 reinstall_ios_helper.py scheduled 執行時，AUM_PYTHON 是 plist 指定的 Python（與收集器相同）；
+# 全程沿用它，不再依 PATH 找 python3（launchd 的 PATH 不一定含那個資料夾）
+PYTHON="${AUM_PYTHON:-python3}"
+HELPER=("$PYTHON" "$REPO/scripts/reinstall_ios_helper.py")
+UPDATE_CONFIG=("$PYTHON" "$REPO/collector/scripts/update-config.py" "$CONFIG")
 INTERVAL_DAYS=6
 OVERDUE_DAYS=6.5
 # 要與 iPhone 捷徑 App 的定時自動化相同（apple/iOSApp/README.md「捷徑：讓卡片整天顯示」）
@@ -44,7 +47,7 @@ notify() {  # 用參數傳文字，避免引號被當成 AppleScript
               -e 'end run' "$1" "$TITLE" >/dev/null 2>&1 || true
 }
 config_get() {
-    python3 -c 'import json,sys
+    "$PYTHON" -c 'import json,sys
 try: print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")
 except (FileNotFoundError, ValueError): print("")' "$CONFIG" "$1"
 }
@@ -68,13 +71,44 @@ if [ "${1:-}" = "--if-due" ]; then
     NEXT_SHORTCUT=${PLAN##*$'\t'}
 fi
 
-# 同時只跑一個（手動與 launchd 可能重疊）
+# 同時只跑一個（手動與 launchd 可能重疊）。鎖是資料夾，裡面記 PID。
+# kill -9、當機或斷電時 EXIT trap 不會執行，鎖會留下來：持有的程序已不存在、
+# 舊版腳本留下沒有 PID 的鎖，或超過最長執行時間（PID 可能已被重用）時視為殘留，接手後繼續。
 LOCK="$CONFIG_DIR/.reinstall.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
+LOCK_MAX_MINUTES=120  # 建置數分鐘、安裝最多 5 分鐘，遠低於此
+lock_is_stale() {  # lock_is_stale <鎖內的 PID，可能為空>
+    if [ -z "$1" ]; then
+        # 剛建立、還沒寫入 PID 的鎖不算；沒有 PID 超過 1 分鐘就是殘留
+        [ -n "$(find "$LOCK" -maxdepth 0 -mmin +1 2>/dev/null)" ]
+        return
+    fi
+    ! kill -0 "$1" 2>/dev/null || [ -n "$(find "$LOCK/pid" -mmin +"$LOCK_MAX_MINUTES" 2>/dev/null)" ]
+}
+acquire_lock() {
+    if mkdir "$LOCK" 2>/dev/null; then
+        echo $$ >"$LOCK/pid"
+        return 0
+    fi
+    local pid stale
+    pid=$(cat "$LOCK/pid" 2>/dev/null)
+    lock_is_stale "$pid" || return 1
+    # 先改名再刪，兩個程序同時接手時只有一個改名成功；改到的若已不是剛才看到的鎖就放回去
+    stale="$LOCK.stale.$$"
+    mv "$LOCK" "$stale" 2>/dev/null || return 1
+    if [ "$(cat "$stale/pid" 2>/dev/null)" != "$pid" ]; then
+        mv "$stale" "$LOCK" 2>/dev/null || rm -rf "$stale"
+        return 1
+    fi
+    rm -rf "$stale"
+    log "清除殘留的鎖（PID ${pid:-未記錄}）"
+    mkdir "$LOCK" 2>/dev/null || return 1
+    echo $$ >"$LOCK/pid"
+}
+if ! acquire_lock; then
     echo "另一個重新安裝正在執行（${LOCK}）" >&2
     exit 0
 fi
-trap 'rmdir "$LOCK"' EXIT
+trap 'rm -rf "$LOCK"' EXIT
 
 log "開始重新安裝（${MODE}，$REPO @ $(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)）"
 
@@ -88,7 +122,7 @@ fi
 
 # 2. iPhone：config.json 優先；沒有時若只連過一台 iPhone 就寫入
 DEVICES_JSON=$(mktemp)
-trap 'rmdir "$LOCK"; rm -f "$DEVICES_JSON"' EXIT
+trap 'rm -rf "$LOCK"; rm -f "$DEVICES_JSON"' EXIT
 xcrun devicectl list devices --timeout 60 --json-output "$DEVICES_JSON" >/dev/null 2>>"$LOG" \
     || fail 2 "devicectl 無法列出裝置"
 IPHONES=$("${HELPER[@]}" iphones "$DEVICES_JSON")

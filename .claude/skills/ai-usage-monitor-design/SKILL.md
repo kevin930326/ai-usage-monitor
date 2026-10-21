@@ -110,8 +110,9 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
 - **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
   來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
-- **每個額度顯示**：名稱、剩餘或已用 %（依使用者設定，FR-17，預設剩餘）、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
+- **每個額度顯示**：名稱、剩餘或已用 %、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
   來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`）。
+- **已用／剩餘設定只在 iPhone**（FR-17，預設剩餘）：iPhone App、Live Activity（含手錶智慧型堆疊的版面）與 iPhone 主畫面／鎖定畫面小工具依設定，用 `displayedPct(mode, at:)`。Mac 選單列、面板、桌面小工具，以及手錶 App 與錶面複雜功能**固定顯示剩餘 %**（`effectiveRemainingPct`；`ComplicationView` 用預設的 `.remaining`），設定不會同步到 Mac 或手錶。
 - **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
   來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。
 - **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大最吃緊的一項、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
@@ -129,7 +130,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 |---|---|---|
 | Live Activity ContentState < 4KB | 只放畫面需要的欄位（可見額度、錯誤、更新時間、顯示模式），錯誤訊息截短；新增欄位要跑大小測試 | `UsageActivityState.swift`（`maxEncodedBytes`、`encodedSize()`）；`UsageActivityStateTests`、`FixtureTests`、`EdgeCaseTests` 檢查 < 4096 bytes（最壞情況留 512 bytes 餘裕） |
 | 鎖定畫面卡片高度約 160pt | 超過會被系統截掉；標題維持單行，新增列之前先確認高度 | `apple/iOSApp/Shared/ActivityViews.swift` |
-| `staleDate` 不可落在過去 | 給過去的時間，系統會直接把卡片從鎖定畫面移除；取資料過期時間與下一個重置時間中較早且尚未到的，都過去就給 `nil` | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
+| `staleDate` 只會重繪一次、不可落在過去 | 每份內容只在 `staleDate` 重繪一次，App 也不在背景更新卡片：資料過期時間未到時一律給過期時間（過期前的重置在那次重繪一併顯示，最多晚 30 分鐘），已過期才給下一個重置時間，都過去就給 `nil`。給過去的時間，系統會直接把卡片從鎖定畫面移除 | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
 | Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |
 | Mac 桌面小工具 reload 最短 25 分鐘 | 內容有變且距上次 ≥ 25 分鐘，或距上次已達 25 分鐘才 `reloadAllTimelines`；每天 ≤ 58 次。收集器每 5 分鐘寫一次，每次都 reload 會用掉約 288 次 | `apple/UsageKit/Sources/UsageKit/WidgetSupport.swift`（`WidgetReloadThrottle`）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift` |
 | iPhone 主畫面小工具 reload 25 分鐘 | 小工具自己抓中繼，每 25 分鐘（資料過期時 60 分鐘）；App 背景取得新資料時另外 reload（約 5 次／天），前景與按鈕 Intent 不扣次數。一般約 51 次／天、最多約 63 次 | `apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`refreshInterval`）、`apple/iOSApp/Shared/SharedStore.swift`（`publish`）、`apple/iOSApp/README.md`「重新整理次數」 |

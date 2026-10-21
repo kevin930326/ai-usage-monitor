@@ -4,8 +4,8 @@ import UsageKit
 
 /// 選單列 App 與桌面小工具交換資料的位置。
 /// 小工具在沙盒中執行，讀不到 `~/Library/Application Support`，所以 App 每次讀到新資料時
-/// 複製一份到 App Group 容器。App Group 需要以 Apple 帳號（Team）簽署並在 project.yml 加入
-/// entitlement（見 README），否則 App 不寫入、小工具顯示範例資料。
+/// 複製一份到 App Group 容器。App Group 需要以 Apple 帳號（Team）簽署，用 project.team.yml 產生專案
+/// （見 README「以 Team 簽署」），否則 App 不寫入、小工具顯示範例資料。
 enum SharedSnapshot {
     static let appGroup = "group.io.github.kevin930326.AIUsageMonitor"
 

@@ -28,16 +28,28 @@ xcodegen generate
 open AIUsageMenuBar.xcodeproj
 ```
 
-預設以「Sign to Run Locally」（`CODE_SIGN_IDENTITY = -`）簽署，不需要 Apple 帳號。要讓桌面小工具讀到真實資料，需以自己的 Team 簽署並為兩個 target 加入 App Group。在 Xcode 的 Signing & Capabilities 加入的設定會在下次 `xcodegen generate` 時被覆寫，請改在 `project.yml` 設定（`AIUsageMenuBar` 需要新增 `entitlements` 區塊，小工具在既有的 `properties` 加一行）：
+預設以「Sign to Run Locally」（`CODE_SIGN_IDENTITY = -`）簽署，不需要 Apple 帳號，`scripts/verify-all.sh` 與 CI 也用這個設定。這時沒有 App Group，桌面小工具顯示範例資料。
 
-```yaml
-    entitlements:
-      path: AIUsageMenuBar/AIUsageMenuBar.entitlements
-      properties:
-        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+### 以 Team 簽署（桌面小工具顯示真實資料）
+
+`project.team.yml` 引用 `project.yml`，只把簽署改為 `Apple Development`／`Automatic`，並為 App 與小工具加入 App Group `group.io.github.kevin930326.AIUsageMonitor`，不需要手改 `project.yml`：
+
+```bash
+cd apple/MacMenuBar
+DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate --spec project.team.yml
+open AIUsageMenuBar.xcodeproj
 ```
 
-並把 `CODE_SIGN_IDENTITY` 改為 `Apple Development`、`CODE_SIGN_STYLE` 改為 `Automatic`，再以 `DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate` 產生專案。
+entitlements 寫在 `*.team.entitlements`，與預設設定的檔案分開。不要在 Xcode 的 Signing & Capabilities 加設定，下次 `xcodegen generate` 會被覆寫。之後再執行不帶 `--spec` 的 `xcodegen generate` 就會回到 Sign to Run Locally。
+
+確認兩個 bundle 都帶有 App Group：
+
+```bash
+codesign -d --entitlements - --xml <AIUsageMenuBar.app> | plutil -p -
+codesign -d --entitlements - --xml <AIUsageMenuBar.app>/Contents/PlugIns/UsageDesktopWidget.appex | plutil -p -
+```
+
+免費 Apple ID（Personal Team）簽署的 Mac App 是否也有 7 天的佈建期限，尚未實測（手動測試 4.4）。
 
 命令列建置：
 

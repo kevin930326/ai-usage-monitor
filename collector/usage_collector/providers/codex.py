@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..http import get_json
-from ..models import ProviderError, ProviderUsage, Window
+from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 AUTH_PATH = Path.home() / ".codex" / "auth.json"
 USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
@@ -46,7 +46,7 @@ def parse(body: dict) -> ProviderUsage:
             continue
         wid, label = window_label(int(w["limit_window_seconds"]))
         resets_at = datetime.fromtimestamp(w["reset_at"], tz=timezone.utc) if w.get("reset_at") else None
-        windows.append(Window(wid, label, float(w.get("used_percent") or 0), resets_at))
+        windows.append(Window(wid, label, parse_pct(w.get("used_percent")), resets_at))
     if not windows:
         raise ProviderError("回應中沒有用量資料，API 可能已變更")
     plan = body.get("plan_type")

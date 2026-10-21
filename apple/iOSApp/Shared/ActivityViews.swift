@@ -13,7 +13,7 @@ struct LockScreenActivityView<Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
 
     // 只看資料時間（FR-11）。ActivityKit 的 `context.isStale` 在 staleDate 到時變成 true，
-    // 但 staleDate 也可能是下一個重置時間，那時資料仍是新的，不能拿來判斷過期。
+    // 但資料已過期後 staleDate 改為下一個重置時間，不能拿來判斷過期。
     private var stale: Bool { state.isStale(at: now) }
 
     var body: some View {

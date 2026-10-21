@@ -50,8 +50,12 @@ struct HomeView: View {
                     .buttonStyle(.borderedProminent)
             }
         } else if let snapshot = model.snapshot {
-            UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode)
-                .refreshable { await model.refresh() }
+            // 過期、已重置、百分比與最吃緊的一項都依時間計算；畫面停在前景時沒有其他狀態變化也每分鐘重算
+            // （FR-11、FR-26）。TimelineView 在 App 進入背景後不會更新
+            TimelineView(.everyMinute) { context in
+                UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode, now: context.date)
+            }
+            .refreshable { await model.refresh() }
         } else if let error = model.errorMessage {
             ContentUnavailableView {
                 Label("無法取得用量", systemImage: "exclamationmark.triangle")
@@ -70,8 +74,9 @@ private struct UsageList: View {
     let snapshot: UsageSnapshot
     let errorMessage: String?
     let mode: UsageDisplayMode
+    let now: Date
 
-    private var stale: Bool { snapshot.isStale() }
+    private var stale: Bool { snapshot.isStale(now: now) }
 
     var body: some View {
         List {
@@ -83,9 +88,9 @@ private struct UsageList: View {
                 }
             }
 
-            if let tightest = snapshot.tightestWindow(at: .now) {
+            if let tightest = snapshot.tightestWindow(at: now) {
                 Section("最吃緊") {
-                    TightestCard(item: tightest, mode: mode, dimmed: stale)
+                    TightestCard(item: tightest, mode: mode, dimmed: stale, now: now)
                 }
             }
 
@@ -99,7 +104,7 @@ private struct UsageList: View {
 
             ForEach(snapshot.orderedProviderKeys, id: \.self) { key in
                 if let provider = snapshot.providers[key] {
-                    ProviderSection(key: key, provider: provider, mode: mode, dimmed: stale)
+                    ProviderSection(key: key, provider: provider, mode: mode, dimmed: stale, now: now)
                 }
             }
 
@@ -114,6 +119,7 @@ private struct TightestCard: View {
     let item: ProviderWindow
     let mode: UsageDisplayMode
     let dimmed: Bool
+    let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -126,10 +132,10 @@ private struct TightestCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Text("\(Int(item.window.displayedPct(mode, at: .now).rounded()))%")
+            Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
                 .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(dimmed ? .secondary : .primary)
-            UsageWindowRow(window: item.window, provider: item.provider, display: mode, dimmed: dimmed)
+            UsageWindowRow(window: item.window, provider: item.provider, display: mode, dimmed: dimmed, now: now)
         }
         .padding(.vertical, 4)
     }
@@ -168,6 +174,7 @@ private struct ProviderSection: View {
     let provider: ProviderUsage
     let mode: UsageDisplayMode
     let dimmed: Bool
+    let now: Date
 
     var body: some View {
         Section {
@@ -177,7 +184,7 @@ private struct ProviderSection: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(provider.visibleWindows) { window in
-                    UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed)
+                    UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed, now: now)
                         .padding(.vertical, 2)
                 }
             }

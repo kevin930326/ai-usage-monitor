@@ -56,6 +56,48 @@ class CodexParseTest(unittest.TestCase):
             self.assertEqual(codex.read_tokens(Path(f.name)), {"access_token": "a", "account_id": "b"})
 
 
+# C-04：百分比缺少或格式不對時要報錯，不能變成「0% 已用」
+BAD_PERCENTS = [None, "12", float("nan"), float("inf"), -5, True]
+
+
+class PercentValidationTest(unittest.TestCase):
+    def test_claude_rejects_missing_percent(self):
+        body = {"five_hour": {"resets_at": "2026-10-20T10:00:00+00:00"}}
+        with self.assertRaises(ProviderError):
+            claude.parse(body, None)
+
+    def test_claude_rejects_bad_percent(self):
+        for value in BAD_PERCENTS:
+            with self.subTest(value=value), self.assertRaises(ProviderError):
+                claude.parse({"five_hour": {"utilization": value, "resets_at": None}}, None)
+
+    def test_codex_rejects_missing_percent(self):
+        body = {"rate_limit": {"primary_window": {"limit_window_seconds": 18000, "reset_at": 1792529816}}}
+        with self.assertRaises(ProviderError):
+            codex.parse(body)
+
+    def test_codex_rejects_bad_percent(self):
+        for value in BAD_PERCENTS:
+            body = {"rate_limit": {"primary_window": {"used_percent": value, "limit_window_seconds": 18000}}}
+            with self.subTest(value=value), self.assertRaises(ProviderError):
+                codex.parse(body)
+
+    def test_zero_and_over_limit_are_kept(self):
+        # 0 是真的沒用；超過 100（超額）照實傳出，顯示端會限制在 0～100
+        usage = claude.parse({"five_hour": {"utilization": 0, "resets_at": None},
+                              "seven_day": {"utilization": 104.5, "resets_at": None}}, None)
+        self.assertEqual([w.used_pct for w in usage.windows], [0.0, 104.5])
+
+    def test_bad_hidden_scoped_limit_is_skipped(self):
+        # 各模型的每週額度是隱藏的次要資訊，格式不對時略過那一項，不讓整個服務失敗
+        body = {**CLAUDE_BODY, "limits": [
+            {"kind": "weekly_scoped", "percent": None, "scope": {"model": {"display_name": "Opus"}}},
+            {"kind": "weekly_scoped", "percent": 30, "scope": {"model": {"display_name": "Fable"}}},
+        ]}
+        usage = claude.parse(body, None)
+        self.assertEqual([w.id for w in usage.windows], ["five_hour", "weekly", "weekly_fable"])
+
+
 class CollectTest(unittest.TestCase):
     def test_one_provider_failure_does_not_break_other(self):
         ok = mock.Mock(fetch=mock.Mock(return_value=ProviderUsage(plan="Pro")))

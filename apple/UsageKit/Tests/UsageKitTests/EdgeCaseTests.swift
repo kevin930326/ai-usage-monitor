@@ -37,15 +37,28 @@ import Testing
 
     // MARK: 過期判斷（FR-11）
 
-    @Test func staleDateAtResetDoesNotMeanDataIsStale() throws {
-        // 10 分鐘後重置：ActivityKit 會在那時把卡片標為 stale，但資料只過了 10 分鐘
+    @Test func redrawAtExpiryShowsBothResetAndStale() throws {
+        // C-01：10 分鐘後重置、30 分鐘後過期。卡片只會在 staleDate 重繪一次，
+        // 這一次必須落在過期時間，畫面才會轉灰；重置在同一次重繪中一併顯示
         let resetsAt = now.addingTimeInterval(10 * 60)
         let state = UsageActivityState(snapshot: snapshot(updatedAt: now, [
             "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: resetsAt)]),
         ]), mode: .remaining)
         let staleDate = try #require(state.staleDate(now: now))
-        #expect(staleDate == resetsAt)
-        #expect(!state.isStale(at: staleDate))
+        #expect(staleDate == now.addingTimeInterval(UsageSnapshot.staleAfter))
+        #expect(state.isStale(at: staleDate.addingTimeInterval(0.001)))
+        let tightest = try #require(state.tightest(at: staleDate))
+        #expect(tightest.window.isReset(at: staleDate))
+        #expect(tightest.window.displayedPct(.remaining, at: staleDate) == 100)
+    }
+
+    @Test func staleDateFallsBackToNextResetOnceExpired() {
+        // 過期後才更新卡片（例如按「更新」但中繼仍是舊資料）：下一次重繪留給重置
+        let resetsAt = now.addingTimeInterval(2 * 3600)
+        let state = UsageActivityState(snapshot: snapshot(updatedAt: now, [
+            "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: resetsAt)]),
+        ]), mode: .remaining)
+        #expect(state.staleDate(now: now.addingTimeInterval(45 * 60)) == resetsAt)
     }
 
     @Test func updatedAtLaterThanDeviceClockIsNotStale() {
@@ -55,6 +68,23 @@ import Testing
         #expect(!snap.isStale(now: now))
         let state = UsageActivityState(snapshot: snap, mode: .remaining)
         #expect(state.staleDate(now: now) == future.addingTimeInterval(UsageSnapshot.staleAfter))
+    }
+
+    @Test func updatedAtFarInTheFutureIsStale() {
+        // C-09：Mac 時鐘快了好幾個小時，舊資料不能一直顯示成新的。
+        // 超過門檻的未來時間視為過期；門檻內的小偏差（上一個測試）照常顯示
+        for hours: Double in [1, 24, 24 * 30] {
+            let snap = snapshot(updatedAt: now.addingTimeInterval(hours * 3600), ["claude": ProviderUsage(windows: [])])
+            #expect(snap.isStale(now: now))
+            #expect(snap.isStale(now: now, after: UsageSnapshot.watchStaleAfter))
+            #expect(UsageActivityState(snapshot: snap, mode: .remaining).isStale(at: now))
+        }
+    }
+
+    @Test func futureToleranceMatchesThreshold() {
+        let snap = snapshot(updatedAt: now.addingTimeInterval(40 * 60), ["claude": ProviderUsage(windows: [])])
+        #expect(snap.isStale(now: now))                                          // iPhone、Mac：30 分鐘
+        #expect(!snap.isStale(now: now, after: UsageSnapshot.watchStaleAfter))   // 手錶：45 分鐘
     }
 
     // MARK: 時間邊界（FR-26）

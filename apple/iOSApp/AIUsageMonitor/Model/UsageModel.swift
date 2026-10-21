@@ -15,9 +15,8 @@ final class UsageModel {
     private(set) var relayURL: String {
         didSet { SharedStore.defaults.set(relayURL, forKey: UsageSource.relayURLKey) }
     }
-    private(set) var readToken: String {
-        didSet { KeychainStore.write(readToken, account: UsageSource.readTokenAccount) }
-    }
+    /// 只在 `saveSettings` 存進 Keychain 成功後才改
+    private(set) var readToken: String
     /// 已用／剩餘（FR-17），同時套用到 Live Activity。
     var displayMode: UsageDisplayMode {
         didSet {
@@ -76,7 +75,9 @@ final class UsageModel {
 
     /// 設定畫面的「儲存」：兩個值都存好後才同步到手錶一次（FR-30）。
     /// 分開送會先送出「新網址＋舊密鑰」，手錶可能短暫顯示「讀取密鑰錯誤」。
-    func saveSettings(url: String, token: String) {
+    /// 密鑰沒存進 Keychain 時丟出錯誤，設定、手錶與小工具都維持原狀。
+    func saveSettings(url: String, token: String) throws {
+        try KeychainStore.write(token, account: UsageSource.readTokenAccount)
         relayURL = url
         readToken = token
         WatchSettingsSync.shared.send(url: url, token: token)

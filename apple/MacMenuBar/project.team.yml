@@ -1,0 +1,25 @@
+# Team 簽署版本：讓桌面小工具讀到真實資料（App Group）。預設的 project.yml 不需要 Apple 帳號，
+# 但沒有 App Group，小工具只能顯示範例資料（見 README「以 Team 簽署」）。
+#   cd apple/MacMenuBar && DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate --spec project.team.yml
+# 其餘設定都來自 project.yml；這裡只覆寫簽署方式並為兩個 target 加上 App Group。
+# entitlements 用另外的檔名，不會改到 project.yml 產生的檔案。
+include:
+  - project.yml
+
+settings:
+  base:
+    CODE_SIGN_IDENTITY: Apple Development
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  AIUsageMenuBar:
+    entitlements:
+      path: AIUsageMenuBar/AIUsageMenuBar.team.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+  UsageDesktopWidget:
+    entitlements:
+      path: UsageDesktopWidget/UsageDesktopWidget.team.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
