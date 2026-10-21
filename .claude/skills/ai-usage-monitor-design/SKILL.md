@@ -48,7 +48,7 @@ L12.00 23.00 L10.35 15.97 L6.20 17.80 L8.03 13.65 L1.00 12.00 L8.03 10.35 L6.20 
 - 圖示是單一 `Shape`，以目前的 `foregroundStyle` 填色（template）。全彩時套 `UsageColors.providerMark`，資料過期時套灰色。
 - 錶面上加 `.widgetAccentable()`，讓單色／主題色錶面由系統換色；鏤空要維持透明。
 - 只有圖示、沒有文字的地方要有 `accessibilityLabel`（「Claude」「Codex」）。`ProviderIcon` 已內建，不要拿掉。
-- 目前尺寸：動態島精簡版 18pt、圓形複雜功能 13pt。縮小前要重新驗證（見第 6 節）。
+- 目前尺寸：動態島精簡版 18pt、圓形複雜功能 13pt。縮小前要重新驗證（見第 8 節）。
 - 新增服務時要設計新的原創圖示並寫進本節；`ProviderIcon` 對未知服務暫時畫圓形。
 
 ## 3. 不收錄官方 logo
@@ -83,7 +83,38 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改。
 
-## 6. UI 驗證方式
+## 6. 資訊排列
+
+所有平台（iPhone App、Live Activity、Mac 面板與桌面小工具、手錶 App 與複雜功能）都遵守：
+
+- **最吃緊的一項永遠放在最顯眼的位置**（FR-15）：所有服務的可見額度中剩餘最少的一項；排除 `hidden` 額度與有錯誤的服務；同分時取較早重置的；已重置的額度視為剩餘 100%。一律用 `UsageSnapshot.tightestWindow(at:)`（Live Activity 用 `UsageActivityState.tightest(at:)`），不要自己挑。
+  來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
+- **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
+  來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
+- **每個額度顯示**：名稱、剩餘或已用 %（依使用者設定，FR-17，預設剩餘）、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
+  來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`）。
+- **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
+  來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。
+- **單一服務失敗只影響該服務**（FR-12）：該服務顯示錯誤訊息，其他服務照常顯示；最吃緊的一項從正常的服務中挑。Live Activity 的錯誤訊息截短到 60 字以控制大小。
+  來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/Shared/UsageViews.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
+- **一律顯示最後更新時間**；過期時改為「資料已過期 · HH:mm 更新」（門檻見第 4 節）。錶面空間不足的複雜功能以灰色表示過期。
+  來源：`ActivityViews.swift`（`ActivityFooter`）、`apple/MacMenuBar/Shared/UsageViews.swift`（`UpdatedText`）、`apple/iOSApp/AIUsageMonitor/Views/HomeView.swift`（`UpdatedFooter`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
+
+## 7. 平台限制
+
+| 限制 | 規則 | 來源 |
+|---|---|---|
+| Live Activity ContentState < 4KB | 只放畫面需要的欄位（可見額度、錯誤、更新時間、顯示模式），錯誤訊息截短；新增欄位要跑大小測試 | `UsageActivityState.swift`（`maxEncodedBytes`、`encodedSize()`）；`UsageActivityStateTests`、`FixtureTests`、`EdgeCaseTests` 檢查 < 4096 bytes（最壞情況留 512 bytes 餘裕） |
+| 鎖定畫面卡片高度約 160pt | 超過會被系統截掉；標題維持單行，新增列之前先確認高度 | `apple/iOSApp/Shared/ActivityViews.swift` |
+| `staleDate` 不可落在過去 | 給過去的時間，系統會直接把卡片從鎖定畫面移除；取資料過期時間與下一個重置時間中較早且尚未到的，都過去就給 `nil` | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
+| Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |
+| Mac 桌面小工具 reload 最短 25 分鐘 | 內容有變且距上次 ≥ 25 分鐘，或距上次已達 25 分鐘才 `reloadAllTimelines`；每天 ≤ 58 次。收集器每 5 分鐘寫一次，每次都 reload 會用掉約 288 次 | `apple/UsageKit/Sources/UsageKit/WidgetSupport.swift`（`WidgetReloadThrottle`）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift` |
+| 手錶背景更新約 30 分鐘 | 每次背景更新 reload 一次複雜功能，約 48 次／天；實際時間由 watchOS 決定，過期門檻因此是 45 分鐘 | `apple/WatchApp/AIUsageWatch/AIUsageWatchApp.swift`（`backgroundInterval`） |
+| WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`WidgetReloadThrottle` 註解、`UsageTimelineSchedule.entryDates`） |
+| Mac 動畫與 3D 效果只在面板開啟時執行 | 面板關閉時不能佔 CPU／GPU；計時器允許系統合併喚醒（FR-25、NFR-8）。FR-25 尚未實作，實作時要遵守 | `docs/01-requirements.md`（FR-25、NFR-8）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
+| 介面語言為繁體中文（zh-Hant） | 所有使用者看得到的文字用繁體中文；開發區域設為 zh-Hant | `apple/UsageKit/Package.swift`（`defaultLocalization`）、三個 `project.yml` 的 `CFBundleDevelopmentRegion` |
+
+## 8. UI 驗證方式
 
 改了畫面就要實際看過，不能只靠編譯通過。
 
