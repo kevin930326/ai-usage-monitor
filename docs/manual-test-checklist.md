@@ -72,3 +72,16 @@
 |---|---|---|---|
 | 5.1 | iPhone 設定頁輸入密鑰後，從多工畫面看 App 縮圖 | 密鑰欄位為遮蔽顯示 | |
 | 5.2 | Xcode → Window → Devices → 手錶 App 的 Console 篩選 `AIUsage` | log 中沒有中繼網址的密鑰或 `Bearer` | |
+
+## 6. Codex 審查後的補充驗證
+
+自動測試已涵蓋邏輯，以下是需要實機、真實排程或無法以程式製造的情境（`~/Documents/ai-usage-monitor-work/reviews/codex-review-triage.md`）。
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 6.1 | 某個 5 小時額度在資料更新後 30 分鐘內重置時開卡片，之後不按「更新」、不開 App（C-01） | 重置時卡片可能仍顯示舊百分比；資料更新 30 分鐘後卡片轉灰、顯示「資料已過期」並同時顯示「已重置」與 100% | |
+| 6.2 | 設定頁改讀取密鑰後儲存，再打開手錶 App（C-05） | 設定頁正常關閉、iPhone 與手錶都改用新密鑰；Keychain 寫入失敗無法在實機製造，失敗路徑由 `KeychainWriteTests` 涵蓋 | |
+| 6.3 | 手錶 App 開過一次後不再打開，戴 2 小時；之後打開 App 再關閉（C-10） | 複雜功能持續更新；Xcode 主控台沒有「背景重新整理排程失敗」，若出現則之後數分鐘內有重試 | |
+| 6.4 | `security lock-keychain ~/Library/Keychains/login.keychain-db` 後 `launchctl kickstart gui/$(id -u)/io.github.kevin930326.ai-usage-monitor`，看 `collector.log` 與 `ps` | 收集器在數秒內結束並記錄錯誤，不會卡住等待互動；之後解鎖鑰匙圈恢復正常（審查「不確定項目」：`security` 沒有 timeout） | |
+| 6.5 | 自動重裝在以下情境各執行一次 `scripts/reinstall-ios.sh`：中繼離線、讀取密鑰錯誤、設定 → Live Activity 關閉、手機鎖定 | 通知文字與實際結果一致：卡片沒有開回來時不應通知「已重開」（審查「不確定項目」，目前只確認 App 程序有啟動） | |
+| 6.6 | 自動重裝執行中 `kill -9` 該 bash 程序（`pgrep -f reinstall-ios.sh`），再執行一次（C-02） | 第二次在 `reinstall.log` 記錄「清除殘留的鎖」並繼續重新安裝 | |
