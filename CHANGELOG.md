@@ -35,6 +35,7 @@
 - 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）
 
 ### Changed
+- ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新
 - `install-launchd.sh` 偵測 claude 的完整路徑寫進 `config.json`；`set-relay.sh` 改為合併寫入 `config.json`，保留其他設定
 
 ## [0.5.0] - 2026-10-21

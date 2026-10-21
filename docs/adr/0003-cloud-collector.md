@@ -1,7 +1,8 @@
 # ADR-0003：雲端排程收集（不依賴 Mac）
 
-- 狀態：**提議中**（待驗證後決定）
+- 狀態：**不採用**（維持選項 A）
 - 日期：2026-10-21
+- 決定日期：2026-10-21
 
 ## 背景
 
@@ -9,7 +10,20 @@
 
 已採用的緩解措施（讓 Mac 插電時不睡眠、重置後顯示「已重置」，見 FR-26）能涵蓋大部分日常情況，但無法讓手機在 Mac 離線時仍顯示最新數字。
 
-## 考慮中的選項
+## 決定
+
+**不採用雲端收集（選項 B），維持選項 A：只由 Mac 收集。** 以下的選項比較、設計草案與驗證問題保留作為紀錄。
+
+原因：
+
+- **Q1 不通過**：`claude setup-token` 產生的長效 token 只有 `user:inference` 權限，缺少用量端點 `/api/oauth/usage` 需要的 `user:profile`，無法查詢額度（見 [ADR-0005](0005-delegate-claude-token-refresh.md)）。
+- **Q5 不通過**：Claude Code 官方文件 [Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance.md) 的「Authentication and credential use」規定，OAuth 訂閱登入僅供一般使用 Claude Code 與 Anthropic 原生應用程式，不得收集、儲存或中介 Claude.ai 憑證或 session token。選項 B 需要把 token 存在雲端並由 Worker 自行續期，不符合條款。
+
+依「決策準則」，結論為維持 A。若未來希望 Mac 不必常開，改評估選項 C（在常開的小裝置上執行**未修改的** Claude Code，由它自己登入與續期），不再考慮把 token 放上雲端。
+
+Q2～Q4、Q6、Q7 因 B 已不成立，不再進行驗證。
+
+## 考慮中的選項（紀錄）
 
 | 選項 | 說明 | 優點 | 缺點 |
 |---|---|---|---|
@@ -20,7 +34,7 @@
 
 D 因穩定性問題不列入優先評估。
 
-## 選項 B 的設計草案
+## 選項 B 的設計草案（紀錄，不實作）
 
 ```
 Cron（每 5 分鐘）→ Worker
@@ -34,7 +48,7 @@ Cron（每 5 分鐘）→ Worker
 - token 於 KV 中以 AES-GCM 加密，金鑰存在 Worker Secret；Worker Secret 本身無法於執行時更新，因此會輪替的 refresh token 必須放在 KV。
 - Mac 收集器可保留為備援，兩邊同時上傳時以較新的 `updated_at` 為準。
 
-## 決定前需驗證的問題
+## 決定前需驗證的問題（紀錄）
 
 | # | 問題 | 驗證方式 | 不通過時 |
 |---|---|---|---|
