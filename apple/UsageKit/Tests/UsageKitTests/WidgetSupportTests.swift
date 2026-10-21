@@ -130,6 +130,14 @@ import Testing
         #expect(dates.allSatisfy { $0 < now.addingTimeInterval(3600) })
     }
 
+    @Test func timelineUsesWatchStaleThreshold() {
+        // 複雜功能：資料 10 分鐘前更新 → 35 分鐘後（45 分鐘門檻）才加過期的時間點
+        let snap = snapshot(updatedAt: now.addingTimeInterval(-10 * 60))
+        let dates = UsageTimelineSchedule.entryDates(now: now, snapshot: snap, staleAfter: UsageSnapshot.watchStaleAfter)
+        #expect(dates.contains(now.addingTimeInterval(35 * 60)))
+        #expect(!dates.contains(now.addingTimeInterval(20 * 60)))
+    }
+
     @Test func timelineSkipsPastAndHiddenEvents() {
         let snap = snapshot(updatedAt: now.addingTimeInterval(-3 * 3600), resetsIn: -60)
         let dates = UsageTimelineSchedule.entryDates(now: now, snapshot: snap)

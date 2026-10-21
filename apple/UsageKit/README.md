@@ -17,6 +17,7 @@ let snapshot = try await client.fetch()
 
 snapshot.tightestWindow(at: .now)  // 所有可見額度中剩餘最少的一項，已重置的視為 100%（FR-15、FR-26）
 snapshot.isStale()             // 超過 30 分鐘沒更新（FR-11）
+snapshot.isStale(after: UsageSnapshot.watchStaleAfter)   // 手錶：超過 45 分鐘
 window.barTone(stale: false, at: .now)   // .provider / .critical / .stale（FR-16）
 ```
 
@@ -28,7 +29,7 @@ window.barTone(stale: false, at: .now)   // .provider / .critical / .stale（FR-
 | 服務識別色 | Claude 珊瑚橘（深色 `#D97757`／淺色 `#B4532F`）、Codex 青綠（深色 `#5CC2B1`／淺色 `#237A6B`）；進度條對背景 ≥ 3:1 |
 | 文字顏色 | 百分比等文字一律 primary／secondary；提示文字（資料已過期、服務錯誤）共用 `notice` 色，淺色與深色都 ≥ 4.5:1 |
 | 最吃緊額度 | 排除 `hidden` 與有錯誤的服務，取剩餘最少者；同分取較早重置 |
-| 過期 | `updated_at` 距今超過 30 分鐘 |
+| 過期 | `updated_at` 距今超過 30 分鐘（iPhone、Mac、Live Activity）；手錶 App 與錶面複雜功能超過 45 分鐘（`watchStaleAfter`，背景更新約每 30 分鐘且常延後） |
 | 服務順序 | Claude、Codex，其他依名稱排序 |
 
 ## 測試

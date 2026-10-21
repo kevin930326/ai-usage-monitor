@@ -43,7 +43,7 @@ private struct UsageList: View {
     var body: some View {
         TimelineView(.everyMinute) { context in
             let now = context.date
-            let stale = snapshot.isStale(now: now)
+            let stale = snapshot.isStale(now: now, after: UsageSnapshot.watchStaleAfter)
             List {
                 if let item = snapshot.tightestWindow(at: now) {
                     Section {

@@ -41,7 +41,7 @@ xcrun simctl get_app_container <手錶 UDID> io.github.kevin930326.AIUsageMonito
 
 `WatchAppDelegate` 在啟動時排程下一次背景重新整理（30 分鐘後），每次執行完：抓中繼 → 存 App Group → `reloadAllTimelines` → 排程下一次 → `setTaskCompletedWithSnapshot`。實際執行時間由 watchOS 決定：每小時最多約 4 次，複雜功能在目前錶面上時比較準時，低電量時會延後。
 
-30 分鐘與「資料已過期」的門檻相同，所以背景更新延後時複雜功能可能短暫顯示灰色；縮短間隔會用掉更多複雜功能的重新整理預算（每天約 48 次背景更新各重新整理一次）。
+手錶 App 與複雜功能的「資料已過期」門檻是 45 分鐘（iPhone 與 Mac 是 30 分鐘，FR-11）。背景間隔維持 30 分鐘：若門檻也是 30 分鐘，背景更新稍有延後複雜功能就會轉灰；縮短間隔則會用掉更多複雜功能的重新整理預算（每天約 48 次背景更新各重新整理一次）。
 
 ## 尚未驗證
 

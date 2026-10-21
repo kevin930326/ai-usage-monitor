@@ -25,11 +25,15 @@ public extension UsageSnapshot {
         tightestWindow(at: .distantPast)
     }
 
-    /// 超過門檻沒更新就視為過期（FR-11），例如 Mac 關機。
+    /// 超過門檻沒更新就視為過期（FR-11），例如 Mac 關機。iPhone 與 Mac 用這個。
     static let staleAfter: TimeInterval = 30 * 60
 
-    func isStale(now: Date = .now) -> Bool {
-        now.timeIntervalSince(updatedAt) > Self.staleAfter
+    /// 手錶 App 與錶面複雜功能的過期門檻（FR-11）。手錶約每 30 分鐘背景更新一次，
+    /// 實際時間由 watchOS 決定、常會延後；門檻與間隔相同時稍有延後就會轉灰。
+    static let watchStaleAfter: TimeInterval = 45 * 60
+
+    func isStale(now: Date = .now, after threshold: TimeInterval = staleAfter) -> Bool {
+        now.timeIntervalSince(updatedAt) > threshold
     }
 }
 

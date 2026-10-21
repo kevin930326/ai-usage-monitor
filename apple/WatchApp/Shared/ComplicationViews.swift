@@ -11,7 +11,7 @@ struct ComplicationView: View {
     var now: Date = .now
 
     private var item: ProviderWindow? { snapshot?.tightestWindow(at: now) }
-    private var stale: Bool { snapshot?.isStale(now: now) ?? true }
+    private var stale: Bool { snapshot?.isStale(now: now, after: UsageSnapshot.watchStaleAfter) ?? true }
     private var pct: Double { item?.window.effectiveRemainingPct(at: now) ?? 0 }
     private var tint: Color {
         guard let item else { return UsageColors.stale }
