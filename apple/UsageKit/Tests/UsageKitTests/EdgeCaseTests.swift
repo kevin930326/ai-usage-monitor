@@ -70,6 +70,23 @@ import Testing
         #expect(state.staleDate(now: now) == future.addingTimeInterval(UsageSnapshot.staleAfter))
     }
 
+    @Test func updatedAtFarInTheFutureIsStale() {
+        // C-09：Mac 時鐘快了好幾個小時，舊資料不能一直顯示成新的。
+        // 超過門檻的未來時間視為過期；門檻內的小偏差（上一個測試）照常顯示
+        for hours: Double in [1, 24, 24 * 30] {
+            let snap = snapshot(updatedAt: now.addingTimeInterval(hours * 3600), ["claude": ProviderUsage(windows: [])])
+            #expect(snap.isStale(now: now))
+            #expect(snap.isStale(now: now, after: UsageSnapshot.watchStaleAfter))
+            #expect(UsageActivityState(snapshot: snap, mode: .remaining).isStale(at: now))
+        }
+    }
+
+    @Test func futureToleranceMatchesThreshold() {
+        let snap = snapshot(updatedAt: now.addingTimeInterval(40 * 60), ["claude": ProviderUsage(windows: [])])
+        #expect(snap.isStale(now: now))                                          // iPhone、Mac：30 分鐘
+        #expect(!snap.isStale(now: now, after: UsageSnapshot.watchStaleAfter))   // 手錶：45 分鐘
+    }
+
     // MARK: 時間邊界（FR-26）
 
     @Test func resetFlipsExactlyAtResetTime() {
