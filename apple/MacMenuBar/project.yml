@@ -1,0 +1,80 @@
+# 用 XcodeGen 產生 Xcode 專案：cd apple/MacMenuBar && xcodegen generate
+name: AIUsageMenuBar
+options:
+  bundleIdPrefix: io.github.kevin930326
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+
+packages:
+  UsageKit:
+    path: ../UsageKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Sign to Run Locally：不需要 Apple 帳號，也沒有 7 天期限（docs/02-architecture.md 2.6）
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+    ENABLE_HARDENED_RUNTIME: NO
+
+targets:
+  AIUsageMenuBar:
+    type: application
+    platform: macOS
+    sources:
+      - AIUsageMenuBar
+      - Shared
+    dependencies:
+      - package: UsageKit
+        product: UsageKit
+      - package: UsageKit
+        product: UsageKitUI
+      - target: UsageDesktopWidget
+    info:
+      path: AIUsageMenuBar/Info.plist
+      properties:
+        CFBundleDisplayName: AI 用量
+        CFBundleDevelopmentRegion: zh-Hant
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.developer-tools
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMenuBar
+        GENERATE_INFOPLIST_FILE: NO
+
+  UsageDesktopWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - UsageDesktopWidget
+      - Shared
+    dependencies:
+      - package: UsageKit
+        product: UsageKit
+      - package: UsageKit
+        product: UsageKitUI
+    info:
+      path: UsageDesktopWidget/Info.plist
+      properties:
+        CFBundleDisplayName: AI 用量
+        CFBundleDevelopmentRegion: zh-Hant
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      # 桌面小工具必須在沙盒中執行
+      path: UsageDesktopWidget/UsageDesktopWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMenuBar.UsageDesktopWidget
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES

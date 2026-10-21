@@ -16,6 +16,9 @@
 - Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27）
 - UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式
 - iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖
+- Mac 選單列 App：選單列顯示最吃緊額度的剩餘 % 與顏色，面板列出所有額度、進度條、重置倒數與更新時間，監看本機 `usage.json`（FR-21, FR-22）
+- Mac 桌面小工具（小、中兩種尺寸；需 Team 簽署與 App Group 才能顯示真實資料，FR-24）
+- UsageKit：`UsageFileLocator`，與收集器相同的 `usage.json` 路徑規則
 - 捷徑動作「重新啟動用量監看」，可搭配定時自動化突破 Live Activity 8 小時上限（FR-10）
 
 ## [0.3.0] - 2026-10-21
