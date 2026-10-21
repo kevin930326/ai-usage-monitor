@@ -56,7 +56,7 @@ class RelayUploadTest(unittest.TestCase):
         resp.__enter__.return_value.read.return_value = b'{"ok": true}'
         with mock.patch.object(relay, "load_relay_url", return_value="https://relay.example"), \
              mock.patch.object(relay, "read_write_token", return_value="w-token"), \
-             mock.patch("urllib.request.urlopen", return_value=resp) as urlopen:
+             mock.patch("usage_collector.http._opener.open", return_value=resp) as urlopen:
             relay.upload({"schema_version": 1})
         req = urlopen.call_args.args[0]
         self.assertEqual(req.full_url, "https://relay.example/usage")
