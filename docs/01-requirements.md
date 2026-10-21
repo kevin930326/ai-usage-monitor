@@ -96,6 +96,7 @@ FR-18、FR-19、FR-23 所需的歷史資料存放方式評估中，見 [ADR-0004
 
 - Live Activity 最長約 8 小時後由系統結束 → 以捷徑定時重開處理。
 - 免費 Apple ID 簽署的 App 7 天後需重新安裝。
+- 手錶 App（`apple/WatchApp`）是獨立的 Xcode 專案，沒有嵌入 iOS App，目前只能用 Xcode 直接裝到手錶自用。若要以 TestFlight（或 App Store）散佈，需要先把手錶 App 嵌入 iOS App，一起封存上傳。
 - 用量 API 為非公開介面，可能隨時變更。
 - **Mac 關機或睡眠時收集器停止更新**，手機只能顯示最後一筆資料。緩解方式：
   - 讓 Mac 插電時不自動睡眠（見[收集器說明](../collector/README.md#讓-mac-保持清醒)）；闔上螢幕仍會睡眠。
