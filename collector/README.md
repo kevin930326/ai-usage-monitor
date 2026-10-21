@@ -1,13 +1,13 @@
 # collector — Mac 端用量收集器
 
-執行 Claude Code 的 `/usage` 取得 Claude 用量、讀取 Codex CLI 在本機的登入資訊查詢 Codex 用量（只用其中一個也可以），並輸出[統一格式的 JSON](../docs/02-architecture.md#3-資料格式)。只使用 Python 標準函式庫，支援 Python 3.10 以上。
+執行 Claude Code 的 `/usage` 取得 Claude 用量、執行 Codex CLI 的 `codex app-server` 取得 Codex 用量（只用其中一個也可以），不讀取任何服務的 token，並輸出[統一格式的 JSON](../docs/02-architecture.md#3-資料格式)。只使用 Python 標準函式庫，支援 Python 3.10 以上。
 
 ## 前置條件
 
 | 服務 | 需要 | 收集器如何取得用量 |
 |---|---|---|
 | Claude | 安裝 Claude Code，在終端機執行 `claude` 並用 Claude 訂閱 `/login` 過一次（只用 Claude 桌面版不算） | 執行 `claude -p /usage`，解析它印出的額度；**不讀取 Claude 的 token**（[ADR-0006](../docs/adr/0006-claude-usage-via-cli.md)） |
-| Codex | 執行 `codex login` 過一次 | 讀取 `~/.codex/auth.json` 的 token 呼叫用量端點 |
+| Codex | 安裝 Codex CLI（或 ChatGPT 桌面版，內附 codex），用 ChatGPT 帳號 `codex login` 過一次 | 執行 `codex app-server`，查詢 `account/rateLimits/read`；**不讀取 Codex 的 token**（[ADR-0007](../docs/adr/0007-codex-usage-via-app-server.md)） |
 
 ### 只收集有用的服務
 
@@ -17,7 +17,7 @@
 { "relay_url": "https://...", "enabled_providers": ["claude"] }
 ```
 
-- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：`claude auth status` 回報已登入就啟用 claude，有 `~/.codex/auth.json` 就啟用 codex，並印出偵測結果（`scripts/detect-providers.sh`）。偵測不讀取任何登入資訊的內容，`claude auth status` 的輸出（含 email）直接丟棄。
+- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：`claude auth status` 回報已登入就啟用 claude，`codex login status` 回報用 ChatGPT 登入就啟用 codex，並印出偵測結果（`scripts/detect-providers.sh`）。偵測不讀取任何登入資訊的內容，兩個指令的輸出（可能含 email）直接丟棄。找不到指令或結果認不得時視為「不知道」，不更動這個欄位。
 - 未啟用的服務不查詢、不出現在輸出的 `providers` 中、不寫日誌，App 上也不會顯示。
 - 已啟用但讀不到登入資訊（例如登出了）仍是錯誤，該服務的 `error` 有值，日誌也會記錄。
 - 沒有 `config.json`、沒有這個欄位或格式不對時全部啟用（舊版安裝的行為）。兩個服務都沒偵測到時安裝腳本不寫入這個欄位並提示先登入，登入後下一次排程就會開始收集。
@@ -59,6 +59,29 @@ claude auth status --json                                                   # �
 | Claude Code 的 /usage 輸出格式已改變 | Claude Code 改版，需要更新收集器 |
 | Claude Code 執行逾時（30 秒）／執行 /usage 失敗 | 在終端機手動執行上面的指令確認 |
 
+### Codex：執行 Codex CLI 的 `app-server`
+
+每次收集時執行未修改的 Codex CLI，在標準輸入輸出上以 JSON-RPC 查詢額度，查完就關閉：
+
+```bash
+codex app-server --listen stdio://   # 送出 initialize → initialized → account/rateLimits/read
+```
+
+收集器不讀取 `~/.codex/auth.json`、不持有 token、不直接呼叫 chatgpt.com；token 的續期由 Codex CLI 自己處理（[ADR-0007](../docs/adr/0007-codex-usage-via-app-server.md)）。
+
+- 不開對話、不呼叫模型、不消耗額度；每次約 0.7 秒。
+- 在暫存資料夾執行、30 秒逾時；結束時關閉 stdin（app-server 會自己結束），等不到就結束整個 process group，不留下背景程序。
+- 只取 `rateLimits` 的 5 小時、每週額度與方案名稱；回應中的帳號 ID、stderr 都不寫入日誌或快照。
+- codex 的完整路徑由 `scripts/install-launchd.sh` 偵測後寫進 `config.json` 的 `codex_path`；沒有設定時退回 PATH 與 ChatGPT.app 內附的 codex。
+- app-server 標示為 experimental，格式沒有保證。認不得時 Codex 會顯示「Codex app-server 的回應格式已改變，請更新收集器」，不會顯示錯的數字；fixture 在 `tests/fixtures/codex/`。
+
+| 日誌／App 上的錯誤 | 原因與處理 |
+|---|---|
+| 找不到 codex 執行檔 | 重新執行 `scripts/install-launchd.sh` |
+| 尚未登入 Codex CLI | 在終端機執行 `codex login`（用 ChatGPT 帳號） |
+| Codex app-server 的回應格式已改變 | Codex CLI 改版，需要更新收集器 |
+| Codex app-server 回應逾時（30 秒）／意外結束／查詢額度失敗 | 在終端機執行 `codex login status` 確認登入狀態，或更新 Codex CLI |
+
 結束碼：至少一個啟用的服務成功且上傳沒有失敗為 `0`，否則為 `1`。錯誤訊息帶時間戳記輸出到 stderr。
 
 ### 檔案位置
@@ -66,7 +89,7 @@ claude auth status --json                                                   # �
 | 檔案 | 位置 | 內容 |
 |---|---|---|
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個） |
-| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 完整路徑、啟用的服務（`enabled_providers`） |
+| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 與 codex 的完整路徑、啟用的服務（`enabled_providers`） |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
 | 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
 
