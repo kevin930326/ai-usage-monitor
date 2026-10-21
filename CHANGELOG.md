@@ -16,6 +16,7 @@
 - Apple Watch 智慧型堆疊的精簡版面，只顯示最吃緊的一項（FR-27）
 - UsageKit：`UsageActivityState`（Live Activity 狀態，限制在 4KB 內）、依時間判斷重置的百分比與顯示模式
 - iOS Debug 示範模式 `AUM_DEMO`，以假資料截圖
+- 捷徑動作「重新啟動用量監看」，可搭配定時自動化突破 Live Activity 8 小時上限（FR-10）
 
 ## [0.3.0] - 2026-10-21
 

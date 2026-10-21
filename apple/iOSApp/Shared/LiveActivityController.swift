@@ -55,6 +55,20 @@ enum LiveActivityController {
         }
     }
 
+    /// 捷徑「重新啟動用量監看」（FR-10）：沿用舊卡片的示範情境，結束所有舊卡片後開一張新的。
+    static func restart() async throws {
+        // Widget 擴充最低支援 iOS 18（FR-27）：iOS 17 上開卡不會顯示，不能回報成功
+        guard #available(iOS 18, *) else { throw LiveActivityError.needsIOS18 }
+        let old = activities
+        let before = old.map(\.id)
+        let demoScenario = old.first?.attributes.demoScenario
+        // 沿用舊卡片的顯示模式（與「更新」按鈕相同），沒有舊卡片時用設定值
+        let mode = old.first?.content.state.mode ?? UsageSource.displayMode
+        let snapshot = try await UsageSource.fetch(demoScenario: demoScenario)
+        let activity = try await start(snapshot: snapshot, mode: mode, demoScenario: demoScenario)
+        ActivityLog.recordRestart(before: before, after: activity.id)
+    }
+
     /// 卡片上的「更新」按鈕（FR-9）：重新抓資料後更新所有卡片。
     static func refresh() async throws {
         guard let activity = activities.first else { return }
@@ -65,10 +79,12 @@ enum LiveActivityController {
 
 enum LiveActivityError: LocalizedError {
     case busy
+    case needsIOS18
 
     var errorDescription: String? {
         switch self {
         case .busy: "正在開啟卡片，請稍候"
+        case .needsIOS18: "Live Activity 需要 iOS 18 以上"
         }
     }
 }
@@ -91,6 +107,24 @@ enum ActivityLog {
             "at": iso.string(from: .now),
         ])
         if let data = try? JSONSerialization.data(withJSONObject: entries, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: url, options: .atomic)
+        }
+        #endif
+    }
+
+    /// DEBUG：重新啟動前後的卡片 ID 與目前卡片數，寫到 Documents/restart-log.json。
+    static func recordRestart(before: [String], after: String) {
+        #if DEBUG
+        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appending(path: "restart-log.json")
+        let current = Activity<UsageActivityAttributes>.activities.filter { $0.activityState == .active }.map(\.id)
+        let entry: [String: Any] = [
+            "before": before,
+            "after": after,
+            "active": current,
+            "at": ISO8601DateFormatter().string(from: .now),
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: entry, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url, options: .atomic)
         }
         #endif

@@ -37,7 +37,7 @@
 | `UsageAttributes` | Live Activity 資料結構，App 與 Widget 共用 |
 | Widget Extension | 只負責繪製鎖定畫面／動態島卡片 |
 | `RefreshUsageIntent` | 「更新」按鈕：抓資料後 `activity.update()` |
-| `RestartUsageActivityIntent` | 捷徑用：結束舊卡片、開新卡片 |
+| `RestartUsageActivityIntent` | 捷徑用：抓資料、開新卡片，成功後才結束舊卡片 |
 
 兩個 Intent 皆為 `LiveActivityIntent`，在背景執行不開 App；資料透過 ActivityKit state 傳給 Widget，不需 App Group。
 

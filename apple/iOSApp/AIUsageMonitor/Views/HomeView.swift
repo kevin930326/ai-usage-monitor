@@ -25,6 +25,11 @@ struct HomeView: View {
             #if DEBUG
             // 示範模式啟動時直接開一張卡片，方便截圖
             if model.demoScenario != nil { await model.startLiveActivity() }
+            // AUM_DEMO_ACTION=restart：開卡後再跑一次捷徑動作，驗證重開流程（FR-10）
+            if model.demoScenario != nil, ProcessInfo.processInfo.environment["AUM_DEMO_ACTION"] == "restart" {
+                try? await Task.sleep(for: .seconds(1))
+                await model.restartLiveActivity()
+            }
             #endif
         }
         // 從背景回到前景時自動更新

@@ -97,6 +97,16 @@ final class UsageModel {
         liveActivityRunning = LiveActivityController.isRunning
     }
 
+    func restartLiveActivity() async {
+        do {
+            _ = try await RestartUsageActivityIntent().perform()
+            liveActivityError = nil
+        } catch {
+            liveActivityError = error.localizedDescription
+        }
+        liveActivityRunning = LiveActivityController.isRunning
+    }
+
     func endLiveActivity() async {
         await LiveActivityController.endAll()
         liveActivityRunning = LiveActivityController.isRunning
