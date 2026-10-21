@@ -35,7 +35,7 @@ public extension Color {
 /// 所有畫面共用的顏色（FR-16），數值與對比度測試在 UsageKit 的 `UsagePalette`。
 /// 文字一律用 primary／secondary，不以顏色表示狀態；顏色只用在進度條、服務標示與提示文字。
 public enum UsageColors {
-    /// 服務識別色（Claude 珊瑚橘、Codex 青綠），進度條與 CL／CX 標示使用
+    /// 服務識別色（Claude 珊瑚橘、Codex 青綠），進度條與服務圖示使用
     public static func provider(_ key: String) -> Color {
         Color(UsagePalette.provider(key))
     }

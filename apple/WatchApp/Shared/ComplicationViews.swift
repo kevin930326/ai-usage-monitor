@@ -30,11 +30,12 @@ struct ComplicationView: View {
                 EmptyView()
             } currentValueLabel: {
                 // accessoryCircularCapacity 只顯示 currentValueLabel：服務標示與百分比疊在圓圈內，
-                // 和動態島一樣用「CL／CX」與識別色區分服務（不用官方 logo）
-                VStack(spacing: -2) {
+                // 和動態島一樣用原創圖示與識別色區分服務（不用官方 logo）；
+                // 圖示是 template，單色／主題色錶面由系統換色
+                VStack(spacing: 0) {
                     if let item {
-                        Text(ProviderInfo.shortName(item.provider))
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                        ProviderIcon(item.provider)
+                            .frame(width: 13, height: 13)
                             .foregroundStyle(stale ? Color.gray : UsageColors.providerMark(item.provider))
                             .widgetAccentable()
                     }

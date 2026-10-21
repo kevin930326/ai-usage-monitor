@@ -55,9 +55,9 @@ enum UsageActivityConfiguration {
                 }
             } compactLeading: {
                 if let tightest {
-                    // 服務以文字與識別色區分（FR-16），不用官方 logo
-                    Text(ProviderInfo.shortName(tightest.provider))
-                        .font(.caption.weight(.bold))
+                    // 服務以原創圖示與識別色區分（FR-16），不用官方 logo
+                    ProviderIcon(tightest.provider)
+                        .frame(width: 18, height: 18)
                         .foregroundStyle(stale ? Color.gray : UsageColors.providerMark(tightest.provider))
                 }
             } compactTrailing: {

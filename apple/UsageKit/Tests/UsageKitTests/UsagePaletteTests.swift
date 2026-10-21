@@ -19,7 +19,7 @@ import Testing
         #expect(UsagePalette.provider("claude") != UsagePalette.provider("codex"))
     }
 
-    /// 動態島與圓形複雜功能的服務標示（CL／CX）是黑底上的識別色文字
+    /// 動態島與圓形複雜功能的服務圖示是黑底上的識別色（圖示很小，沿用文字的 4.5:1 標準）
     @Test func providerMarksAreReadableOnBlack() {
         for key in providers {
             #expect(UsagePalette.provider(key).dark.contrastRatio(with: UsagePalette.blackBackground) >= 4.5, "\(key)")

@@ -46,8 +46,8 @@ public enum ProviderInfo {
         }
     }
 
-    /// 動態島精簡版面與錶面圓形複雜功能用的兩個字母標示。
-    /// Claude 與 Codex 都是 C 開頭，只取首字母無法分辨。
+    /// 兩個字母的文字標示，給沒有空間放服務名稱的純文字場合。
+    /// 動態島與錶面改用 UsageKitUI 的 `ProviderIcon`。Claude 與 Codex 都是 C 開頭，只取首字母無法分辨。
     public static func shortName(_ key: String) -> String {
         switch key {
         case "claude": "CL"

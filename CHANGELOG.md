@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Added
+- UsageKitUI `ProviderIcon`：原創服務圖示（Claude 八芒星、Codex 六瓣雲鏤空 `>_`），三個平台共用，template 繪製並套服務識別色，附 VoiceOver 名稱
+- iOS／watchOS Debug 示範情境 `codex`（Codex 最吃緊）；手錶 `AUM_RENDER` 另輸出圓形複雜功能的淺色與主題色模擬
+- `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
+
+### Changed
+- 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
+
 ### Fixed
 - 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）
 

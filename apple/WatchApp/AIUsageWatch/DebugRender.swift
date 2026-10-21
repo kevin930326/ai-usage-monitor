@@ -21,11 +21,24 @@ enum DebugRender {
                 .padding(6)
                 .background(.black)
                 .environment(\.colorScheme, .dark)
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 4
-            guard let image = renderer.uiImage, let png = image.pngData() else { continue }
-            try? png.write(to: dir.appendingPathComponent("complication-\(name).png"))
+            write(view, to: dir.appendingPathComponent("complication-\(name).png"))
         }
+        // 圓形複雜功能的另外兩種外觀：淺色背景，以及模擬單色／主題色錶面
+        // （系統只用形狀的 alpha，再套主題色；圖示的鏤空處要透出背景）
+        let circular = ComplicationView(snapshot: snapshot, family: .accessoryCircular)
+            .frame(width: 52, height: 52)
+        write(circular.padding(6).background(.white).environment(\.colorScheme, .light),
+              to: dir.appendingPathComponent("complication-circular-light.png"))
+        write(Color.yellow.mask(circular.environment(\.colorScheme, .dark))
+                .frame(width: 52, height: 52).padding(6).background(Color(white: 0.12)),
+              to: dir.appendingPathComponent("complication-circular-tinted.png"))
+    }
+
+    private static func write(_ view: some View, to url: URL) {
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 4
+        guard let image = renderer.uiImage, let png = image.pngData() else { return }
+        try? png.write(to: url)
     }
 }
 #endif
