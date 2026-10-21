@@ -20,7 +20,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .. import paths
-from ..models import ProviderError, ProviderUsage, Window
+from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 # --safe-mode 略過 hooks、外掛、MCP 與自訂指令；--no-session-persistence 不在 `claude --resume` 留下紀錄
 USAGE_ARGS = ("-p", "/usage", "--safe-mode", "--no-session-persistence", "--output-format", "json")
@@ -84,6 +84,8 @@ def parse_reset(text: str, now: datetime) -> datetime:
         tz = ZoneInfo(m["tz"]) if m["tz"] else now.astimezone().tzinfo
     except (ZoneInfoNotFoundError, ValueError):
         raise ProviderError(FORMAT_CHANGED) from None
+    if not 1 <= int(m["hour"]) <= 12:
+        raise ProviderError(FORMAT_CHANGED)  # 12 小時制沒有 0am／13pm
     hour = int(m["hour"]) % 12 + (12 if m["ampm"].lower() == "pm" else 0)
     year = int(m["year"]) if m["year"] else now.astimezone(tz).year
     try:
@@ -115,7 +117,11 @@ def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderU
             raise ProviderError(FORMAT_CHANGED)
         wid, label, hidden = window_for(m["scope"])
         resets_at = parse_reset(m["reset"], now) if m["reset"] else None
-        windows.append(Window(wid, label, float(m["pct"]), resets_at, hidden=hidden))
+        try:
+            pct = parse_pct(float(m["pct"]))  # 位數多到變成 inf 時同樣視為格式改變，不寫出不合法的 JSON
+        except ProviderError:
+            raise ProviderError(FORMAT_CHANGED) from None
+        windows.append(Window(wid, label, pct, resets_at, hidden=hidden))
 
     if not any(w.id in ("five_hour", "weekly") for w in windows):
         if windows:

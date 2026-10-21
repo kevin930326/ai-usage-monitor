@@ -57,6 +57,11 @@ class ClaudeParseTest(unittest.TestCase):
             ("weekly_opus", "每週 Opus", 97.0, None, True),
         ])
 
+    def test_reset_hour_must_be_1_to_12(self):
+        for text in ("Oct 22 at 0am (Asia/Taipei)", "Oct 22 at 13pm (Asia/Taipei)", "Oct 22 at 99pm (Asia/Taipei)"):
+            with self.subTest(text), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse_reset(text, RECORDED_AT)
+
     def test_reset_variants(self):
         cases = {
             "Oct 22 at 1am (Asia/Taipei)": "2026-10-21T17:00:00Z",
@@ -85,8 +90,9 @@ class ClaudeParseTest(unittest.TestCase):
                      "Current session: -5% used",
                      "Current session: nan% used",
                      "Current session: twelve% used",
-                     "Current week (all models): 12 % used"):
-            with self.subTest(line), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                     "Current week (all models): 12 % used",
+                     "Current session: " + "9" * 400 + "% used"):   # float() 會變成 inf
+            with self.subTest(line[:60]), self.assertRaisesRegex(ProviderError, "格式已改變"):
                 claude.parse(line, None, RECORDED_AT)
 
     def test_bad_hidden_scoped_line_is_error_not_skipped(self):
