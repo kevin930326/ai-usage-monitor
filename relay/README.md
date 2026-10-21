@@ -11,6 +11,8 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 
 - 驗證失敗一律回 `401`；兩把密鑰未設定或相同時回 `500`，拒絕服務。
 - 只接受 `schema_version` 為支援版本的內容；KV 只保存最新一筆。
+- 依 schema 驗證每個欄位（`providers` 必須是物件、`used_pct` 是有限且不為負的數字、日期為 ISO 8601、字串長度與服務／額度數量有上限），不合格回 `422`。
+- 以白名單重建後才保存：只留 `schema_version`、`updated_at`、各服務的 `plan`／`error`／`windows`，以及額度的 `id`／`label`／`used_pct`／`resets_at`／`hidden`，其他欄位移除。**收集器新增欄位時要先更新 `src/index.ts`（`sanitizeSnapshot`）並重新部署**，否則新欄位會被丟掉。
 - 密鑰比對先雜湊再逐 byte 比較，避免時序攻擊。
 
 ## 部署

@@ -76,7 +76,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘，受 watchOS 預算限制） |
 | Mac 選單列 App、桌面小工具、Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀本機檔案或 App 傳來的資料 | — |
 
-上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容。Worker 只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
+上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除（即使收集器出錯誤帶了其他資料也不會被保存）；Worker 只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
 ### 資料存放位置
 

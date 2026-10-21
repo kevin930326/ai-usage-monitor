@@ -76,6 +76,63 @@ describe("POST /usage", () => {
   });
 });
 
+describe("POST /usage 欄位驗證（C-12）", () => {
+  const WINDOW = { id: "five_hour", label: "5 小時", used_pct: 12.5, resets_at: "2026-10-21T05:00:00Z", hidden: false };
+  const snapshot = (provider: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ ...SNAPSHOT, ...extra, providers: { claude: { plan: "Max", error: null, windows: [WINDOW], ...provider } } });
+  const post = (body: string) => call("POST", "write-secret", body);
+
+  it("只保存允許的欄位，未知欄位（例如誤帶的 token）被移除", async () => {
+    const body = snapshot(
+      { access_token: "leak", windows: [{ ...WINDOW, email: "me@example.com" }] },
+      { refresh_token: "leak" },
+    );
+    assert.equal((await post(body)).status, 204);
+    const stored = kv.store.get("latest")!;
+    assert.ok(!stored.includes("leak") && !stored.includes("example.com"), stored);
+    assert.deepEqual(await (await call("GET", "read-secret")).json(), {
+      ...SNAPSHOT,
+      providers: { claude: { plan: "Max", error: null, windows: [WINDOW] } },
+    });
+  });
+
+  it("沒有 hidden 的舊版額度照樣保存", async () => {
+    const { hidden, ...old } = WINDOW;
+    assert.equal((await post(snapshot({ windows: [old] }))).status, 204);
+    assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.windows, [old]);
+  });
+
+  const invalid: [string, string][] = [
+    ["providers 是陣列", JSON.stringify({ ...SNAPSHOT, providers: [] })],
+    ["updated_at 不是日期", JSON.stringify({ ...SNAPSHOT, updated_at: "昨天" })],
+    ["updated_at 不存在的日期", JSON.stringify({ ...SNAPSHOT, updated_at: "2026-13-45T00:00:00Z" })],
+    ["服務不是物件", JSON.stringify({ ...SNAPSHOT, providers: { claude: "x" } })],
+    ["服務名稱不合法", JSON.stringify({ ...SNAPSHOT, providers: { "<script>": { windows: [] } } })],
+    ["windows 不是陣列", snapshot({ windows: {} })],
+    ["used_pct 是字串", snapshot({ windows: [{ ...WINDOW, used_pct: "12" }] })],
+    ["used_pct 是負數", snapshot({ windows: [{ ...WINDOW, used_pct: -1 }] })],
+    ["used_pct 缺少", snapshot({ windows: [{ id: "five_hour", label: "5 小時", resets_at: null }] })],
+    ["resets_at 不是日期", snapshot({ windows: [{ ...WINDOW, resets_at: "soon" }] })],
+    ["hidden 不是布林", snapshot({ windows: [{ ...WINDOW, hidden: "no" }] })],
+    ["錯誤訊息過長", snapshot({ error: "錯".repeat(501) })],
+    ["plan 不是字串", snapshot({ plan: 3 })],
+    ["額度過多", snapshot({ windows: Array.from({ length: 17 }, (_, i) => ({ ...WINDOW, id: `w${i}` })) })],
+    [
+      "服務過多",
+      JSON.stringify({
+        ...SNAPSHOT,
+        providers: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`p${i}`, { windows: [] }])),
+      }),
+    ],
+  ];
+  for (const [name, body] of invalid) {
+    it(`拒絕：${name}`, async () => {
+      assert.equal((await post(body)).status, 422);
+      assert.equal(kv.store.size, 0);
+    });
+  }
+});
+
 describe("GET /usage", () => {
   it("沒有密鑰或密鑰錯誤回 401", async () => {
     assert.equal((await call("GET")).status, 401);
