@@ -35,5 +35,6 @@ def resolve_executable(config_key: str, name: str, fallbacks: Iterable[str] = ()
         path = None  # config.json 被改成別的型別時當成沒設定，不讓 os.access 丟 TypeError
     for candidate in (path, shutil.which(name), *fallbacks):
         if candidate and os.access(candidate, os.X_OK):
-            return candidate
+            # 絕對路徑：provider 在暫存資料夾執行，相對路徑會指到別的地方
+            return os.path.abspath(candidate)
     return None

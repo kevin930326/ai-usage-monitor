@@ -5,6 +5,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -111,6 +112,9 @@ CODEX_STATUS = {
     "apikey": ("Logged in using an API key - sk-proj-***ABCD", 0),
     "logged-out": ("Not logged in", 1),
     "weird": ("Error: person@example.com something went wrong", 2),
+    # API key 的說明文字剛好提到 ChatGPT：仍然是 API key 登入
+    "apikey-mentions-chatgpt": ("Logged in using an API key - sk-***; run codex login to use ChatGPT", 0),
+    "slow": ("Logged in using ChatGPT", 0),
 }
 
 
@@ -120,7 +124,8 @@ def write_fake_codex(bin_dir: Path, state: str) -> Path:
     fake = bin_dir / "codex"
     fake.write_text("#!/bin/bash\n"
                     '[ "$1 $2" = "login status" ] || exit 98\n'
-                    f"echo '{message}' >&2\n"
+                    + ("sleep 10\n" if state == "slow" else "")
+                    + f"echo '{message}' >&2\n"
                     f"exit {code}\n")
     fake.chmod(0o755)
     return fake
@@ -129,8 +134,8 @@ def write_fake_codex(bin_dir: Path, state: str) -> Path:
 class DetectProvidersTest(unittest.TestCase):
     """install-launchd.sh 用的偵測：問 `claude auth status` 與 `codex login status`，不讀登入檔。"""
 
-    def detect(self, claude: bool | None, codex: str | None, codex_dir: bool = False) -> list[str]:
-        """claude：True 已登入、False 未登入、None 找不到 claude。
+    def detect(self, claude: bool | int | None, codex: str | None, codex_dir: bool = False) -> list[str]:
+        """claude：True 已登入、False 未登入、None 找不到 claude、整數是 auth status 的結束碼。
         codex：CODEX_STATUS 的狀態，None 找不到 codex；codex_dir：~/.codex 是否存在。"""
         with tempfile.TemporaryDirectory() as d:
             home, bin_dir = Path(d) / "home", Path(d) / "bin"
@@ -145,7 +150,7 @@ class DetectProvidersTest(unittest.TestCase):
             fake.write_text("#!/bin/bash\n"
                             '[ "$1 $2" = "auth status" ] || exit 98\n'
                             'echo \'{"loggedIn": true, "email": "person@example.com"}\'\n'
-                            f"exit {0 if claude else 1}\n")
+                            f"exit {claude if type(claude) is int else 0 if claude else 1}\n")
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
             fake_codex = write_fake_codex(bin_dir, codex) if codex else None
             if codex_dir:
@@ -154,7 +159,7 @@ class DetectProvidersTest(unittest.TestCase):
                 auth = home / ".codex" / "auth.json"
                 auth.write_text('{"tokens": {"access_token": "secret"}}')
                 auth.chmod(0)
-            env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin"}
+            env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AUM_DETECT_TIMEOUT": "1"}
             env.pop("CODEX_HOME", None)
             args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake),
                     str(fake_codex) if fake_codex else ""]
@@ -167,12 +172,19 @@ class DetectProvidersTest(unittest.TestCase):
         self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
         self.assertEqual(self.detect(False, "chatgpt"), ["codex"])
         self.assertEqual(self.detect(None, "chatgpt"), ["?claude", "codex"])
+        self.assertEqual(self.detect(2, "chatgpt"), ["?claude", "codex"])  # 結束碼認不得：不知道
 
     def test_codex_asks_codex_itself(self):
         self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
         self.assertEqual(self.detect(True, "apikey", codex_dir=True), ["claude"])  # 沒有訂閱額度
         self.assertEqual(self.detect(True, "logged-out", codex_dir=True), ["claude"])  # 有登入檔也不算
         self.assertEqual(self.detect(True, "weird"), ["claude", "?codex"])  # 認不得：不知道
+        self.assertEqual(self.detect(True, "apikey-mentions-chatgpt"), ["claude"])
+
+    def test_status_commands_are_time_limited(self):
+        started = time.monotonic()
+        self.assertEqual(self.detect(True, "slow"), ["claude", "?codex"])  # 逾時：不知道
+        self.assertLess(time.monotonic() - started, 8)
 
     def test_missing_codex(self):
         self.assertEqual(self.detect(True, None), ["claude"])  # 沒用過 Codex

@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -152,6 +153,9 @@ class CodexParseTest(unittest.TestCase):
             {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": True}}},
             {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 300, "resetsAt": "soon"}}},
             {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 300, "resetsAt": 10 ** 20}}},
+            {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 300, "resetsAt": -1}}},
+            # 太長的額度：不輸出（window id 也會超過中繼的 64 字上限，讓整份快照被拒收）
+            {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 60 * 10 ** 70}}},
             {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 300},
                             "secondary": {"usedPercent": 6, "windowDurationMins": 300}}},  # 重複
         ]
@@ -159,13 +163,18 @@ class CodexParseTest(unittest.TestCase):
             with self.subTest(result=result), self.assertRaisesRegex(ProviderError, "格式已改變"):
                 codex.parse(result)
 
+    def test_zero_reset_means_no_reset_time(self):
+        # 舊端點的 0 是「沒有重置時間」，不能變成 1970-01-01
+        result = {"rateLimits": {"primary": {"usedPercent": 5, "windowDurationMins": 300, "resetsAt": 0}}}
+        self.assertIsNone(codex.parse(result).windows[0].resets_at)
+
     def test_no_windows_is_error(self):
         with self.assertRaisesRegex(ProviderError, "沒有用量資料"):
             codex.parse({"rateLimits": {"primary": None, "secondary": None, "planType": "pro"}})
 
 
 # C-04：百分比缺少或格式不對時要報錯，不能變成「0% 已用」
-BAD_PERCENTS = [None, "12", float("nan"), float("inf"), -5, True]
+BAD_PERCENTS = [None, "12", float("nan"), float("inf"), -5, True, 10 ** 400, 1001]
 
 
 class PercentValidationTest(unittest.TestCase):
@@ -274,6 +283,39 @@ class CodexFetchTest(unittest.TestCase):
             codex.fetch()
         self.assert_no_leftover(fake)
 
+    def test_close_survives_zombie_process_group(self):
+        # app-server 在等待逾時之後、killpg 之前結束：macOS 對只剩殭屍的 group 回 EPERM，
+        # 不能讓它蓋掉已經拿到的結果，也要確實收掉程序
+        real_wait = subprocess.Popen.wait
+        state = {"first": True}
+
+        def flaky_wait(proc, timeout=None):
+            if state["first"]:
+                state["first"] = False
+                # 等它結束但不收掉，留下殭屍（macOS 沒有 os.waitid，看 ps 的狀態）
+                while subprocess.run(["ps", "-o", "stat=", "-p", str(proc.pid)],
+                                     capture_output=True, text=True).stdout.strip()[:1] != "Z":
+                    time.sleep(0.02)
+                raise subprocess.TimeoutExpired(proc.args, timeout)
+            return real_wait(proc, timeout)
+
+        with FakeCodex() as fake, mock.patch.object(subprocess.Popen, "wait", flaky_wait):
+            usage = codex.fetch()
+        self.assertFalse(state["first"])
+        self.assertEqual(usage.plan, "Team")
+        self.assert_no_leftover(fake)
+
+    def test_cleanup_error_does_not_hide_original_error(self):
+        with FakeCodex(mode="logged-out"), \
+             mock.patch.object(codex.os, "killpg", side_effect=RuntimeError("cleanup")), \
+             mock.patch.object(codex, "CLOSE_TIMEOUT", 0.01), \
+             mock.patch.object(subprocess.Popen, "wait", side_effect=subprocess.TimeoutExpired("codex", 0)), \
+             self.assertRaisesRegex(ProviderError, "尚未登入"):
+            try:
+                codex.fetch()
+            finally:
+                mock.patch.stopall()
+
     def test_codex_not_found(self):
         with tempfile.TemporaryDirectory() as d:
             config = Path(d) / "config.json"
@@ -308,6 +350,16 @@ class ResolveCodexPathTest(unittest.TestCase):
                 self.assertEqual(codex.resolve_codex_path(Path(d) / "missing.json"), str(exe))
             with mock.patch.dict(os.environ, {"PATH": "/nonexistent"}), mock.patch.object(codex, "FALLBACK_PATHS", ()):
                 self.assertIsNone(codex.resolve_codex_path(Path(d) / "missing.json"))
+            # 相對路徑轉成絕對路徑：provider 在暫存資料夾執行
+            config.write_text(json.dumps({"codex_path": "codex"}))
+            cwd = os.getcwd()
+            try:
+                os.chdir(d)
+                resolved = codex.resolve_codex_path(config)
+                self.assertTrue(os.path.isabs(resolved))
+                self.assertEqual(os.path.realpath(resolved), os.path.realpath(exe))
+            finally:
+                os.chdir(cwd)
 
 
 if __name__ == "__main__":

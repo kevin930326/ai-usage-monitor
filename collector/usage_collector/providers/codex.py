@@ -29,6 +29,7 @@ APP_SERVER_ARGS = ("app-server", "--listen", "stdio://")
 # ChatGPT.app 內附的 Codex CLI：安裝腳本沒寫入 codex_path 時（舊安裝）也找得到
 FALLBACK_PATHS = ("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",)
 TIMEOUT = 30  # 秒，整段對話；正常約 0.7 秒
+MAX_WINDOW_MINUTES = 366 * 24 * 60  # 更長的額度長度視為格式改變（window id 也不會超過中繼的長度上限）
 CLOSE_TIMEOUT = 3  # 關閉 stdin 後等 app-server 自己結束的秒數，超過就強制結束
 MAX_OUTPUT = 1024 * 1024  # 讀取的位元組上限，避免異常輸出吃光記憶體
 
@@ -66,14 +67,27 @@ class AppServer:
         except OSError:
             self.cwd.cleanup()
             raise ProviderError("無法執行 codex，重新執行 scripts/install-launchd.sh") from None
-        self.selector = selectors.DefaultSelector()
-        self.selector.register(self.proc.stdout, selectors.EVENT_READ)
+        try:
+            self.selector = selectors.DefaultSelector()
+            self.selector.register(self.proc.stdout, selectors.EVENT_READ)
+        except BaseException:
+            self.proc.kill()
+            self.proc.wait()
+            self.proc.stdin.close()
+            self.proc.stdout.close()
+            self.cwd.cleanup()
+            raise
 
     def __enter__(self):
         return self
 
-    def __exit__(self, *exc):
-        self.close()
+    def __exit__(self, exc_type, *exc):
+        try:
+            self.close()
+        except Exception:
+            if exc_type is None:
+                raise
+            # 已經有錯誤在傳遞中：不讓清理時的錯誤蓋掉原本的錯誤
 
     def send(self, message: dict) -> None:
         try:
@@ -117,23 +131,27 @@ class AppServer:
     def close(self) -> None:
         """關閉 stdin，app-server 收到 EOF 會自己結束（約 0.05 秒）；等不到就結束整個 process group，
         不留下背景程序。"""
-        self.selector.close()
         try:
-            self.proc.stdin.close()
-        except OSError:
-            pass
-        for sig in (None, signal.SIGTERM, signal.SIGKILL):
+            self.selector.close()
             try:
+                self.proc.stdin.close()
+            except OSError:
+                pass
+            for sig in (None, signal.SIGTERM, signal.SIGKILL):
                 if sig is not None:
-                    os.killpg(self.proc.pid, sig)
-                self.proc.wait(CLOSE_TIMEOUT)
-                break
-            except subprocess.TimeoutExpired:
-                continue
-            except ProcessLookupError:
-                break
-        self.proc.stdout.close()
-        self.cwd.cleanup()
+                    try:
+                        os.killpg(self.proc.pid, sig)
+                    except OSError:
+                        # 已經結束：沒有這個 group 是 ESRCH；macOS 對只剩殭屍的 group 回 EPERM。照樣 wait 收掉
+                        pass
+                try:
+                    self.proc.wait(CLOSE_TIMEOUT)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            self.proc.stdout.close()
+            self.cwd.cleanup()
 
 
 def result_of(response: dict, failure: str) -> dict:
@@ -172,13 +190,13 @@ def parse_window(w: object) -> Window:
     if not isinstance(w, dict):
         raise ProviderError(FORMAT_CHANGED)
     minutes = w.get("windowDurationMins")
-    if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes <= 0:
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= MAX_WINDOW_MINUTES:
         raise ProviderError(FORMAT_CHANGED)  # 不知道是哪一種額度：不猜
     wid, label = window_label(minutes)
     resets = w.get("resetsAt")
-    if resets is None:
-        resets_at = None
-    elif isinstance(resets, bool) or not isinstance(resets, int):
+    if resets is None or resets == 0:
+        resets_at = None  # 舊端點的 0 也是「沒有重置時間」
+    elif isinstance(resets, bool) or not isinstance(resets, int) or resets < 0:
         raise ProviderError(FORMAT_CHANGED)
     else:
         try:

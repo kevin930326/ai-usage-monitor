@@ -76,13 +76,13 @@ codex app-server --listen stdio://
 |---|---|---|
 | 執行環境 | 暫存資料夾當工作目錄、stdin／stdout 是管線、stderr 丟棄 | app-server 不會把收集器的資料夾當成專案；stderr 可能含個人資訊 |
 | 逾時 | 整段對話 30 秒（與 Claude 相同），用 `selectors` 等待 stdout | 讀取時不會無限卡住 |
-| 結束 | 關閉 stdin → 等 3 秒 → 對整個 process group 送 SIGTERM → 再等 3 秒 → SIGKILL | 正常 0.05 秒自己結束；`start_new_session` 讓 app-server 日後若啟動子程序也一起收掉。逾時、格式錯誤、未預期例外與 Ctrl-C 都走同一段清理（`with` 區塊）；launchd 的 SIGTERM 在 `__main__` 轉成 `SystemExit`，同樣會清理。收集器被 SIGKILL 時 stdin 管線跟著關閉，app-server 收到 EOF 也會自己結束 |
+| 結束 | 關閉 stdin → 等 3 秒 → 對整個 process group 送 SIGTERM → 再等 3 秒 → SIGKILL；程序剛好在等待逾時後才結束時（macOS 的 `killpg` 對只剩殭屍的 group 回 EPERM）照樣 `wait` 收掉；清理時的錯誤不會蓋掉原本的結果或錯誤，暫存資料夾一定刪除 | 正常 0.05 秒自己結束；`start_new_session` 讓 app-server 日後若啟動子程序也一起收掉。逾時、格式錯誤、未預期例外與 Ctrl-C 都走同一段清理（`with` 區塊）；launchd 的 SIGTERM 在 `__main__` 轉成 `SystemExit`，同樣會清理。收集器被 SIGKILL 時 stdin 管線跟著關閉，app-server 收到 EOF 也會自己結束（只會留下空的 `aum-codex-*` 暫存資料夾，與 Claude 的 `aum-claude-*` 相同） |
 | 輸出上限 | 最多讀 1 MiB | 異常輸出不會吃光記憶體 |
 | 只讀的欄位 | `rateLimits.primary`、`rateLimits.secondary`（`usedPercent`、`windowDurationMins`、`resetsAt`）與 `rateLimits.planType` | 與舊端點的資料相同；`accountId`、`credits`、`rateLimitsByLimitId` 等一律不讀 |
 | 個人資訊 | 回應、通知、`initialize` 結果與 stderr 都不寫進日誌、快照或錯誤訊息；錯誤訊息只用固定文字與 JSON-RPC 錯誤代碼 | 回應含 `accountId`、路徑、主機名稱 |
 | codex 路徑 | `config.json` 的 `codex_path`（安裝腳本偵測後合併寫入）→ PATH → ChatGPT.app 內附的 codex | launchd 的 PATH 只有系統目錄；ChatGPT.app 的路徑讓舊安裝不重新執行安裝腳本也能運作 |
 | PATH | 執行時把 codex 所在資料夾放到 PATH 最前面 | npm 版 codex 是 `#!/usr/bin/env node` 腳本，Homebrew 的 node 與它在同一個資料夾 |
-| 登入偵測 | `detect-providers.sh` 改為 `codex login status`：結束碼 0 且是 ChatGPT 登入 → 啟用；`Not logged in` 或 API key 登入 → 不啟用；其他結果（例如輸出改變）→ **不知道**；找不到 codex 時 Codex 資料夾存在 → 不知道，否則不啟用 | 不再只看 `auth.json` 是否存在；「不知道」時安裝腳本不更動 `enabled_providers`（與 integration review 對找不到 claude 的處理相同） |
+| 登入偵測 | `detect-providers.sh` 改為 `codex login status`：結束碼 0 且是 ChatGPT 登入 → 啟用；`Not logged in` 或 API key 登入 → 不啟用；其他結果（例如輸出改變）→ **不知道**；兩個狀態指令都限時 20 秒，逾時結束整個 process group，視為不知道；`claude auth status` 的結束碼不是 0 或 1 時也是不知道；找不到 codex 時 Codex 資料夾存在 → 不知道，否則不啟用 | 不再只看 `auth.json` 是否存在；「不知道」時安裝腳本不更動 `enabled_providers`（與 integration review 對找不到 claude 的處理相同） |
 | 方案名稱 | `planType` 對照表（`team` → `Team`），不在表內的 `[a-z0-9_]` 名稱轉成標題大小寫（`edu_plus` → `Edu Plus`），`unknown` 或其他字元 → `null` | 新方案不會讓快照被中繼拒收 |
 
 JSON 格式與 `schema_version` 不變，iPhone、手錶、Mac App 與中繼都不需要修改。
@@ -105,8 +105,9 @@ app-server 是 experimental，協定可能改名、改欄位或要求不同的�
 
 | 情況 | 表現 |
 |---|---|
-| `rateLimits` 不見或不是物件、額度不是物件、`windowDurationMins` 缺少或不是正整數、`resetsAt` 不是整數、兩個額度長度相同、回應不是 JSON | 「Codex app-server 的回應格式已改變，請更新收集器」 |
-| `usedPercent` 缺少、`null`、字串、負數、NaN 或布林值 | 「用量百分比缺少或格式不正確」（C-04）；**不會**變成 0% |
+| `rateLimits` 不見或不是物件、額度不是物件、`windowDurationMins` 缺少、不是正整數或超過 366 天、`resetsAt` 不是整數或是負數、兩個額度長度相同、回應不是 JSON | 「Codex app-server 的回應格式已改變，請更新收集器」 |
+| `usedPercent` 缺少、`null`、字串、負數、NaN、布林值、大到轉不成浮點數或超過 1000（中繼的上限，超過會讓整份快照被拒收） | 「用量百分比缺少或格式不正確」（C-04）；**不會**變成 0% |
+| `resetsAt` 是 0 | 視為沒有重置時間（與舊端點相同），不顯示 1970 年 |
 | `primary`／`secondary` 其中一個是 `null` | 照常輸出另一個（與舊端點回傳 `null` 時相同） |
 | 兩個都沒有 | 「Codex 回應中沒有用量資料」 |
 | 新的額度長度（例如 1440 分鐘） | 輸出為 `24h`／「24 小時」，不硬套成 5 小時或每週 |
