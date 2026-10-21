@@ -96,12 +96,14 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor \
 排程的運作方式：
 
 - 每 3 小時檢查一次，距上次成功滿 6 天才重新建置與安裝；失敗時下一次檢查（3 小時後）就會重試，直到成功為止。
+- 重新安裝會結束鎖定畫面的 Live Activity 卡片，所以裝完後腳本會打開 App（帶 `--start-live-activity` 參數），由 App 在前景把卡片開回來。
 - 安裝成功時發 macOS 通知；同一輪連續失敗超過 1 天時再通知一次（不會每次重試都通知）。
 - 簽署使用 Xcode 已登入的 Apple ID（`xcodebuild -allowProvisioningUpdates`），腳本內沒有帳號或密碼。建置的是 Release（不含示範模式）。
 
 限制：
 
 - 手機要與 Mac 在同一個網路，且是醒著的；鎖定或休眠時安裝可能失敗，會在 3 小時後重試。Mac 睡眠時排程不會執行，醒來後才補做。
+- 安裝成功但手機鎖定時打不開 App，鎖定畫面卡片會暫時消失，要等下一次捷徑自動化（07:00、15:00、23:00）或手動打開 App；通知會提醒。
 - 腳本只重新安裝 iPhone App，手錶 App（`apple/WatchApp`）仍需用 Xcode 手動安裝。
 - Xcode 的 Apple ID 登入過期時建置會失敗，需要重新登入。
 - repo 在 `~/Documents` 時，排程透過與收集器相同的 `python3` 啟動腳本，沿用它存取「文件」資料夾的權限（launchd 直接執行 bash 會被 macOS 隱私保護拒絕）。沒有安裝過收集器排程時，macOS 可能會詢問是否允許 python3 存取「文件」。

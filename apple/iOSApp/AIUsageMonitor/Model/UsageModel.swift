@@ -97,6 +97,9 @@ final class UsageModel {
 
     // MARK: Live Activity（FR-8）
 
+    /// 以這個啟動參數開啟 App 時開一張卡片（重新安裝腳本用，見 AIUsageMonitorApp）
+    static let startActivityArgument = "--start-live-activity"
+
     func startLiveActivity() async {
         // 連點時第二次直接忽略（第一次還在抓資料）
         guard !isStartingActivity else { return }

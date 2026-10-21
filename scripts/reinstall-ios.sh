@@ -25,6 +25,7 @@ UPDATE_CONFIG=(python3 "$REPO/collector/scripts/update-config.py" "$CONFIG")
 INTERVAL_DAYS=6
 NOTIFY_AFTER_HOURS=24
 TITLE="AI 用量"
+BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
 
 mkdir -p "$LOG_DIR" "$CONFIG_DIR"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >>"$LOG"; echo "$*"; }
@@ -106,6 +107,16 @@ fi
 
 "${HELPER[@]}" success "$STATE"
 EXPIRES=$(date -v+7d '+%m/%d')
-log "安裝成功，簽署約在 $EXPIRES 到期"
-notify "已重新安裝 iPhone App，簽署約在 $EXPIRES 到期"
+log "安裝成功，簽署約在 ${EXPIRES} 到期"
+
+# 5. 重新安裝會結束鎖定畫面的 Live Activity。打開 App 並帶參數，讓 App 在前景把卡片開回來。
+#    手機鎖定時打不開；簽署已經更新，仍算成功，卡片等下一次捷徑自動化重開。
+if xcrun devicectl device process launch --device "$UDID" --terminate-existing --timeout 60 \
+        "$BUNDLE_ID" -- --start-live-activity >>"$LOG" 2>&1; then
+    log "已打開 App 並重開鎖定畫面卡片"
+    notify "已重新安裝 iPhone App，簽署約在 ${EXPIRES} 到期"
+else
+    log "無法打開 App（手機可能鎖定），鎖定畫面卡片要等捷徑自動化或手動打開 App 才會出現"
+    notify "已重新安裝 iPhone App（簽署約在 ${EXPIRES} 到期），但手機鎖定中，請打開 App 重開鎖定畫面卡片"
+fi
 exit 0
