@@ -95,8 +95,8 @@ struct SettingsView: View {
     }
 
     private func save() {
-        model.relayURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        model.readToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.saveSettings(url: url.trimmingCharacters(in: .whitespacesAndNewlines),
+                           token: token.trimmingCharacters(in: .whitespacesAndNewlines))
         dismiss()
         Task { await model.refresh() }
     }

@@ -1,0 +1,85 @@
+# 用 XcodeGen 產生 Xcode 專案：cd apple/WatchApp && xcodegen generate
+name: AIUsageWatch
+options:
+  bundleIdPrefix: io.github.kevin930326
+  deploymentTarget:
+    watchOS: "11.0"
+  createIntermediateGroups: true
+
+packages:
+  UsageKit:
+    path: ../UsageKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.3.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  AIUsageWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - AIUsageWatch
+      - Shared
+      # 與 iOS App 共用：Keychain 存取、Debug 示範資料
+      - path: ../iOSApp/Shared/KeychainStore.swift
+      - path: ../iOSApp/Shared/DemoData.swift
+    dependencies:
+      - package: UsageKit
+        product: UsageKit
+      - package: UsageKit
+        product: UsageKitUI
+      - target: UsageComplications
+    # 與複雜功能交換資料（WatchSnapshotStore）；實機需以 Team 簽署
+    entitlements:
+      path: AIUsageWatch/AIUsageWatch.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+    info:
+      path: AIUsageWatch/Info.plist
+      properties:
+        CFBundleDisplayName: AI 用量
+        CFBundleDevelopmentRegion: zh-Hant
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: io.github.kevin930326.AIUsageMonitor
+        WKRunsIndependentlyOfCompanionApp: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMonitor.watchkitapp
+        GENERATE_INFOPLIST_FILE: NO
+
+  UsageComplications:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - UsageComplications
+      - Shared
+    dependencies:
+      - package: UsageKit
+        product: UsageKit
+      - package: UsageKit
+        product: UsageKitUI
+    info:
+      path: UsageComplications/Info.plist
+      properties:
+        CFBundleDisplayName: AI 用量
+        CFBundleDevelopmentRegion: zh-Hant
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: UsageComplications/UsageComplications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.io.github.kevin930326.AIUsageMonitor]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMonitor.watchkitapp.UsageComplications
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES

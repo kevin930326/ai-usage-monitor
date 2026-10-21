@@ -49,7 +49,7 @@ Live Activity 以 `.supplementalActivityFamilies([.small])` 提供手錶版面�
 ### 2.5 共用套件 UsageKit (`apple/UsageKit/`)
 Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台加入 watchOS）：
 - `UsageSnapshot` 等資料模型與 JSON 解析（含 `schema_version` 檢查）
-- 最吃緊額度的挑選邏輯、顏色分級規則（FR-15、FR-16）
+- 最吃緊額度的挑選邏輯、顏色規則與色值（FR-15、FR-16）
 - 共用的 SwiftUI 元件：額度進度條、重置倒數
 
 ### 2.6 Mac 選單列 App (`apple/MacMenuBar/`，v1.2)
@@ -68,7 +68,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 |---|---|
 | 錶面複雜功能 | WidgetKit `accessoryCircular`／`accessoryRectangular`／`accessoryInline`，顯示最吃緊額度的剩餘 % 與顏色（FR-28） |
 | 手錶 App | 列出所有可見額度與重置倒數（FR-29） |
-| 設定同步 | iPhone App 以 WatchConnectivity 傳送中繼網址與讀取密鑰，手錶存入自己的 Keychain（FR-30） |
+| 設定同步 | iPhone App 以 WatchConnectivity 的 application context 傳送中繼網址與讀取密鑰，手錶存入自己的 Keychain（FR-30）；系統會在兩端另存最後一份 context |
 
 - 資料來源：手錶直接呼叫中繼 `GET /usage`（透過 iPhone 或 Wi-Fi 連網），使用 UsageKit 的 `RelayClient`。
 - 複雜功能的更新時機由 watchOS 決定；重置倒數依絕對時間在手錶上自行計算。
@@ -118,7 +118,7 @@ apple/
 
 | 情況 | 行為 |
 |---|---|
-| Mac 關機、睡眠或離線 | 顯示最後一筆與「更新於 N 分鐘前」，超過 30 分鐘變灰；重置時間已過的額度標示「已重置」（FR-26） |
+| Mac 關機、睡眠或離線 | 顯示最後一筆與「更新於 N 分鐘前」，超過 30 分鐘變灰（手錶 45 分鐘，FR-11）；重置時間已過的額度標示「已重置」（FR-26） |
 | 某家 API 改版或失敗 | 該欄顯示「—」，另一家照常 |
 | Live Activity 被系統結束 | 下次捷徑排程重開 |
 | 免費帳號簽署過期 | 以 Xcode 重新安裝 |

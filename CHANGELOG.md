@@ -19,6 +19,9 @@
 - Mac 選單列 App：選單列顯示最吃緊額度的剩餘 % 與顏色，面板列出所有額度、進度條、重置倒數與更新時間，監看本機 `usage.json`（FR-21, FR-22）
 - Mac 桌面小工具（小、中兩種尺寸；需 Team 簽署與 App Group 才能顯示真實資料，FR-24）
 - UsageKit：`UsageFileLocator`，與收集器相同的 `usage.json` 路徑規則
+- Apple Watch App：列出所有可見額度與重置倒數（FR-29）；錶面複雜功能顯示最吃緊額度（圓形、矩形、單行，FR-28）
+- iPhone 以 WatchConnectivity 把中繼設定傳到手錶（FR-30，尚未以實機驗證）
+- UsageKit 支援 watchOS 11
 - 捷徑動作「重新啟動用量監看」，可搭配定時自動化突破 Live Activity 8 小時上限（FR-10）
 
 ## [0.3.0] - 2026-10-21

@@ -99,6 +99,15 @@ let sampleJSON = """
         #expect(snap.isStale(now: snap.updatedAt.addingTimeInterval(31 * 60)))
     }
 
+    @Test func watchStaleAfterFortyFiveMinutes() {
+        // 手錶背景更新約每 30 分鐘、常會延後：35 分鐘還不算過期，iPhone 與 Mac 已過期
+        let at35 = snap.updatedAt.addingTimeInterval(35 * 60)
+        #expect(snap.isStale(now: at35))
+        #expect(!snap.isStale(now: at35, after: UsageSnapshot.watchStaleAfter))
+        #expect(!snap.isStale(now: snap.updatedAt.addingTimeInterval(44 * 60), after: UsageSnapshot.watchStaleAfter))
+        #expect(snap.isStale(now: snap.updatedAt.addingTimeInterval(46 * 60), after: UsageSnapshot.watchStaleAfter))
+    }
+
     @Test func displayNames() {
         #expect(ProviderInfo.displayName("claude") == "Claude")
         #expect(ProviderInfo.displayName("cursor") == "Cursor")
