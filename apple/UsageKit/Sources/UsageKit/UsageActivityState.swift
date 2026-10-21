@@ -18,6 +18,9 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
     public var providers: [Provider]
     public var updatedAt: Date
     public var mode: UsageDisplayMode
+    /// 「更新」按鈕抓不到新資料的原因。資料沿用上一份，頁尾在更新時間後加上這段；下次成功就清掉。
+    /// 沒有這個欄位的舊版狀態解碼為 nil。
+    public private(set) var refreshError: String?
 
     public static let maxErrorLength = 60
     /// ActivityKit 的狀態大小上限
@@ -27,6 +30,13 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
         self.providers = providers
         self.updatedAt = updatedAt
         self.mode = mode
+    }
+
+    /// 同一份資料加上（或清掉）更新失敗的原因，訊息截短以控制大小。
+    public func withRefreshError(_ message: String?) -> UsageActivityState {
+        var state = self
+        state.refreshError = message.map { String($0.prefix(Self.maxErrorLength)) }
+        return state
     }
 
     /// 從快照建立：依固定順序排列服務，只保留可見額度（FR-14）。

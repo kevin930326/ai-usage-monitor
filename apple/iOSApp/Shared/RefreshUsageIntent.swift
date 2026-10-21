@@ -8,7 +8,7 @@ struct RefreshUsageIntent: LiveActivityIntent {
     static let isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
-        try await LiveActivityController.refresh()
+        await LiveActivityController.refresh()
         return .result()
     }
 }

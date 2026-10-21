@@ -135,4 +135,38 @@ import Testing
         let data = try JSONEncoder().encode(state)
         #expect(try JSONDecoder().decode(UsageActivityState.self, from: data) == state)
     }
+
+    @Test func refreshErrorIsTruncatedAndClearable() throws {
+        let state = UsageActivityState(snapshot: snap, mode: .remaining)
+        #expect(state.refreshError == nil)
+        let failed = state.withRefreshError(String(repeating: "錯", count: 500))
+        #expect(failed.refreshError?.count == UsageActivityState.maxErrorLength)
+        #expect(failed.updatedAt == state.updatedAt)
+        #expect(failed.withRefreshError(nil) == state)
+        let data = try JSONEncoder().encode(failed)
+        #expect(try JSONDecoder().decode(UsageActivityState.self, from: data) == failed)
+    }
+
+    @Test func decodesStateWithoutRefreshError() throws {
+        // 升級前開的卡片：狀態裡沒有 refreshError
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
+            UsageActivityState(snapshot: snap, mode: .remaining))) as! [String: Any]
+        json.removeValue(forKey: "refreshError")
+        let state = try JSONDecoder().decode(UsageActivityState.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(state.refreshError == nil)
+    }
+
+    @Test func worstCaseStateWithRefreshErrorFits() throws {
+        var providers: [String: ProviderUsage] = [:]
+        for name in ["claude", "codex", "gemini", "cursor"] {
+            providers[name] = ProviderUsage(
+                plan: "Enterprise Plus",
+                error: String(repeating: "錯誤", count: 100),
+                windows: (0..<4).map { UsageWindow(id: "window_\($0)", label: "每週 Opus \($0)", usedPct: 99.9, resetsAt: .now) }
+            )
+        }
+        let state = UsageActivityState(snapshot: UsageSnapshot(updatedAt: .now, providers: providers), mode: .remaining)
+            .withRefreshError(String(repeating: "錯誤", count: 100))
+        #expect(try state.encodedSize() < UsageActivityState.maxEncodedBytes)
+    }
 }

@@ -71,11 +71,24 @@ enum LiveActivityController {
     }
 
     /// 卡片上的「更新」按鈕（FR-9）：重新抓資料後更新所有卡片。
-    static func refresh() async throws {
+    static func refresh() async {
         guard let activity = activities.first else { return }
-        let snapshot = try await UsageSource.fetch(demoScenario: activity.attributes.demoScenario)
-        SharedStore.publish(snapshot)
-        await update(snapshot: snapshot, mode: activity.content.state.mode)
+        do {
+            let snapshot = try await UsageSource.fetch(demoScenario: activity.attributes.demoScenario)
+            SharedStore.publish(snapshot)
+            await update(snapshot: snapshot, mode: activity.content.state.mode)
+        } catch {
+            // 抓不到時保留舊資料、頁尾顯示原因；否則按了沒反應，看不出是網路、密鑰還是中繼的問題
+            await markRefreshFailed(error.localizedDescription)
+        }
+    }
+
+    nonisolated static func markRefreshFailed(_ message: String) async {
+        for activity in UsageActivity.activities {
+            let state = activity.content.state.withRefreshError(message)
+            await activity.update(ActivityContent(state: state, staleDate: state.staleDate()))
+            ActivityLog.record("refresh-failed", activity: activity, updatedAt: state.updatedAt)
+        }
     }
 }
 
