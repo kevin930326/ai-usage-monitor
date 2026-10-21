@@ -1,7 +1,7 @@
 #!/bin/bash
 # 偵測這台 Mac 登入過哪些服務，每行印出一個結果（順序與收集器相同）：
 #   claude／codex      已登入，要啟用
-#   ?claude／?codex    不知道（找不到執行檔、或輸出認不得）：安裝腳本不更動 enabled_providers
+#   ?claude／?codex    不知道（裝過但找不到執行檔、或輸出認不得）：安裝腳本不更動 enabled_providers
 #   （不印）           沒有登入
 #
 #   detect-providers.sh [claude 執行檔路徑] [codex 執行檔路徑]
@@ -10,7 +10,8 @@
 # Claude：`claude auth status` 登入時結束碼 0、未登入時 1，其他結束碼視為不知道。
 # Codex：`codex login status` 用 ChatGPT 登入時結束碼 0 並印出「Logged in using ChatGPT」，
 #   未登入時結束碼 1 並印出「Not logged in」。用 API key 登入沒有訂閱額度，不啟用。
-#   找不到 codex 時，Codex 的資料夾存在才算「不知道」（裝過但這次找不到），否則就是沒用過 Codex。
+# 找不到執行檔時，該服務的設定資料夾（~/.claude、~/.codex，只看是否存在、不讀內容）存在才算「不知道」
+# （裝過但這次找不到），否則就是沒用過，不啟用：只用其中一個服務的人才不會一直顯示另一個的錯誤。
 # 兩個指令都限時 TIMEOUT 秒（macOS 沒有 timeout 指令，用 perl 的 alarm），逾時視為不知道。
 set -euo pipefail
 
@@ -33,7 +34,7 @@ limited() {
 }
 
 if [ -z "$CLAUDE" ]; then
-    echo '?claude'
+    if [ -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" ]; then echo '?claude'; fi
 else
     CLAUDE_RC=0
     limited "$CLAUDE" auth status --json </dev/null >/dev/null 2>&1 || CLAUDE_RC=$?

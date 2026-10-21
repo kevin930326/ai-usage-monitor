@@ -41,7 +41,7 @@ fi
 
 # 只收集這台 Mac 登入過的服務，沒用的服務不會在 App 上顯示成錯誤。
 # 一個都沒偵測到時不寫入，收集器維持全部啟用，登入後不必重新安裝也能開始收集。
-# 任何一個服務的登入狀態是「不知道」（找不到指令、輸出認不得）而不是「沒登入」時也不寫入，
+# 任何一個服務的登入狀態是「不知道」（裝過但找不到指令、輸出認不得）而不是「沒登入」時也不寫入，
 # 不然原本啟用的服務會被悄悄關掉（收集器仍會每 5 分鐘記錄錯誤，例如「找不到 claude 執行檔」）。
 RESULTS="$("$COLLECTOR_DIR/scripts/detect-providers.sh" "$CLAUDE" "$CODEX")"
 DETECTED="$(printf '%s\n' "$RESULTS" | grep -v '^?' || true)"
@@ -91,6 +91,8 @@ else
         echo "Claude 用量：不確定（找不到 claude 指令，enabled_providers 維持原設定）"
     elif has_provider claude; then
         echo "Claude 用量：啟用（Claude Code 已登入）"
+    elif [ -z "$CLAUDE" ]; then
+        echo "Claude 用量：未啟用（沒有安裝 Claude Code）"
     else
         echo "Claude 用量：未啟用（Claude Code 沒有登入）"
     fi
@@ -98,6 +100,8 @@ else
         echo "Codex 用量：不確定（${CODEX:+無法判斷登入狀態}${CODEX:-找不到 codex 指令}，enabled_providers 維持原設定）"
     elif has_provider codex; then
         echo "Codex 用量：啟用（Codex CLI 已用 ChatGPT 登入）"
+    elif [ -z "$CODEX" ]; then
+        echo "Codex 用量：未啟用（沒有使用過 Codex CLI）"
     else
         echo "Codex 用量：未啟用（Codex CLI 沒有用 ChatGPT 登入）"
     fi

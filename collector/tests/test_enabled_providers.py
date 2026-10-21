@@ -134,9 +134,10 @@ def write_fake_codex(bin_dir: Path, state: str) -> Path:
 class DetectProvidersTest(unittest.TestCase):
     """install-launchd.sh 用的偵測：問 `claude auth status` 與 `codex login status`，不讀登入檔。"""
 
-    def detect(self, claude: bool | int | None, codex: str | None, codex_dir: bool = False) -> list[str]:
-        """claude：True 已登入、False 未登入、None 找不到 claude、整數是 auth status 的結束碼。
-        codex：CODEX_STATUS 的狀態，None 找不到 codex；codex_dir：~/.codex 是否存在。"""
+    def detect(self, claude: bool | int | None, codex: str | None, codex_dir: bool = False,
+               claude_dir: bool = False) -> list[str]:
+        """claude：True 已登入、False 未登入、None 找不到 claude、整數是 auth status 的結束碼；
+        claude_dir：~/.claude 是否存在。codex：CODEX_STATUS 的狀態，None 找不到 codex；codex_dir：~/.codex 是否存在。"""
         with tempfile.TemporaryDirectory() as d:
             home, bin_dir = Path(d) / "home", Path(d) / "bin"
             home.mkdir()
@@ -153,6 +154,8 @@ class DetectProvidersTest(unittest.TestCase):
                             f"exit {claude if type(claude) is int else 0 if claude else 1}\n")
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
             fake_codex = write_fake_codex(bin_dir, codex) if codex else None
+            if claude_dir:
+                (home / ".claude").mkdir()
             if codex_dir:
                 (home / ".codex").mkdir()
                 # 登入檔不能被讀：權限設成 000，cat 也讀不到
@@ -161,6 +164,7 @@ class DetectProvidersTest(unittest.TestCase):
                 auth.chmod(0)
             env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AUM_DETECT_TIMEOUT": "1"}
             env.pop("CODEX_HOME", None)
+            env.pop("CLAUDE_CONFIG_DIR", None)
             args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake),
                     str(fake_codex) if fake_codex else ""]
             result = subprocess.run(args, env=env, capture_output=True, text=True, check=True)
@@ -171,7 +175,8 @@ class DetectProvidersTest(unittest.TestCase):
     def test_claude_detection(self):
         self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
         self.assertEqual(self.detect(False, "chatgpt"), ["codex"])
-        self.assertEqual(self.detect(None, "chatgpt"), ["?claude", "codex"])
+        self.assertEqual(self.detect(None, "chatgpt"), ["codex"])  # 沒用過 Claude Code
+        self.assertEqual(self.detect(None, "chatgpt", claude_dir=True), ["?claude", "codex"])  # 用過但找不到
         self.assertEqual(self.detect(2, "chatgpt"), ["?claude", "codex"])  # 結束碼認不得：不知道
 
     def test_codex_asks_codex_itself(self):
@@ -192,13 +197,13 @@ class DetectProvidersTest(unittest.TestCase):
 
 
 class InstallLaunchdTest(unittest.TestCase):
-    """install-launchd.sh 寫 enabled_providers 的規則：任一服務的登入狀態是「不知道」（找不到指令、
-    結果認不得）時不能把原本啟用的服務關掉。launchctl／plutil 用假的取代，不會真的安裝。
+    """install-launchd.sh 寫 enabled_providers 的規則：任一服務的登入狀態是「不知道」（裝過但找不到指令、
+    結果認不得）時不能把原本啟用的服務關掉；沒裝過的服務不啟用。launchctl／plutil 用假的取代，不會真的安裝。
     注意：腳本也會找 /opt/homebrew/bin/claude 與 /usr/local/bin/claude，這台機器若裝在那裡，
     「找不到 claude」的案例會變成找得到；codex 的候選位置以 AUM_CODEX_FALLBACKS 清空。"""
 
-    def install(self, *, claude_found: bool, claude_logged_in: bool = True, codex: str | None,
-                codex_dir: bool = False, existing: dict | None = None) -> tuple[dict, str]:
+    def install(self, *, claude_found: bool, claude_logged_in: bool = True, claude_dir: bool = False,
+                codex: str | None, codex_dir: bool = False, existing: dict | None = None) -> tuple[dict, str]:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             home, bin_dir, config_dir = root / "home", root / "bin", root / "config"
@@ -218,6 +223,8 @@ class InstallLaunchdTest(unittest.TestCase):
                 fake.chmod(0o755)
             if codex:
                 write_fake_codex(bin_dir, codex)
+            if claude_dir:
+                (home / ".claude").mkdir()
             if codex_dir:
                 (home / ".codex").mkdir()
             if existing is not None:
@@ -266,7 +273,7 @@ class InstallLaunchdTest(unittest.TestCase):
     def test_missing_claude_binary_keeps_existing_providers(self):
         # 重新執行安裝時 shell 找不到 claude：既有的 Claude 啟用不能被悄悄關掉
         existing = {"relay_url": "https://relay.example", "enabled_providers": ["claude", "codex"]}
-        config, out = self.install(claude_found=False, codex="chatgpt", existing=existing)
+        config, out = self.install(claude_found=False, claude_dir=True, codex="chatgpt", existing=existing)
         self.assertEqual({k: v for k, v in config.items() if k != "codex_path"}, existing)
         self.assertIn("找不到 claude 指令", out)
         self.assertIn("Claude 用量：不確定", out)
@@ -284,10 +291,25 @@ class InstallLaunchdTest(unittest.TestCase):
                 self.assertIn("Codex 用量：不確定", out)
 
     def test_missing_claude_binary_leaves_defaults_alone(self):
-        config, out = self.install(claude_found=False, codex="chatgpt")
+        config, out = self.install(claude_found=False, claude_dir=True, codex="chatgpt")
         self.assertNotIn("enabled_providers", config)
         self.assertNotIn("claude_path", config)
         self.assertIn("找不到 claude 指令", out)
+
+    def test_codex_only_user_without_claude_code(self):
+        # 從沒裝過 Claude Code（沒有 claude 也沒有 ~/.claude）：只啟用 Codex，不會一直顯示 Claude 的錯誤
+        existing = {"relay_url": "https://relay.example"}
+        config, out = self.install(claude_found=False, codex="chatgpt", existing=existing)
+        self.assertEqual(config["enabled_providers"], ["codex"])
+        self.assertEqual(config["relay_url"], "https://relay.example")
+        self.assertNotIn("claude_path", config)
+        self.assertIn("Claude 用量：未啟用（沒有安裝 Claude Code）", out)
+        self.assertNotIn("找不到 claude 指令", out)
+
+    def test_never_used_either_service(self):
+        config, out = self.install(claude_found=False, codex=None)
+        self.assertNotIn("enabled_providers", config)
+        self.assertIn("沒有偵測到任何登入資訊", out)
 
 
 class UpdateConfigJsonTest(unittest.TestCase):

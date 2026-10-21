@@ -17,7 +17,7 @@
 { "relay_url": "https://...", "enabled_providers": ["claude"] }
 ```
 
-- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：`claude auth status` 回報已登入就啟用 claude，`codex login status` 回報用 ChatGPT 登入就啟用 codex，並印出偵測結果（`scripts/detect-providers.sh`）。偵測不讀取任何登入資訊的內容，兩個指令的輸出（可能含 email）直接丟棄。找不到指令或結果認不得時視為「不知道」，不更動這個欄位。
+- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：`claude auth status` 回報已登入就啟用 claude，`codex login status` 回報用 ChatGPT 登入就啟用 codex，並印出偵測結果（`scripts/detect-providers.sh`）。偵測不讀取任何登入資訊的內容，兩個指令的輸出（可能含 email）直接丟棄。找不到指令時，該服務的設定資料夾（`~/.claude`、`~/.codex`，只看是否存在）存在就視為「不知道」、不更動這個欄位，不存在就當成沒用過、不啟用（只用其中一個服務的人不會一直看到另一個的錯誤）；結果認不得或逾時也視為「不知道」。
 - 未啟用的服務不查詢、不出現在輸出的 `providers` 中、不寫日誌，App 上也不會顯示。
 - 已啟用但讀不到登入資訊（例如登出了）仍是錯誤，該服務的 `error` 有值，日誌也會記錄。
 - 沒有 `config.json`、沒有這個欄位或格式不對時全部啟用（舊版安裝的行為）。兩個服務都沒偵測到時安裝腳本不寫入這個欄位並提示先登入，登入後下一次排程就會開始收集。

@@ -37,11 +37,13 @@
 
 修正後（`c9e23aa`）重跑：**16/16 通過**（collector-tests、relay-tests、usagekit-macos、usagekit-linux、iOS／Mac／watch 的 Debug 與 Release 建置、appex 嵌入、Release 不含除錯字串）。
 
-## 需要使用者決定的事項
+## 使用者的決定
 
-1. **Claude 與 Codex 的「不知道」規則不對稱**（#41 帶進來的既有行為）：找不到 `claude` 一律視為「不知道」，找不到 `codex` 則要 `~/.codex` 存在才算「不知道」、否則視為沒用過。結果是**只用 Codex、從沒裝 Claude Code 的人**重新執行安裝腳本時永遠不會寫入 `enabled_providers`，收集器每 5 分鐘記錄一次「找不到 claude 執行檔」，App 也會顯示 Claude 的錯誤。選項：
-   - A. 維持現狀（本分支的做法；保守，不會誤關原本啟用的 Claude）。
-   - B. Claude 比照 Codex：找不到 `claude` 且 `~/.claude`（或 `CLAUDE_CONFIG_DIR`）不存在時視為沒用過、不啟用。只檢查資料夾是否存在，不讀內容。
-2. **用 API key 登入 Codex CLI 的人**：舊做法只看 `auth.json` 是否存在，會啟用 Codex（實際上也查不到訂閱額度，只會一直顯示錯誤）；本分支在重新執行安裝腳本後會停用 Codex。這是行為改變，請確認接受。
+1. **Claude 與 Codex 的「不知道」規則不對稱**（#41 帶進來的既有行為：找不到 `claude` 一律視為「不知道」，只用 Codex、從沒裝 Claude Code 的人永遠不會寫入 `enabled_providers`，App 一直顯示 Claude 的錯誤）。
+   → **選 B**：Claude 比照 Codex，找不到 `claude` 且 `~/.claude`（或 `CLAUDE_CONFIG_DIR`）不存在時視為沒用過、不啟用；資料夾存在時仍是「不知道」、不更動設定。只檢查資料夾是否存在，不讀內容。已實作並加測試（`test_codex_only_user_without_claude_code` 等）。
+2. **用 API key 登入 Codex CLI 的人**重新執行安裝腳本後 Codex 會被停用（舊做法會啟用，但也查不到訂閱額度）。
+   → **接受**，記錄在 ADR-0007 與 CHANGELOG。
 
-有待決定的事項，因此本分支**沒有合併**。
+決定後重跑 verify-all 的結果見下方。
+
+VERIFY_RESULT_2

@@ -82,7 +82,7 @@ codex app-server --listen stdio://
 | 個人資訊 | 回應、通知、`initialize` 結果與 stderr 都不寫進日誌、快照或錯誤訊息；錯誤訊息只用固定文字與 JSON-RPC 錯誤代碼 | 回應含 `accountId`、路徑、主機名稱 |
 | codex 路徑 | `config.json` 的 `codex_path`（安裝腳本偵測後合併寫入）→ PATH → ChatGPT.app 內附的 codex | launchd 的 PATH 只有系統目錄；ChatGPT.app 的路徑讓舊安裝不重新執行安裝腳本也能運作 |
 | PATH | 執行時把 codex 所在資料夾放到 PATH 最前面 | npm 版 codex 是 `#!/usr/bin/env node` 腳本，Homebrew 的 node 與它在同一個資料夾 |
-| 登入偵測 | `detect-providers.sh` 改為 `codex login status`：結束碼 0 且是 ChatGPT 登入 → 啟用；`Not logged in` 或 API key 登入 → 不啟用；其他結果（例如輸出改變）→ **不知道**；兩個狀態指令都限時 20 秒，逾時結束整個 process group，視為不知道；`claude auth status` 的結束碼不是 0 或 1 時也是不知道；找不到 codex 時 Codex 資料夾存在 → 不知道，否則不啟用 | 不再只看 `auth.json` 是否存在；「不知道」時安裝腳本不更動 `enabled_providers`（與 integration review 對找不到 claude 的處理相同） |
+| 登入偵測 | `detect-providers.sh` 改為 `codex login status`：結束碼 0 且是 ChatGPT 登入 → 啟用；`Not logged in` 或 API key 登入 → 不啟用；其他結果（例如輸出改變）→ **不知道**；兩個狀態指令都限時 20 秒，逾時結束整個 process group，視為不知道；`claude auth status` 的結束碼不是 0 或 1 時也是不知道；Claude 也比照 Codex：找不到 `claude` 時 `~/.claude`（或 `CLAUDE_CONFIG_DIR`）存在才算不知道，否則視為沒用過、不啟用（原本一律不知道，只用 Codex 的人永遠不會寫入 `enabled_providers`）；找不到 codex 時 Codex 資料夾存在 → 不知道，否則不啟用 | 不再只看 `auth.json` 是否存在；「不知道」時安裝腳本不更動 `enabled_providers`（integration review 對找不到 claude 的處理，改為只套用在裝過的情況） |
 | 方案名稱 | `planType` 對照表（`team` → `Team`），不在表內的 `[a-z0-9_]` 名稱轉成標題大小寫（`edu_plus` → `Edu Plus`），`unknown` 或其他字元 → `null` | 新方案不會讓快照被中繼拒收 |
 
 JSON 格式與 `schema_version` 不變，iPhone、手錶、Mac App 與中繼都不需要修改。
@@ -132,4 +132,5 @@ app-server 是 experimental，協定可能改名、改欄位或要求不同的�
 - `collector/usage_collector/providers/codex.py` 改寫；`http.py` 移除沒有使用者的 `get_json`；`paths.resolve_executable` 由 Claude 與 Codex provider 共用。
 - `scripts/install-launchd.sh` 偵測 codex 的完整路徑寫進 `config.json` 的 `codex_path`（合併寫入）；`scripts/detect-providers.sh` 改用 `codex login status`，並以 `?codex`／`?claude` 回報「不知道」。
 - **不一定要重新安裝 launchd**：plist 沒有變；沒有 `codex_path` 時收集器會找 PATH 與 ChatGPT.app 內附的 codex。codex 裝在其他位置（npm、Homebrew）的人要重新執行 `scripts/install-launchd.sh`，此時 App 會顯示「找不到 codex 執行檔」。
-- 用 API key 登入 Codex CLI 的人重新執行安裝腳本後 Codex 會被停用（API key 沒有訂閱額度，舊做法也查不到）。
+- 用 API key 登入 Codex CLI 的人重新執行安裝腳本後 Codex 會被停用（API key 沒有訂閱額度，舊做法也查不到）。使用者已確認接受。
+- 只用 Codex、從沒裝過 Claude Code 的人重新執行安裝腳本後，`enabled_providers` 會寫成 `["codex"]`，App 不再顯示 Claude 的錯誤。
