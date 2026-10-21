@@ -17,13 +17,14 @@ public enum UsageEncoder {
 ///
 /// 規則：畫面上會看到的內容變了且距離上次至少 `minimumInterval`，或距離上次已達
 /// `maximumInterval`（小於 30 分鐘的過期門檻，避免小工具因資料時間太舊而誤顯示「已過期」）。
+/// 預設兩者都是 25 分鐘：一天最多 58 次，數字變動最多晚 25 分鐘反映。
 public struct WidgetReloadThrottle: Sendable {
     public var minimumInterval: TimeInterval
     public var maximumInterval: TimeInterval
     public private(set) var lastReload: Date?
     private var lastSignature: [String]?
 
-    public init(minimumInterval: TimeInterval = 15 * 60, maximumInterval: TimeInterval = 25 * 60) {
+    public init(minimumInterval: TimeInterval = 25 * 60, maximumInterval: TimeInterval = 25 * 60) {
         self.minimumInterval = minimumInterval
         self.maximumInterval = maximumInterval
     }

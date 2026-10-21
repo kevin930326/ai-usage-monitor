@@ -52,6 +52,21 @@ import Testing
     @Test func changedNumbersWaitForMinimumInterval() {
         var throttle = WidgetReloadThrottle()
         _ = throttle.shouldReload(for: snapshot(updatedAt: now), now: now)
+        // 數字變了也要等滿 25 分鐘
+        for minutes in stride(from: 5.0, through: 20, by: 5) {
+            let t = now.addingTimeInterval(minutes * 60)
+            let reloaded = throttle.shouldReload(for: snapshot(updatedAt: t, used: 60), now: t)
+            #expect(!reloaded)
+        }
+        let t25 = now.addingTimeInterval(25 * 60)
+        let reloadedLater = throttle.shouldReload(for: snapshot(updatedAt: t25, used: 60), now: t25)
+        #expect(reloadedLater)
+    }
+
+    @Test func changedNumbersReloadAfterCustomMinimumInterval() {
+        // minimumInterval 比 maximumInterval 短時，內容變了就提早更新
+        var throttle = WidgetReloadThrottle(minimumInterval: 15 * 60, maximumInterval: 25 * 60)
+        _ = throttle.shouldReload(for: snapshot(updatedAt: now), now: now)
         let t5 = now.addingTimeInterval(5 * 60)
         let reloaded = throttle.shouldReload(for: snapshot(updatedAt: t5, used: 60), now: t5)
         #expect(!reloaded)
@@ -62,7 +77,7 @@ import Testing
     }
 
     @Test func providerErrorCountsAsVisibleChange() {
-        var throttle = WidgetReloadThrottle()
+        var throttle = WidgetReloadThrottle(minimumInterval: 15 * 60, maximumInterval: 25 * 60)
         _ = throttle.shouldReload(for: snapshot(updatedAt: now), now: now)
         let t = now.addingTimeInterval(16 * 60)
         let reloaded = throttle.shouldReload(for: snapshot(updatedAt: t, error: "token 過期"), now: t)
@@ -85,7 +100,7 @@ import Testing
             let t = now.addingTimeInterval(Double(i) * 300)
             if throttle.shouldReload(for: snapshot(updatedAt: t, used: Double(i % 100)), now: t) { count += 1 }
         }
-        #expect(count <= 96)
+        #expect(count <= 58)
         // 數字整天不變（例如沒在用）：每 25 分鐘一次
         var idle = WidgetReloadThrottle()
         var idleCount = 0
