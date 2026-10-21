@@ -13,6 +13,7 @@
 - `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
 
 ### Changed
+- 手錶取得中繼設定改用 WatchConnectivity `sendMessage`（手錶 App 開啟時向 iPhone 要），不再用 application context，讀取密鑰不會被系統另存一份在 Keychain 以外；舊版留下的 context 會在 iPhone App 啟動時清空。iPhone 改設定後要打開一次手錶 App 才會套用
 - iPhone App 與 Widget 擴充加入 App Group 與 Keychain 群組（免費 Apple ID 也可簽署）；中繼網址與顯示模式改存 App Group 的 UserDefaults，第一次啟動時自動從舊位置複製
 - 錶面的 `ComplicationView` 移到 UsageKitUI，加入顯示模式與過期門檻參數，iPhone 鎖定畫面小工具共用
 - 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
