@@ -14,11 +14,15 @@
 
 ### Changed
 - 手錶取得中繼設定改用 WatchConnectivity `sendMessage`（手錶 App 開啟時向 iPhone 要），不再用 application context，讀取密鑰不會被系統另存一份在 Keychain 以外；舊版留下的 context 會在 iPhone App 啟動時清空。iPhone 改設定後要打開一次手錶 App 才會套用
+- Mac：新增 `apple/MacMenuBar/project.team.yml`，以 Team 簽署並為 App 與桌面小工具加入 App Group，不必手改 `project.yml`；預設設定不變（C-06）
+- CI：新增 macOS job，產生並建置三個 App（Debug、不簽署），確認擴充有嵌入；不設為必要檢查（C-11）
+- 文件：「已用／剩餘」設定（FR-17）明確只用在 iPhone，Mac 與手錶固定顯示剩餘（C-08）；iPhone 主畫面／鎖定畫面小工具列入需求 FR-31、FR-32 與 v0.6 里程碑（C-14）
 - iPhone App 與 Widget 擴充加入 App Group 與 Keychain 群組（免費 Apple ID 也可簽署）；中繼網址與顯示模式改存 App Group 的 UserDefaults，第一次啟動時自動從舊位置複製
 - 錶面的 `ComplicationView` 移到 UsageKitUI，加入顯示模式與過期門檻參數，iPhone 鎖定畫面小工具共用
 - 動態島精簡版與圓形錶面複雜功能的「CL／CX」文字改為服務圖示（FR-16）
 
 ### Fixed
+- 中繼：依 schema 驗證上傳的快照（`providers` 必須是物件、百分比、日期、字串長度、數量上限），並只保存白名單欄位，其他欄位移除；需重新部署 Worker（C-12）
 - Live Activity：重置時間早於資料過期時間時，卡片不再永遠不轉灰；`staleDate` 在過期前一律給過期時間，過期前的重置在同一次重繪顯示（最多晚 30 分鐘）（C-01）
 - 自動重裝：程序被強制結束後殘留的鎖不再永久停止重裝；鎖內記錄 PID，程序已不存在、舊版無 PID 或超過 2 小時的鎖會被接手（C-02）
 - 收集器：含 Bearer 密鑰的請求只跟隨同來源（scheme、主機、port 相同）的重新導向，最多 3 次（C-03）
