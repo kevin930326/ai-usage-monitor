@@ -48,6 +48,8 @@ def resolve_claude_path(config_path: Path | None = None) -> str | None:
         path = json.loads((config_path or paths.CONFIG_PATH).read_text()).get("claude_path")
     except (FileNotFoundError, json.JSONDecodeError, AttributeError):
         path = None
+    if not isinstance(path, str):
+        path = None  # config.json 被改成別的型別時當成沒設定，不讓 os.access 丟 TypeError
     path = path or shutil.which("claude")
     return path if path and os.access(path, os.X_OK) else None
 
@@ -100,14 +102,23 @@ def parse_reset(text: str, now: datetime) -> datetime:
         raise ProviderError(FORMAT_CHANGED) from None
 
 
+# 模型名稱只會是字母、數字、空白、點與連字號（Fable、Sonnet 4.5、Opus）；其他字元或太長都視為格式改變。
+# 上限遠小於 relay 的 id／label 64 字，避免一個奇怪的額度行讓整份快照上傳被拒
+SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .-]{0,31}$")
+
+
 def window_for(scope: str | None) -> tuple[str, str, bool]:
-    """額度行 → (統一 id, 顯示名稱, hidden)。各模型的每週額度（FR-14）列為 hidden。"""
+    """額度行 → (統一 id, 顯示名稱, hidden)。各模型的每週額度（FR-14）列為 hidden。
+    id 只含 [a-z0-9_]（`Sonnet 4.5 only` → `weekly_sonnet_4_5`），顯示名稱保留原文。"""
     if scope is None:
         return "five_hour", "5 小時", False
-    if scope == "all models":
+    if scope.casefold() == "all models":
         return "weekly", "每週", False
-    name = scope.removesuffix(" only")
-    return f"weekly_{name.lower()}", f"每週 {name}", True
+    name = scope.removesuffix(" only").strip()
+    if not SCOPE_RE.match(name):
+        raise ProviderError(FORMAT_CHANGED)
+    slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    return f"weekly_{slug}", f"每週 {name}", True
 
 
 def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderUsage:
@@ -126,6 +137,8 @@ def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderU
             pct = parse_pct(float(m["pct"]))  # 位數多到變成 inf 時同樣視為格式改變，不寫出不合法的 JSON
         except ProviderError:
             raise ProviderError(FORMAT_CHANGED) from None
+        if any(w.id == wid for w in windows):
+            raise ProviderError(FORMAT_CHANGED)  # 同一個額度印了兩行：不猜哪一行才對
         windows.append(Window(wid, label, pct, resets_at, hidden=hidden))
 
     if not any(w.id in ("five_hour", "weekly") for w in windows):

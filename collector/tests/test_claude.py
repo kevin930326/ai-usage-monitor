@@ -57,6 +57,31 @@ class ClaudeParseTest(unittest.TestCase):
             ("weekly_opus", "每週 Opus", 97.0, None, True),
         ])
 
+    def test_model_scope_becomes_a_safe_window_id(self):
+        # id 只含 [a-z0-9_]，relay 與 App 都好處理；顯示名稱保留原文；all models 不分大小寫
+        cases = {
+            "Opus": ("weekly_opus", "每週 Opus", True),
+            "Sonnet only": ("weekly_sonnet", "每週 Sonnet", True),
+            "Sonnet 4.5 only": ("weekly_sonnet_4_5", "每週 Sonnet 4.5", True),
+            "Claude 3.5 Sonnet": ("weekly_claude_3_5_sonnet", "每週 Claude 3.5 Sonnet", True),
+            "All models": ("weekly", "每週", False),
+        }
+        for scope, expected in cases.items():
+            with self.subTest(scope):
+                self.assertEqual(claude.window_for(scope), expected)
+
+    def test_strange_or_long_scope_is_a_format_change(self):
+        # 其他字元、空字串或超過 32 字：不讓它變成快照裡的 id／label（relay 會因長度拒絕整份快照）
+        for scope in ("模型 A", "Opus; rm -rf", "x" * 33, " only", ""):
+            with self.subTest(scope), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse(f"Current session: 1% used\nCurrent week ({scope}): 2% used\n", None, RECORDED_AT)
+
+    def test_duplicate_window_is_a_format_change(self):
+        for text in ("Current session: 1% used\nCurrent session: 2% used\n",
+                     "Current session: 1% used\nCurrent week (Opus): 2% used\nCurrent week (Opus only): 3% used\n"):
+            with self.subTest(text), self.assertRaisesRegex(ProviderError, "格式已改變"):
+                claude.parse(text, None, RECORDED_AT)
+
     def test_ansi_colour_codes_are_ignored(self):
         # 整行被色碼包住時不能把那個額度悄悄略過；色碼只包數字時也要解得出來
         plain = claude.parse(fixture("usage-max.txt"), None, RECORDED_AT)
@@ -258,6 +283,11 @@ class ResolveClaudePathTest(unittest.TestCase):
                 self.assertEqual(claude.resolve_claude_path(config), str(exe))
             with mock.patch.dict(os.environ, {"PATH": "/nonexistent"}):
                 self.assertIsNone(claude.resolve_claude_path(Path(d) / "missing.json"))
+                # claude_path 不是字串：當成沒設定，不丟 TypeError
+                for bad in ([str(exe)], {"path": str(exe)}, 3, True):
+                    config.write_text(json.dumps({"claude_path": bad}))
+                    with self.subTest(bad=bad):
+                        self.assertIsNone(claude.resolve_claude_path(config))
 
 
 if __name__ == "__main__":
