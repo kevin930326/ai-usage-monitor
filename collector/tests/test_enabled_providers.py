@@ -106,25 +106,32 @@ class CollectEnabledTest(unittest.TestCase):
 
 
 class DetectProvidersTest(unittest.TestCase):
-    """install-launchd.sh 用的偵測：Keychain 有 Claude Code-credentials、有 ~/.codex/auth.json。"""
+    """install-launchd.sh 用的偵測：`claude auth status` 回報已登入、有 ~/.codex/auth.json。"""
 
-    def detect(self, claude: bool, codex: bool) -> list[str]:
+    def detect(self, claude: bool | None, codex: bool) -> list[str]:
+        """claude：True 已登入、False 未登入、None 找不到 claude。"""
         with tempfile.TemporaryDirectory() as d:
             home, bin_dir = Path(d) / "home", Path(d) / "bin"
             home.mkdir()
             bin_dir.mkdir()
-            # 假的 security：有 Claude 登入時回傳 0，並確認沒有要求讀出密碼（-w）
-            fake = bin_dir / "security"
+            # 假的 security：被呼叫就失敗，確認偵測不碰 Claude Code 的 Keychain 項目
+            security = bin_dir / "security"
+            security.write_text("#!/bin/bash\nexit 99\n")
+            security.chmod(security.stat().st_mode | stat.S_IEXEC)
+            # 假的 claude：只認得 auth status，登入時結束碼 0（與真的 Claude Code 相同）
+            fake = bin_dir / "claude"
             fake.write_text("#!/bin/bash\n"
-                            'for a in "$@"; do [ "$a" = -w ] && exit 99; done\n'
-                            f"exit {0 if claude else 44}\n")
+                            '[ "$1 $2" = "auth status" ] || exit 98\n'
+                            'echo \'{"loggedIn": true, "email": "person@example.com"}\'\n'
+                            f"exit {0 if claude else 1}\n")
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
             if codex:
                 (home / ".codex").mkdir()
                 (home / ".codex" / "auth.json").write_text("{}")
             env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin"}
-            result = subprocess.run([str(SCRIPTS / "detect-providers.sh")], env=env,
-                                    capture_output=True, text=True, check=True)
+            args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake)]
+            result = subprocess.run(args, env=env, capture_output=True, text=True, check=True)
+        self.assertNotIn("@", result.stdout)
         return result.stdout.split()
 
     def test_detection(self):
@@ -132,6 +139,7 @@ class DetectProvidersTest(unittest.TestCase):
         self.assertEqual(self.detect(True, False), ["claude"])
         self.assertEqual(self.detect(False, True), ["codex"])
         self.assertEqual(self.detect(False, False), [])
+        self.assertEqual(self.detect(None, True), ["codex"])
 
 
 class UpdateConfigJsonTest(unittest.TestCase):

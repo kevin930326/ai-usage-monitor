@@ -25,16 +25,9 @@ class SchemaTest(unittest.TestCase):
 
 class ClaudeScopedLimitsTest(unittest.TestCase):
     def test_per_model_weekly_limits_are_hidden(self):
-        body = {
-            "five_hour": {"utilization": 21.0, "resets_at": "2026-10-20T19:00:00+00:00"},
-            "limits": [
-                {"kind": "session", "percent": 21},
-                {"kind": "weekly_scoped", "percent": 5, "resets_at": "2026-10-20T23:00:00+00:00",
-                 "scope": {"model": {"display_name": "Fable"}}},
-                {"kind": "weekly_scoped", "percent": 1, "scope": None},
-            ],
-        }
-        windows = claude.parse(body, "Max").to_dict()["windows"]
+        text = ("Current session: 21% used · resets Oct 21 at 3am (UTC)\n"
+                "Current week (Fable): 5% used · resets Oct 20 at 11pm (UTC)\n")
+        windows = claude.parse(text, "Max").to_dict()["windows"]
         self.assertEqual([(w["id"], w["hidden"]) for w in windows],
                          [("five_hour", False), ("weekly_fable", True)])
         self.assertEqual(windows[1]["label"], "每週 Fable")

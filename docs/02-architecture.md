@@ -20,10 +20,10 @@
 ### 2.1 Mac 收集器 (`collector/`)
 - Python 3，僅使用標準函式庫，降低安裝門檻。
 - 每家服務一個 provider，介面一致：輸入無，輸出 `ProviderUsage` 或錯誤。
-- 每次執行都重新讀取 token，**不自行刷新 token**，避免與 Claude Code / Codex CLI 互搶。
-- Claude token 已過期或距離 `expiresAt` 不到 5 分鐘時，委派 Claude Code 續期：在暫存資料夾執行一次 `claude -p /usage --safe-mode --no-session-persistence`（不呼叫模型、不消耗額度），再重新讀取 Keychain。最多每 30 分鐘嘗試一次；續期失敗超過 30 分鐘發一次 macOS 通知。claude 的完整路徑由安裝腳本寫進 `config.json`。理由與風險見 [ADR-0005](adr/0005-delegate-claude-token-refresh.md)。
-- 只收集啟用的服務：`config.json` 的 `enabled_providers`（例如 `["claude"]`）由安裝腳本依 Mac 上的登入資訊偵測後寫入（Keychain 有 `Claude Code-credentials` → claude；有 `~/.codex/auth.json` → codex）。未啟用的服務不查詢、不輸出、不寫日誌；已啟用但讀不到登入資訊才是錯誤（該服務的 `error`）。沒有設定檔或沒有這個欄位時全部啟用，舊安裝不受影響。
-- Codex 的 access token 有效期 10 天，Codex CLI 約每 8 天主動續期，目前不需要委派（同見 ADR-0005）。
+- Claude：執行未修改的 Claude Code `claude -p /usage --safe-mode --no-session-persistence --output-format json`（暫存資料夾、stdin 關閉、30 秒逾時；本機指令，不呼叫模型、不消耗額度），解析印出的額度與重置時間；方案名稱取自 `claude auth status --json` 的 `subscriptionType`。**收集器不讀取 Claude 的 token**、不直接呼叫 Anthropic 的端點，token 由 Claude Code 自己續期。輸出格式認不得時回報錯誤，不猜測。claude 的完整路徑由安裝腳本寫進 `config.json`。理由與風險見 [ADR-0006](adr/0006-claude-usage-via-cli.md)（取代 ADR-0005 的委派續期）。
+- Codex：每次執行都重新讀取 `~/.codex/auth.json` 的 token，**不自行刷新 token**，避免與 Codex CLI 互搶。
+- 只收集啟用的服務：`config.json` 的 `enabled_providers`（例如 `["claude"]`）由安裝腳本依 Mac 上的登入資訊偵測後寫入（`claude auth status` 回報已登入 → claude；有 `~/.codex/auth.json` → codex）。未啟用的服務不查詢、不輸出、不寫日誌；已啟用但讀不到登入資訊才是錯誤（該服務的 `error`）。沒有設定檔或沒有這個欄位時全部啟用，舊安裝不受影響。
+- Codex 的 access token 有效期 10 天，Codex CLI 約每 8 天主動續期，目前不需要委派（見 ADR-0005）。Codex CLI 也有不消耗額度的本機介面（`codex app-server` 的 `account/rateLimits/read`），調查結果見 ADR-0006 附錄。
 - 由 launchd 每 5 分鐘觸發。
 - 除了上傳中繼 API，也寫入本機 `~/Library/Application Support/AIUsageMonitor/usage.json`（先寫暫存檔再改名，避免讀到寫一半的檔案），供 Mac 選單列 App 讀取（FR-20）。
 

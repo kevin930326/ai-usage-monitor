@@ -19,5 +19,3 @@ def resolve_home(environ: Mapping[str, str] = os.environ) -> Path:
 APP_SUPPORT_DIR = resolve_home()
 LOCAL_SNAPSHOT_PATH = APP_SUPPORT_DIR / "usage.json"
 CONFIG_PATH = APP_SUPPORT_DIR / "config.json"
-# 委派 Claude Code 續期的節流與通知狀態（ADR-0005）
-CLAUDE_REFRESH_STATE_PATH = APP_SUPPORT_DIR / "claude-refresh.json"
