@@ -44,6 +44,22 @@ scripts/verify-all.sh              # 全部測試 + iOS／Mac／手錶的 Debug 
 SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 測試
 ```
 
+## 安裝概要
+
+只用 Claude 或只用 Codex 都可以，不必兩個都有。
+
+1. 在 Mac 登入要監看的服務（至少一個）：Claude 在終端機執行 `claude` 並 `/login`；Codex 執行 `codex login`。
+2. 部署中繼 API：見 [relay/README.md](relay/README.md)。
+3. 設定收集器並安裝排程：
+   ```bash
+   collector/scripts/set-relay.sh https://ai-usage-relay.<你的帳號>.workers.dev
+   collector/scripts/install-launchd.sh
+   ```
+   安裝腳本會偵測這台 Mac 登入過哪些服務，只收集那些服務，並印出結果，例如「Claude 用量：啟用」「Codex 用量：未啟用（沒有登入過 Codex CLI）」。沒用的服務不會出現在 App 上，也不會被當成錯誤。之後登入了另一個服務，重新執行 `install-launchd.sh` 即可加入。
+4. 安裝 iPhone App，在設定中填入中繼網址與讀取密鑰：見 [apple/iOSApp/README.md](apple/iOSApp/README.md)。
+
+細節見 [collector/README.md](collector/README.md)。
+
 ## 隱私與安全
 
 原則：Claude Code 與 Codex 的 OAuth token **只在 Mac 上使用、不會上傳**（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。

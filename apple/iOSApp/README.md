@@ -158,6 +158,9 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 | `reset` | Claude 5 小時額度的重置時間已過 |
 | `used` | 顯示已用 % |
 | `codex` | Codex 最吃緊（動態島顯示 Codex 圖示） |
+| `claude-only` | 只用 Claude（收集器沒有啟用 Codex，`providers` 只有 `claude`） |
+| `codex-only` | 只用 Codex |
+| `none` | 收集器沒有啟用任何服務（顯示「沒有啟用任何服務」提示） |
 
 另外設定 `AUM_DEMO_ACTION=restart` 時，開卡一秒後會再執行一次捷徑動作，並把前後的卡片 ID 寫到 `Documents/restart-log.json`。
 
@@ -165,6 +168,6 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
 ```
 
-示範情境也會寫進 App Group，主畫面／鎖定畫面小工具同樣只顯示假資料（以非示範模式重新啟動 App 即恢復）。截圖見 [`docs/screenshots/ios-widget/`](../../docs/screenshots/ios-widget/)。
+示範情境也會寫進 App Group，主畫面／鎖定畫面小工具同樣只顯示假資料（以非示範模式重新啟動 App 即恢復）。截圖見 [`docs/screenshots/ios-widget/`](../../docs/screenshots/ios-widget/)；單一服務與沒有服務的情境見 [`docs/screenshots/single-provider/`](../../docs/screenshots/single-provider/)。
 
 情境存在 Live Activity 的屬性中，所以按卡片上的「更新」也會使用同一份假資料。每次開始、更新、結束卡片都會寫入 App 容器的 `Documents/activity-log.json`（只有 Debug 版本）。

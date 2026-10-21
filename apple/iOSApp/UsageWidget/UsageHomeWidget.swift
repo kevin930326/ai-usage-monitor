@@ -185,6 +185,8 @@ private struct SmallUsageView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            } else if state.providers.isEmpty {
+                NoProvidersNotice()
             } else {
                 Label("沒有資料", systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -200,16 +202,22 @@ private struct SmallUsageView: View {
 }
 
 /// 大：最吃緊的一項 + 每個服務的所有可見額度（與 App 主畫面相同的 `UsageWindowRow`）。
+/// 只用一個服務時（收集器沒有啟用另一個）放大最吃緊的一項、額度改單欄，不留下半部空白。
 private struct LargeUsageView: View {
     let state: UsageActivityState
     let now: Date
 
     private var stale: Bool { state.isStale(at: now) }
+    private var single: Bool { state.providers.count == 1 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: single ? 16 : 12) {
             if let tightest = state.tightest(at: now) {
-                TightestHeader(item: tightest, mode: state.mode, stale: stale, now: now)
+                if single {
+                    LargeTightestHeader(item: tightest, mode: state.mode, stale: stale, now: now)
+                } else {
+                    TightestHeader(item: tightest, mode: state.mode, stale: stale, now: now)
+                }
             }
             ForEach(state.providers) { provider in
                 VStack(alignment: .leading, spacing: 6) {
@@ -234,9 +242,11 @@ private struct LargeUsageView: View {
                             .foregroundStyle(UsageColors.notice)
                             .lineLimit(2)
                     } else {
-                        // 額度多於兩個時換行，不會把頁尾擠出畫面
-                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible())],
-                                  alignment: .leading, spacing: 8) {
+                        // 兩欄，額度多於兩個時換行，不會把頁尾擠出畫面；只有一個服務且額度不多時改單欄
+                        let oneColumn = single && provider.windows.count <= 3
+                        LazyVGrid(columns: oneColumn ? [GridItem(.flexible())]
+                                                     : [GridItem(.flexible(), spacing: 14), GridItem(.flexible())],
+                                  alignment: .leading, spacing: oneColumn ? 14 : 8) {
                             ForEach(provider.windows) { window in
                                 UsageWindowRow(window: window, provider: provider.key, display: state.mode,
                                                dimmed: stale, now: now)
@@ -245,6 +255,11 @@ private struct LargeUsageView: View {
                     }
                 }
             }
+            if state.providers.isEmpty {
+                // 置中，不要只佔左上角
+                Spacer(minLength: 0)
+                NoProvidersNotice()
+            }
             Spacer(minLength: 0)
             ActivityFooter(updatedAt: state.updatedAt, stale: stale) {
                 RefreshButton(intent: ReloadUsageWidgetIntent())
@@ -252,5 +267,31 @@ private struct LargeUsageView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(16)
+    }
+}
+
+/// 大尺寸只有一個服務時的最吃緊一項：大字百分比與重置倒數。
+private struct LargeTightestHeader: View {
+    let item: ProviderWindow
+    let mode: UsageDisplayMode
+    let stale: Bool
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("\(item.window.label) · \(mode.label) · 最吃緊")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
+                    .font(.system(size: 52, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(stale ? .secondary : .primary)
+                Spacer()
+                ResetLabel(window: item.window, now: now)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 }

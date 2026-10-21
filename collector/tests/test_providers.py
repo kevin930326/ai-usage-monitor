@@ -62,7 +62,7 @@ class CollectTest(unittest.TestCase):
         bad = mock.Mock(fetch=mock.Mock(side_effect=ProviderError("尚未登入")))
         boom = mock.Mock(fetch=mock.Mock(side_effect=KeyError("secret-token-value")))
         with mock.patch.dict(cli.PROVIDERS, {"a": ok, "b": bad, "c": boom}, clear=True):
-            snap = cli.collect()
+            snap = cli.collect(["a", "b", "c"])
         self.assertIsNone(snap["providers"]["a"]["error"])
         self.assertEqual(snap["providers"]["b"]["error"], "尚未登入")
         # 未預期例外只顯示類別名稱，不會把例外內容（可能含 token）帶出去

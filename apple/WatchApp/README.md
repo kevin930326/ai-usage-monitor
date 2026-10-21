@@ -28,7 +28,7 @@ Debug 版本支援：
 
 | 變數 | 作用 |
 |---|---|
-| `AUM_DEMO=<情境>` | 使用假資料、不連網，情境與 iOS 相同（`normal`、`stale`、`error`、`reset`、`used`、`codex`） |
+| `AUM_DEMO=<情境>` | 使用假資料、不連網，情境與 iOS 相同（`normal`、`stale`、`error`、`reset`、`used`、`codex`、`claude-only`、`codex-only`、`none`） |
 | `AUM_RENDER=1` | 把三種複雜功能以 ImageRenderer 輸出到 App 容器的 `Documents/complication-*.png`；圓形另有淺色背景（`-circular-light`）與模擬單色／主題色錶面（`-circular-tinted`）兩張 |
 
 ```bash

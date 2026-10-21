@@ -9,12 +9,13 @@ from datetime import datetime, timezone
 from . import local_store, relay
 from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
-from .providers import PROVIDERS
+from .providers import PROVIDERS, enabled_providers
 
 
-def collect() -> dict:
+def collect(enabled: list[str] | None = None) -> dict:
     providers = {}
-    for name, module in PROVIDERS.items():
+    for name in enabled_providers() if enabled is None else enabled:
+        module = PROVIDERS[name]
         try:
             usage = module.fetch()
         except ProviderError as e:
@@ -38,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     snapshot = collect()
+    if not snapshot["providers"]:
+        log("config.json 的 enabled_providers 沒有啟用任何服務，登入 Claude Code 或 Codex CLI 後重新執行 scripts/install-launchd.sh")
     ok = any(p["error"] is None for p in snapshot["providers"].values())
     for name, p in snapshot["providers"].items():
         if p["error"]:

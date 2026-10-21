@@ -114,6 +114,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
   來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`）。
 - **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
   來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。
+- **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大最吃緊的一項、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
+  來源：`collector/usage_collector/providers/__init__.py`（`enabled_providers`）、`apple/UsageKit/Sources/UsageKitUI/NoProvidersNotice.swift`、`apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`LargeUsageView`）。
 - **單一服務失敗只影響該服務**（FR-12）：該服務顯示錯誤訊息，其他服務照常顯示；最吃緊的一項從正常的服務中挑。Live Activity 的錯誤訊息截短到 60 字以控制大小。
   來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/Shared/UsageViews.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
 - **一律顯示最後更新時間**；過期時改為「資料已過期 · HH:mm 更新」（門檻見第 4 節）。錶面空間不足的複雜功能以灰色表示過期。
@@ -143,7 +145,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
    ```bash
    SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
    ```
-   回到主畫面，卡片會縮成動態島精簡版。情境：`normal`（Claude 最吃緊）、`codex`（Codex 最吃緊）、`stale`、`error`、`reset`、`used`。
+   回到主畫面，卡片會縮成動態島精簡版。情境：`normal`（Claude 最吃緊）、`codex`（Codex 最吃緊）、`stale`、`error`、`reset`、`used`，以及只有一個服務的 `claude-only`、`codex-only` 與沒有服務的 `none`（見第 6 節「只有一個服務」）。
    - `xcrun simctl io screenshot` **拍不到動態島內容**，要用模擬器控制工具的截圖。
    - 深色、淺色各拍一次：`xcrun simctl ui booted appearance dark|light`。
    - **主畫面小工具**：示範情境會經由 App Group 傳給小工具。回到主畫面長按「AI 用量」圖示選尺寸（或編輯 →「加入小工具」），用 `xcrun simctl io booted screenshot` 截圖（主畫面拍得到）；長按小工具可直接換尺寸。

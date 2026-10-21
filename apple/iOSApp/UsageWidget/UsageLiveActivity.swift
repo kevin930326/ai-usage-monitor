@@ -47,6 +47,9 @@ enum UsageActivityConfiguration {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 6) {
+                        if state.providers.isEmpty {
+                            NoProvidersNotice()
+                        }
                         ForEach(state.providers) { provider in
                             ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: .now)
                         }
