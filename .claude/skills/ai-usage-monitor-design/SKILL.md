@@ -51,6 +51,25 @@ L12.00 23.00 L10.35 15.97 L6.20 17.80 L8.03 13.65 L1.00 12.00 L8.03 10.35 L6.20 
 - 目前尺寸：動態島精簡版 18pt、圓形複雜功能 13pt。縮小前要重新驗證（見第 8 節）。
 - 新增服務時要設計新的原創圖示並寫進本節；`ProviderIcon` 對未知服務暫時畫圓形。
 
+### App 圖示
+
+兩個服務圖示沿對角線分開。座標用 100×100 畫布；輸出 1024×1024，**不透明、不加圓角**（系統自己裁圓角）。
+
+| | 一般 | 深色（iOS 18） | 主題色（iOS 18） |
+|---|---|---|---|
+| 背景 | 青綠 `#5CC2B1`；左上三角 (0,0)-(100,0)-(0,100) 珊瑚橘 `#D97757` | `#000` | `#000` |
+| 分隔線 (100,0)→(0,100)，寬 2.5 | 白色 | `#2A2A2C` | `#3A3A3A` |
+| 八芒星 `ClaudeIconShape`，translate(8,8) scale(1.95) | 白色 | `#D97757` | `#E6E6E6` |
+| 六瓣雲 `CodexIconShape`，translate(48,48) scale(1.85) | 白色 | `#5CC2B1` | `#A8A8A8` |
+| 陰影（兩個圖示） | 向下 1.5、模糊半徑 1.6、黑色 28% | 無 | 無 |
+
+- 雲朵的 `>_` 鏤空透出底下的背景（一般為青綠，深色與主題色為黑色）。
+- Mac 選單列 App 用一般外觀：1024 畫布中置中 824×824、連續圓角半徑 22.5%（約 185），加向下 10、模糊 10、黑色 30% 的陰影，四周透明；輸出 16～1024 各尺寸。
+- 手錶 App 尚未加圖示。
+- **不要手改 PNG**：改 `scripts/render-app-icon.swift` 後執行 `scripts/render-app-icon.sh`，它直接用 UsageKitUI 的兩個 Shape，圖示會和 App 內一致。
+
+來源：`scripts/render-app-icon.swift`、`apple/iOSApp/AIUsageMonitor/Assets.xcassets/AppIcon.appiconset`、`apple/MacMenuBar/AIUsageMenuBar/Assets.xcassets/AppIcon.appiconset`、兩個 `project.yml` 的 `ASSETCATALOG_COMPILER_APPICON_NAME`。
+
 ## 3. 不收錄官方 logo
 
 repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商標圖或其描摹，包括 SVG、PNG、SF Symbols 以外的圖片資源。上面兩個圖示是原創造型，不要改成接近官方 logo 的形狀。
