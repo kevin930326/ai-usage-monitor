@@ -63,3 +63,36 @@ jobs:
       - if: steps.check.outputs.exists == 'true'
         working-directory: relay
         run: npm ci && npm test
+
+  apple:
+    name: Apple apps (${{ matrix.project }})
+    # 編譯三個 App 與它們的擴充，抓 SwiftUI、Info.plist、XcodeGen 與 target membership 錯誤（C-11）。
+    # macOS runner 經常排不到或被取消，所以這個 job 不設為必要檢查；Release 建置與
+    # 「Release 不含 Debug 字串」的檢查仍以本機 scripts/verify-all.sh 為準
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: iOSApp, xcodeproj: AIUsageMonitor, destination: "generic/platform=iOS Simulator", appex: "Debug-iphonesimulator/AIUsageMonitor.app/PlugIns/UsageWidget.appex" }
+          - { project: MacMenuBar, xcodeproj: AIUsageMenuBar, destination: "platform=macOS", appex: "Debug/AIUsageMenuBar.app/Contents/PlugIns/UsageDesktopWidget.appex" }
+          - { project: WatchApp, xcodeproj: AIUsageWatch, destination: "generic/platform=watchOS Simulator", appex: "Debug-watchsimulator/AIUsageWatch.app/PlugIns/UsageComplications.appex" }
+    steps:
+      - uses: actions/checkout@v4
+      # 用 runner 上最新的正式版 Xcode（略過 beta），部署目標需要 iOS 18／watchOS 11 SDK 以上
+      - name: Select Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - run: brew install xcodegen
+      - name: Build (Debug)
+        working-directory: apple/${{ matrix.project }}
+        run: |
+          xcodegen generate --quiet
+          xcodebuild -project ${{ matrix.xcodeproj }}.xcodeproj -scheme ${{ matrix.xcodeproj }} \
+            -configuration Debug -destination '${{ matrix.destination }}' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build
+      - name: Extension is embedded
+        run: test -d "$RUNNER_TEMP/dd/Build/Products/${{ matrix.appex }}"
