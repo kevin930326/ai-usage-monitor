@@ -105,11 +105,33 @@ class CollectEnabledTest(unittest.TestCase):
                 self.assertEqual(list(cli.collect()["providers"]), ["codex"])
 
 
-class DetectProvidersTest(unittest.TestCase):
-    """install-launchd.sh 用的偵測：`claude auth status` 回報已登入、有 ~/.codex/auth.json。"""
+# 假的 codex login status 的輸出與結束碼（與 Codex CLI 0.163 相同；訊息印在 stderr）
+CODEX_STATUS = {
+    "chatgpt": ("Logged in using ChatGPT", 0),
+    "apikey": ("Logged in using an API key - sk-proj-***ABCD", 0),
+    "logged-out": ("Not logged in", 1),
+    "weird": ("Error: person@example.com something went wrong", 2),
+}
 
-    def detect(self, claude: bool | None, codex: bool) -> list[str]:
-        """claude：True 已登入、False 未登入、None 找不到 claude。"""
+
+def write_fake_codex(bin_dir: Path, state: str) -> Path:
+    """假的 codex：只認得 login status，被要求其他事（例如讀 auth.json 的指令）就失敗。"""
+    message, code = CODEX_STATUS[state]
+    fake = bin_dir / "codex"
+    fake.write_text("#!/bin/bash\n"
+                    '[ "$1 $2" = "login status" ] || exit 98\n'
+                    f"echo '{message}' >&2\n"
+                    f"exit {code}\n")
+    fake.chmod(0o755)
+    return fake
+
+
+class DetectProvidersTest(unittest.TestCase):
+    """install-launchd.sh 用的偵測：問 `claude auth status` 與 `codex login status`，不讀登入檔。"""
+
+    def detect(self, claude: bool | None, codex: str | None, codex_dir: bool = False) -> list[str]:
+        """claude：True 已登入、False 未登入、None 找不到 claude。
+        codex：CODEX_STATUS 的狀態，None 找不到 codex；codex_dir：~/.codex 是否存在。"""
         with tempfile.TemporaryDirectory() as d:
             home, bin_dir = Path(d) / "home", Path(d) / "bin"
             home.mkdir()
@@ -125,31 +147,46 @@ class DetectProvidersTest(unittest.TestCase):
                             'echo \'{"loggedIn": true, "email": "person@example.com"}\'\n'
                             f"exit {0 if claude else 1}\n")
             fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-            if codex:
+            fake_codex = write_fake_codex(bin_dir, codex) if codex else None
+            if codex_dir:
                 (home / ".codex").mkdir()
-                (home / ".codex" / "auth.json").write_text("{}")
+                # 登入檔不能被讀：權限設成 000，cat 也讀不到
+                auth = home / ".codex" / "auth.json"
+                auth.write_text('{"tokens": {"access_token": "secret"}}')
+                auth.chmod(0)
             env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin"}
-            args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake)]
+            env.pop("CODEX_HOME", None)
+            args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake),
+                    str(fake_codex) if fake_codex else ""]
             result = subprocess.run(args, env=env, capture_output=True, text=True, check=True)
         self.assertNotIn("@", result.stdout)
+        self.assertNotIn("secret", result.stdout)
         return result.stdout.split()
 
-    def test_detection(self):
-        self.assertEqual(self.detect(True, True), ["claude", "codex"])
-        self.assertEqual(self.detect(True, False), ["claude"])
-        self.assertEqual(self.detect(False, True), ["codex"])
-        self.assertEqual(self.detect(False, False), [])
-        self.assertEqual(self.detect(None, True), ["codex"])
+    def test_claude_detection(self):
+        self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
+        self.assertEqual(self.detect(False, "chatgpt"), ["codex"])
+        self.assertEqual(self.detect(None, "chatgpt"), ["?claude", "codex"])
+
+    def test_codex_asks_codex_itself(self):
+        self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
+        self.assertEqual(self.detect(True, "apikey", codex_dir=True), ["claude"])  # 沒有訂閱額度
+        self.assertEqual(self.detect(True, "logged-out", codex_dir=True), ["claude"])  # 有登入檔也不算
+        self.assertEqual(self.detect(True, "weird"), ["claude", "?codex"])  # 認不得：不知道
+
+    def test_missing_codex(self):
+        self.assertEqual(self.detect(True, None), ["claude"])  # 沒用過 Codex
+        self.assertEqual(self.detect(True, None, codex_dir=True), ["claude", "?codex"])  # 用過但找不到
 
 
 class InstallLaunchdTest(unittest.TestCase):
-    """install-launchd.sh 寫 enabled_providers 的規則：找不到 claude 指令時 Claude 的狀態是「不知道」，
-    不能把原本啟用的 Claude 關掉。launchctl／plutil 用假的取代，不會真的安裝。
+    """install-launchd.sh 寫 enabled_providers 的規則：任一服務的登入狀態是「不知道」（找不到指令、
+    結果認不得）時不能把原本啟用的服務關掉。launchctl／plutil 用假的取代，不會真的安裝。
     注意：腳本也會找 /opt/homebrew/bin/claude 與 /usr/local/bin/claude，這台機器若裝在那裡，
-    「找不到 claude」的案例會變成找得到。"""
+    「找不到 claude」的案例會變成找得到；codex 的候選位置以 AUM_CODEX_FALLBACKS 清空。"""
 
-    def install(self, *, claude_found: bool, claude_logged_in: bool = True, codex: bool,
-                existing: dict | None = None) -> tuple[dict, str]:
+    def install(self, *, claude_found: bool, claude_logged_in: bool = True, codex: str | None,
+                codex_dir: bool = False, existing: dict | None = None) -> tuple[dict, str]:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             home, bin_dir, config_dir = root / "home", root / "bin", root / "config"
@@ -168,12 +205,13 @@ class InstallLaunchdTest(unittest.TestCase):
                                 f"exit {0 if claude_logged_in else 1}\n")
                 fake.chmod(0o755)
             if codex:
+                write_fake_codex(bin_dir, codex)
+            if codex_dir:
                 (home / ".codex").mkdir()
-                (home / ".codex" / "auth.json").write_text("{}")
             if existing is not None:
                 (config_dir / "config.json").write_text(json.dumps(existing))
             env = {"HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AI_USAGE_MONITOR_HOME": str(config_dir),
-                   "LANG": "en_US.UTF-8"}
+                   "LANG": "en_US.UTF-8", "AUM_CODEX_FALLBACKS": ""}
             result = subprocess.run([str(SCRIPTS / "install-launchd.sh")], env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             config_path = config_dir / "config.json"
@@ -182,28 +220,59 @@ class InstallLaunchdTest(unittest.TestCase):
         return config, result.stdout
 
     def test_detected_services_are_written(self):
-        config, out = self.install(claude_found=True, codex=True)
+        config, out = self.install(claude_found=True, codex="chatgpt")
         self.assertEqual(config["enabled_providers"], ["claude", "codex"])
         self.assertTrue(config["claude_path"].endswith("/bin/claude"))
+        self.assertTrue(config["codex_path"].endswith("/bin/codex"))
         self.assertIn("Claude 用量：啟用", out)
-        self.assertIn("Codex 用量：啟用", out)
+        self.assertIn("Codex 用量：啟用（Codex CLI 已用 ChatGPT 登入）", out)
+
+    def test_paths_are_merged_into_existing_config(self):
+        existing = {"relay_url": "https://relay.example", "iphone_udid": "x"}
+        config, _ = self.install(claude_found=True, codex="chatgpt", existing=existing)
+        self.assertEqual(config["relay_url"], "https://relay.example")
+        self.assertEqual(config["iphone_udid"], "x")
+        self.assertIn("codex_path", config)
 
     def test_logged_out_claude_is_disabled(self):
-        config, out = self.install(claude_found=True, claude_logged_in=False, codex=True)
+        config, out = self.install(claude_found=True, claude_logged_in=False, codex="chatgpt")
         self.assertEqual(config["enabled_providers"], ["codex"])
         self.assertIn("Claude 用量：未啟用（Claude Code 沒有登入）", out)
+
+    def test_logged_out_codex_is_disabled(self):
+        for state in ("logged-out", "apikey"):
+            with self.subTest(state=state):
+                config, out = self.install(claude_found=True, codex=state, codex_dir=True)
+                self.assertEqual(config["enabled_providers"], ["claude"])
+                self.assertIn("Codex 用量：未啟用", out)
+
+    def test_never_used_codex_is_disabled(self):
+        config, out = self.install(claude_found=True, codex=None)
+        self.assertEqual(config["enabled_providers"], ["claude"])
+        self.assertNotIn("codex_path", config)
 
     def test_missing_claude_binary_keeps_existing_providers(self):
         # 重新執行安裝時 shell 找不到 claude：既有的 Claude 啟用不能被悄悄關掉
         existing = {"relay_url": "https://relay.example", "enabled_providers": ["claude", "codex"]}
-        config, out = self.install(claude_found=False, codex=True, existing=existing)
-        self.assertEqual(config, existing)
+        config, out = self.install(claude_found=False, codex="chatgpt", existing=existing)
+        self.assertEqual({k: v for k, v in config.items() if k != "codex_path"}, existing)
         self.assertIn("找不到 claude 指令", out)
         self.assertIn("Claude 用量：不確定", out)
         self.assertIn("Codex 用量：啟用", out)
 
+    def test_unknown_codex_keeps_existing_providers(self):
+        existing = {"relay_url": "https://relay.example", "enabled_providers": ["claude", "codex"]}
+        for kwargs, message in (({"codex": None, "codex_dir": True}, "找不到 codex 指令"),
+                                ({"codex": "weird"}, "無法判斷 Codex CLI 的登入狀態")):
+            with self.subTest(**kwargs):
+                config, out = self.install(claude_found=True, existing=existing, **kwargs)
+                self.assertEqual(config["enabled_providers"], ["claude", "codex"])
+                self.assertEqual(config["relay_url"], "https://relay.example")
+                self.assertIn(message, out)
+                self.assertIn("Codex 用量：不確定", out)
+
     def test_missing_claude_binary_leaves_defaults_alone(self):
-        config, out = self.install(claude_found=False, codex=True)
+        config, out = self.install(claude_found=False, codex="chatgpt")
         self.assertNotIn("enabled_providers", config)
         self.assertNotIn("claude_path", config)
         self.assertIn("找不到 claude 指令", out)
