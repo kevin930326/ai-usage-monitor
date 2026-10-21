@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 由 scripts/install-reinstall-launchd.sh 填入 __PLACEHOLDER__ 後安裝到 ~/Library/LaunchAgents -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.github.kevin930326.ai-usage-monitor.reinstall</string>
+
+    <!-- 執行 reinstall-ios.sh --if-due（要不要安裝由腳本決定，不需要時不到 1 秒就結束）。
+         經由 python3 啟動：repo 在 ~/Documents，launchd 直接執行 /bin/bash 會被隱私保護拒絕，
+         與收集器使用同一個 python3，沿用它已取得的存取權限 -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>__REPO__/scripts/reinstall_ios_helper.py</string>
+        <string>scheduled</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <!-- launchd 的 PATH 只有系統目錄，要加上 xcodegen 所在的資料夾 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <!-- launchd 預設沒有語系，bash 會把變數後面緊接的中文字當成變數名稱的一部分 -->
+        <key>LANG</key>
+        <string>en_US.UTF-8</string>
+    </dict>
+
+    <!-- 每 20 分鐘檢查一次：滿 6 天後在捷徑自動化前的時段安裝，滿 6.5 天不挑時間，
+         失敗時下一次符合條件的檢查就會重試，直到成功。Mac 睡眠時錯過的檢查只會在醒來後補一次 -->
+    <key>StartInterval</key>
+    <integer>1200</integer>
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/reinstall-launchd.log</string>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/reinstall-launchd.log</string>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

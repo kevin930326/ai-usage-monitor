@@ -51,7 +51,9 @@ final class WatchModel {
 
     /// iPhone 傳來的中繼設定（FR-30）。App 自己只把密鑰存在 Keychain；
     /// WatchConnectivity 另會保留最後一份 application context（系統行為）。
-    private func apply(url: String, token: String) {
+    private func apply(url rawURL: String, token rawToken: String) {
+        // 較舊的 iPhone App 可能送來帶換行的值，存之前再清一次
+        let url = RelayInput.clean(rawURL), token = RelayInput.clean(rawToken)
         guard url != relayURL || token != readToken else { return }
         relayURL = url
         readToken = token

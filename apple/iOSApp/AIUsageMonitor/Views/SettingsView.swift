@@ -11,6 +11,10 @@ struct SettingsView: View {
     @State private var testResult: TestResult?
     @State private var testing = false
 
+    // 貼上的值常帶前後空白或換行，判斷、測試與儲存都用去除後的值
+    private var cleanURL: String { RelayInput.clean(url) }
+    private var cleanToken: String { RelayInput.clean(token) }
+
     enum TestResult {
         case success
         case failure(String)
@@ -54,7 +58,7 @@ struct SettingsView: View {
                             if testing { ProgressView() }
                         }
                     }
-                    .disabled(url.isEmpty || token.isEmpty || testing)
+                    .disabled(cleanURL.isEmpty || cleanToken.isEmpty || testing)
 
                     switch testResult {
                     case .success:
@@ -74,7 +78,7 @@ struct SettingsView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("儲存") { save() }
-                        .disabled(url.isEmpty || token.isEmpty)
+                        .disabled(cleanURL.isEmpty || cleanToken.isEmpty)
                 }
             }
             .onAppear {
@@ -87,7 +91,7 @@ struct SettingsView: View {
     private func test() async {
         testing = true
         defer { testing = false }
-        if let error = await model.testConnection(url: url, token: token) {
+        if let error = await model.testConnection(url: cleanURL, token: cleanToken) {
             testResult = .failure(error)
         } else {
             testResult = .success
@@ -95,8 +99,7 @@ struct SettingsView: View {
     }
 
     private func save() {
-        model.saveSettings(url: url.trimmingCharacters(in: .whitespacesAndNewlines),
-                           token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+        model.saveSettings(url: cleanURL, token: cleanToken)
         dismiss()
         Task { await model.refresh() }
     }

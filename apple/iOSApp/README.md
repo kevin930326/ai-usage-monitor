@@ -75,6 +75,65 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor \
   -destination 'platform=iOS Simulator,name=<模擬器名稱>' build
 ```
 
+## 每週自動重新安裝（免費 Apple ID）
+
+以免費 Apple ID（Personal Team）簽署的 App 7 天後就無法開啟。`scripts/reinstall-ios.sh` 會重新簽署並透過網路裝到 iPhone，搭配 launchd 在滿 6 天後自動執行。
+
+第一次設定：
+
+1. 在 Xcode → Settings → Accounts 登入 Apple ID，並用 Xcode 把 App 裝到 iPhone 一次（手機會詢問是否信任這台 Mac）。
+2. 在 Xcode 的 Devices and Simulators 視窗勾選該 iPhone 的「Connect via network」，之後不必接線。
+3. 手機在旁邊並解鎖，先手動執行一次：
+   ```bash
+   scripts/reinstall-ios.sh
+   ```
+   第一次執行會偵測 Team ID 與 iPhone，寫入 `~/Library/Application Support/AIUsageMonitor/config.json` 的 `development_team` 與 `iphone_udid`（合併寫入，不會動到收集器的 `relay_url`、`claude_path`；不進版控）。連過多台 iPhone 或登入多個 Team 時不會自動選，請手動把值寫進 config.json。
+4. 安裝排程：
+   ```bash
+   scripts/install-reinstall-launchd.sh
+   ```
+
+排程的運作方式：
+
+- 每 20 分鐘檢查一次，依距上次成功的時間決定要不要重新建置與安裝：
+
+  | 距上次成功 | 何時安裝 | 裝完 |
+  |---|---|---|
+  | 未滿 6 天 | 不安裝（檢查不到 1 秒就結束） | — |
+  | 6～6.5 天 | 只在捷徑自動化前的時段：06:35～06:55、14:35～14:55、22:35～22:55 | 不打開 App，卡片由接著的 07:00／15:00／23:00 捷徑開回來，最多約 25 分鐘 |
+  | 滿 6.5 天，或從未成功 | 不挑時間 | 打開 App（帶 `--start-live-activity` 參數），由 App 在前景把卡片開回來 |
+
+  重新安裝會結束鎖定畫面的 Live Activity 卡片，所以平常排在捷徑前、讓捷徑接手；簽署快到期時以裝成功為優先。失敗時下一次符合條件的檢查就會重試，直到成功為止。手動執行 `scripts/reinstall-ios.sh` 一律立即安裝並打開 App。
+- 時段寫在 `scripts/reinstall-ios.sh` 的 `SHORTCUT_TIMES`，要與上面「捷徑：讓卡片整天顯示」的自動化時間相同；改了自動化時間要一起改。
+- 安裝成功時發 macOS 通知；同一輪連續失敗超過 1 天時再通知一次（不會每次重試都通知）。
+- 簽署使用 Xcode 已登入的 Apple ID（`xcodebuild -allowProvisioningUpdates`），腳本內沒有帳號或密碼。建置的是 Release（不含示範模式）。
+
+限制：
+
+- 手機要與 Mac 在同一個網路，且是醒著的；長時間鎖定或休眠時安裝可能失敗，會在下一個時段重試。
+- Mac 睡眠時排程不會執行，醒來後只補一次檢查：不在時段內且未滿 6.5 天時略過，等下一個時段。滿 6 天到 7 天之間 Mac 一直睡著或關機時，簽署會過期，Mac 醒來後才補裝；連續失敗超過 1 天會通知。
+- 快到期時安裝成功但手機鎖定，打不開 App，鎖定畫面卡片會暫時消失，要等下一次捷徑自動化或手動打開 App；通知會提醒。
+- 腳本只重新安裝 iPhone App，手錶 App（`apple/WatchApp`）仍需用 Xcode 手動安裝。
+- Xcode 的 Apple ID 登入過期時建置會失敗，需要重新登入。
+- repo 在 `~/Documents` 時，排程透過與收集器相同的 `python3` 啟動腳本，沿用它存取「文件」資料夾的權限（launchd 直接執行 bash 會被 macOS 隱私保護拒絕）。沒有安裝過收集器排程時，macOS 可能會詢問是否允許 python3 存取「文件」。
+
+查看日誌：
+
+```bash
+tail -n 20 ~/Library/Logs/AIUsageMonitor/reinstall.log        # 每次執行的結果
+tail -n 50 ~/Library/Logs/AIUsageMonitor/reinstall-build.log  # 最近一次 xcodebuild 的完整輸出
+```
+
+結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤。上次成功與失敗的時間記在 `~/Library/Application Support/AIUsageMonitor/reinstall-state.json`。
+
+移除排程（不會刪除設定與日誌）：
+
+```bash
+scripts/uninstall-reinstall-launchd.sh
+```
+
+排程執行的是安裝時所在資料夾裡的腳本；搬移 repo 後要重新執行 `scripts/install-reinstall-launchd.sh`。
+
 ## 開發用：預先填入設定
 
 模擬器的文字輸入不太穩定。Debug 版本會讀取下列環境變數，覆寫設定（只存在記憶體，不寫入 Keychain）：

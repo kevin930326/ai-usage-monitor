@@ -23,6 +23,14 @@ public enum RelayError: Error, Equatable, LocalizedError {
     }
 }
 
+/// 使用者貼上的中繼網址與密鑰常多帶空白或換行（例如從終端機複製），
+/// 密鑰多一個換行就會被中繼判為「讀取密鑰錯誤」，所以儲存與送出前一律去除。
+public enum RelayInput {
+    public static func clean(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 /// 中繼 API 的讀取端（`GET /usage`）。
 public struct RelayClient: Sendable {
     public var baseURL: URL
@@ -31,13 +39,14 @@ public struct RelayClient: Sendable {
 
     public init(baseURL: URL, readToken: String, session: URLSession = .shared) {
         self.baseURL = baseURL
-        self.readToken = readToken
+        // 先前存下的密鑰可能帶著換行，這裡也清一次
+        self.readToken = RelayInput.clean(readToken)
         self.session = session
     }
 
     /// 接受使用者輸入的網址字串，補上 https:// 並去掉結尾斜線。
     public init(urlString: String, readToken: String, session: URLSession = .shared) throws {
-        var s = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        var s = RelayInput.clean(urlString)
         // 先補 scheme 再去斜線，否則 "https://" 會被削成 "https:" 再補成 "https://https:"
         if !s.contains("://") { s = "https://" + s }
         guard var components = URLComponents(string: s),

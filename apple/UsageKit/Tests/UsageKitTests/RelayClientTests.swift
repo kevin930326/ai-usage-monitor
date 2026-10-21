@@ -48,6 +48,28 @@ final class StubProtocol: URLProtocol, @unchecked Sendable {
         #expect(snap.providers.count == 2)
     }
 
+    @Test func trimsPastedTokenAndURL() async throws {
+        // 從終端機複製時常多帶換行或空白
+        StubProtocol.handler = { req in
+            #expect(req.url?.absoluteString == "https://relay.example.dev/usage")
+            #expect(req.value(forHTTPHeaderField: "Authorization") == "Bearer r-token")
+            return (200, Data(sampleJSON.utf8))
+        }
+        let pasted = try RelayClient(urlString: "  relay.example.dev/\n", readToken: " r-token\n", session: session)
+        #expect(pasted.readToken == "r-token")
+        _ = try await pasted.fetch()
+    }
+
+    @Test(arguments: ["r-token\n", "r-token\r\n", "\tr-token ", "\n r-token \n"])
+    func cleansWhitespaceAroundInput(raw: String) {
+        #expect(RelayInput.clean(raw) == "r-token")
+    }
+
+    @Test func keepsInnerCharacters() {
+        #expect(RelayInput.clean(" a b\n") == "a b")
+        #expect(RelayInput.clean(" \n ").isEmpty)
+    }
+
     @Test(arguments: [(401, RelayError.unauthorized), (404, .noData), (500, .http(500))])
     func mapsHTTPErrors(status: Int, expected: RelayError) async throws {
         StubProtocol.handler = { _ in (status, Data()) }
