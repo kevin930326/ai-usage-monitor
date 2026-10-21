@@ -1,11 +1,12 @@
 import Foundation
+import UsageKit
 import WatchConnectivity
 
 /// 以 `sendMessage` 從 iPhone 取得中繼網址與讀取密鑰（FR-30），手錶上不需要輸入。
 /// 不用 application context（系統會另存一份密鑰在 Keychain 以外）。
 /// - App 開啟、回到前景或 iPhone 變得可連線時向 iPhone 要設定，iPhone App 會在背景被喚醒回覆。
 /// - iPhone 儲存設定時若手錶 App 正開著，會直接送過來（`didReceiveMessage`）。
-/// iPhone 端見 apple/iOSApp/AIUsageMonitor/Model/WatchSettingsSync.swift。
+/// 訊息格式與判斷在 UsageKit 的 `WatchSettingsMessage`（可測試）；iPhone 端見 apple/iOSApp/AIUsageMonitor/Model/WatchSettingsSync.swift。
 final class SettingsReceiver: NSObject, WCSessionDelegate {
     private let onSettings: @MainActor (String, String) -> Void
 
@@ -24,7 +25,7 @@ final class SettingsReceiver: NSObject, WCSessionDelegate {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else { return }
-        session.sendMessage(["requestSettings": true], replyHandler: { [weak self] reply in
+        session.sendMessage(WatchSettingsMessage.request, replyHandler: { [weak self] reply in
             self?.handle(reply)
         }, errorHandler: nil)
     }
@@ -42,8 +43,8 @@ final class SettingsReceiver: NSObject, WCSessionDelegate {
     }
 
     private func handle(_ message: [String: Any]) {
-        guard let url = message["relayURL"] as? String, let token = message["readToken"] as? String else { return }
+        guard let settings = WatchSettingsMessage.parse(message) else { return }
         let onSettings = onSettings
-        Task { @MainActor in onSettings(url, token) }
+        Task { @MainActor in onSettings(settings.url, settings.token) }
     }
 }
