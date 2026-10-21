@@ -55,7 +55,7 @@ fi
 # 同時只跑一個（手動與 launchd 可能重疊）
 LOCK="$CONFIG_DIR/.reinstall.lock"
 if ! mkdir "$LOCK" 2>/dev/null; then
-    echo "另一個重新安裝正在執行（$LOCK）" >&2
+    echo "另一個重新安裝正在執行（${LOCK}）" >&2
     exit 0
 fi
 trap 'rmdir "$LOCK"' EXIT
@@ -85,13 +85,13 @@ if [ -z "$UDID" ]; then
     "${UPDATE_CONFIG[@]}" iphone_udid "$UDID" || fail 4 "無法寫入 config.json"
     log "找到 iPhone（$(cut -f2 <<<"$IPHONES")）並寫入 config.json"
 fi
-DEVICE=$(grep "^$UDID"$'\t' <<<"$IPHONES") || fail 2 "devicectl 清單中沒有 config.json 的 iPhone（$UDID）"
+DEVICE=$(grep "^$UDID"$'\t' <<<"$IPHONES") || fail 2 "devicectl 清單中沒有 config.json 的 iPhone（${UDID}）"
 log "iPhone：$(cut -f2 <<<"$DEVICE")，連線方式 $(cut -f3 <<<"$DEVICE")"
 
 # 3. 產生專案並建置（Release：不含示範模式與截圖工具）
 cd "$REPO/apple/iOSApp" || fail 1 "找不到 apple/iOSApp"
 DEVELOPMENT_TEAM="$TEAM" xcodegen generate --quiet >>"$BUILD_LOG" 2>&1 || fail 1 "xcodegen generate 失敗"
-log "建置中（完整輸出：$BUILD_LOG）"
+log "建置中（完整輸出：${BUILD_LOG}）"
 xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor -configuration Release \
     -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" \
     -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >"$BUILD_LOG" 2>&1 \

@@ -13,6 +13,8 @@
       記錄成功並清除失敗狀態。
   reinstall_ios_helper.py failure <state.json> <小時>
       記錄失敗；這一輪連續失敗超過指定小時且還沒通知過時印出 notify 與失敗時數。
+  reinstall_ios_helper.py scheduled
+      launchd 用：以子程序執行 reinstall-ios.sh --if-due 並回傳它的結束碼。
 
 環境變數 AUM_NOW（Unix 秒）可覆寫現在時間，測試重試與通知用。
 """
@@ -120,8 +122,17 @@ def cmd_failure(path: str, hours: str) -> int:
     return 0
 
 
+# MARK: launchd
+
+def cmd_scheduled() -> int:
+    # repo 在 ~/Documents（macOS 隱私保護的資料夾）。launchd 直接執行 /bin/bash 會被拒絕讀取，
+    # 由 python3 啟動 bash 時，存取權限算在 python3 上，與收集器的 launchd 工作相同
+    script = Path(__file__).resolve().parent / "reinstall-ios.sh"
+    return subprocess.call(["/bin/bash", str(script), "--if-due"])
+
+
 COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "due": cmd_due,
-            "success": cmd_success, "failure": cmd_failure}
+            "success": cmd_success, "failure": cmd_failure, "scheduled": cmd_scheduled}
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
