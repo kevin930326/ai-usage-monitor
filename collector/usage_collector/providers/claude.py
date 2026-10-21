@@ -37,6 +37,8 @@ RESET_RE = re.compile(r"^(?P<month>[A-Z][a-z]{2}) (?P<day>\d{1,2})(?:, (?P<year>
                       r"(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s?(?P<ampm>[ap]m)(?: \((?P<tz>[^)]+)\))?$",
                       re.IGNORECASE)
 MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+# 終端機色碼（stdout 不是 TTY 時 Claude Code 不會印，但 FORCE_COLOR 之類的環境變數可能強制上色）
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def resolve_claude_path(config_path: Path | None = None) -> str | None:
@@ -54,7 +56,10 @@ def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:
     # 暫存資料夾：不載入任何專案的 CLAUDE.md；stdin 關閉：-p 在 stdin 是開著的管線時會等待輸入
     with tempfile.TemporaryDirectory(prefix="aum-claude-") as cwd:
         try:
-            return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL,
+            # NO_COLOR：輸出不帶色碼，解析才不會把被色碼包住的額度行當成一般文字略過
+            env = {**os.environ, "NO_COLOR": "1"}
+            env.pop("FORCE_COLOR", None)
+            return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
                                   capture_output=True, text=True, timeout=TIMEOUT)
         except subprocess.TimeoutExpired:
             raise ProviderError(f"Claude Code 執行逾時（{TIMEOUT:g} 秒）") from None
@@ -108,7 +113,7 @@ def window_for(scope: str | None) -> tuple[str, str, bool]:
 def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderUsage:
     now = now or datetime.now(timezone.utc)
     windows = []
-    for line in text.splitlines():
+    for line in ANSI_RE.sub("", text).splitlines():
         line = line.strip()
         if not line.startswith("Current "):
             continue

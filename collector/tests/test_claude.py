@@ -57,6 +57,15 @@ class ClaudeParseTest(unittest.TestCase):
             ("weekly_opus", "每週 Opus", 97.0, None, True),
         ])
 
+    def test_ansi_colour_codes_are_ignored(self):
+        # 整行被色碼包住時不能把那個額度悄悄略過；色碼只包數字時也要解得出來
+        plain = claude.parse(fixture("usage-max.txt"), None, RECORDED_AT)
+        coloured = fixture("usage-max.txt").replace(
+            "Current session: 45% used", "\x1b[1mCurrent session: \x1b[33m45%\x1b[0m used\x1b[0m").replace(
+            "Current week (all models): 12% used", "\x1b[1mCurrent week (all models): 12% used\x1b[0m")
+        self.assertEqual(coloured.count("\x1b"), 6)  # 確定測試資料真的有被改到
+        self.assertEqual(claude.parse(coloured, None, RECORDED_AT).to_dict(), plain.to_dict())
+
     def test_reset_hour_must_be_1_to_12(self):
         for text in ("Oct 22 at 0am (Asia/Taipei)", "Oct 22 at 13pm (Asia/Taipei)", "Oct 22 at 99pm (Asia/Taipei)"):
             with self.subTest(text), self.assertRaisesRegex(ProviderError, "格式已改變"):
@@ -157,7 +166,8 @@ class FakeClaude:
 
 class ClaudeFetchTest(unittest.TestCase):
     def test_fetch_runs_claude_and_reads_plan(self):
-        with FakeClaude() as fake:
+        with FakeClaude(script="[ \"$NO_COLOR\" = 1 ] || exit 96; [ -z \"$FORCE_COLOR\" ] || exit 95") as fake, \
+             mock.patch.dict(os.environ, {"FORCE_COLOR": "1"}):
             usage = claude.fetch()
             cwd = fake.cwd_marker.read_text().strip()
         self.assertEqual(usage.plan, "Max")
