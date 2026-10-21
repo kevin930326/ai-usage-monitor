@@ -14,7 +14,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
                                                     iOS 捷徑自動化：定時重開 Live Activity
 ```
 
-- **token 永遠留在 Mac**，上傳的只有用量百分比與重置時間。
+- **收集器不讀取 Claude 的 token**（改由 Claude Code 自己的 `/usage` 查詢）；Codex 的 token 永遠留在 Mac，上傳的只有用量百分比與重置時間。
 - 不需付費 Apple Developer 帳號：用「捷徑定時重開 + 按鈕手動更新」繞過 Live Activity 的 8 小時上限。
 
 ## 文件
@@ -62,13 +62,13 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 ## 隱私與安全
 
-原則：Claude Code 與 Codex 的 OAuth token **只在 Mac 上使用、不會上傳**（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
+原則：收集器**不讀取 Claude Code 的 token**，Claude 用量由 Claude Code 自己的 `/usage` 指令取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)）；Codex 的 OAuth token **只在 Mac 上使用、不會上傳**（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
 
 ### 網路請求
 
 | 發出者 | 目的地 | 認證 | 傳送／取得的內容 | 時機 |
 |---|---|---|---|---|
-| Mac 收集器 | `https://api.anthropic.com/api/oauth/usage` | Claude Code 的 OAuth token（從 macOS Keychain 讀取） | 取得 Claude 用量 | launchd 每 5 分鐘 |
+| Mac 收集器 → Claude Code | 收集器本身不連線；執行 `claude -p /usage` 與 `claude auth status`，由 Claude Code 自己向 Anthropic 查詢 | 由 Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱（email 等其餘輸出直接丟棄） | launchd 每 5 分鐘 |
 | Mac 收集器 | `https://chatgpt.com/backend-api/wham/usage` | Codex CLI 的 token（`~/.codex/auth.json`） | 取得 Codex 用量 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
@@ -85,7 +85,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | Mac | Keychain `AIUsageMonitor-relay-write` | 中繼**寫入**密鑰（只有收集器使用） |
 | Mac | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（選單列 App 讀取） |
 | Mac | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址（不含密鑰） |
-| Mac | `~/Library/Logs/AIUsageMonitor/collector.log` | 收集器 log（錯誤訊息，不含 token） |
+| Mac | `~/Library/Logs/AIUsageMonitor/collector.log` | 收集器 log（錯誤訊息，不含 token，也不含 Claude Code 的輸出） |
 | Mac | App Group `~/Library/Group Containers/group.io.github.kevin930326.AIUsageMonitor/usage.json` | 快照複本給桌面小工具；只有以 Team 簽署、帶 App Group entitlement 時才寫入 |
 | Cloudflare | Worker KV `latest`；Worker secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新快照；兩把密鑰 |
 | iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組（App 自己的 application identifier）共用同一個項目 |
@@ -105,4 +105,4 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 ## 免責聲明
 
-本專案為個人學習作品，與 Anthropic、OpenAI 無關。用量資料取自 Claude Code 與 Codex CLI 使用的**非公開介面**，可能隨時變更或失效。
+本專案為個人學習作品，與 Anthropic、OpenAI 無關。Claude 用量取自 Claude Code `/usage` 指令的輸出、Codex 用量取自 Codex CLI 使用的非公開介面，兩者都**沒有文件保證**，可能隨時變更或失效。

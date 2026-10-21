@@ -1,6 +1,6 @@
 # ADR-0005：Claude token 過期時委派 Claude Code 續期
 
-- 狀態：**已採用**
+- 狀態：**已被 [ADR-0006](0006-claude-usage-via-cli.md) 取代**（2026-10-21：收集器不再讀取 Claude 的 token，改由 Claude Code 的 `/usage` 取得用量，token 由 Claude Code 自己續期）
 - 日期：2026-10-21
 - 相關需求：FR-4（自動排程收集）
 

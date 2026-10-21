@@ -12,17 +12,8 @@ CONFIG_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMo
 
 mkdir -p "$LOG_DIR" "$(dirname "$TARGET")" "$CONFIG_DIR"
 
-# 只收集這台 Mac 登入過的服務，沒用的服務不會在 App 上顯示成錯誤。
-# 一個都沒偵測到時不寫入，收集器維持全部啟用，登入後不必重新安裝也能開始收集。
-DETECTED="$("$COLLECTOR_DIR/scripts/detect-providers.sh")"
-has_provider() { printf '%s\n' "$DETECTED" | grep -qx "$1"; }
-if [ -n "$DETECTED" ]; then
-    ENABLED="$(printf '%s\n' "$DETECTED" | "$PYTHON" -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))')"
-    "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" --json "$CONFIG_DIR/config.json" enabled_providers "$ENABLED"
-fi
-
 # launchd 的 PATH 只有系統目錄，先在這裡找到 claude 的完整路徑寫進 config.json，
-# 收集器在 token 快過期時用它委派 Claude Code 續期（ADR-0005）；找不到就略過
+# 收集器執行它的 `claude -p /usage` 取得 Claude 用量（ADR-0006）
 CLAUDE=""
 for candidate in "$(command -v claude || true)" "$HOME/.local/bin/claude" "$HOME/.claude/local/claude" \
                  /opt/homebrew/bin/claude /usr/local/bin/claude; do
@@ -30,6 +21,15 @@ for candidate in "$(command -v claude || true)" "$HOME/.local/bin/claude" "$HOME
 done
 if [ -n "$CLAUDE" ]; then
     "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" "$CONFIG_DIR/config.json" claude_path "$CLAUDE"
+fi
+
+# 只收集這台 Mac 登入過的服務，沒用的服務不會在 App 上顯示成錯誤。
+# 一個都沒偵測到時不寫入，收集器維持全部啟用，登入後不必重新安裝也能開始收集。
+DETECTED="$("$COLLECTOR_DIR/scripts/detect-providers.sh" "$CLAUDE")"
+has_provider() { printf '%s\n' "$DETECTED" | grep -qx "$1"; }
+if [ -n "$DETECTED" ]; then
+    ENABLED="$(printf '%s\n' "$DETECTED" | "$PYTHON" -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))')"
+    "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" --json "$CONFIG_DIR/config.json" enabled_providers "$ENABLED"
 fi
 
 # 路徑可能含空白，用 | 當 sed 分隔字元
@@ -51,9 +51,9 @@ if [ -z "$DETECTED" ]; then
     echo
 else
     if has_provider claude; then
-        echo "Claude 用量：啟用（Keychain 有 Claude Code-credentials）"
+        echo "Claude 用量：啟用（Claude Code 已登入）"
     else
-        echo "Claude 用量：未啟用（沒有登入過 Claude Code）"
+        echo "Claude 用量：未啟用（${CLAUDE:+Claude Code 沒有登入}${CLAUDE:-找不到 claude 指令}）"
     fi
     if has_provider codex; then
         echo "Codex 用量：啟用（找到 ~/.codex/auth.json）"
@@ -64,7 +64,7 @@ else
 fi
 echo "Python：$PYTHON"
 if [ -z "$DETECTED" ] || has_provider claude; then
-    echo "claude 指令：${CLAUDE:-找不到，token 過期時不會自動續期}"
+    echo "claude 指令：${CLAUDE:-找不到，無法取得 Claude 用量}"
 fi
 echo "日誌：$LOG_DIR/collector.log"
 echo "立即執行一次：launchctl kickstart gui/$(id -u)/$LABEL"

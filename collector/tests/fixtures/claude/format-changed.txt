@@ -1,0 +1,4 @@
+You are currently using your subscription to power your Claude Code usage
+
+Current session: 45 percent used, resets in 2 hours
+Current week (all models): 12% used · resets Oct 28 at 7am (Asia/Taipei)

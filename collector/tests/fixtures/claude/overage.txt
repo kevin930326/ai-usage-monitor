@@ -1,0 +1,6 @@
+You are currently using your overages to power your Claude Code usage. We will automatically switch you back to your subscription rate limits when they reset
+
+Current session: 100% used · resets Dec 31 at 11:30pm (America/Los_Angeles)
+Current week (all models): 87% used · resets Jan 2, 2027 at 12am (America/Los_Angeles)
+Current week (Sonnet only): 40% used · resets Jan 2, 2027 at 12am (America/Los_Angeles)
+Current week (Opus): 97% used

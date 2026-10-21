@@ -13,6 +13,7 @@
 - `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
 
 ### Changed
+- 收集器的 Claude 用量改為執行未修改的 Claude Code（`claude -p /usage`）並解析它的輸出，方案名稱取自 `claude auth status`；收集器不再讀取 Keychain 的 `Claude Code-credentials`、不再持有 token、不再直接呼叫 api.anthropic.com，以符合 Claude Code 的 Legal and compliance 條款。移除 ADR-0005 的委派續期與 `claude-refresh.json`；`/usage` 格式認不得時回報錯誤而不是顯示 0%；安裝腳本改用 `claude auth status` 偵測登入（ADR-0006）
 - 手錶取得中繼設定改用 WatchConnectivity `sendMessage`（手錶 App 開啟時向 iPhone 要），不再用 application context，讀取密鑰不會被系統另存一份在 Keychain 以外；舊版留下的 context 會在 iPhone App 啟動時清空。iPhone 改設定後要打開一次手錶 App 才會套用
 - Mac：新增 `apple/MacMenuBar/project.team.yml`，以 Team 簽署並為 App 與桌面小工具加入 App Group，不必手改 `project.yml`；預設設定不變（C-06）
 - CI：新增 macOS job，產生並建置三個 App（Debug、不簽署），確認擴充有嵌入；不設為必要檢查（C-11）
@@ -26,13 +27,13 @@
 - Live Activity：重置時間早於資料過期時間時，卡片不再永遠不轉灰；`staleDate` 在過期前一律給過期時間，過期前的重置在同一次重繪顯示（最多晚 30 分鐘）（C-01）
 - 自動重裝：程序被強制結束後殘留的鎖不再永久停止重裝；鎖內記錄 PID，程序已不存在、舊版無 PID 或超過 2 小時的鎖會被接手（C-02）
 - 收集器：含 Bearer 密鑰的請求只跟隨同來源（scheme、主機、port 相同）的重新導向，最多 3 次（C-03）
-- 收集器：API 缺少或格式錯誤的百分比回報為格式錯誤，不再當成 0% 已用；隱藏的各模型額度格式錯誤時只略過該項（C-04）
+- 收集器：API 缺少或格式錯誤的百分比回報為格式錯誤，不再當成 0% 已用；隱藏的各模型額度格式錯誤時只略過該項（C-04）；改用 Claude Code `/usage` 輸出後（ADR-0006），額度行缺少或認不得百分比時整個回報格式錯誤，同樣不會變成 0%
 - iPhone／手錶：讀取密鑰改為先更新、不存在才新增，寫入失敗時保留舊密鑰並顯示錯誤，不同步到手錶（C-05）
 - iPhone App 停在前景時每分鐘重算過期、已重置、百分比與最吃緊一項（C-07）
 - 資料時間比裝置時間晚超過過期門檻時視為過期，Mac 時鐘快了也不會讓舊資料一直顯示成新的（C-09）
 - 手錶背景重新整理排程失敗時延後 1、5、15 分鐘重試，App 回到前景時也重新排程（C-10）
 - 自動重裝腳本全程使用 launchd 指定的 Python，不再依 PATH 找 `python3`（C-13）
-- 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）
+- 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）（之後由 ADR-0006 取代，見 Changed）
 
 ### Changed
 - ADR-0003 雲端排程收集：已評估，不採用，見 ADR-0003。`setup-token` 缺少用量端點需要的 `user:profile` 權限，且把訂閱 OAuth token 存在雲端代為續期不符合 Claude Code 的使用條款；維持由 Mac 收集，日後若要 Mac 不必常開改評估常開小裝置（選項 C）。ADR-0004 與需求文件 3.3 節同步更新

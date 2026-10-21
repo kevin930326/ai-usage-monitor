@@ -1,13 +1,13 @@
 # collector — Mac 端用量收集器
 
-讀取 Claude Code 與 Codex CLI 在本機的登入資訊（只用其中一個也可以），查詢用量並輸出[統一格式的 JSON](../docs/02-architecture.md#3-資料格式)。只使用 Python 標準函式庫，支援 Python 3.10 以上。
+執行 Claude Code 的 `/usage` 取得 Claude 用量、讀取 Codex CLI 在本機的登入資訊查詢 Codex 用量（只用其中一個也可以），並輸出[統一格式的 JSON](../docs/02-architecture.md#3-資料格式)。只使用 Python 標準函式庫，支援 Python 3.10 以上。
 
 ## 前置條件
 
-| 服務 | 需要 | token 位置 |
+| 服務 | 需要 | 收集器如何取得用量 |
 |---|---|---|
-| Claude | 在終端機執行 `claude` 並 `/login` 過一次（只用 Claude 桌面版不會產生 CLI token） | macOS Keychain `Claude Code-credentials` |
-| Codex | 執行 `codex login` 過一次 | `~/.codex/auth.json` |
+| Claude | 安裝 Claude Code，在終端機執行 `claude` 並用 Claude 訂閱 `/login` 過一次（只用 Claude 桌面版不算） | 執行 `claude -p /usage`，解析它印出的額度；**不讀取 Claude 的 token**（[ADR-0006](../docs/adr/0006-claude-usage-via-cli.md)） |
+| Codex | 執行 `codex login` 過一次 | 讀取 `~/.codex/auth.json` 的 token 呼叫用量端點 |
 
 ### 只收集有用的服務
 
@@ -17,7 +17,7 @@
 { "relay_url": "https://...", "enabled_providers": ["claude"] }
 ```
 
-- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：Keychain 有 `Claude Code-credentials` 就啟用 claude，有 `~/.codex/auth.json` 就啟用 codex，並印出偵測結果。偵測只檢查登入資訊是否存在，不讀取內容（`scripts/detect-providers.sh`）。
+- `scripts/install-launchd.sh` 會自動偵測並寫入（合併寫入，不會洗掉 `relay_url` 等其他欄位）：`claude auth status` 回報已登入就啟用 claude，有 `~/.codex/auth.json` 就啟用 codex，並印出偵測結果（`scripts/detect-providers.sh`）。偵測不讀取任何登入資訊的內容，`claude auth status` 的輸出（含 email）直接丟棄。
 - 未啟用的服務不查詢、不出現在輸出的 `providers` 中、不寫日誌，App 上也不會顯示。
 - 已啟用但讀不到登入資訊（例如登出了）仍是錯誤，該服務的 `error` 有值，日誌也會記錄。
 - 沒有 `config.json`、沒有這個欄位或格式不對時全部啟用（舊版安裝的行為）。兩個服務都沒偵測到時安裝腳本不寫入這個欄位並提示先登入，登入後下一次排程就會開始收集。
@@ -35,24 +35,29 @@ python3 -m usage_collector --upload        # 同時上傳中繼 API（未設定�
 python3 -m usage_collector --write-local --upload --quiet   # launchd 用的組合
 ```
 
-第一次讀取 Keychain 時，macOS 可能會詢問是否允許，選「永遠允許」。
+### Claude：執行 Claude Code 的 `/usage`
 
-### Claude token 過期時自動續期
-
-Claude 的 token 只有幾小時有效期，平常由 Claude Code 在下次使用時續期。收集器讀到的 token 已過期或 5 分鐘內到期時，會執行一次
+每次收集時執行未修改的 Claude Code：
 
 ```bash
-claude -p /usage --safe-mode --no-session-persistence
+claude -p /usage --safe-mode --no-session-persistence --output-format json   # 額度與重置時間
+claude auth status --json                                                   # 只取方案名稱（subscriptionType）
 ```
 
-讓 Claude Code 自己續期，再重新讀取 Keychain。收集器本身不發送刷新請求、不寫入憑證。
+收集器不讀取 Keychain 的 `Claude Code-credentials`、不持有 token、不直接呼叫 Anthropic 的端點；token 的續期由 Claude Code 啟動時自己處理（[ADR-0006](../docs/adr/0006-claude-usage-via-cli.md)）。
 
-- 在暫存資料夾執行、stdin 關閉、30 秒逾時；不呼叫模型，不消耗額度。
-- claude 的完整路徑由 `scripts/install-launchd.sh` 偵測後寫進 `config.json` 的 `claude_path`（launchd 的 PATH 找不到 claude）；找不到就不嘗試。手動執行時退回 PATH。
-- 最多每 30 分鐘嘗試一次；過期且續期失敗超過 30 分鐘時發一次 macOS 通知（同一次過期只通知一次），此時開一次 Claude Code 即可。
-- 這依賴 Claude Code 未寫入文件的行為，理由、實測與失效時的備案見 [ADR-0005](../docs/adr/0005-delegate-claude-token-refresh.md)。
+- `/usage` 在 `-p` 模式是本機指令，不呼叫模型、不消耗額度；每次約 1.5 秒。
+- 在暫存資料夾執行、stdin 關閉、30 秒逾時；輸出不寫入日誌。輸出中的 email 等個人資訊不會進入快照。
+- claude 的完整路徑由 `scripts/install-launchd.sh` 偵測後寫進 `config.json` 的 `claude_path`（launchd 的 PATH 找不到 claude）；手動執行時退回 PATH。
+- `/usage` 的文字格式沒有文件保證。認不得時 Claude 會顯示「Claude Code 的 /usage 輸出格式已改變，請更新收集器」，不會顯示錯的數字；fixture 在 `tests/fixtures/claude/`。
 
-日誌中看到 `已委派 Claude Code 續期（completed）` 且之後沒有「token 已過期」，代表續期成功；`failed` 或 `timed_out` 代表 claude 執行失敗或逾時。
+| 日誌／App 上的錯誤 | 原因與處理 |
+|---|---|
+| 找不到 claude 執行檔 | 重新執行 `scripts/install-launchd.sh` |
+| 尚未用 Claude 訂閱登入 Claude Code | 在終端機執行 `claude` 並 `/login` |
+| Claude Code 暫時查不到額度 | Claude Code 這次沒拿到額度，下一次排程會再試 |
+| Claude Code 的 /usage 輸出格式已改變 | Claude Code 改版，需要更新收集器 |
+| Claude Code 執行逾時（30 秒）／執行 /usage 失敗 | 在終端機手動執行上面的指令確認 |
 
 結束碼：至少一個啟用的服務成功且上傳沒有失敗為 `0`，否則為 `1`。錯誤訊息帶時間戳記輸出到 stderr。
 
@@ -62,7 +67,6 @@ claude -p /usage --safe-mode --no-session-persistence
 |---|---|---|
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個） |
 | 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 完整路徑、啟用的服務（`enabled_providers`） |
-| 續期狀態 | `~/Library/Application Support/AIUsageMonitor/claude-refresh.json` | 上次委派續期的時間與通知紀錄（不含 token） |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
 | 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
 
@@ -107,8 +111,9 @@ python3 -m unittest -v
 
 ## 設計重點
 
-- **token 不離開本機**：只輸出百分比與重置時間；錯誤訊息不含例外內容。
-- **不自行刷新 token**：避免與 Claude Code / Codex CLI 互搶。Claude token 快過期時委派 Claude Code 續期，仍失敗才提示使用者開一次原程式（[ADR-0005](../docs/adr/0005-delegate-claude-token-refresh.md)）。
+- **不碰 Claude 的 token**：Claude 用量由 Claude Code 自己的 `/usage` 取得（[ADR-0006](../docs/adr/0006-claude-usage-via-cli.md)）。
+- **token 不離開本機**：Codex 的 token 只在 Mac 上使用；只輸出百分比與重置時間；錯誤訊息不含例外內容或子程序的輸出。
+- **不自行刷新 token**：避免與 Codex CLI 互搶。
 - **provider 互相隔離**：單一服務失敗只會讓該服務的 `error` 有值。
 - **原子寫入**：本機快照先寫暫存檔再改名，讀取端不會讀到寫一半的檔案。
 - **新增服務**：在 `usage_collector/providers/` 新增模組並實作 `fetch() -> ProviderUsage`，再到 `providers/__init__.py` 註冊，並在 `scripts/detect-providers.sh` 加上偵測。
