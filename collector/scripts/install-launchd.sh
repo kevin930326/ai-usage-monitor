@@ -39,6 +39,18 @@ if [ -n "$CODEX" ]; then
     "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" "$CONFIG_DIR/config.json" codex_path "$CODEX"
 fi
 
+# Token 統計讀對話紀錄的資料夾（ADR-0009 第 3 節）：launchd 不會傳入 shell 的環境變數，
+# 所以在這裡把 CLAUDE_CONFIG_DIR／CODEX_HOME 寫進 config.json；沒有設定時寫 null（用預設的 ~/.claude、~/.codex）
+for pair in "claude_config_dir:${CLAUDE_CONFIG_DIR:-}" "codex_home:${CODEX_HOME:-}"; do
+    key="${pair%%:*}"
+    value="${pair#*:}"
+    if [ -n "$value" ]; then
+        "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" "$CONFIG_DIR/config.json" "$key" "$value"
+    else
+        "$PYTHON" "$COLLECTOR_DIR/scripts/update-config.py" --json "$CONFIG_DIR/config.json" "$key" null
+    fi
+done
+
 # 只收集這台 Mac 登入過的服務，沒用的服務不會在 App 上顯示成錯誤。
 # 一個都沒偵測到時不寫入，收集器維持全部啟用，登入後不必重新安裝也能開始收集。
 # 任何一個服務的登入狀態是「不知道」（裝過但找不到指令、輸出認不得）而不是「沒登入」時也不寫入，
