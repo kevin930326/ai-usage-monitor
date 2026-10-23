@@ -28,6 +28,17 @@ for arg in "$@"; do
   esac
 done
 
+# 同一時間只允許一個安裝（mkdir 是原子操作）；結束時才釋放
+LOCK=$ROOT/build/install.lock
+mkdir -p "$ROOT/build"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "另一個安裝正在進行（$LOCK）；確定沒有在執行的話刪除這個資料夾再試" >&2
+  exit 1
+fi
+TMP=
+cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; rmdir "$LOCK" 2>/dev/null || true; }
+trap cleanup EXIT
+
 command -v xcodebuild >/dev/null || { echo "找不到 xcodebuild，請先安裝 Xcode" >&2; exit 1; }
 if command -v xcodegen >/dev/null; then
   (cd "$PROJECT_DIR" && xcodegen generate --quiet)
@@ -60,15 +71,14 @@ if [ "$QUIT" = 1 ] && pgrep -x "$NAME" >/dev/null; then
 fi
 
 # 先複製到同一個資料夾的暫存名稱，成功後才換掉舊版本（複製失敗時舊版本不受影響）
-TMP=$DEST_DIR/.$NAME.app.installing
-rm -rf "$TMP"
-ditto "$BUILT" "$TMP"
+TMP=$(mktemp -d "$DEST_DIR/.$NAME.installing.XXXXXX")
+ditto "$BUILT" "$TMP/$NAME.app"
 if [ -d "$DEST" ]; then
   TRASH=$HOME/.Trash/$NAME-$(date +%Y%m%d-%H%M%S).app
   mv "$DEST" "$TRASH"
   echo "舊版本已移到垃圾桶：$TRASH"
 fi
-mv "$TMP" "$DEST"
+mv "$TMP/$NAME.app" "$DEST"
 echo "已安裝：$DEST（版本 $(defaults read "$DEST/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?')）"
 
 if [ "$OPEN" = 1 ]; then
