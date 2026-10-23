@@ -78,7 +78,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 | 平台 | 門檻 | 常數 |
 |---|---|---|
-| iPhone App、Live Activity、iPhone 主畫面／鎖定畫面小工具、Mac 選單列與桌面小工具 | 30 分鐘 | `UsageSnapshot.staleAfter` |
+| iPhone App、Live Activity、iPhone 主畫面／鎖定畫面小工具、Mac 選單列與面板 | 30 分鐘 | `UsageSnapshot.staleAfter` |
 | Apple Watch App 與錶面複雜功能 | 45 分鐘 | `UsageSnapshot.watchStaleAfter` |
 
 手錶較長是因為背景重新整理約每 30 分鐘一次，且時間由 watchOS 決定（見 `apple/WatchApp/README.md`）。Timeline 的重新整理時間點要用和畫面相同的門檻。
@@ -92,11 +92,10 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | iOS App Bundle ID | `io.github.kevin930326.AIUsageMonitor` |
 | Live Activity 擴充 | `io.github.kevin930326.AIUsageMonitor.UsageWidget` |
 | Mac 選單列 App | `io.github.kevin930326.AIUsageMenuBar` |
-| Mac 桌面小工具 | `io.github.kevin930326.AIUsageMenuBar.UsageDesktopWidget` |
 | watchOS App | `io.github.kevin930326.AIUsageMonitor.watchkitapp` |
 | 錶面複雜功能 | `io.github.kevin930326.AIUsageMonitor.watchkitapp.UsageComplications` |
 | App Group | `group.io.github.kevin930326.AIUsageMonitor` |
-| 小工具 kind | Mac `UsageDesktopWidget`、手錶 `UsageComplication`、iPhone 主畫面／鎖定畫面 `UsageHomeWidget` |
+| 小工具 kind | 手錶 `UsageComplication`、iPhone 主畫面／鎖定畫面 `UsageHomeWidget`（Mac 桌面小工具 `UsageDesktopWidget` 已移除，FR-24 不做） |
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
 
@@ -104,7 +103,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ## 6. 資訊排列
 
-所有平台（iPhone App、Live Activity、Mac 面板與桌面小工具、手錶 App 與複雜功能）都遵守：
+所有平台（iPhone App、Live Activity、Mac 選單列與面板、手錶 App 與複雜功能）都遵守：
 
 - **剩餘最少的額度永遠放在最顯眼的位置**（FR-15）：所有服務的可見額度中剩餘最少的一項；畫面上**不加「剩餘最少」之類的標題**，用服務圖示＋服務名稱＋額度名稱（「Claude 每週」，`ProviderWindow.displayName`）表達；VoiceOver 仍說完整的「剩餘最少的額度：Claude 每週，剩 67%」（`leastRemainingAccessibilityLabel(mode:at:)`）；排除 `hidden` 額度與有錯誤的服務；同分時取較早重置的；已重置的額度視為剩餘 100%。一律用 `UsageSnapshot.tightestWindow(at:)`（Live Activity 用 `UsageActivityState.tightest(at:)`），不要自己挑。
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
@@ -132,10 +131,9 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | 鎖定畫面卡片高度約 160pt | 超過會被系統截掉；標題維持單行，新增列之前先確認高度 | `apple/iOSApp/Shared/ActivityViews.swift` |
 | `staleDate` 只會重繪一次、不可落在過去 | 每份內容只在 `staleDate` 重繪一次，App 也不在背景更新卡片：資料過期時間未到時一律給過期時間（過期前的重置在那次重繪一併顯示，最多晚 30 分鐘），已過期才給下一個重置時間，都過去就給 `nil`。給過去的時間，系統會直接把卡片從鎖定畫面移除 | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
 | Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |
-| Mac 桌面小工具 reload 最短 25 分鐘 | 內容有變且距上次 ≥ 25 分鐘，或距上次已達 25 分鐘才 `reloadAllTimelines`；每天 ≤ 58 次。收集器每 5 分鐘寫一次，每次都 reload 會用掉約 288 次 | `apple/UsageKit/Sources/UsageKit/WidgetSupport.swift`（`WidgetReloadThrottle`）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift` |
 | iPhone 主畫面小工具 reload 25 分鐘 | 小工具自己抓中繼，每 25 分鐘（資料過期時 60 分鐘）；App 背景取得新資料時另外 reload（約 5 次／天），前景與按鈕 Intent 不扣次數。一般約 51 次／天、最多約 63 次 | `apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`refreshInterval`）、`apple/iOSApp/Shared/SharedStore.swift`（`publish`）、`apple/iOSApp/README.md`「重新整理次數」 |
 | 手錶背景更新約 30 分鐘 | 每次背景更新 reload 一次複雜功能，約 48 次／天；實際時間由 watchOS 決定，過期門檻因此是 45 分鐘 | `apple/WatchApp/AIUsageWatch/AIUsageWatchApp.swift`（`backgroundInterval`） |
-| WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`WidgetReloadThrottle` 註解、`UsageTimelineSchedule.entryDates`） |
+| WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`UsageTimelineSchedule.entryDates`）、`UsageHomeWidget.swift`（`refreshInterval` 註解） |
 | Mac 動畫只在面板或統計視窗開啟時執行 | 面板關閉時不能佔 CPU／GPU；選單列圖示不得有持續動畫；計時器允許系統合併喚醒；規則與量測方法見第 9 節（FR-25、NFR-8、NFR-10） | `docs/adr/0010-mac-animation-principles.md`、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
 | 介面語言為繁體中文（zh-Hant） | 所有使用者看得到的文字用繁體中文；開發區域設為 zh-Hant | `apple/UsageKit/Package.swift`（`defaultLocalization`）、三個 `project.yml` 的 `CFBundleDevelopmentRegion` |
 

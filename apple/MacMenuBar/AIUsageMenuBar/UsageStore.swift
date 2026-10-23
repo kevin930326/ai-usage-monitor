@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import UsageKit
-import WidgetKit
 
 /// 讀取並監看本機 `usage.json`（FR-20）。收集器以「寫暫存檔再改名」更新，
 /// 監看檔案本身會在改名後失效，所以監看所在資料夾。
@@ -20,9 +19,8 @@ final class UsageStore {
 
     @ObservationIgnored private var source: DispatchSourceFileSystemObject?
     @ObservationIgnored private var timer: Timer?
-    @ObservationIgnored private var widgetThrottle = WidgetReloadThrottle()
 
-    /// 測試時以 AI_USAGE_MONITOR_HOME 指向假資料，此時不寫入 App Group，避免動到真實資料夾。
+    /// 測試時以 AI_USAGE_MONITOR_HOME 指向假資料（「更新」按鈕此時不觸發真的收集器）。
     var usesCustomHome: Bool {
         !(ProcessInfo.processInfo.environment[UsageFileLocator.homeEnvironmentKey] ?? "").isEmpty
     }
@@ -46,7 +44,6 @@ final class UsageStore {
             watchDirectory()
             reload()
         }
-        reloadWidgetIfNeeded()
     }
 
     func reload() {
@@ -56,7 +53,6 @@ final class UsageStore {
             guard loaded != snapshot else { return }
             snapshot = loaded
             Self.log("loaded updated_at=\(loaded.updatedAt.ISO8601Format())")
-            shareWithWidget()
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             errorMessage = "找不到 usage.json，請確認 Mac 收集器正在執行"
         } catch {
@@ -90,23 +86,6 @@ final class UsageStore {
             Self.log("directory moved or deleted, polling until it comes back")
         }
         reload()
-    }
-
-    /// 複製到 App Group 給小工具讀。只在 App 有 App Group entitlement（以 Team 簽署）時才寫入：
-    /// 未簽署時小工具本來就讀不到，且 macOS 15 會對存取未授權的群組容器跳出詢問。
-    private func shareWithWidget() {
-        guard !usesCustomHome, SharedSnapshot.isEntitled, let url = SharedSnapshot.url, let snapshot,
-              let data = try? UsageEncoder.encode(snapshot) else { return }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
-        reloadWidgetIfNeeded()
-    }
-
-    /// 收集器每 5 分鐘寫一次，每次都重新整理會超過 WidgetKit 的每日預算，改由節流決定。
-    private func reloadWidgetIfNeeded() {
-        guard !usesCustomHome, SharedSnapshot.isEntitled, let snapshot,
-              widgetThrottle.shouldReload(for: snapshot, now: .now) else { return }
-        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// 寫到 stderr（不經緩衝），方便測試時從 log 確認讀取的路徑與資料時間。

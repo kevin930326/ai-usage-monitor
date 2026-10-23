@@ -64,7 +64,8 @@ for config in Debug Release; do
   run "watch-$config" xcbuild WatchApp    AIUsageWatch   AIUsageWatch   "$config" "$WATCH_DEST"
 done
 run ios-appex         test -d "$DD/iOSApp/Build/Products/Release-iphonesimulator/AIUsageMonitor.app/PlugIns/UsageWidget.appex"
-run mac-appex         test -d "$DD/MacMenuBar/Build/Products/Release/AIUsageMenuBar.app/Contents/PlugIns/UsageDesktopWidget.appex"
+# Mac 桌面小工具已移除（FR-24 不做）：App 內不應再有任何擴充
+run mac-no-appex      test ! -e "$DD/MacMenuBar/Build/Products/Release/AIUsageMenuBar.app/Contents/PlugIns"
 run watch-appex       test -d "$DD/WatchApp/Build/Products/Release-watchsimulator/AIUsageWatch.app/PlugIns/UsageComplications.appex"
 run ios-release-clean   no_debug_strings "$DD/iOSApp/Build/Products/Release-iphonesimulator/AIUsageMonitor.app"
 run mac-release-clean   no_debug_strings "$DD/MacMenuBar/Build/Products/Release/AIUsageMenuBar.app"
