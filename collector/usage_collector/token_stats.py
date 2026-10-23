@@ -543,16 +543,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     """在一個交易內處理一個檔案從上次位置起的新內容。回傳處理後的 offset。
     `switch`：上一次嘗試遇到 _SwitchToRecord（交易已回復），這次先扣掉該檔的貢獻、改用 record 從頭重算。"""
     st = _load_state(row)
-    rewritten = row is not None and (
-        (row["device"], row["inode"]) != (f.device, f.inode) or f.size < row["offset"] or f.mtime < row["mtime"])
-    if switch:
-        _reset_codex(conn, totals, f.key, cutoffs)
-        st = FileState(source="record")
-    elif row is None or rewritten:
-        if f.provider == "codex":
-            # 新檔案也先扣：scan_state 已過期刪除、但帳本還在的檔案再出現時不重複計入
-            _reset_codex(conn, totals, f.key, cutoffs)
-        st = FileState()  # Claude 從頭重掃，以 seen_ids／seen_tasks 避免重複計入
+    # 先確認檔案打得開、而且是列舉到的那一個，才動統計：開不了或被換掉時這次什麼都不改（下次再處理）
     try:
         fd = os.open(f.path, os.O_RDONLY | os.O_NOFOLLOW)
     except OSError:
@@ -560,8 +551,18 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     with os.fdopen(fd, "rb") as fh:
         opened = os.fstat(fh.fileno())
         if (opened.st_dev, opened.st_ino) != (f.device, f.inode):
-            return st.offset  # 列舉之後被換掉：下次再處理
+            return st.offset
         size = opened.st_size
+        rewritten = row is not None and (
+            (row["device"], row["inode"]) != (f.device, f.inode) or size < row["offset"] or f.mtime < row["mtime"])
+        if switch:
+            _reset_codex(conn, totals, f.key, cutoffs)
+            st = FileState(source="record")
+        elif row is None or rewritten:
+            if f.provider == "codex":
+                # 新檔案也先扣：scan_state 已過期刪除、但帳本還在的檔案再出現時不重複計入
+                _reset_codex(conn, totals, f.key, cutoffs)
+            st = FileState()  # Claude 從頭重掃，以 seen_ids／seen_tasks 避免重複計入
         fh.seek(st.offset)
         while not budget.exhausted():
             start = fh.tell()

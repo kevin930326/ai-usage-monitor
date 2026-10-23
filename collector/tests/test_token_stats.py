@@ -544,6 +544,28 @@ class CodexTest(TokenStatsTestCase):
         self.assertEqual(self.table("file_tokens"), self.table("file_tokens", fresh))
         self.assertEqual(self.records()["total_tokens"], self.records(fresh)["total_tokens"])
 
+    def test_unreadable_or_replaced_file_changes_nothing(self):
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=100, out=10))
+        self.scan()
+        before = {t: self.table(t) for t in ("daily_tokens", "hourly_tokens", "records", "seen_ids", "file_tokens", "scan_state")}
+        # 截斷（需要重算）但開不了：扣除不能先提交
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=1, out=1), mode="w")
+        with mock.patch.object(token_stats.os, "open", side_effect=PermissionError("denied")):
+            self.scan()
+        self.assertEqual({t: self.table(t) for t in before}, before)
+        # 列舉之後被換成另一個檔案（inode 不同）
+        real_list = token_stats.list_files
+        def swapped(dirs):
+            files = real_list(dirs)
+            os.unlink(self.codex_file())
+            self.write(self.codex_file(), codex_count(T0, inp=5, out=5))
+            return files
+        with mock.patch.object(token_stats, "list_files", side_effect=swapped):
+            self.scan()
+        self.assertEqual({t: self.table(t) for t in before}, before)
+        self.scan()  # 下次執行才處理新的檔案
+        self.assertEqual(self.totals("codex")[:4], (5, 0, 0, 5))
+
     def test_cleared_history_recompute_only_clears(self):
         # App 的「清除歷史」把 file_tokens 歸零（對應的加總已刪除）：之後改寫時不會扣成負數或扣到新資料
         self.write(self.codex_file(), codex_count(T0, inp=100, out=10))
