@@ -81,8 +81,13 @@ CREATE TABLE scan_state (
   last_seen  INTEGER NOT NULL   -- 超過 90 天沒看到這個檔案就刪除該列
 );
 
--- 去重：已計入的訊息或回應 ID（只存 ID，不存內容）。**永久保留**（只有 ID，一年約數十萬列、數十 MB 以內）
-CREATE TABLE seen_ids (provider TEXT, id TEXT, day TEXT, PRIMARY KEY (provider, id));
+-- 去重：已計入的訊息或回應 ID 與當時計入的數值（只存 ID 與數字，不存內容）。**永久保留**（一年約數十萬列、數十 MB 以內）
+CREATE TABLE seen_ids (
+  provider TEXT, id TEXT,
+  day TEXT, hour INTEGER, model TEXT,   -- 第一次計入時的歸屬，之後的差額也記在這裡
+  input_tokens INTEGER, cache_write_tokens INTEGER, cache_read_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER,
+  PRIMARY KEY (provider, id)
+);
 
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 -- schema_version、device_id、device_name、retention_days、first_scan_progress、upload_state（ADR-0011）
@@ -133,7 +138,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | `reasoning_tokens` | 不填（thinking 明細不另存） | `reasoning_output_tokens`（明細） |
 
 - **顯示的「Token」= `input + cache_write + cache_read + output`**（不加 `reasoning`）。對 Codex 這等於 `total_tokens`，以測試驗證這個等式；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。是否把快取讀取算進「本週 Token」列為待確認事項。
-- **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。
+- **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
 - **日期與時區**：以紀錄的 `timestamp` 換算成**掃描當下**的本機時區取日期與小時；之後改時區不回頭重算。限制：旅行或另一台電腦在不同時區時，第二層合併的「同一天」不是同一個 24 小時（ADR-0011 第 1 節）。
 - **模型名稱**：前綴白名單 `claude-`、`gpt-`、`codex-`、`o` 加數字（例如 `o4-mini`），且只含 `[a-z0-9._-]`、最長 64 字；其他（自訂別名、proxy、`<synthetic>`）一律記為 `other`。第二層會上傳模型名稱，所以用白名單而不是字元集。
