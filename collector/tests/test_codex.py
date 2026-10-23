@@ -306,7 +306,21 @@ class CodexFetchTest(unittest.TestCase):
         self.assert_no_leftover(fake)
 
     def test_cleanup_error_does_not_hide_original_error(self):
-        with FakeCodex(mode="logged-out"), \
+        # 這個測試故意讓清理失敗，假的 codex 會留著：測試結束後自己收掉，
+        # 否則它被回收時的 ResourceWarning 會落在之後某個擷取 stderr 的測試裡
+        servers = []
+        real_init = codex.AppServer.__init__
+
+        def spy(server, *args, **kwargs):
+            real_init(server, *args, **kwargs)
+            servers.append(server)
+
+        def reap():
+            for server in servers:
+                server.proc.kill()
+                server.proc.wait()
+        self.addCleanup(reap)
+        with FakeCodex(mode="logged-out"), mock.patch.object(codex.AppServer, "__init__", spy), \
              mock.patch.object(codex.os, "killpg", side_effect=RuntimeError("cleanup")), \
              mock.patch.object(codex, "CLOSE_TIMEOUT", 0.01), \
              mock.patch.object(subprocess.Popen, "wait", side_effect=subprocess.TimeoutExpired("codex", 0)), \

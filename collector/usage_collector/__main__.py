@@ -7,7 +7,7 @@ import signal
 import sys
 from datetime import datetime, timezone
 
-from . import local_store, relay
+from . import history, local_store, relay
 from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -62,6 +62,10 @@ def main(argv: list[str] | None = None) -> int:
         except ProviderError as e:
             log(str(e))
             ok = False
+
+    # 額度歷史（ADR-0009）放在最後：鎖住時最多等 5 秒，不能拖慢 usage.json 與上傳；失敗只記日誌、不影響結束碼
+    if args.write_local:
+        history.record_safely(snapshot)
 
     # 全部 provider 失敗或上傳失敗時回傳非 0，方便 launchd / 腳本判斷
     return 0 if ok else 1

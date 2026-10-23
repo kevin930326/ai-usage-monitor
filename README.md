@@ -85,6 +85,7 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 | Mac | Keychain `AIUsageMonitor-relay-write` | 中繼**寫入**密鑰（只有收集器使用） |
 | Mac | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（選單列 App 讀取） |
 | Mac | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址（不含密鑰） |
+| Mac | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史（[ADR-0009](docs/adr/0009-local-history-and-token-stats.md)）：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」，以及每次收集是否成功；隨機產生的裝置 ID 與保留期間設定。不存方案名稱、錯誤訊息或任何帳號資訊；**不上傳**，只有選單列 App 讀取。預設保留 1 年，35 天前的資料降為每小時一筆 |
 | Mac | `~/Library/Logs/AIUsageMonitor/collector.log` | 收集器 log（錯誤訊息，不含 token，也不含 Claude Code 的輸出） |
 | Cloudflare | Worker KV `latest`；Worker secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新快照；兩把密鑰 |
 | iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組（App 自己的 application identifier）共用同一個項目 |

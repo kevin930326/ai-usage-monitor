@@ -41,7 +41,8 @@ CREATE TABLE quota_samples (
 );
 
 -- 收集器每次執行一列：分辨「沒有紀錄」（Mac 睡眠、收集器停止）與「沒有使用」的唯一依據
-CREATE TABLE collector_runs (ts INTEGER PRIMARY KEY, ok INTEGER NOT NULL);
+-- runs：這一列代表幾次執行（降採樣後為該小時的次數）；ok：其中成功的次數（v1.6 實作時加入 runs）
+CREATE TABLE collector_runs (ts INTEGER PRIMARY KEY, ok INTEGER NOT NULL, runs INTEGER NOT NULL DEFAULT 1);
 
 -- 每日 Token 加總：一列 = 某裝置、某天、某服務、某模型（欄位語意見第 4 節的正規化）
 CREATE TABLE daily_tokens (
@@ -97,7 +98,8 @@ CREATE TABLE file_tokens (
 );
 
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
--- schema_version、device_id、device_name、retention_days、first_scan_progress、upload_state（ADR-0011）
+-- schema_version、device_id、device_name、retention_days、first_scan_progress、upload_state（ADR-0011）、
+-- last_cleanup_day（每天第一次執行的判斷）、downsampled_before（降採樣做到哪裡）
 ```
 
 - 額度歷史只存 `quota_samples` 列出的欄位：不存方案名稱、錯誤訊息、額度顯示名稱。
