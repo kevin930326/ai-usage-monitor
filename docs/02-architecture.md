@@ -58,7 +58,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 | 部分 | 作用 |
 |---|---|
 | 選單列圖示 | `MenuBarExtra` 顯示最吃緊額度的 % 與顏色（FR-21） |
-| 面板 | `.window` 樣式，顯示所有額度、進度條、倒數、更新時間與趨勢圖（FR-22、FR-23） |
+| 面板 | `.window` 樣式，單一長版、卡片式：最吃緊的額度、所有額度與預期進度、倒數、更新時間；區塊可開關、排序、收合（FR-22、FR-34～FR-36）；走勢與統計見 ADR-0008 的階段 |
 | 桌面小工具 | WidgetKit Extension（FR-24） |
 | 動態視覺 | SwiftUI 內建動畫，只在面板或統計視窗開啟時執行、尊重「減少動態效果」（FR-25、[ADR-0010](adr/0010-mac-animation-principles.md)）；不用 Metal／SceneKit |
 | 設定視窗 | 選單列圖示樣式、面板區塊的開關與排序（FR-35，[ADR-0008](adr/0008-mac-panel-layout.md)） |

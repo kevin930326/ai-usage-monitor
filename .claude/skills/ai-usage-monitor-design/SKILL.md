@@ -100,7 +100,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
 
-另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改。
+另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（提議中，ADR-0009）也是收集器與 App 共用。
 
 ## 6. 資訊排列
 
@@ -180,7 +180,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ### 面板
 
-- 單一長版、**卡片式**：寬 360pt；卡片圓角 12pt、系統材質背景（macOS 26 Liquid Glass，舊版 `.regularMaterial`）；深淺色跟隨系統。
+- 單一長版、**卡片式**：寬 360pt；卡片圓角 12pt、半透明填色（primary 4.5%）加細邊框，不疊材質（面板視窗本身已是系統材質；`ImageRenderer` 畫不出材質）；深淺色跟隨系統。
+- 按鈕、開關等控制項自己畫（`ButtonStyle`／`ToggleStyle`），不用 AppKit 實作的控制項，`ImageRenderer` 才能截圖。
 - 預設順序：主圓環卡片 → 額度卡片 →（之後的區塊）。頁首（標題、更新時間、更新、設定、結束）與頁尾不能關閉或移動。
 - 區塊以穩定的字串 `id` 識別，順序與開關存在 `UserDefaults`；新區塊依預設順序插入、預設開啟；不認得的 id 保留但不顯示。
 - 卡片可以收合，收合時不建立內容視圖（不計算、不播動畫）。
@@ -189,9 +190,10 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ### 動畫原則（ADR-0010）
 
-1. 只在面板或視窗開啟時執行；關閉後停止所有動畫與 `TimelineView`／計時器。
+1. 只在面板或視窗開啟時執行；關閉後停止所有動畫與 `TimelineView`／計時器。選單列面板關閉時視圖仍在，以視窗的 occlusion／key 狀態判斷；看不見時把 `Text(date, style: .relative)` 換成固定文字（它在收起的視窗裡仍會定時重算）。
 2. `accessibilityReduceMotion` 時改為直接顯示（只允許 ≤ 0.15 秒淡入淡出）。
-3. 一次性、有終點（多數 0.2～0.6 秒，最長 1 秒），不循環；呼吸類最多 3 次。
+3. 一次性、有終點：單次 ≤ 1.2 秒（多數 0.2～0.6 秒），重複類最多 3 次、總長 ≤ 4 秒。
 4. 由資料改變或使用者操作觸發，不為動畫輪詢。
 5. 以 SwiftUI 內建動畫為主（`withAnimation`、`.contentTransition(.numericText())`、`PhaseAnimator`／`KeyframeAnimator`），不用 Metal／SceneKit。
-6. **每個動畫都量測效能**：`ps -o %cpu=,rss=` 記錄面板開啟靜止（≤ 2%）、播放中（記錄最大值）、關閉後 1 分鐘（≤ 0.3%，RSS 不明顯增加），結果寫進 PR。
+6. **每個動畫都量測效能**：`scripts/measure-panel-perf.sh`（`ps -o %cpu=,rss=`）記錄面板開啟靜止（≤ 2%）、播放中（記錄最大值）、關閉後 1 分鐘（≤ 0.3%）、第二次開關後記憶體不累積（≤ +5 MB），結果寫進 PR。
+7. 每個動畫寫成 0…1 的進度值，執行時由 `withAnimation` 驅動，截圖工具以相同曲線逐格指定，輸出 PNG 序列與 GIF。
