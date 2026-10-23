@@ -5,7 +5,8 @@
 #   AUM_PERF_SCENARIO=fresh scripts/measure-panel-perf.sh …   # 歷史只有 1 筆：量測骨架掃光
 #
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
-# 52 秒時關閉面板，144 秒時再開關一次，約 172 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
+# 57 秒時關閉面板，149 秒時再開關一次，177 秒打開完整統計視窗、187 秒關閉，約 207 秒後結束），
+# 每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
 # 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3），不讀真實資料；設定也用獨立的 demo 設定。
 # 任何一項門檻未通過時以非零結束。
@@ -50,13 +51,19 @@ rows.append(("面板開啟、靜止（開啟後 5～11 秒）", window(o + 5, o 
 opening = "打開面板：圓環＋用量條＋骨架掃光" if sys.argv[3] == "fresh" else "打開面板：圓環＋用量條＋走勢"
 rows.append((f"播放中：{opening}（開啟後 0～4 秒）", window(o, o + 4), "peak"))
 anims = [ ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
-         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light")]
+         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light"),
+         ("統計切換服務", "stats-scope"), ("統計切換範圍", "stats-range")]
 for name, key in anims:
     rows.append((f"播放中：{name}", window(marks[key], marks[key] + 2), "peak"))
 rows.append(("關閉後 60～90 秒", window(c + 60, c + 90), "avg"))
 c2 = marks.get("panel-close-2")
 if c2:
     rows.append(("第二次關閉後 5～18 秒", window(c2 + 5, c2 + 18), "avg"))
+so, sc = marks.get("stats-open"), marks.get("stats-close")
+if so and sc:
+    rows.append(("播放中：打開完整統計視窗（0～3 秒）", window(so, so + 3), "peak"))
+    rows.append(("完整統計視窗開啟、靜止（3～9 秒）", window(so + 3, so + 9), "avg"))
+    rows.append(("完整統計視窗關閉後 5～18 秒", window(sc + 5, sc + 18), "avg"))
 print(f"情境：{sys.argv[3]}（scripts/make-demo-history.py）")
 print()
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
@@ -71,10 +78,18 @@ ok_static = avg(window(o + 5, o + 11), 1) <= 2
 second = window(c2 + 5, c2 + 18) if c2 else []
 rss_limit = peak(closed, 2) + 5 * 1024
 ok_rss = bool(second) and peak(second, 2) <= rss_limit
+stats_static = window(so + 3, so + 9) if so else []
+stats_after = window(sc + 5, sc + 18) if sc else []
+ok_stats_static = bool(stats_static) and avg(stats_static, 1) <= 2
+# 關閉統計視窗後釋放資料：不超過面板第二次關閉後 +5 MB
+stats_limit = (peak(second, 2) if second else peak(closed, 2)) + 5 * 1024
+ok_stats_rss = bool(stats_after) and peak(stats_after, 2) <= stats_limit
 print()
 print(f"- 開啟靜止 ≤ 2%：{'通過' if ok_static else '未通過'}")
+print(f"- 完整統計視窗靜止 ≤ 2%：{'通過' if ok_stats_static else '未通過'}")
+print(f"- 完整統計視窗關閉後 RSS 不超過面板第二次關閉後 +5 MB（{stats_limit / 1024:.1f} MB）：{'通過' if ok_stats_rss else '未通過'}")
 print(f"- 關閉後 1 分鐘 ≤ 0.3%：{'通過' if ok_cpu else '未通過'}")
 print(f"- 第二次開關後 RSS 不超過第一次關閉後 +5 MB（{rss_limit / 1024:.1f} MB）：{'通過' if ok_rss else '未通過'}")
 # 任何一項未通過（含沒有取樣，平均為 NaN）就以非零結束
-sys.exit(0 if ok_static and ok_cpu and ok_rss else 1)
+sys.exit(0 if ok_static and ok_cpu and ok_rss and ok_stats_static and ok_stats_rss else 1)
 PY

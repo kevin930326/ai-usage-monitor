@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- Mac 面板第三階段：統計卡片與完整統計視窗（v1.7，FR-43、FR-44、FR-46，ADR-0008～0011）。卡片標「這台 Mac」（滑鼠移上去說明不含網頁、手機 App、其他電腦與雲端 session），可切換全部／Claude／Codex：本週 Token（與上週同期比較 ▲▼%）、單日最高、最長任務、連續天數（創新紀錄時 🔥）、Token 活動（30 天／12 週／累計）與約 5 個月的活動熱力圖；主數字＝input＋cache_write＋output，滑鼠移到「本週 Token」看四種 Token 與快取讀取。首次掃描完成前顯示骨架「正在整理過去的紀錄（N%）」。頁尾「完整統計視窗 →」打開可調整大小的視窗（最小 720×520）：一年熱力圖、30 天疊加長條、各模型、一天中的時段、個人紀錄；打開時才讀資料庫、關閉時釋放。第三階段動畫：服務切換交叉淡入、數字滾動、長條依序長出、熱力圖逐欄淡入、🔥 每個新紀錄彈一次；減少動態效果時直接顯示。`make-demo-history.py` 產生假的 Token 資料，量測腳本加入統計切換與統計視窗
 - 收集器 Token 統計（v1.7，FR-40～FR-44，ADR-0009）：讀這台 Mac 的 Claude Code 與 Codex CLI 對話紀錄（只列舉 ADR 列出的檔案、不跟隨符號連結、每行只取白名單欄位），把 `input`、`cache_write`、`cache_read`、`output`、`reasoning` 與任務時間分開累加到 `history.sqlite3`（schema 2：`daily_tokens`、`hourly_tokens`、`records`、`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）。Claude 以訊息 ID 去重並補串流差額；Codex 每檔一種來源、改寫或換來源時先扣再重算；首次掃描每次最多 64 MB 或 15 秒並記錄進度；一般執行約增加 8 ms。`install-launchd.sh` 把 `CLAUDE_CONFIG_DIR`／`CODEX_HOME` 寫進 `config.json`；Mac App 支援 schema 2，「清除歷史」把 Codex 帳本歸零、「清除並重新掃描」一併清除任務去重與首次掃描狀態
 - `scripts/codex-review.sh`：以 Codex（固定 `gpt-6.1-sol`、reasoning effort medium、唯讀）審查 `origin/main...HEAD` 的變更（`--diff`，預設）或整個 repo（`--full`），報告存到 `~/Documents/ai-usage-monitor-work/reviews/<分支>-codex.md`；模型無法使用或額度不足時印出原因並以非 0 結束，不改用其他模型。專案 skill `.claude/skills/codex-review` 說明何時跑與 triage 的寫法，CLAUDE.md 加上「開 PR 前先審查」
 - `scripts/tests/`：shell 腳本的測試（以 `AUM_INSTALL_DIR` 與假 xcodebuild 跑完整的 `install-mac-app.sh` 流程、`codex-review.sh` 的參數與失敗處理、檢查沒有緊接非 ASCII 字元的 `$VAR`），接進 `verify-all.sh` 與 CI
