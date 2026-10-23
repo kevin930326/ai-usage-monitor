@@ -4,7 +4,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import date, datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -46,8 +46,15 @@ class HistoryTestCase(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def db(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.path)
+    @contextmanager
+    def db(self):
+        # `with sqlite3.connect()` 只 commit 不關閉；Python 3.13 對沒關的連線發 ResourceWarning
+        conn = sqlite3.connect(self.path)
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
     def count(self, table: str) -> int:
         with self.db() as c:
