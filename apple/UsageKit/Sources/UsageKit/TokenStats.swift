@@ -124,10 +124,14 @@ public struct TokenStatsData: Equatable, Sendable {
     public var skippedLines: Int
     /// 保留期間（天，0＝永久）
     public var retentionDays: Int
+    /// 實際還有每日資料的第一天（`meta.token_days_from`，`YYYY-MM-DD`）：保留期間縮短或清除歷史後延長保留期間，
+    /// 已刪除的日子不會回來，不能只看目前的保留期間；沒有記錄時為 nil
+    public var dataFrom: String?
 
     public init(days: [TokenDayRow] = [], hours: [TokenHourRow] = [], records: [String: TokenRecord] = [:],
                 recordDays: [String: [String: Int64]] = [:],
-                firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365) {
+                firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365,
+                dataFrom: String? = nil) {
         self.days = days
         self.hours = hours
         self.records = records
@@ -136,6 +140,7 @@ public struct TokenStatsData: Equatable, Sendable {
         self.firstScanProgress = firstScanProgress
         self.skippedLines = skippedLines
         self.retentionDays = retentionDays
+        self.dataFrom = dataFrom
     }
 
     public static let empty = TokenStatsData()
@@ -150,11 +155,17 @@ public struct TokenStatsData: Equatable, Sendable {
         ["claude", "codex"].filter { p in days.contains { $0.provider == p && $0.counts.main > 0 } || (records["total_tokens:\(p)"]?.value ?? 0) > 0 }
     }
 
-    /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）；永久保留時為 nil
+    /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）：目前保留期間的起點與
+    /// `dataFrom` 較晚的一個；永久保留且沒有刪除過時為 nil
     public func firstAvailableDay(now: Date, calendar base: Calendar = .current) -> Date? {
-        guard retentionDays > 0 else { return nil }
         let calendar = TokenCalendar.make(base)
-        return calendar.startOfDay(for: now.addingTimeInterval(-TimeInterval(retentionDays) * 86400))
+        let byRetention = retentionDays > 0
+            ? calendar.startOfDay(for: now.addingTimeInterval(-TimeInterval(retentionDays) * 86400)) : nil
+        let deleted = dataFrom.flatMap { TokenCalendar.date($0, calendar: base) }
+        switch (byRetention, deleted) {
+        case let (a?, b?): return max(a, b)
+        case let (a, b): return a ?? b
+        }
     }
 
     /// 每天（依範圍）的合計
@@ -345,8 +356,8 @@ public enum TokenActivity {
                     counts += c
                     providers.merge(p, uniquingKeysWith: +)
                 }
-                return TokenBar(start: start, byProvider: providers, counts: counts,
-                                available: available(TokenCalendar.adding(6, to: start, calendar: calendar)))
+                // 一週的第一天也在保留期間內才算完整；跨過保留邊界的週有幾天已刪除，合計不可信
+                return TokenBar(start: start, byProvider: providers, counts: counts, available: available(start))
             }
         case .cumulative:
             // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣。
@@ -414,15 +425,24 @@ public struct TokenHeatmap: Equatable, Sendable {
 
 // MARK: - 各模型與時段（完整統計視窗）
 
+/// 一個服務的一個模型的合計（「各模型」的一列）
+public struct TokenModelTotal: Equatable, Sendable, Identifiable {
+    public var provider: String
+    public var model: String
+    public var counts: TokenCounts
+    public var id: String { "\(provider)/\(model)" }
+}
+
 public enum TokenBreakdown {
-    /// 各模型的合計，依主數字由大到小
-    public static func models(data: TokenStatsData, scope: TokenScope) -> [(model: String, counts: TokenCounts)] {
-        var result: [String: TokenCounts] = [:]
+    /// 各模型的合計，依主數字由大到小。以（服務、模型）分組：兩家都有白名單外的模型時各自一列 `other`
+    public static func models(data: TokenStatsData, scope: TokenScope) -> [TokenModelTotal] {
+        var result: [String: TokenModelTotal] = [:]
         for row in data.days where scope.includes(row.provider) {
-            result[row.model, default: .zero] += row.counts
+            let key = "\(row.provider)/\(row.model)"
+            result[key, default: TokenModelTotal(provider: row.provider, model: row.model, counts: .zero)].counts += row.counts
         }
-        return result.filter { $0.value.main > 0 }.map { ($0.key, $0.value) }
-            .sorted { ($0.counts.main, $1.model) > ($1.counts.main, $0.model) }
+        return result.values.filter { $0.counts.main > 0 }
+            .sorted { ($0.counts.main, $1.model, $1.provider) > ($1.counts.main, $0.model, $0.provider) }
     }
 
     /// 一天中各時段（0～23 時）的主數字合計

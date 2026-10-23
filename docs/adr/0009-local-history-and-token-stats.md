@@ -128,7 +128,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 服務 | 取用的欄位 | 不取用（舉例，會在同一行出現） |
 |---|---|---|
 | Claude | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的 `input_tokens`／`cache_creation_input_tokens`／`cache_read_input_tokens`／`output_tokens`、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`，以及 `message.content` **是否為 `tool_result`**（只判斷型別，不讀文字） | `message.content` 的文字、`cwd`、`gitBranch`、附件（含 `userEmail`、`gitStatus`）、檔案快照、`lastPrompt`、`customTitle` |
-| Codex | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`（`info` 為 null 時略過）；`turn_context` 的 `model`；`task_started`／`task_complete` 的 `turn_id`、`started_at`、`completed_at`、`duration_ms` | `task_complete.last_agent_message`、`turn_context.cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
+| Codex | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`（`info` 為 null 時略過）；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、`started_at`、`completed_at`、`duration_ms`（`task_started` 只在第 1 步的位元組篩選中，解析後不取任何欄位） | `task_complete.last_agent_message`、`turn_context.cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 
 > 限制：JSON 無法只解析部分欄位，篩選過的行仍會整行載入記憶體再丟棄（例如 user 行的提示文字）。規則是「載入後只取白名單、不保留、不輸出」，不是「完全不讀到」。測試在假紀錄的每一種行放入假的內容、路徑與 email，確認資料庫、CSV、日誌、stdout 都沒有出現。
 
@@ -237,6 +237,9 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - `record_days (day, provider, tokens)`：每天每個服務的主數字，**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，保留期間較短或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它。「清除歷史」時與 `records` 一起清除。
 - `records` 另有各服務的版本（鍵加上 `:claude`／`:codex`），給面板的「全部／Claude／Codex」切換使用。個人紀錄同樣大時記最早的那天。
 - 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
+- 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
+- 「匯出 CSV」（第 5 節）目前只匯出每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`），尚未匯出 `daily_tokens`；是否補上待使用者決定。
+- `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
 
 ## 決定（使用者於 2026-10-23 決定）
 

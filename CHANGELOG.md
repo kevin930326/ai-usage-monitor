@@ -38,6 +38,10 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- 總檢查（night3 第 8 部分，修正 commit 的 Codex 審查與 Fable 對抗式審查）：
+  - Token 統計：跨過保留期間邊界的那一週不再當成完整的一週；縮短保留期間後再延長，已刪除的日子仍標「超過保留期間」而不是 0（App 記在 `meta.token_days_from`）；同一個 Codex rollout 被複製到 `archived_sessions` 時只算一次；完整統計視窗的「各模型」把兩家的 `other` 分開、各用自己的顏色
+  - 額度：每週額度沒有近期速度時，經過 10% 以前不預測「可撐到星期幾」（與「用得太快」同一規則）；資料過期時時間軸不再把早已過去的重置標成「剛重置」
+  - 文件：README 隱私章節補上 `menuBar.*`、登入項目、stderr、狀態頁與 `launchctl kickstart`，Codex 讀取欄位改為實際的 `task_complete`；ADR-0008 決定 1 註明 v1.6 的規則；ADR-0009 註明 CSV 尚未匯出每日 Token
 - 收集器連上中繼或狀態頁後讀取回應逾時（`TimeoutError`）、連線被中斷或回應不完整時，整個收集器中斷並在日誌留下 traceback，之後的額度歷史、Token 統計與服務狀態都沒有寫入；改為回報「網路錯誤（連線逾時或中斷）」並照常執行後續步驟
 - 手錶：iPhone 傳來的設定存不進 Keychain 時，錯誤改為獨立顯示（未設定時也看得到、抓取成功不會洗掉）；套用新設定後，用舊密鑰開始的抓取結果不再蓋過新的結果；背景更新的第一次排程要求改為直接送出（在背景工作結束前），失敗時才延後重試（整合審查 D-a、D-b、D-c）
 - `reinstall-ios.sh`：接手殘留的鎖時，若改名到的是別人的新鎖而且又放不回去，保留原樣並記錄，不再 `rm -rf`（整合審查 D-h 3-2）

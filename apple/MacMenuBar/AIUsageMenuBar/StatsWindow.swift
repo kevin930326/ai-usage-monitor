@@ -188,7 +188,7 @@ enum StatNumbersText {
 
 /// 各模型：橫條（相對最多的模型），右邊是主數字；滑鼠移上去看四種 Token。
 private struct ModelList: View {
-    let models: [(model: String, counts: TokenCounts)]
+    let models: [TokenModelTotal]
 
     var body: some View {
         let peak = Double(max(models.first?.counts.main ?? 1, 1))
@@ -196,13 +196,12 @@ private struct ModelList: View {
             if models.isEmpty {
                 Text("沒有資料").font(.callout).foregroundStyle(.secondary)
             }
-            ForEach(models.prefix(10), id: \.model) { item in
-                let provider = item.model.hasPrefix("claude") ? "claude" : "codex"
+            ForEach(models.prefix(10)) { item in
                 HStack(spacing: 8) {
                     Text(item.model).font(.callout).lineLimit(1).truncationMode(.middle).frame(width: 150, alignment: .leading)
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(UsageColors.provider(provider))
+                            .fill(UsageColors.provider(item.provider))
                             .frame(width: max(geo.size.width * CGFloat(Double(item.counts.main) / peak), 2))
                     }
                     .frame(height: 8)

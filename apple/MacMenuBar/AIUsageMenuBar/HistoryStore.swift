@@ -231,12 +231,23 @@ final class HistoryStore {
     }
 
     /// 改保留期間：寫入 `meta.retention_days`；縮短時立即刪除超出的資料（收集器每天也會依 meta 再刪一次）。
+    /// 延長時舊期間以前的每日 Token 已刪除，把邊界記在 `meta.token_days_from`，統計才不會把它們畫成 0。
+    /// 收集器停過時實際刪到的地方比「現在 − 舊期間」早，所以取它與資料庫裡最早一天較早的一個：
+    /// 還在的資料一定不會被藏起來；最早一天之前若剛好沒有使用，會顯示成「沒有資料」而不是 0（保守）。
     nonisolated func setRetention(days: Int, now: Date = .now) throws {
         try write { db in
             let old = Self.meta(db, "retention_days").flatMap(Int.init) ?? Self.defaultRetentionDays
             guard Self.exec(db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('retention_days', ?)", [.text(String(days))]) else { return false }
             let shorter = days > 0 && (old == 0 || days < old)
-            guard shorter else { return true }
+            guard shorter else {
+                guard old > 0, days != old else { return true }
+                var boundary = Self.tokenDay(now.addingTimeInterval(-TimeInterval(old) * 86400))
+                if Self.existingTables(db, ["daily_tokens"]).count == 1,
+                   let earliest = Self.firstTokenDay(db), earliest < boundary {
+                    boundary = earliest
+                }
+                return Self.raiseTokenDaysFrom(db, boundary)
+            }
             let cutoff = Int64(now.timeIntervalSince1970) - Int64(days) * 86400
             return Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens"]).allSatisfy { table in
                 let column = table.hasSuffix("_tokens") ? "day" : "ts"
@@ -252,7 +263,7 @@ final class HistoryStore {
     /// 清除歷史（ADR-0009 第 5 節）。`rescan` 為真時連同掃描進度與去重表一起清除（Token 統計會從對話紀錄重建；
     /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
     /// 不重新掃描時 `file_tokens` 歸零而不刪除：對應的加總已清除，之後收集器重算該檔時只清空、不會扣到新的資料。
-    nonisolated func clear(rescan: Bool) throws {
+    nonisolated func clear(rescan: Bool, now: Date = .now) throws {
         var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days"]
         if rescan { tables += ["scan_state", "seen_ids", "seen_tasks", "file_tokens"] }
         try write(vacuum: true) { db in
@@ -262,8 +273,25 @@ final class HistoryStore {
                         + " output_tokens = 0, reasoning_tokens = 0", [])
                 })
                 && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
-                    + " 'token_bad_lines', 'token_long_lines')", []))
+                    + " 'token_bad_lines', 'token_long_lines', 'token_days_from')", []))
+                // 不重新掃描時，今天以前的每日 Token 不會再算回來
+                && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
         }
+    }
+
+    /// `daily_tokens` 最早的一天；沒有資料時為 nil
+    private nonisolated static func firstTokenDay(_ db: OpaquePointer) -> String? {
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, "SELECT MIN(day) FROM daily_tokens", -1, &stmt, nil) == SQLITE_OK,
+              sqlite3_step(stmt) == SQLITE_ROW, let text = sqlite3_column_text(stmt, 0) else { return nil }
+        return String(cString: text)
+    }
+
+    /// `meta.token_days_from` 只往後移（YYYY-MM-DD 可以直接比較字串）
+    private nonisolated static func raiseTokenDaysFrom(_ db: OpaquePointer, _ day: String) -> Bool {
+        if let current = meta(db, "token_days_from"), current >= day { return true }
+        return exec(db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('token_days_from', ?)", [.text(day)])
     }
 
     /// 匯出 CSV 的內容：每小時的額度歷史（`QuotaHistoryCSV`）。
@@ -442,7 +470,7 @@ extension HistoryStore {
             days: days, hours: hours, records: records, recordDays: recordDays,
             firstScanDone: meta(db, "first_scan_done") == "1",
             firstScanProgress: meta(db, "first_scan_progress").flatMap(Int.init).map { min(max($0, 0), 100) },
-            skippedLines: skipped, retentionDays: retention)
+            skippedLines: skipped, retentionDays: retention, dataFrom: meta(db, "token_days_from"))
     }
 
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。

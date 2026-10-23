@@ -143,6 +143,11 @@ import Testing
         ])
         #expect(TokenBreakdown.models(data: data, scope: .all).map(\.model) == ["claude-opus-5-5", "gpt-6.1-sol", "claude-sonnet-5-5"])
         #expect(TokenBreakdown.models(data: data, scope: .codex).map(\.model) == ["gpt-6.1-sol"])
+        // 兩家都有白名單外的模型（other）：各自一列、帶自己的服務
+        let others = TokenStatsData(days: [TokenDayRow(day: "2026-11-05", provider: "claude", model: "other", counts: TokenCounts(input: 30)),
+                                           TokenDayRow(day: "2026-11-05", provider: "codex", model: "other", counts: TokenCounts(input: 20))])
+        #expect(TokenBreakdown.models(data: others, scope: .all).map(\.id) == ["claude/other", "codex/other"])
+        #expect(TokenBreakdown.models(data: others, scope: .claude).map(\.provider) == ["claude"])
         let hours = TokenBreakdown.hours(data: data, scope: .all)
         #expect(hours[9] == 12)
         #expect(hours[23] == 0)
@@ -199,12 +204,38 @@ import Testing
         let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
         #expect(cumulative.first(where: \.available)?.main == 4960)
         #expect(cumulative.last?.main == 5000)
+        // 週長條：10/26 那週的 10/26～10/28 已刪除，不算完整的一週；11/2 那週完整
+        let weeks = TokenActivity.bars(data: data, scope: .all, range: .weeks, now: now, calendar: cal)
+        #expect(TokenCalendar.key(weeks[weeks.count - 2].start, calendar: cal) == "2026-10-26")
+        #expect(!weeks[weeks.count - 2].available)
+        #expect(weeks.last!.available)
+        #expect(weeks.filter(\.available).count == 1)
         // 上週同期（10/26～10/29）已部分超過保留期間：不比較
         #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).changePct == nil)
         // 永久保留：全部可用
         var forever = data
         forever.retentionDays = 0
         #expect(!TokenHeatmap(data: forever, scope: .all, now: now, weeks: 22, calendar: cal).truncated)
+    }
+
+    @Test func deletedDaysStayUnavailableAfterRetentionIsExtended() {
+        // 先保留 7 天（10/29 以前已刪除），再改回 1 年或永久：10/29 以前仍然沒有資料，不能畫成 0
+        for retention in [365, 0] {
+            let data = TokenStatsData(days: [row("2026-11-05", main: 40), row("2026-10-29", main: 7)],
+                                      records: ["total_tokens": TokenRecord(value: 5000)], firstScanDone: true,
+                                      retentionDays: retention, dataFrom: "2026-10-29")
+            #expect(TokenCalendar.key(data.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-10-29")
+            let map = TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: cal)
+            #expect(map.truncated)
+            let days = TokenActivity.bars(data: data, scope: .all, range: .days30, now: now, calendar: cal)
+            #expect(days.filter(\.available).count == 8)
+            #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).changePct == nil)
+        }
+        // 刪除邊界比目前的保留期間早時，以保留期間為準
+        let older = TokenStatsData(days: [row("2026-11-05", main: 40)], retentionDays: 7, dataFrom: "2026-01-01")
+        #expect(TokenCalendar.key(older.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-10-29")
+        // 沒有刪除過、永久保留：全部可用
+        #expect(TokenStatsData(retentionDays: 0).firstAvailableDay(now: now, calendar: cal) == nil)
     }
 
     @Test func dayKeysRoundTrip() {
