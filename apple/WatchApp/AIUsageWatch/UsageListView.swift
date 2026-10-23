@@ -8,27 +8,41 @@ struct UsageListView: View {
 
     var body: some View {
         NavigationStack {
-            content
+            UsageListContent(isConfigured: model.isConfigured, snapshot: model.snapshot, errorMessage: model.errorMessage,
+                             settingsError: model.settingsError, isLoading: model.isLoading) { await model.refresh() }
                 .navigationTitle("AI 用量")
         }
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
-        if !model.isConfigured {
-            ContentUnavailableView("請在 iPhone 設定", systemImage: "iphone",
-                                   description: Text("在 iPhone 的 AI 用量 App 設定中繼後，會自動同步到手錶。"))
-        } else if let snapshot = model.snapshot {
-            UsageList(snapshot: snapshot, errorMessage: model.errorMessage)
-                .refreshable { await model.refresh() }
-        } else if let error = model.errorMessage {
+/// 列表的各種狀態（不直接讀 WatchModel，Debug 截圖可以指定每種狀態）
+struct UsageListContent: View {
+    let isConfigured: Bool
+    let snapshot: UsageSnapshot?
+    let errorMessage: String?
+    /// iPhone 傳來的設定存不進 Keychain（整合審查 D-a）：每個狀態都要看得到
+    let settingsError: String?
+    let isLoading: Bool
+    let refresh: () async -> Void
+
+    var body: some View {
+        if !isConfigured {
+            ContentUnavailableView {
+                Label("請在 iPhone 設定", systemImage: "iphone")
+            } description: {
+                Text(settingsError ?? "在 iPhone 的 AI 用量 App 設定中繼後，會自動同步到手錶。")
+            }
+        } else if let snapshot {
+            UsageList(snapshot: snapshot, messages: [errorMessage, settingsError].compactMap { $0 })
+                .refreshable { await refresh() }
+        } else if let error = errorMessage ?? settingsError {
             ContentUnavailableView {
                 Label("無法取得用量", systemImage: "exclamationmark.triangle")
             } description: {
-                Text(error)
+                Text([error, errorMessage == nil ? nil : settingsError].compactMap { $0 }.joined(separator: "\n"))
             } actions: {
-                Button("重試") { Task { await model.refresh() } }
-                    .disabled(model.isLoading)
+                Button("重試") { Task { await refresh() } }
+                    .disabled(isLoading)
             }
         } else {
             ProgressView()
@@ -38,7 +52,8 @@ struct UsageListView: View {
 
 private struct UsageList: View {
     let snapshot: UsageSnapshot
-    let errorMessage: String?
+    /// 抓取錯誤與設定錯誤，列在最下方
+    let messages: [String]
 
     var body: some View {
         TimelineView(.everyMinute) { context in
@@ -90,8 +105,8 @@ private struct UsageList: View {
                     }
                     .font(.footnote)
                     .foregroundStyle(stale ? UsageColors.notice : .secondary)
-                    if let errorMessage {
-                        Text(errorMessage).font(.footnote).foregroundStyle(UsageColors.notice)
+                    ForEach(messages, id: \.self) { message in
+                        Text(message).font(.footnote).foregroundStyle(UsageColors.notice)
                     }
                 }
             }

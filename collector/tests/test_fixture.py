@@ -6,9 +6,10 @@ from unittest import mock
 
 from usage_collector import __main__ as cli
 from usage_collector.models import ProviderError
-from usage_collector.providers import claude
+from usage_collector.providers import claude, codex
 
-FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "usage-sample.json"
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+FIXTURE = FIXTURES / "usage-sample.json"
 
 
 class SharedFixtureTest(unittest.TestCase):
@@ -38,8 +39,30 @@ class SharedFixtureTest(unittest.TestCase):
         self.assertEqual(set(snapshot), set(self.fixture))
 
     def test_fixture_round_trips_through_json(self):
-        text = json.dumps(self.fixture, ensure_ascii=False)
-        self.assertEqual(json.loads(text), self.fixture)
+        for path in sorted(FIXTURES.glob("usage-*.json")):
+            with self.subTest(path.name):
+                fixture = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(json.loads(json.dumps(fixture, ensure_ascii=False)), fixture)
+
+    def test_collect_produces_codex_only_fixture(self):
+        # 只啟用 Codex；app-server 的 planType 不明（plan 為 null）、5 小時額度超過 100%（整合審查 D-i）
+        fixture = json.loads((FIXTURES / "usage-codex-only.json").read_text(encoding="utf-8"))
+        result = {"rateLimits": {
+            "primary": {"usedPercent": 112.5, "windowDurationMins": 300, "resetsAt": 1792555200},    # 04:00Z
+            "secondary": {"usedPercent": 40, "windowDurationMins": 10080, "resetsAt": 1792897200},  # 10/25 03:00Z
+            "planType": "unknown",
+        }}
+        providers = {"codex": mock.Mock(fetch=mock.Mock(return_value=codex.parse(result)))}
+        with mock.patch.dict(cli.PROVIDERS, providers, clear=True):
+            snapshot = cli.collect(["codex"])
+        self.assertEqual(snapshot["providers"], fixture["providers"])
+        self.assertEqual(set(snapshot), set(fixture))
+
+    def test_collect_with_no_providers_produces_empty_fixture(self):
+        fixture = json.loads((FIXTURES / "usage-no-providers.json").read_text(encoding="utf-8"))
+        snapshot = cli.collect([])
+        self.assertEqual(snapshot["providers"], fixture["providers"])
+        self.assertEqual(snapshot["schema_version"], fixture["schema_version"])
 
 
 if __name__ == "__main__":

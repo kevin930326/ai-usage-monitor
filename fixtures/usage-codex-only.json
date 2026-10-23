@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-21T03:00:00Z",
+  "providers": {
+    "codex": {
+      "plan": null,
+      "error": null,
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "5 小時",
+          "used_pct": 112.5,
+          "resets_at": "2026-10-21T04:00:00Z",
+          "hidden": false
+        },
+        {
+          "id": "weekly",
+          "label": "每週",
+          "used_pct": 40.0,
+          "resets_at": "2026-10-25T03:00:00Z",
+          "hidden": false
+        }
+      ]
+    }
+  }
+}

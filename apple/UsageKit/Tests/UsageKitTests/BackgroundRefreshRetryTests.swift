@@ -41,4 +41,18 @@ import Testing
         #expect(attempts == BackgroundRefreshRetry.maxAttempts + 1)
         #expect(waited.count == BackgroundRefreshRetry.maxAttempts)
     }
+
+    @Test func retryAfterASynchronousFirstFailureWaitsFirst() async {
+        // 第一次已在呼叫端同步失敗：先等第一段延遲再試，總共最多 maxAttempts＋1 次
+        var attempts = 0
+        var waited: [TimeInterval] = []
+        await BackgroundRefreshRetry.schedule(
+            alreadyFailed: 1,
+            attempt: { attempts += 1; return false },
+            sleep: { waited.append($0) }
+        )
+        #expect(attempts == BackgroundRefreshRetry.maxAttempts)
+        #expect(waited.first == BackgroundRefreshRetry.delay(afterFailures: 1))
+        #expect(waited.count == BackgroundRefreshRetry.maxAttempts)
+    }
 }
