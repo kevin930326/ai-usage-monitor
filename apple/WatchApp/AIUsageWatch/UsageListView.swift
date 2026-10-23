@@ -84,7 +84,8 @@ private struct UsageList: View {
                         if stale {
                             Text("資料已過期 · ") + Text(snapshot.updatedAt, style: .time) + Text(" 更新")
                         } else {
-                            Text(snapshot.updatedAt, style: .relative) + Text("前更新")
+                            // 同重置倒數：不用每秒更新的相對時間文字，由 TimelineView 每分鐘更新
+                            Text(ResetCountdown.updatedText(since: snapshot.updatedAt, now: now))
                         }
                     }
                     .font(.footnote)

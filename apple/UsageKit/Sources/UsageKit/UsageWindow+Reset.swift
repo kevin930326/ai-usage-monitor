@@ -56,7 +56,7 @@ public extension UsageSnapshot {
     }
 }
 
-/// 到 `date` 還有多久，精確到分鐘（「2天 23小時」「1小時 39分鐘」「12分鐘」）。
+/// 到 `date` 還有多久，精確到分鐘（「2天 23小時」「1小時 39分鐘」「12分鐘」）；頁尾的更新時間也用同一格式。
 ///
 /// 手錶列表用這個取代 `Text(date, style: .relative)`：watchOS 的 `List` 列中有每秒更新的相對時間文字時，
 /// 版面會不斷重新計算，App 一直吃滿 CPU（直到被系統結束）。手錶 App 已用 `TimelineView(.everyMinute)`
@@ -70,5 +70,11 @@ public enum ResetCountdown {
         if days > 0 { return hours > 0 ? "\(days)天 \(hours)小時" : "\(days)天" }
         if hours > 0 { return mins > 0 ? "\(hours)小時 \(mins)分鐘" : "\(hours)小時" }
         return minutes > 0 ? "\(mins)分鐘" : "不到 1 分鐘"
+    }
+
+    /// 手錶頁尾的更新時間（「12分鐘前更新」），同樣精確到分鐘；不到 1 分鐘為「剛剛更新」。
+    public static func updatedText(since date: Date, now: Date = .now) -> String {
+        guard now.timeIntervalSince(date) >= 60, let elapsed = text(until: now, now: date) else { return "剛剛更新" }
+        return "\(elapsed)前更新"
     }
 }

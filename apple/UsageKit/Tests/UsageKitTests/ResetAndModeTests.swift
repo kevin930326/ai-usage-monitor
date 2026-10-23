@@ -85,6 +85,14 @@ import Testing
         #expect(text(30) == "不到 1 分鐘")
     }
 
+    @Test func updatedTextToTheMinute() {
+        #expect(ResetCountdown.updatedText(since: now.addingTimeInterval(-20), now: now) == "剛剛更新")
+        #expect(ResetCountdown.updatedText(since: now.addingTimeInterval(-(12 * 60 + 30)), now: now) == "12分鐘前更新")
+        #expect(ResetCountdown.updatedText(since: now.addingTimeInterval(-3 * 3600), now: now) == "3小時前更新")
+        // 時鐘不一致（更新時間在未來）時不顯示負數
+        #expect(ResetCountdown.updatedText(since: now.addingTimeInterval(120), now: now) == "剛剛更新")
+    }
+
     @Test func pastOrNowIsNil() {
         #expect(ResetCountdown.text(until: now, now: now) == nil)
         #expect(ResetCountdown.text(until: now.addingTimeInterval(-60), now: now) == nil)
