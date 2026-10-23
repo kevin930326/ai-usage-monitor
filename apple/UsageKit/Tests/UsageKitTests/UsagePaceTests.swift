@@ -29,11 +29,15 @@ import Testing
         #expect(abs(w.elapsedFraction(at: now)! - 0.8) < 1e-9)
         #expect(abs(w.expectedRemainingPct(at: now)! - 20) < 1e-9)
         #expect(abs(w.timeRemainingFraction(at: now)! - 0.2) < 1e-9)
+        #expect(w.expectedRemainingDescription(at: now) == "照時間比例，現在應剩 20%")
+        // 5 小時額度還剩 6 分鐘 → 應剩 2%
+        #expect(fiveHour(used: 50, resetsIn: 360).expectedRemainingDescription(at: now) == "照時間比例，現在應剩 2%")
     }
 
     @Test func noExpectationWhenResetOrUnknown() {
         #expect(fiveHour(used: 50, resetsIn: -1).expectedRemainingPct(at: now) == nil)
         #expect(fiveHour(used: 50, resetsIn: nil).expectedRemainingPct(at: now) == nil)
+        #expect(fiveHour(used: 50, resetsIn: nil).expectedRemainingDescription(at: now) == nil)
         #expect(UsageWindow(id: "monthly", label: "", usedPct: 1, resetsAt: now.addingTimeInterval(60)).elapsedFraction(at: now) == nil)
     }
 

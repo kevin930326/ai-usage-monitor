@@ -29,6 +29,15 @@ public extension UsageWindow {
     func expectedRemainingPct(at now: Date) -> Double? {
         elapsedFraction(at: now).map { 100 * (1 - $0) }
     }
+
+    /// 預期進度標記的說明（滑鼠移上去的提示與 VoiceOver）：「照時間比例，現在應剩 2%」。
+    func expectedRemainingDescription(at now: Date) -> String? {
+        expectedRemainingPct(at: now).map(Self.expectedRemainingDescription(pct:))
+    }
+
+    static func expectedRemainingDescription(pct: Double) -> String {
+        "照時間比例，現在應剩 \(Int(pct.rounded()))%"
+    }
 }
 
 /// 用量節奏：是否用得太快，以及照目前速度大約何時用完。

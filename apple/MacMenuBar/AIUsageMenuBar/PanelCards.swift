@@ -375,14 +375,22 @@ struct QuotaBar: View {
                     .frame(width: geo.size.width * min(max(fraction, 0), 1))
                 if let expected {
                     // 照時間比例應剩多少：比標記短＝用得比預期快
+                    // 說明（「照時間比例，現在應剩 2%」）滑鼠移上去顯示，VoiceOver 也會讀
+                    let help = UsageWindow.expectedRemainingDescription(pct: expected * 100)
                     RoundedRectangle(cornerRadius: 1)
                         .fill(Color.primary)
                         .frame(width: 2.5, height: geo.size.height + 6)
-                        .offset(x: geo.size.width * min(max(expected, 0), 1) - 1.25)
+                        // 標記只有 2.5pt 寬，滑鼠感應範圍放寬到 12pt
+                        .frame(width: Self.markerHitWidth)
+                        .contentShape(Rectangle())
+                        .help(help)
+                        .offset(x: geo.size.width * min(max(expected, 0), 1) - Self.markerHitWidth / 2)
                         .opacity(markerOpacity)
-                        .accessibilityLabel("預期剩餘 \(Int((expected * 100).rounded()))%")
+                        .accessibilityLabel(help)
                 }
             }
         }
     }
+
+    static let markerHitWidth: CGFloat = 12
 }
