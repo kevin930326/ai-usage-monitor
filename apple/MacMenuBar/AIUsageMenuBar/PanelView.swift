@@ -21,6 +21,8 @@ struct PanelView: View {
     @State private var visible = false
     @State private var refreshHint = false
     @State private var resetSignature: [String: [String: Date]] = [:]
+    /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
+    @State private var motionGeneration = 0
 
     private var animates: Bool { visible && !reduceMotion && fixedMotion == nil }
 
@@ -166,9 +168,12 @@ struct PanelView: View {
             refreshHint = unchanged
             return
         }
+        let generation = motionGeneration
         withAnimation(PanelTiming.refreshSpin) {
             motion.refreshTurns += 1
         } completion: {
+            // 旋轉途中關閉面板時不再接著閃狀態點
+            guard generation == motionGeneration else { return }
             withAnimation(PanelTiming.dotFlash) { motion.dotFlash = 1 } completion: { motion.dotFlash = 0 }
         }
         withAnimation(PanelTiming.reducedFade) { refreshHint = unchanged }
@@ -197,6 +202,7 @@ struct PanelView: View {
     private func stopAnimations() {
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
+        motionGeneration += 1
         withTransaction(transaction) {
             motion = .settled
             refreshHint = false
