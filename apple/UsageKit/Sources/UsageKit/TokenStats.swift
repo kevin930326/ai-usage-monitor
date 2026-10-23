@@ -425,15 +425,24 @@ public struct TokenHeatmap: Equatable, Sendable {
 
 // MARK: - 各模型與時段（完整統計視窗）
 
+/// 一個服務的一個模型的合計（「各模型」的一列）
+public struct TokenModelTotal: Equatable, Sendable, Identifiable {
+    public var provider: String
+    public var model: String
+    public var counts: TokenCounts
+    public var id: String { "\(provider)/\(model)" }
+}
+
 public enum TokenBreakdown {
-    /// 各模型的合計，依主數字由大到小
-    public static func models(data: TokenStatsData, scope: TokenScope) -> [(model: String, counts: TokenCounts)] {
-        var result: [String: TokenCounts] = [:]
+    /// 各模型的合計，依主數字由大到小。以（服務、模型）分組：兩家都有白名單外的模型時各自一列 `other`
+    public static func models(data: TokenStatsData, scope: TokenScope) -> [TokenModelTotal] {
+        var result: [String: TokenModelTotal] = [:]
         for row in data.days where scope.includes(row.provider) {
-            result[row.model, default: .zero] += row.counts
+            let key = "\(row.provider)/\(row.model)"
+            result[key, default: TokenModelTotal(provider: row.provider, model: row.model, counts: .zero)].counts += row.counts
         }
-        return result.filter { $0.value.main > 0 }.map { ($0.key, $0.value) }
-            .sorted { ($0.counts.main, $1.model) > ($1.counts.main, $0.model) }
+        return result.values.filter { $0.counts.main > 0 }
+            .sorted { ($0.counts.main, $1.model, $1.provider) > ($1.counts.main, $0.model, $0.provider) }
     }
 
     /// 一天中各時段（0～23 時）的主數字合計

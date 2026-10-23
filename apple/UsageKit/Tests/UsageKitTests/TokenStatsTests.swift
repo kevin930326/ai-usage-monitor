@@ -143,6 +143,11 @@ import Testing
         ])
         #expect(TokenBreakdown.models(data: data, scope: .all).map(\.model) == ["claude-opus-5-5", "gpt-6.1-sol", "claude-sonnet-5-5"])
         #expect(TokenBreakdown.models(data: data, scope: .codex).map(\.model) == ["gpt-6.1-sol"])
+        // 兩家都有白名單外的模型（other）：各自一列、帶自己的服務
+        let others = TokenStatsData(days: [TokenDayRow(day: "2026-11-05", provider: "claude", model: "other", counts: TokenCounts(input: 30)),
+                                           TokenDayRow(day: "2026-11-05", provider: "codex", model: "other", counts: TokenCounts(input: 20))])
+        #expect(TokenBreakdown.models(data: others, scope: .all).map(\.id) == ["claude/other", "codex/other"])
+        #expect(TokenBreakdown.models(data: others, scope: .claude).map(\.provider) == ["claude"])
         let hours = TokenBreakdown.hours(data: data, scope: .all)
         #expect(hours[9] == 12)
         #expect(hours[23] == 0)
