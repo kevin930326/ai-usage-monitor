@@ -2,20 +2,56 @@
 
 [![CI](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml)
 
-在 iPhone 鎖定畫面用 Live Activity、或用主畫面與鎖定畫面小工具，隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週），並可一鍵更新。Mac 選單列 App 直接讀取本機資料，與 iPhone 共用同一套 Swift 程式碼。
+隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週）：iPhone 鎖定畫面的 Live Activity 與小工具、Apple Watch、Mac 選單列。Mac 面板另外顯示額度走勢、消耗熱力圖、這台 Mac 的 Token 統計與兩家服務的狀態。只用其中一個服務也可以。
 
-> 🚧 開發中（目前 v0.5：Mac 收集器、中繼 API、iOS App、鎖定畫面 Live Activity 與捷徑已可運作；Mac 選單列 App 與 Apple Watch App 為預覽版，下一步是實機驗證與文件（v1.0）），進度見 [CHANGELOG](CHANGELOG.md)。
+> 目前發布的版本是 [0.5.0](CHANGELOG.md#050---2026-10-21)；之後的 Mac 面板（v1.5～v1.8）、iPhone 小工具與 Token 統計已在 `main`，尚未發版，見 [CHANGELOG](CHANGELOG.md) 的 Unreleased 與[里程碑](docs/03-development-workflow.md#1-里程碑)。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-panel-dark.png">
+    <img src="docs/images/mac-panel-light.png" width="300" alt="Mac 選單列面板：剩餘最少的額度、建議接下來用、各額度進度條、接下來的重置、本週額度走勢、額度消耗、這台 Mac 的 Token 統計與服務狀態">
+  </picture>
+  &nbsp;
+  <img src="docs/images/demo-mac-stats-switch.gif" width="300" alt="統計卡片在全部、Claude、Codex 之間切換的動畫">
+</p>
+
+<p align="center">
+  <img src="docs/images/iphone-live-activity.png" width="420" alt="iPhone 鎖定畫面 Live Activity：剩餘最少的額度大字與兩個服務各額度的進度條">
+  &nbsp;
+  <img src="docs/images/iphone-island-expanded.png" width="200" alt="iPhone 動態島展開">
+  &nbsp;
+  <img src="docs/images/watch-app.png" width="170" alt="Apple Watch App">
+</p>
+
+截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量。
+
+## 功能
+
+| 平台 | 功能 |
+|---|---|
+| iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 % |
+| Apple Watch | 手錶 App 與錶面複雜功能（圓形、矩形、單行）；智慧型堆疊顯示 iPhone 的 Live Activity；設定由 iPhone 傳過來，手錶不需要輸入 |
+| Mac 選單列 | 選單列圖示（雙圓環）顯示最吃緊額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；通知（剩不到 20%、用得太快、額度重置，預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏 |
+| 收集器 | launchd 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼 |
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-window-dark.png">
+    <img src="docs/images/mac-stats-window-light.png" width="720" alt="完整統計視窗：一年活動熱力圖、最近 30 天長條、各模型與一天中的時段">
+  </picture>
+</p>
 
 ## 系統概觀
 
 ```
-Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀──GET── iOS App (Live Activity)
-                                                                      ▲
-                                                    iOS 捷徑自動化：定時重開 Live Activity
+Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀──GET── iPhone App、小工具、Live Activity、Apple Watch
+        │                                                              ▲
+        ▼                                                    iOS 捷徑自動化：定時重開 Live Activity
+本機 usage.json、history.sqlite3、service-status.json ◀──讀── Mac 選單列 App（不連網）
 ```
 
-- **收集器不讀取 Claude 的 token**（改由 Claude Code 自己的 `/usage` 查詢）；Codex 的 token 永遠留在 Mac，上傳的只有用量百分比與重置時間。
-- 不需付費 Apple Developer 帳號：用「捷徑定時重開 + 按鈕手動更新」繞過 Live Activity 的 8 小時上限。
+- **收集器不讀取任何服務的 token**：Claude 用量由未修改的 Claude Code 自己的 `/usage` 取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)），Codex 用量由 Codex CLI 自己的 `app-server` 取得（[ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)）。
+- 不需付費 Apple Developer 帳號：用「捷徑定時重開 + 按鈕手動更新」繞過 Live Activity 的 8 小時上限，免費 Apple ID 的 7 天簽署期限可用每週自動重裝處理。
 
 ## 文件
 
@@ -23,20 +59,21 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 |---|---|
 | [需求規格](docs/01-requirements.md) | 功能需求、非功能需求、範圍 |
 | [系統架構](docs/02-architecture.md) | 元件、資料格式、失敗處理 |
-| [開發流程](docs/03-development-workflow.md) | 分支、commit、PR 規範 |
+| [開發流程](docs/03-development-workflow.md) | 里程碑、分支、commit、PR 規範 |
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
+| [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
 ## 專案結構
 
 ```
-collector/   Mac 端用量收集器 (Python)
+collector/   Mac 端用量收集器 (Python，只用標準函式庫)
 relay/       Cloudflare Worker 中繼 API
-apple/       UsageKit 共用套件、iOS App + Live Activity、Mac 選單列 App、Apple Watch App
+apple/       UsageKit 共用套件、iOS App + Live Activity + 小工具、Mac 選單列 App、Apple Watch App
 fixtures/    三個元件測試共用的範例 usage.json
-scripts/     verify-all.sh：一次跑完所有測試與 Debug／Release 建置
-docs/        需求、架構、ADR、手動測試清單
+scripts/     verify-all.sh、install-mac-app.sh、reinstall-ios.sh、截圖與效能量測工具
+docs/        需求、架構、ADR、手動測試清單、README 截圖
 ```
 
 ```bash
@@ -44,65 +81,122 @@ scripts/verify-all.sh              # 全部測試 + iOS／Mac／手錶的 Debug 
 SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 測試
 ```
 
-## 安裝概要
+## 安裝
 
-只用 Claude 或只用 Codex 都可以，不必兩個都有。
+只用 Claude 或只用 Codex 都可以，不必兩個都有。需要一台常開（或常醒）的 Mac；只想在 Mac 上看，可以略過中繼與 iPhone。
 
-1. 在 Mac 登入要監看的服務（至少一個）：Claude 在終端機執行 `claude` 並 `/login`；Codex 執行 `codex login`。
-2. 部署中繼 API：見 [relay/README.md](relay/README.md)。
-3. 設定收集器並安裝排程：
-   ```bash
-   collector/scripts/set-relay.sh https://ai-usage-relay.<你的帳號>.workers.dev
-   collector/scripts/install-launchd.sh
-   ```
-   安裝腳本會偵測這台 Mac 登入過哪些服務，只收集那些服務，並印出結果，例如「Claude 用量：啟用」「Codex 用量：未啟用（沒有登入過 Codex CLI）」。沒用的服務不會出現在 App 上，也不會被當成錯誤。之後登入了另一個服務，重新執行 `install-launchd.sh` 即可加入。
-4. 安裝 iPhone App，在設定中填入中繼網址與讀取密鑰：見 [apple/iOSApp/README.md](apple/iOSApp/README.md)。
+### 1. 收集器（Mac）
 
-細節見 [collector/README.md](collector/README.md)。
+前置：Python 3.10 以上，並在 Mac 登入要監看的服務（至少一個）：Claude 在終端機執行 `claude` 並 `/login`；Codex 執行 `codex login`。
+
+```bash
+collector/scripts/install-launchd.sh
+```
+
+安裝腳本會偵測這台 Mac 登入過哪些服務，只收集那些服務，並印出結果，例如「Claude 用量：啟用」「Codex 用量：未啟用（沒有登入過 Codex CLI）」。沒用的服務不會出現在 App 上，也不會被當成錯誤。之後登入了另一個服務，重新執行 `install-launchd.sh` 即可加入。移除：`collector/scripts/uninstall-launchd.sh`（會詢問是否一併刪除額度歷史，預設保留）。細節見 [collector/README.md](collector/README.md)。
+
+### 2. Mac 選單列 App
+
+需要 Xcode（有裝 XcodeGen 時會先重新產生專案）。
+
+```bash
+scripts/install-mac-app.sh
+```
+
+以 Release 建置、安裝到「應用程式」並打開；之後要更新也是同一個指令。設定 › 一般 可開「登入時自動打開」。細節見 [apple/MacMenuBar/README.md](apple/MacMenuBar/README.md)。
+
+### 3. 中繼 API（給 iPhone 與手錶）
+
+需要 Cloudflare 帳號（免費方案即可）。依 [relay/README.md](relay/README.md#部署) 部署 Worker 並產生兩把不同的密鑰（寫入、讀取），然後讓收集器開始上傳：
+
+```bash
+collector/scripts/set-relay.sh https://ai-usage-relay.<你的帳號>.workers.dev
+```
+
+寫入密鑰存在 Mac 的 Keychain，讀取密鑰之後填進 iPhone App。
+
+### 4. iPhone 與 Apple Watch
+
+```bash
+brew install xcodegen
+cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
+```
+
+在 Xcode 的 Signing & Capabilities 選自己的 Team（免費 Apple ID 即可）並安裝到 iPhone，打開 App 在設定填入中繼網址與讀取密鑰。鎖定畫面卡片要整天顯示，照 [apple/iOSApp/README.md](apple/iOSApp/README.md#捷徑讓卡片整天顯示) 設定捷徑自動化；免費 Apple ID 的 App 7 天後失效，可用[每週自動重新安裝](apple/iOSApp/README.md#每週自動重新安裝免費-apple-id)。
+
+手錶 App 在 `apple/WatchApp`（[README](apple/WatchApp/README.md)），以同樣方式建置安裝；打開手錶 App 時會向 iPhone 要中繼設定。
 
 ## 隱私與安全
 
-原則：收集器**不讀取任何服務的 token**：Claude 用量由 Claude Code 自己的 `/usage` 指令取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)），Codex 用量由 Codex CLI 自己的 `codex app-server` 取得（[ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)），token 只由各自的 CLI 在 Mac 上使用（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
+原則：
+
+- 收集器**不讀取任何服務的 token**，token 只由各自的 CLI 在 Mac 上使用（NFR-1）。
+- **離開這台 Mac 的使用者資料只有上傳到你自己中繼的用量快照**（方案名稱與各額度的百分比、重置時間）。額度歷史、Token 統計、對話紀錄的任何內容、服務狀態都只留在本機。
+- 中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
+
+### 讀取的檔案與欄位
+
+| 讀取者 | 檔案或來源 | 取用的內容 | 不取用（舉例） |
+|---|---|---|---|
+| 收集器 | `claude -p /usage`、`claude auth status` 的輸出 | 各額度的已用 %、重置時間；方案名稱 | email 等其餘輸出直接丟棄 |
+| 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱 | 帳號 ID 等其餘欄位 |
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
+| 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
+| 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
+| 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_started`／`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
+| 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字） | 事件內文、連結 |
+| Mac 選單列 App | `usage.json`、`history.sqlite3`、`service-status.json`（同一個資料夾） | 全部（都是收集器寫的、不含帳號資訊） | — |
+| iPhone、小工具、手錶 | 你的中繼 `GET /usage` | 用量快照 | — |
+
+對話紀錄的規則（[ADR-0009](docs/adr/0009-local-history-and-token-stats.md) 第 3 節）：只列舉上表的一般檔案，不跟隨符號連結；每一行先以位元組比對篩選，解析成 JSON 後**立刻**只取白名單欄位、不保留原始行；超過 4 MB 的行略過。資料庫的 `file_key` 只用檔名中的 UUID，不含專案資料夾名稱；模型名稱只收 `claude-`、`gpt-`、`codex-`、`o` 加數字開頭的，其他記為 `other`。例外只記錄類別名稱與檔案序號，不記錄檔名、路徑或行內容。限制：JSON 無法只解析部分欄位，篩選過的行仍會整行載入記憶體再丟棄。
+
+**從不讀取**：`~/.codex/auth.json`、`~/.claude/.credentials.json`、Keychain 的 `Claude Code-credentials`、瀏覽器 cookie、`~/.claude.json`、`settings.json`、`config.toml`、`history.jsonl`、`tool-results/`、`~/.codex/*.sqlite`，以及上表以外的任何檔案。收集器有測試掃描原始碼確認不讀憑證，並確認檔案列舉只回傳上表的檔案。
+
+### 寫入的檔案
+
+| 寫入者 | 位置 | 內容 |
+|---|---|---|
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（與上傳的內容相同） |
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」與每次收集是否成功；Token 統計：每天／每小時 × 服務 × 模型的四種 Token 數、任務數與任務時間、個人紀錄、各紀錄檔讀到哪裡（以 UUID 識別）、已計入的訊息與任務 ID；隨機裝置 ID、裝置名稱固定為「這台 Mac」、保留期間。**不存**方案名稱、錯誤訊息、帳號資訊、對話內容、路徑或專案名稱。預設保留 1 年，35 天前的額度歷史降為每小時一筆 |
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/service-status.json`（`0600`） | 兩家狀態頁的精簡結果（見上表） |
+| 收集器的安裝腳本 | `config.json`、`~/Library/LaunchAgents/io.github.kevin930326.ai-usage-monitor.plist` | 設定；launchd 排程 |
+| `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
+| 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容） |
+| Mac 選單列 App | App 的 UserDefaults | 面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`） |
+| Mac 選單列 App | `history.sqlite3` | 只在設定的「清除歷史」「縮短保留期間」「清除並重新掃描」確認後寫入 |
+| Mac 選單列 App | 你選擇的位置 | 「匯出 CSV」：每小時的額度歷史 |
+| Mac 選單列 App | 通知中心 | 通知內容（服務、額度名稱與剩餘 %），只在你打開通知開關後 |
+| 中繼（Cloudflare） | Worker KV `latest`；secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新一筆快照；兩把密鑰 |
+| iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組共用同一個項目 |
+| iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults（`relayURL`、`displayMode`）與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示） |
+| iPhone | Live Activity 與小工具 | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
+| Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults（`relayURL`）、App Group 的 `usage.json` | 讀取密鑰、中繼網址、最新快照（給複雜功能，**錶面上隨時看得到**百分比） |
+
+iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給開著的手錶 App，系統不保存訊息（FR-30）。寫入密鑰只存在 Mac 的 Keychain 與 Cloudflare，不會傳到 iPhone 或手錶。
 
 ### 網路請求
 
 | 發出者 | 目的地 | 認證 | 傳送／取得的內容 | 時機 |
 |---|---|---|---|---|
-| Mac 收集器 → Claude Code | 收集器本身不連線；執行 `claude -p /usage` 與 `claude auth status`，由 Claude Code 自己向 Anthropic 查詢 | 由 Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱（email 等其餘輸出直接丟棄） | launchd 每 5 分鐘 |
-| Mac 收集器 → Codex CLI | 收集器本身不連線；執行 `codex app-server` 查詢 `account/rateLimits/read`，由 Codex CLI 自己向 OpenAI 查詢 | 由 Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json`、不持有 token | 取得 Codex 額度與方案名稱（帳號 ID 等其餘欄位直接丟棄） | launchd 每 5 分鐘 |
+| Claude Code（由收集器執行） | Anthropic | Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱 | launchd 每 5 分鐘 |
+| Codex CLI（由收集器執行） | OpenAI | Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json` | 取得 Codex 額度與方案名稱 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
+| Mac 收集器 | `status.claude.com`、`status.openai.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
-| iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰（與 App 共用的 Keychain 項目） | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
-| Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘，受 watchOS 預算限制） |
+| iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
+| Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘） |
 | Mac 選單列 App、Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀本機檔案或 App 傳來的資料 | — |
 
-上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除（即使收集器出錯誤帶了其他資料也不會被保存）；Worker 只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
+上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
-### 資料存放位置
-
-| 裝置 | 位置 | 內容 |
-|---|---|---|
-| Mac | Keychain `AIUsageMonitor-relay-write` | 中繼**寫入**密鑰（只有收集器使用） |
-| Mac | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（選單列 App 讀取） |
-| Mac | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址（不含密鑰） |
-| Mac | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史（[ADR-0009](docs/adr/0009-local-history-and-token-stats.md)）：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」，以及每次收集是否成功；隨機產生的裝置 ID 與保留期間設定。不存方案名稱、錯誤訊息或任何帳號資訊；**不上傳**，只有選單列 App 讀取。預設保留 1 年，35 天前的資料降為每小時一筆 |
-| Mac | `~/Library/Logs/AIUsageMonitor/collector.log` | 收集器 log（錯誤訊息，不含 token，也不含 Claude Code 的輸出） |
-| Cloudflare | Worker KV `latest`；Worker secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新快照；兩把密鑰 |
-| iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組（App 自己的 application identifier）共用同一個項目 |
-| iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults 與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示）。舊版存在 App 自己的 UserDefaults，第一次啟動時複製過來 |
-| iPhone | 主畫面／鎖定畫面小工具 | 各額度百分比與重置時間；**鎖定畫面小工具鎖定時也看得到** |
-| iPhone | Live Activity 內容（鎖定畫面、動態島） | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
-| iPhone → Apple Watch | WatchConnectivity `sendMessage`（不保存） | 中繼網址與**讀取密鑰**。手錶 App 開啟時向 iPhone 要、或 iPhone 儲存設定時手錶 App 正開著才傳送；系統不保存訊息，兩端只存在各自的 Keychain（FR-30）。舊版留下的 application context 會在 iPhone App 啟動時以空內容覆蓋 |
-| Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults | 讀取密鑰、中繼網址 |
-| Apple Watch | App Group `group.io.github.kevin930326.AIUsageMonitor` 的 `usage.json` | 最新快照，給錶面複雜功能讀取；**錶面上隨時看得到**百分比 |
-
-寫入密鑰只存在 Mac 的 Keychain 與 Cloudflare，不會傳到 iPhone 或手錶。Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
+Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
 
 ### 已知取捨
 
-- 手錶的設定只在手錶 App 開啟、且 iPhone 在附近時同步（`sendMessage` 需要兩端可連線）。在 iPhone 改了網址或密鑰後，要打開一次手錶 App 才會套用；在那之前手錶的背景更新仍用舊設定。
-- Mac 選單列 App 不開沙盒（需要讀取 `~/Library/Application Support`），以 Sign to Run Locally 簽署、未開 Hardened Runtime。它不連網，也不讀任何 token。
+- 手錶的設定只在手錶 App 開啟、且 iPhone 在附近時同步。在 iPhone 改了網址或密鑰後，要打開一次手錶 App 才會套用。
+- Mac 選單列 App 不開沙盒（需要讀取 `~/Library/Application Support`），以 Sign to Run Locally 簽署、未開 Hardened Runtime。它不連網，也不讀任何 token 或對話紀錄。
+- Token 統計只算這台 Mac 的 Claude Code 與 Codex CLI；網頁、手機 App、其他電腦與雲端 session 不在內（面板標「這台 Mac」）。
 
 ## 免責聲明
 
-本專案為個人學習作品，與 Anthropic、OpenAI 無關。Claude 用量取自 Claude Code `/usage` 指令的輸出、Codex 用量取自 Codex CLI 使用的非公開介面，兩者都**沒有文件保證**，可能隨時變更或失效。
+本專案為個人學習作品，與 Anthropic、OpenAI 無關。服務圖示為原創，不使用官方 logo。Claude 用量取自 Claude Code `/usage` 指令的輸出、Codex 用量取自 Codex CLI 使用的非公開介面、Token 統計取自兩者的本機對話紀錄格式，都**沒有文件保證**，可能隨時變更或失效。
