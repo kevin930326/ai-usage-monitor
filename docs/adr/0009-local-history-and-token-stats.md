@@ -1,6 +1,6 @@
 # ADR-0009：額度歷史與 Token 統計的存放、保留與隱私（Mac）
 
-- 狀態：**提議中**
+- 狀態：**已採用**（2026-10-23）
 - 日期：2026-10-23
 - 相關需求：FR-18、FR-19、FR-37、FR-40～FR-44、FR-46、NFR-1、NFR-6、NFR-8、NFR-9、NFR-10
 - 回答 [ADR-0004](0004-usage-history.md) 中屬於 Mac 的部分（Q1、Q2、Q4、Q6）；iPhone 端的預測（Q3）不在本 ADR 決定
@@ -144,7 +144,9 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | `output_tokens` | `output_tokens`（已含 thinking） | `output_tokens`（已含推理） |
 | `reasoning_tokens` | 不填（thinking 明細不另存） | `reasoning_output_tokens`（明細） |
 
-- **顯示的「Token」= `input + cache_write + cache_read + output`**（不加 `reasoning`）。對 Codex 這等於 `total_tokens`，以測試驗證這個等式；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。是否把快取讀取算進「本週 Token」列為待確認事項。
+- **四個欄位分開存**：資料庫（`daily_tokens`、`hourly_tokens`、`seen_ids`、`file_tokens`、`records`）與第二層的上傳格式都分別保存 `input`、`cache_write`、`cache_read`、`output`（另有 `reasoning` 明細），不預先加總，之後改顯示方式不必重算。
+- **顯示的「Token」主數字 = `input + cache_write + output`**（不含 `cache_read`、不加 `reasoning`）。快取讀取是重複送出的上下文，數量常是其他三項的數十倍，算進主數字會蓋過實際的用量變化。滑鼠移上去的說明顯示四項明細，其中 `cache_read` 單獨一行（「快取讀取 N（不計入上方數字）」）。單日最高、Token 活動、熱力圖與個人紀錄的「累計 Token」都用同一個主數字定義。
+- 以測試驗證 Codex 的 `input + cache_write + cache_read + output == total_tokens`（確認正規化正確）；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。
 - **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
 - **Codex 的重算**：每個檔案計入的數字同時記在 `file_tokens`。累計差值只在「從上次的位置接著讀」時正確，所以以下兩種情況都**先從 `daily_tokens`／`hourly_tokens` 扣掉該檔在 `file_tokens` 的貢獻、清空該檔的 `file_tokens` 與 `last_total`，再從頭重掃該檔**（同一個交易內完成）：(1) 檔案被改寫（第 7 節）；(2) 已用 `token_count` 的檔案之後出現 `token_usage_record`（來源改為 record）。來源一旦是 record 就不再改回。以測試驗證：截斷、改寫、compaction 後重掃、先只有 `token_count` 再追加重疊或不重疊的 record，結果都與一次讀完整個檔案相同，重複執行不改變統計。
@@ -223,8 +225,8 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - 選單列 App 新增唯讀的資料庫讀取層；設定視窗加入「歷史資料」分頁。
 - README 的隱私章節（NFR-6）列出新讀取的檔案、取用的欄位與 `history.sqlite3` 的位置。
 
-## 待確認事項
+## 決定（使用者於 2026-10-23 決定）
 
-1. 預設保留期間 1 年（設計圖的預設值），以及保留期間不套用到個人紀錄與去重表。
-2. 「本週 Token」是否包含快取讀取（建議包含並在提示中說明；不含時數字會小很多）。
-3. Claude 任務時間的定義（真人提示到最後一則回應，上限 6 小時）。
+1. 保留期間預設 1 年；保留期間不套用到 `records`（個人紀錄）與 `seen_ids`（去重表）（第 5 節）。
+2. Token：資料庫與上傳格式分開存 `input`、`cache_write`、`cache_read`、`output`；「本週 Token」等主數字 = `input + cache_write + output`，滑鼠移上去顯示 `cache_read`（第 4 節）。
+3. Claude 任務時間：同一檔、非 sidechain，從真人提示到下一個真人提示之前最後一筆 assistant 行，上限 6 小時（第 4 節）。

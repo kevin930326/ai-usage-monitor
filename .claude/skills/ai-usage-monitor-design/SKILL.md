@@ -100,7 +100,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
 
-另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（提議中，ADR-0009）也是收集器與 App 共用。
+另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（ADR-0009）也是收集器與 App 共用。
 
 ## 6. 資訊排列
 
@@ -168,7 +168,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 ### 選單列圖示
 
 - 預設**雙圓環**：外圈＝剩餘 %（顏色同進度條，第 1 節），內圈＝距離重置的剩餘時間占額度長度的比例（中性 `secondary`；額度長度不明時不畫）。另有橫條、只有 %、圓環＋% 三種樣式，由設定選擇；顯示的額度預設「自動（最吃緊）」＝`tightestWindow(at:)`。
-- 四種狀態**不能只靠顏色區分**：正常；用得太快＝右上角提示色小點；剩 < 20%＝外圈轉紅；資料過期＝整個轉灰（灰色優先）。`accessibilityLabel` 用完整句子（「Claude 5 小時 剩餘 27%，用得較快」）。
+- 四種狀態**不能只靠顏色區分**：正常；用得太快＝右上角提示色小點；剩 < 20%＝外圈轉紅；資料過期＝整個轉灰且外圈改為虛線（橫條為虛線外框；灰色優先）。「只有 %」樣式以符號區分：`↑` 太快、`!` 剩 < 20%、`–` 過期（只顯示優先的一個）。`accessibilityLabel` 用完整句子（「Claude 5 小時 剩餘 27%，用得較快」）。
 - 以非範本點陣圖繪製（選單列會把 SF Symbol 與文字轉成單色）；每分鐘最多重繪一次，只在內容改變時換圖。
 - **不得有持續或循環的動畫**；數值改變時最多 0.3 秒的轉場，「減少動態效果」時直接換圖。
 
