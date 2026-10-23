@@ -584,7 +584,7 @@ private struct TrendLegend: View {
                 .frame(width: 12, height: 8)
                 Text("照時間的預期")
             }
-            if hasGaps { HatchSwatch(label: "沒有紀錄（Mac 睡眠或關機）") }
+            if hasGaps { HatchSwatch(label: "沒有紀錄") }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
