@@ -16,11 +16,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/iphone-live-activity.png" width="420" alt="iPhone 鎖定畫面 Live Activity：剩餘最少的額度大字與兩個服務各額度的進度條">
+  <img src="docs/images/iphone-island-expanded.png" width="220" alt="iPhone 模擬器：動態島展開，剩餘最少的額度大字與兩個服務各額度的進度條（鎖定畫面卡片另外顯示每個額度的重置倒數）">
   &nbsp;
-  <img src="docs/images/iphone-island-expanded.png" width="200" alt="iPhone 動態島展開">
-  &nbsp;
-  <img src="docs/images/watch-app.png" width="170" alt="Apple Watch App">
+  <img src="docs/images/watch-app.png" width="200" alt="Apple Watch App：剩餘最少的額度與各額度進度條">
 </p>
 
 截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量。
