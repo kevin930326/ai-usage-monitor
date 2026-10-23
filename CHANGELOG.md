@@ -24,6 +24,7 @@
 - `.claude/skills/ai-usage-monitor-design`：顏色、圖示定義、不收錄官方 logo、過期門檻、不能更改的識別字與 UI 驗證方式
 
 ### Changed
+- 文件（v1.0，NFR-6）：README 改寫為功能、截圖與 Demo GIF（`docs/images/`，都是示範資料）、收集器／Mac App／中繼／iPhone 與手錶四段安裝步驟；隱私章節列出每個讀取的檔案與欄位、每個寫入的檔案（`history.sqlite3*`、`usage.json`、`service-status.json`、UserDefaults、Keychain）與網路請求，並說明離開 Mac 的使用者資料只有中繼快照。`docs/03-development-workflow.md` 里程碑表加入 v1.5～v2.0 與各里程碑的狀態；手動測試清單加入 v1.5、v1.6、v1.7（第 7～9 節），v1.8 改為第 10 節
 - 收集器的 Claude 用量改為執行未修改的 Claude Code（`claude -p /usage`）並解析它的輸出，方案名稱取自 `claude auth status`；收集器不再讀取 Keychain 的 `Claude Code-credentials`、不再持有 token、不再直接呼叫 api.anthropic.com，以符合 Claude Code 的 Legal and compliance 條款。移除 ADR-0005 的委派續期與 `claude-refresh.json`；`/usage` 格式認不得時回報錯誤而不是顯示 0%；安裝腳本改用 `claude auth status` 偵測登入（ADR-0006）
 - 手錶取得中繼設定改用 WatchConnectivity `sendMessage`（手錶 App 開啟時向 iPhone 要），不再用 application context，讀取密鑰不會被系統另存一份在 Keychain 以外；舊版留下的 context 會在 iPhone App 啟動時清空。iPhone 改設定後要打開一次手錶 App 才會套用
 - Mac：新增 `apple/MacMenuBar/project.team.yml`，以 Team 簽署並為 App 與桌面小工具加入 App Group，不必手改 `project.yml`；預設設定不變（C-06）
