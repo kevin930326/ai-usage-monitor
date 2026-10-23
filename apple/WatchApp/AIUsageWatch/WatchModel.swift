@@ -69,7 +69,11 @@ final class WatchModel {
     private func apply(url rawURL: String, token rawToken: String) {
         // 較舊的 iPhone App 可能送來帶換行的值，存之前再清一次
         let url = RelayInput.clean(rawURL), token = RelayInput.clean(rawToken)
-        guard url != relayURL || token != readToken else { return }
+        guard url != relayURL || token != readToken else {
+            // iPhone 改回目前已保存的設定：先前「存不進去」的錯誤已不再適用（C-03）
+            settingsError = nil
+            return
+        }
         do {
             try KeychainStore.write(token, account: "relay-read-token")
         } catch {
