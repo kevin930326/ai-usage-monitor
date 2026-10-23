@@ -345,8 +345,8 @@ public enum TokenActivity {
                     counts += c
                     providers.merge(p, uniquingKeysWith: +)
                 }
-                return TokenBar(start: start, byProvider: providers, counts: counts,
-                                available: available(TokenCalendar.adding(6, to: start, calendar: calendar)))
+                // 一週的第一天也在保留期間內才算完整；跨過保留邊界的週有幾天已刪除，合計不可信
+                return TokenBar(start: start, byProvider: providers, counts: counts, available: available(start))
             }
         case .cumulative:
             // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣。

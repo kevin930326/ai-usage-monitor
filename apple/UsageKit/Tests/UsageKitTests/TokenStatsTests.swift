@@ -199,6 +199,12 @@ import Testing
         let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
         #expect(cumulative.first(where: \.available)?.main == 4960)
         #expect(cumulative.last?.main == 5000)
+        // 週長條：10/26 那週的 10/26～10/28 已刪除，不算完整的一週；11/2 那週完整
+        let weeks = TokenActivity.bars(data: data, scope: .all, range: .weeks, now: now, calendar: cal)
+        #expect(TokenCalendar.key(weeks[weeks.count - 2].start, calendar: cal) == "2026-10-26")
+        #expect(!weeks[weeks.count - 2].available)
+        #expect(weeks.last!.available)
+        #expect(weeks.filter(\.available).count == 1)
         // 上週同期（10/26～10/29）已部分超過保留期間：不比較
         #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).changePct == nil)
         // 永久保留：全部可用
