@@ -183,6 +183,145 @@ extension ActivityFooter where Trailing == EmptyView {
     }
 }
 
+// MARK: - 動態島展開版面
+
+/// 動態島展開版面的內距：左上與右上的文字要離開圓角，最下方一行不能貼著底邊。
+enum IslandLayout {
+    static let sideInset: CGFloat = 8
+    static let topInset: CGFloat = 4
+    static let bottomInset: CGFloat = 4
+}
+
+/// 左上：剩餘最少的額度（名稱一行＋大數字，FR-15）。沒有服務時顯示提示。
+struct IslandLeading: View {
+    let state: UsageActivityState
+    let now: Date
+
+    var body: some View {
+        Group {
+            if let item = state.tightest(at: now) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(item.displayName) · \(state.mode.label)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    Text("\(Int(item.window.displayedPct(state.mode, at: now).rounded()))%")
+                        .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                        .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: state.mode, at: now))
+                }
+            } else if state.providers.isEmpty {
+                NoProvidersNotice(showsHint: false)
+            }
+        }
+        .padding(.leading, IslandLayout.sideInset)
+        .padding(.top, IslandLayout.topInset)
+    }
+}
+
+/// 右上：更新按鈕，下面一行是剩餘最少的額度的重置倒數（各額度的重置時間不放，空間不夠）。
+struct IslandTrailing<Trailing: View>: View {
+    let state: UsageActivityState
+    let now: Date
+    @ViewBuilder var button: Trailing
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            button
+            if let item = state.tightest(at: now) {
+                ResetLabel(window: item.window, now: now)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+        }
+        .padding(.trailing, IslandLayout.sideInset)
+        .padding(.top, IslandLayout.topInset)
+    }
+}
+
+/// 下方：每個服務一行（名稱＋各額度的 % 與細進度條；失敗時一行錯誤），最後一行更新時間。
+struct IslandBottom: View {
+    let state: UsageActivityState
+    let stale: Bool
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(state.providers) { provider in
+                IslandProviderRow(provider: provider, mode: state.mode, stale: stale, now: now)
+            }
+            ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError)
+        }
+        .padding(.horizontal, IslandLayout.sideInset)
+        .padding(.bottom, IslandLayout.bottomInset)
+    }
+}
+
+/// 動態島的一個服務：一行，不放重置倒數（鎖定畫面的 `ProviderActivityRow` 才有）。
+struct IslandProviderRow: View {
+    let provider: UsageActivityState.Provider
+    let mode: UsageDisplayMode
+    let stale: Bool
+    let now: Date
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Text(provider.displayName)
+                .font(.caption2.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(width: 44, alignment: .leading)
+                .layoutPriority(1)
+            if let error = provider.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(UsageColors.notice)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            } else {
+                ForEach(provider.windows) { window in
+                    let pct = window.displayedPct(mode, at: now)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 4) {
+                            Text(window.label)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 2)
+                            Text("\(Int(pct.rounded()))%")
+                                .monospacedDigit()
+                        }
+                        .font(.caption2.weight(.medium))
+                        .lineLimit(1)
+                        IslandBar(pct: pct, color: UsageColors.bar(window, provider: provider.key, stale: stale, now: now))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+}
+
+/// 動態島的細進度條（3pt）。自己畫而不用 `ProgressView`：比較細，ImageRenderer 也畫得出來。
+struct IslandBar: View {
+    let pct: Double
+    let color: Color
+
+    var body: some View {
+        Capsule()
+            .fill(.white.opacity(0.18))
+            .overlay(alignment: .leading) {
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: geo.size.width * min(max(pct, 0), 100) / 100)
+                }
+            }
+            .frame(height: 3)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Apple Watch 智慧型堆疊的精簡版面：只顯示剩餘最少的額度（FR-27）。
 struct WatchActivityView: View {
     let state: UsageActivityState
