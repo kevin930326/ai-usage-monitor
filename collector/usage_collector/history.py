@@ -145,6 +145,23 @@ def _v2(conn: sqlite3.Connection) -> None:
         conn.execute(statement)
 
 
+def _repair_v2(conn: sqlite3.Connection) -> None:
+    """開發中的收集器建立的版本 2 檔案可能少了之後才加的 record_days：補建，並以每日資料回填
+    （每日資料套用保留期間，回填的是目前還在的天數；之後的掃描照常累加）。其他表都已存在時什麼都不做。"""
+    if _table_exists(conn, "record_days"):
+        return
+    with _transaction(conn):
+        _v2(conn)
+        conn.execute("""
+            INSERT OR REPLACE INTO record_days (day, provider, tokens)
+            SELECT day, provider, SUM(input_tokens + cache_write_tokens + output_tokens)
+            FROM daily_tokens WHERE device_id = ? GROUP BY day, provider""", (meta(conn, "device_id") or "",))
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
+
+
 # MIGRATIONS[i] 把版本 i 升到 i + 1；之後的版本往後加
 MIGRATIONS = [_v1, _v2]
 
@@ -170,6 +187,8 @@ def migrate(conn: sqlite3.Connection) -> None:
             MIGRATIONS[version](conn)
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
                          (str(version + 1),))
+    if current == SCHEMA_VERSION == 2:
+        _repair_v2(conn)
 
 
 @contextmanager
