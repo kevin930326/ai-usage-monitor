@@ -32,6 +32,17 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest -v
 
+  scripts:
+    name: scripts (shell 腳本)
+    # install-mac-app.sh 的完整流程只在 macOS 跑（ditto、defaults），這裡跑其餘的檢查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover -s scripts/tests -v
+
   usagekit:
     name: UsageKit (Swift)
     # macOS runner 經常排不到（容量不足被取消），改用 Linux 容器；

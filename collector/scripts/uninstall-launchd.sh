@@ -17,7 +17,7 @@ HISTORY="$DATA_DIR/history.sqlite3"
 if [ -e "$HISTORY" ]; then
     answer="${AUM_DELETE_HISTORY:-}"
     if [ -z "$answer" ] && [ -t 0 ]; then
-        read -r -p "要一併刪除額度歷史（$HISTORY）嗎？[y/N] " answer || answer=""
+        read -r -p "要一併刪除額度歷史（${HISTORY}）嗎？[y/N] " answer || answer=""
     fi
     case "$answer" in
         y|Y|yes|YES|1)

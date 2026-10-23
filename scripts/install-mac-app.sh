@@ -24,7 +24,7 @@ for arg in "$@"; do
   case "$arg" in
     --no-open) OPEN=0 ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
-    *) echo "不認得的參數：$arg（只支援 --no-open）" >&2; exit 2 ;;
+    *) echo "不認得的參數：${arg}（只支援 --no-open）" >&2; exit 2 ;;
   esac
 done
 
@@ -32,7 +32,7 @@ done
 LOCK=$ROOT/build/install.lock
 mkdir -p "$ROOT/build"
 if ! mkdir "$LOCK" 2>/dev/null; then
-  echo "另一個安裝正在進行（$LOCK）；確定沒有在執行的話刪除這個資料夾再試" >&2
+  echo "另一個安裝正在進行（${LOCK}）；確定沒有在執行的話刪除這個資料夾再試" >&2
   exit 1
 fi
 TMP=
@@ -91,7 +91,7 @@ if [ -d "$DEST" ]; then
   echo "舊版本已移到垃圾桶：$TRASH"
 fi
 mv "$TMP/$NAME.app" "$DEST"
-echo "已安裝：$DEST（版本 $(defaults read "$DEST/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?')）"
+echo "已安裝：${DEST}（版本 $(defaults read "$DEST/Contents/Info" CFBundleShortVersionString 2>/dev/null || echo '?')）"
 
 if [ "$OPEN" = 1 ]; then
   open "$DEST"

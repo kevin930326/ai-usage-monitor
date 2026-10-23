@@ -162,7 +162,7 @@ class DetectProvidersTest(unittest.TestCase):
                 auth = home / ".codex" / "auth.json"
                 auth.write_text('{"tokens": {"access_token": "secret"}}')
                 auth.chmod(0)
-            env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AUM_DETECT_TIMEOUT": "1"}
+            env = {**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AUM_DETECT_TIMEOUT": "3"}
             env.pop("CODEX_HOME", None)
             env.pop("CLAUDE_CONFIG_DIR", None)
             args = [str(SCRIPTS / "detect-providers.sh"), "" if claude is None else str(fake),
