@@ -23,6 +23,7 @@ from .log import log
 from .paths import CONFIG_PATH
 
 MAX_LINE_BYTES = 4 * 1024 * 1024
+SKIP_CHUNK_BYTES = 1024 * 1024  # 丟棄過長的行時每次讀多少（每段都扣預算）
 CHUNK_BYTES = 64 * 1024 * 1024  # 每次執行最多處理的位元組（首次掃描分段）
 CHUNK_SECONDS = 15.0
 TASK_CAP_SECONDS = 6 * 3600  # Claude：超過 6 小時視為中斷，以 6 小時計
@@ -357,6 +358,12 @@ class FileState:
     source: str | None = None
     last_total: list | None = None
     state: dict = field(default_factory=dict)
+    # 正在丟棄一行過長的紀錄（跨次執行接著丟，不重讀）
+    skipping: bool = False
+
+    def state_json(self) -> str | None:
+        state = {**self.state, "_skip": 1} if self.skipping else self.state
+        return json.dumps(state) if state else None
 
 
 @dataclass
@@ -522,9 +529,10 @@ def _load_state(row) -> FileState:
         state = json.loads(row["state"]) if row["state"] else {}
     except ValueError:
         last_total, state = None, {}
+    state = state if isinstance(state, dict) else {}
+    skipping = bool(state.pop("_skip", False))
     return FileState(offset=row["offset"], source=row["source"],
-                     last_total=last_total if isinstance(last_total, list) else None,
-                     state=state if isinstance(state, dict) else {})
+                     last_total=last_total if isinstance(last_total, list) else None, state=state, skipping=skipping)
 
 
 def _reset_codex(conn: sqlite3.Connection, totals: Totals, file_key: str, cutoffs) -> None:
@@ -565,28 +573,27 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
             st = FileState()  # Claude 從頭重掃，以 seen_ids／seen_tasks 避免重複計入
         fh.seek(st.offset)
         while not budget.exhausted():
-            start = fh.tell()
+            if st.skipping:
+                # 丟棄過長的一行：每段都扣預算，到換行為止；預算用完時下次從這裡接著丟
+                chunk = fh.readline(SKIP_CHUNK_BYTES)
+                if not chunk:
+                    break
+                budget.bytes_left -= len(chunk)
+                st.offset = fh.tell()
+                if chunk.endswith(b"\n"):
+                    st.skipping = False
+                    counters.long_lines += 1
+                continue
             line = fh.readline(MAX_LINE_BYTES + 1)
             if not line:
                 break
             if not line.endswith(b"\n"):
                 if len(line) <= MAX_LINE_BYTES:
                     break  # 最後一行還沒寫完：下次再讀
-                # 過長的一行：丟到下一個換行為止，只計次數
-                complete = False
-                while True:
-                    more = fh.readline(MAX_LINE_BYTES)
-                    if not more:
-                        break
-                    if more.endswith(b"\n"):
-                        complete = True
-                        break
-                if not complete:
-                    fh.seek(start)
-                    break
-                counters.long_lines += 1
-                budget.bytes_left -= fh.tell() - start
+                # 超過 4 MB：開始丟棄這一行，只計次數
+                budget.bytes_left -= len(line)
                 st.offset = fh.tell()
+                st.skipping = True
                 continue
             budget.bytes_left -= len(line)
             if f.provider == "claude":
@@ -601,7 +608,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (f.key, f.inode, f.device, size, f.mtime, st.offset, st.source,
          json.dumps(st.last_total) if st.last_total is not None else None,
-         json.dumps(st.state) if st.state else None, totals.now))
+         st.state_json(), totals.now))
     return st.offset
 
 

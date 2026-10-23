@@ -427,15 +427,34 @@ class LineHandlingTest(TokenStatsTestCase):
         with self.db() as c:
             self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'token_bad_lines'").fetchone()[0], "2")
 
-    def test_long_line_at_end_without_newline_waits(self):
+    def test_long_line_at_end_without_newline_is_skipped_later(self):
         self.write(self.claude_file(), claude_assistant("a1", T0, inp=1, out=1), "x" * 5000, newline=False)
         with mock.patch.object(token_stats, "MAX_LINE_BYTES", 2048):
             self.scan()
-            with self.db() as c:
-                offset = c.execute("SELECT offset FROM scan_state").fetchone()[0]
-            self.assertEqual(offset, len(claude_assistant("a1", T0, inp=1, out=1)) + 1)
-            self.write(self.claude_file(), "", claude_assistant("a2", T0, inp=2, out=2))
+            self.write(self.claude_file(), "y" * 3000, claude_assistant("a2", T0, inp=2, out=2))
             self.scan()
+            self.scan()
+        self.assertEqual(self.totals("claude")[:4], (3, 0, 0, 3))
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'token_long_lines'").fetchone()[0], "1")
+
+    def test_skipping_a_long_line_respects_the_budget(self):
+        # 一行比整次預算還長：分好幾次丟完，不重讀已丟棄的部分
+        self.write(self.claude_file(), claude_assistant("a1", T0, inp=1, out=1), "z" * 20_000,
+                   claude_assistant("a2", T0, inp=2, out=2))
+        size = self.claude_file().stat().st_size
+        consumed, runs = 0, 0
+        with mock.patch.object(token_stats, "MAX_LINE_BYTES", 2048), mock.patch.object(token_stats, "SKIP_CHUNK_BYTES", 1024):
+            while runs < 50:
+                budget = token_stats.Budget(bytes_left=4000)
+                result = self.scan(budget=budget)
+                consumed += 4000 - budget.bytes_left
+                self.assertLessEqual(4000 - budget.bytes_left, 4000 + 2049)
+                runs += 1
+                if result.done:
+                    break
+        self.assertGreater(runs, 4)
+        self.assertLessEqual(consumed, size)
         self.assertEqual(self.totals("claude")[:4], (3, 0, 0, 3))
 
     def test_model_whitelist(self):
