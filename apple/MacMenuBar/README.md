@@ -16,6 +16,8 @@
 
 讀取 `~/Library/Application Support/AIUsageMonitor/usage.json`，規則與收集器相同：設定環境變數 `AI_USAGE_MONITOR_HOME` 時改讀該資料夾。收集器以「寫暫存檔再改名」更新檔案，App 監看所在資料夾（改名後監看檔案本身會失效）。另有每 60 秒的計時器重新判斷過期與重置；只有在監看失效時（資料夾還不存在，或被刪除後重建）才改為每 60 秒讀檔，並在資料夾出現後重新監看。
 
+面板的「更新」按鈕（FR-50）：重新讀檔，並以 `launchctl kickstart gui/<uid>/io.github.kevin930326.ai-usage-monitor` 請 launchd 立即執行收集器，收集器寫完後資料夾監看會自動重讀。App 本身不連網。**60 秒內只觸發一次，最近 24 小時最多 100 次**（`CollectorKickThrottle`，存在 App 的 UserDefaults）：每次觸發收集器都會上傳一次快照到中繼，Cloudflare KV 免費額度每天 1,000 次寫入，排程本身已用約 288 次。超過限制時只重讀檔案，頁尾說明原因。設定 `AI_USAGE_MONITOR_HOME`（測試、截圖、效能量測）時不觸發收集器。
+
 App 不開沙盒，才能讀取 `~/Library/Application Support`。桌面小工具必須在沙盒中執行，讀不到這個資料夾，所以 App 讀到新資料時會複製一份到 App Group 容器（`~/Library/Group Containers/group.io.github.kevin930326.AIUsageMonitor/usage.json`）給小工具。
 
 - App Group 需要以 Apple 帳號（Team）簽署。App 只有在自己帶有該 App Group entitlement 時才寫入；以「Sign to Run Locally」建置時不寫入（macOS 15 對未授權存取群組容器會跳出詢問），小工具顯示「範例資料 · 未連結 App Group」。

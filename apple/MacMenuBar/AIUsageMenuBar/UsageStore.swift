@@ -23,7 +23,7 @@ final class UsageStore {
     @ObservationIgnored private var widgetThrottle = WidgetReloadThrottle()
 
     /// 測試時以 AI_USAGE_MONITOR_HOME 指向假資料，此時不寫入 App Group，避免動到真實資料夾。
-    private var usesCustomHome: Bool {
+    var usesCustomHome: Bool {
         !(ProcessInfo.processInfo.environment[UsageFileLocator.homeEnvironmentKey] ?? "").isEmpty
     }
 
