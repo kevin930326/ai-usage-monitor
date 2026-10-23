@@ -4,13 +4,18 @@ import Testing
 
 /// 讀 repo 根目錄的 fixtures/usage-sample.json；收集器與中繼的測試讀同一份（fixtures/README.md）。
 @Suite struct FixtureTests {
-    static let url = URL(fileURLWithPath: #filePath)
+    static let folder = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // UsageKitTests
         .deletingLastPathComponent()   // Tests
         .deletingLastPathComponent()   // UsageKit
         .deletingLastPathComponent()   // apple
         .deletingLastPathComponent()   // repo 根目錄
-        .appendingPathComponent("fixtures/usage-sample.json")
+        .appendingPathComponent("fixtures")
+    static let url = folder.appendingPathComponent("usage-sample.json")
+
+    static func load(_ name: String) throws -> UsageSnapshot {
+        try UsageDecoder.decode(Data(contentsOf: folder.appendingPathComponent(name)))
+    }
 
     let snapshot: UsageSnapshot
     let updatedAt = Date(timeIntervalSince1970: 1_792_551_600) // 2026-10-21T03:00:00Z
@@ -58,5 +63,36 @@ import Testing
     @Test func encoderRoundTrips() throws {
         let again = try UsageDecoder.decode(UsageEncoder.encode(snapshot))
         #expect(again == snapshot)
+    }
+
+    // MARK: - 整合審查 D-i：只有 Codex（plan null、超過 100%）、沒有任何服務
+
+    @Test func codexOnlyOverHundredPercent() throws {
+        let codexOnly = try Self.load("usage-codex-only.json")
+        #expect(codexOnly.orderedProviderKeys == ["codex"])
+        #expect(!codexOnly.hasNoProviders)
+        let codex = try #require(codexOnly.providers["codex"])
+        #expect(codex.plan == nil)
+        #expect(codex.error == nil)
+        #expect(codex.windows[0].usedPct == 112.5)
+        // 超過 100% 以剩 0% 顯示，且是剩餘最少的額度
+        let tightest = try #require(codexOnly.tightestWindow(at: updatedAt))
+        #expect(tightest.provider == "codex")
+        #expect(tightest.window.id == "five_hour")
+        #expect(tightest.window.effectiveRemainingPct(at: updatedAt) == 0)
+        let state = UsageActivityState(snapshot: codexOnly, mode: .remaining)
+        #expect(!state.hasPartialFailure)
+        #expect(try UsageDecoder.decode(UsageEncoder.encode(codexOnly)) == codexOnly)
+    }
+
+    @Test func noProvidersIsNotAnError() throws {
+        let empty = try Self.load("usage-no-providers.json")
+        #expect(empty.hasNoProviders)
+        #expect(empty.orderedProviderKeys.isEmpty)
+        #expect(empty.tightestWindow(at: updatedAt) == nil)
+        let state = UsageActivityState(snapshot: empty, mode: .remaining)
+        #expect(!state.hasPartialFailure)
+        #expect(state.providers.isEmpty)
+        #expect(try UsageDecoder.decode(UsageEncoder.encode(empty)) == empty)
     }
 }
