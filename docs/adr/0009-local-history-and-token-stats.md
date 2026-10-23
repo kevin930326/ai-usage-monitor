@@ -119,7 +119,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 **逐行處理，只取白名單欄位**：
 
-1. 先以位元組比對篩選，其他行不解析：Claude 只處理同時含 `"type":"assistant"` 與 `"usage"`，或含 `"type":"user"` 的行（後者只用於任務時間）；Codex 只處理含 `"token_usage_record"`、`"token_count"`、`"task_started"`、`"task_complete"`、`"turn_context"` 的行。
+1. 先以位元組比對篩選，其他行不解析：Claude 只處理同時含 `"assistant"` 與 `"usage"`，或含 `"user"` 的行（後者只用於任務時間）；這只是保守的候選篩選，是否真的是 assistant／user 行以解析後的 `type` 欄位判斷，不依空白或欄位順序（以 `"type": "assistant"` 等不同的合法 JSON 格式測試結果相同）；Codex 只處理含 `"token_usage_record"`、`"token_count"`、`"task_started"`、`"task_complete"`、`"turn_context"` 的行。
 2. 解析成 JSON 後**立刻**只取下表的欄位，其餘丟棄；不保留原始行、不保留整個物件。
 3. 單行超過 4 MB 直接跳過（只記錄「略過一行過長的紀錄」的次數）。
 
