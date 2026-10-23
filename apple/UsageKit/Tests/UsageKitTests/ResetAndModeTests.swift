@@ -70,3 +70,23 @@ import Testing
         #expect(item.leastRemainingAccessibilityLabel(mode: .used, at: now) == "剩餘最少的額度：Claude 每週，已用 33%")
     }
 }
+
+/// 手錶列表的重置倒數（取代每秒更新的相對時間文字，避免 watchOS 版面不斷重算）
+@Suite struct ResetCountdownTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func formatsToTheMinute() {
+        func text(_ seconds: TimeInterval) -> String? { ResetCountdown.text(until: now.addingTimeInterval(seconds), now: now) }
+        #expect(text(2 * 86400 + 23 * 3600 + 59 * 60) == "2天 23小時")
+        #expect(text(86400 + 30) == "1天")
+        #expect(text(3600 + 39 * 60 + 59) == "1小時 39分鐘")
+        #expect(text(2 * 3600) == "2小時")
+        #expect(text(12 * 60 + 5) == "12分鐘")
+        #expect(text(30) == "不到 1 分鐘")
+    }
+
+    @Test func pastOrNowIsNil() {
+        #expect(ResetCountdown.text(until: now, now: now) == nil)
+        #expect(ResetCountdown.text(until: now.addingTimeInterval(-60), now: now) == nil)
+    }
+}
