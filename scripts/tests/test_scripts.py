@@ -124,6 +124,60 @@ class InstallMacAppTests(unittest.TestCase):
         self.assertIn("不認得的參數：--bogus（只支援 --no-open）", result.stderr)
 
 
+class ReinstallLockTests(unittest.TestCase):
+    """reinstall-ios.sh 的鎖（整合審查 D-h 3-2）：只取出鎖的函式來跑，不執行真的重新安裝。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        script = (ROOT / "scripts" / "reinstall-ios.sh").read_text()
+        start = script.index('LOCK="$CONFIG_DIR/.reinstall.lock"')
+        end = script.index("if ! acquire_lock; then")
+        self.functions = script[start:end]
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_acquire(self, prelude: str) -> subprocess.CompletedProcess:
+        body = f"""
+            set -u
+            CONFIG_DIR={self.dir}
+            LOG={self.dir}/reinstall.log
+            log() {{ echo "$*" >>"$LOG"; }}
+            {self.functions}
+            {prelude}
+            acquire_lock; echo "result=$?"
+        """
+        return subprocess.run(["bash", "-c", textwrap.dedent(body)], capture_output=True, text=True, env={**os.environ, **UTF8_ENV})
+
+    def test_stale_lock_is_taken_over(self):
+        lock = self.dir / ".reinstall.lock"
+        lock.mkdir()
+        (lock / "pid").write_text("999999\n")  # 不存在的程序
+        result = self.run_acquire("")
+        self.assertIn("result=0", result.stdout)
+        self.assertTrue((lock / "pid").read_text().strip().isdigit())
+        self.assertEqual(list(self.dir.glob(".reinstall.lock.stale.*")), [])
+
+    def test_lock_that_cannot_be_put_back_is_kept(self):
+        # 改名後發現是別人新建的鎖（PID 不同），而且這段時間又有人建立了鎖：不能刪掉改名後的資料夾
+        lock = self.dir / ".reinstall.lock"
+        lock.mkdir()
+        (lock / "pid").write_text("999999\n")
+        prelude = f"""
+            mv() {{
+                if [ "$2" = "{lock}" ]; then mkdir -p "{lock}"; return 1; fi   # 放回時已有新的鎖
+                command mv "$@" && echo 424242 >"$2/pid"                      # 改名時換成別人的新鎖
+            }}
+        """
+        result = self.run_acquire(prelude)
+        self.assertIn("result=1", result.stdout)
+        kept = list(self.dir.glob(".reinstall.lock.stale.*"))
+        self.assertEqual(len(kept), 1)
+        self.assertEqual((kept[0] / "pid").read_text().strip(), "424242")
+        self.assertIn("無法放回鎖", (self.dir / "reinstall.log").read_text())
+
+
 class CodexReviewTests(unittest.TestCase):
     """scripts/codex-review.sh：參數、報告位置、固定的模型參數、失敗時非 0 且不覆蓋舊報告。"""
 
