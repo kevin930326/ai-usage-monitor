@@ -126,6 +126,9 @@ def connect(path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), timeout=BUSY_TIMEOUT_MS / 1000, isolation_level=None)
     try:
         conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        # 先確認版本再改日誌模式：較新版本的檔案一個位元組都不動（journal_mode 會寫進檔案）
+        if schema_version(conn) > SCHEMA_VERSION:
+            raise HistoryError(f"history.sqlite3 的版本（{schema_version(conn)}）比收集器新，請更新收集器")
         conn.execute("PRAGMA journal_mode = WAL")
         migrate(conn)
     except BaseException:

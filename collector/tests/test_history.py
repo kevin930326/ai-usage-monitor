@@ -99,6 +99,17 @@ class SchemaTest(HistoryTestCase):
             tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         self.assertEqual(tables, {"meta"})
 
+    def test_newer_schema_keeps_journal_mode_and_bytes(self):
+        with self.db() as c:
+            c.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+            c.execute("INSERT INTO meta VALUES ('schema_version', '99')")
+        before = self.path.read_bytes()
+        with self.assertRaises(history.HistoryError):
+            history.connect(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+        with self.db() as c:
+            self.assertEqual(c.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+
     def test_failed_migration_rolls_back(self):
         def broken(conn):
             history._v1(conn)
