@@ -54,6 +54,11 @@ public struct UsagePace: Equatable, Sendable {
 
     public var isTooFast: Bool { aheadBy >= Self.fastMargin }
 
+    init(aheadBy: Double, exhaustsAt: Date?) {
+        self.aheadBy = aheadBy
+        self.exhaustsAt = exhaustsAt
+    }
+
     /// 資料過期、已重置、長度不明或經過不足 10% 時為 nil（不判斷）。
     public init?(window: UsageWindow, stale: Bool, now: Date) {
         guard !stale, let elapsed = window.elapsedFraction(at: now), elapsed >= Self.minimumElapsed,

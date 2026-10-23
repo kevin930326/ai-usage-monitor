@@ -13,6 +13,7 @@ struct UsageFileLocatorTests {
     @Test func environmentOverridesDirectory() {
         let locator = UsageFileLocator(environment: ["AI_USAGE_MONITOR_HOME": "/tmp/fixture"], homeDirectory: home)
         #expect(locator.usageFile.path == "/tmp/fixture/usage.json")
+        #expect(locator.historyFile.path == "/tmp/fixture/history.sqlite3")
     }
 
     @Test func emptyEnvironmentFallsBack() {

@@ -6,9 +6,12 @@ import Foundation
 public struct UsageFileLocator: Sendable {
     public static let homeEnvironmentKey = "AI_USAGE_MONITOR_HOME"
     public static let fileName = "usage.json"
+    /// 收集器寫的額度歷史（ADR-0009）；App 只讀
+    public static let historyFileName = "history.sqlite3"
 
     public let directory: URL
     public var usageFile: URL { directory.appendingPathComponent(Self.fileName) }
+    public var historyFile: URL { directory.appendingPathComponent(Self.historyFileName) }
 
     public init(directory: URL) {
         self.directory = directory
