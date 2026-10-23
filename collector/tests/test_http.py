@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -102,6 +104,48 @@ class RedirectTest(unittest.TestCase):
         with self.assertRaises(ProviderError):
             request_json(f"{self.origin.origin}/a", self.headers)
 
+
+
+class SilentServer:
+    """接受連線後不回應（sleep 秒）或直接關閉連線，模擬讀取回應時逾時或中斷。"""
+
+    def __init__(self, sleep: float | None):
+        self.sock = socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen()
+        self.origin = f"http://127.0.0.1:{self.sock.getsockname()[1]}"
+        self.sleep = sleep
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        try:
+            conn, _ = self.sock.accept()
+        except OSError:
+            return
+        with conn:
+            conn.recv(65536)
+            if self.sleep:
+                time.sleep(self.sleep)
+
+    def close(self):
+        self.sock.close()
+
+
+class ReadFailureTest(unittest.TestCase):
+    """連上中繼後讀取回應逾時或連線被中斷：要變成 ProviderError，不能讓收集器整個中斷（之後的歷史、統計、服務狀態都不寫）。"""
+
+    def check(self, sleep: float | None):
+        server = SilentServer(sleep)
+        self.addCleanup(server.close)
+        with self.assertRaises(ProviderError) as ctx:
+            post_json(f"{server.origin}/usage", {"Authorization": "Bearer w"}, {"schema_version": 1}, timeout=0.3)
+        self.assertEqual(str(ctx.exception), "網路錯誤（連線逾時或中斷）")
+
+    def test_read_timeout(self):
+        self.check(sleep=2)
+
+    def test_connection_closed_without_response(self):
+        self.check(sleep=None)
 
 
 class ErrorReasonTest(unittest.TestCase):

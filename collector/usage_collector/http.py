@@ -3,6 +3,7 @@
 收集器不直接呼叫任何服務的用量端點（ADR-0006、ADR-0007），這裡唯一帶的密鑰是中繼的上傳密鑰。"""
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -67,8 +68,11 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
         raise ProviderError(f"HTTP {e.code}{_reason(e)}") from None
     except urllib.error.URLError:
         raise ProviderError("網路錯誤") from None
-    except json.JSONDecodeError:
+    except ValueError:  # JSONDecodeError，以及不是 UTF-8 的回應（UnicodeDecodeError）
         raise ProviderError("回應不是 JSON，API 可能已變更") from None
+    # 連上之後讀取回應時逾時（TimeoutError）、連線被中斷或回應不完整：urllib 不會包成 URLError
+    except (OSError, http.client.HTTPException):
+        raise ProviderError("網路錯誤（連線逾時或中斷）") from None
 
 
 def post_json(url: str, headers: dict[str, str], body: dict, timeout: float = 15) -> dict:
