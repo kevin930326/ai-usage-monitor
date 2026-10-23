@@ -138,9 +138,21 @@ struct ResetsCardContent: View {
 
     var body: some View {
         let resets = UpcomingReset.list(snapshot: snapshot, now: now)
+        let waiting = UpcomingReset.awaitingStart(snapshot: snapshot)
         let forecasts = WeeklyForecast.list(snapshot: snapshot, history: history, now: now)
         VStack(alignment: .leading, spacing: 12) {
             ResetTimeline(resets: resets, stale: stale, progress: motion.timeline)
+            if !waiting.isEmpty {
+                // 服務回報沒有重置時間：已重置，新一輪要等下次使用才開始計時
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(waiting, id: \.key) { item in
+                        Text("\(ResetTimeline.name(provider: item.provider, window: item.window))：已重置，下次使用時開始計時")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
             if !forecasts.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(forecasts, id: \.provider) { forecast in
@@ -191,7 +203,10 @@ struct ResetTimeline: View, Animatable {
                 let width = geo.size.width - 8
                 ZStack(alignment: .topLeading) {
                     Capsule().fill(Color.primary.opacity(0.12)).frame(width: geo.size.width, height: 3).offset(y: 6)
-                    Text("現在").font(.caption2).foregroundStyle(.secondary).offset(y: 18)
+                    // 有「剛重置」時它的標籤就在現在的位置，不另外寫「現在」
+                    if !showsJustReset {
+                        Text("現在").font(.caption2).foregroundStyle(.secondary).offset(y: 18)
+                    }
                     ForEach(Array(resets.enumerated()), id: \.offset) { index, reset in
                         let x: CGFloat = 4 + width * CGFloat(reset.position * stagger(index))
                         dot(reset.provider)
@@ -200,9 +215,16 @@ struct ResetTimeline: View, Animatable {
                             Text(Self.name(reset))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                            Text(reset.resetsAt, format: .dateTime.hour().minute())
-                                .font(.caption.weight(.semibold))
-                                .monospacedDigit()
+                            Group {
+                                if reset.justReset {
+                                    // 重置時間已過、收集器還沒拿到新的重置時間
+                                    Text("剛重置")
+                                } else {
+                                    Text(reset.resetsAt, format: .dateTime.hour().minute())
+                                }
+                            }
+                            .font(.caption.weight(.semibold))
+                            .monospacedDigit()
                         }
                         .lineLimit(1)
                         .frame(width: Self.labelWidth)
@@ -225,10 +247,16 @@ struct ResetTimeline: View, Animatable {
         }
     }
 
+    private var showsJustReset: Bool { resets.contains(where: \.justReset) }
+
     /// 「Claude 5h」「Codex 每週」
     static func name(_ reset: UpcomingReset) -> String {
-        reset.window.id == "five_hour" ? "\(ProviderInfo.displayName(reset.provider)) 5h"
-            : ProviderWindow(provider: reset.provider, window: reset.window).displayName
+        name(provider: reset.provider, window: reset.window)
+    }
+
+    static func name(provider: String, window: UsageWindow) -> String {
+        window.id == "five_hour" ? "\(ProviderInfo.displayName(provider)) 5h"
+            : ProviderWindow(provider: provider, window: window).displayName
     }
 
     /// 標籤置中在圓點下方，但不超出時間軸兩端
@@ -255,7 +283,7 @@ struct ResetTimeline: View, Animatable {
     private func labelRows() -> [Int] {
         var rows: [Int] = []
         // 第一行最左邊有「現在」（約 28pt）：標籤中心要在 68pt 以後才不會蓋到，否則換行
-        var lastX: [Int: Double] = [0: 68 - Double(Self.labelWidth)]
+        var lastX: [Int: Double] = showsJustReset ? [:] : [0: 68 - Double(Self.labelWidth)]
         for reset in resets {
             let x = reset.position * 300
             let row = (0..<4).first { r in lastX[r].map { x - $0 >= Double(Self.labelWidth) } ?? true } ?? 0
@@ -268,7 +296,10 @@ struct ResetTimeline: View, Animatable {
     private var accessibilityText: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
-        let items = resets.map { "\(ProviderWindow(provider: $0.provider, window: $0.window).displayName) \(formatter.string(from: $0.resetsAt)) 重置" }
+        let items = resets.map { reset in
+            let name = ProviderWindow(provider: reset.provider, window: reset.window).displayName
+            return reset.justReset ? "\(name) 剛重置" : "\(name) \(formatter.string(from: reset.resetsAt)) 重置"
+        }
         return "未來 8 小時：" + items.joined(separator: "，")
     }
 }

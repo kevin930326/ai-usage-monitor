@@ -5,6 +5,9 @@ public struct ProviderWindow: Equatable, Sendable {
     public var provider: String
     public var window: UsageWindow
 
+    /// 「服務/額度 id」，同一份快照中唯一
+    public var key: String { "\(provider)/\(window.id)" }
+
     public init(provider: String, window: UsageWindow) {
         self.provider = provider
         self.window = window

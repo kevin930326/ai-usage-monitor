@@ -230,17 +230,40 @@ public struct UpcomingReset: Equatable, Sendable {
     public var resetsAt: Date
     /// 在時間軸上的位置（0＝現在，1＝8 小時後）
     public var position: Double
+    /// 重置時間已過、收集器還沒拿到新的重置時間：畫在「現在」並標「剛重置」
+    public var justReset: Bool
 
-    /// 未來 `horizon` 內會重置的可見額度，依時間排序（有錯誤的服務、已重置的額度不列）。
+    public init(provider: String, window: UsageWindow, resetsAt: Date, position: Double, justReset: Bool = false) {
+        self.provider = provider
+        self.window = window
+        self.resetsAt = resetsAt
+        self.position = position
+        self.justReset = justReset
+    }
+
+    /// 時間軸上的可見額度，依時間排序（有錯誤的服務不列）：未來 `horizon` 內會重置的，
+    /// 以及重置時間已過、還沒有新重置時間的（`justReset`，位置 0）。
     public static func list(snapshot: UsageSnapshot, now: Date, horizon: TimeInterval = 8 * 3600) -> [UpcomingReset] {
         snapshot.orderedProviderKeys.flatMap { key -> [UpcomingReset] in
             guard let p = snapshot.providers[key], p.error == nil else { return [] }
             return p.visibleWindows.compactMap { w in
-                guard let at = w.resetsAt, at > now, at.timeIntervalSince(now) <= horizon else { return nil }
+                guard let at = w.resetsAt, at.timeIntervalSince(now) <= horizon else { return nil }
+                if at <= now { return UpcomingReset(provider: key, window: w, resetsAt: at, position: 0, justReset: true) }
                 return UpcomingReset(provider: key, window: w, resetsAt: at, position: at.timeIntervalSince(now) / horizon)
             }
         }
         .sorted { $0.resetsAt < $1.resetsAt }
+    }
+
+    /// 服務回報沒有重置時間的額度（已重置、新一輪要等下次使用才開始計時）：時間軸下方另列一行。
+    /// 只列長度已知、已用 0% 的可見額度；有用量卻沒有重置時間時不知道狀態，不列。
+    public static func awaitingStart(snapshot: UsageSnapshot) -> [ProviderWindow] {
+        snapshot.orderedProviderKeys.flatMap { key -> [ProviderWindow] in
+            guard let p = snapshot.providers[key], p.error == nil else { return [] }
+            return p.visibleWindows
+                .filter { $0.resetsAt == nil && $0.duration != nil && $0.usedPct <= 0 }
+                .map { ProviderWindow(provider: key, window: $0) }
+        }
     }
 }
 

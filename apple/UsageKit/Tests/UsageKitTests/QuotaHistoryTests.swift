@@ -198,6 +198,39 @@ import Testing
         #expect(list.map(\.position) == [0.125, 0.25])
     }
 
+    @Test func pastResetTimeShowsJustResetAtNow() {
+        // Codex 5 小時的重置時間 10 分鐘前已過、收集器還沒拿到新的：畫在「現在」、標剛重置，排在最前面
+        let s = UsageSnapshot(updatedAt: at(0), providers: [
+            "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 30, resetsAt: at(2 * hour))]),
+            "codex": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: at(-10 * minute))]),
+        ])
+        let list = UpcomingReset.list(snapshot: s, now: at(0))
+        #expect(list.map(\.provider) == ["codex", "claude"])
+        #expect(list.map(\.justReset) == [true, false])
+        #expect(list[0].position == 0)
+        #expect(UpcomingReset.awaitingStart(snapshot: s).isEmpty)
+        // 收集器拿到新的重置時間後就不再是剛重置
+        let next = UsageSnapshot(updatedAt: at(5 * minute), providers: [
+            "codex": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 0, resetsAt: at(5 * hour))]),
+        ])
+        #expect(UpcomingReset.list(snapshot: next, now: at(5 * minute)).map(\.justReset) == [false])
+    }
+
+    @Test func nullResetTimeAwaitsNextUse() {
+        // Codex 5 小時已重置、回報沒有重置時間（下次使用才開始計時）：不在時間軸上，另列一行
+        let s = UsageSnapshot(updatedAt: at(0), providers: [
+            "claude": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 30, resetsAt: at(2 * hour))]),
+            "codex": ProviderUsage(windows: [
+                UsageWindow(id: "five_hour", label: "5 小時", usedPct: 0, resetsAt: nil),
+                UsageWindow(id: "weekly", label: "每週", usedPct: 12, resetsAt: nil),  // 有用量卻沒有重置時間：狀態不明，不列
+            ]),
+        ])
+        #expect(UpcomingReset.list(snapshot: s, now: at(0)).map(\.provider) == ["claude"])
+        let waiting = UpcomingReset.awaitingStart(snapshot: s)
+        #expect(waiting.map(\.provider) == ["codex"])
+        #expect(waiting.map(\.window.id) == ["five_hour"])
+    }
+
     @Test func weeklyForecastRunsOutWithRecentRate() {
         // 每週額度已用 50%，再 3 天重置；最近 24 小時用了 24%（每小時 1%）→ 50 小時後用完
         let now = at(4 * 86400)
