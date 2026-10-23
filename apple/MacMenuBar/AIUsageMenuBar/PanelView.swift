@@ -92,6 +92,10 @@ struct PanelView: View {
                 footer
             }
             .padding(16)
+            // 面板開著時收集器寫入新的紀錄：連續天數創新紀錄也要彈一次
+            .onChange(of: historyStore.tokens) {
+                if visible { celebrateStreakIfNeeded() }
+            }
     }
 
     /// Debug 的效能量測腳本用來觸發動畫（Release 不含）
@@ -216,8 +220,9 @@ struct PanelView: View {
         withAnimation(PanelTiming.heatmap) { motion.heatmap = 1 }
     }
 
-    /// 連續天數創新紀錄：🔥 彈一下，每個新紀錄只播一次（記在設定裡）
+    /// 連續天數創新紀錄：🔥 彈一下，每個新紀錄只播一次（記在設定裡）。統計卡片隱藏或收合時不算
     private func celebrateStreakIfNeeded() {
+        guard settings.visibleSections.contains(.stats), !settings.collapsed.contains(PanelSection.stats.rawValue) else { return }
         let summary = TokenSummary(data: historyStore.tokens, scope: .all, now: store.now)
         guard summary.streakIsRecord, summary.currentStreak > 1, summary.currentStreak > settings.celebratedStreak else { return }
         settings.celebratedStreak = summary.currentStreak
