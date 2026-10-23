@@ -197,6 +197,7 @@ class ReinstallLockTests(unittest.TestCase):
         self.assertEqual((kept[0] / "pid").read_text().strip(), "424242")
         log = (self.dir / "reinstall.log").read_text()
         self.assertIn("無法放回鎖", log)
+        self.assertNotIn(str(self.dir), log + result.stdout)  # 只記檔名，不記完整路徑
 
 
 class CodexReviewTests(unittest.TestCase):

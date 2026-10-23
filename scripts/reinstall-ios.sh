@@ -101,7 +101,7 @@ acquire_lock() {
         if mkdir "$LOCK" 2>/dev/null && mv "$stale/pid" "$LOCK/pid" 2>/dev/null; then
             rmdir "$stale" 2>/dev/null
         else
-            log "無法放回鎖，保留在 ${stale}"
+            log "無法放回鎖，保留為 ${stale##*/}"
         fi
         return 1
     fi
