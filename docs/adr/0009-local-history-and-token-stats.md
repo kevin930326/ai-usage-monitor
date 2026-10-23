@@ -89,6 +89,13 @@ CREATE TABLE seen_ids (
   PRIMARY KEY (provider, id)
 );
 
+-- 每個 Codex 紀錄檔對加總的貢獻（只有數字），從頭重掃或換來源時先扣掉再重算（第 4、7 節）
+CREATE TABLE file_tokens (
+  file_key TEXT, day TEXT, hour INTEGER, model TEXT,
+  input_tokens INTEGER, cache_write_tokens INTEGER, cache_read_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER,
+  PRIMARY KEY (file_key, day, hour, model)
+);
+
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 -- schema_version、device_id、device_name、retention_days、first_scan_progress、upload_state（ADR-0011）
 ```
@@ -140,6 +147,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - **顯示的「Token」= `input + cache_write + cache_read + output`**（不加 `reasoning`）。對 Codex 這等於 `total_tokens`，以測試驗證這個等式；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。是否把快取讀取算進「本週 Token」列為待確認事項。
 - **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
+- **Codex 的重算**：每個檔案計入的數字同時記在 `file_tokens`。累計差值只在「從上次的位置接著讀」時正確，所以以下兩種情況都**先從 `daily_tokens`／`hourly_tokens` 扣掉該檔在 `file_tokens` 的貢獻、清空該檔的 `file_tokens` 與 `last_total`，再從頭重掃該檔**（同一個交易內完成）：(1) 檔案被改寫（第 7 節）；(2) 已用 `token_count` 的檔案之後出現 `token_usage_record`（來源改為 record）。來源一旦是 record 就不再改回。以測試驗證：截斷、改寫、compaction 後重掃、先只有 `token_count` 再追加重疊或不重疊的 record，結果都與一次讀完整個檔案相同，重複執行不改變統計。
 - **日期與時區**：以紀錄的 `timestamp` 換算成**掃描當下**的本機時區取日期與小時；之後改時區不回頭重算。限制：旅行或另一台電腦在不同時區時，第二層合併的「同一天」不是同一個 24 小時（ADR-0011 第 1 節）。
 - **模型名稱**：前綴白名單 `claude-`、`gpt-`、`codex-`、`o` 加數字（例如 `o4-mini`），且只含 `[a-z0-9._-]`、最長 64 字；其他（自訂別名、proxy、`<synthetic>`）一律記為 `other`。第二層會上傳模型名稱，所以用白名單而不是字元集。
 - **任務時間**：Codex 用 `task_complete.duration_ms`（沒有時用 `completed_at − started_at`）。Claude：同一檔、非 sidechain，從一個「真人提示」（`type == "user"`、不是 `tool_result`、不是 `isMeta`）到下一個真人提示之前最後一筆 assistant 行的時間差；超過 6 小時視為中斷，以 6 小時計；sidechain（子代理）只計 Token、不另算任務。任務歸到**開始**那天。
@@ -156,8 +164,8 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
-| 匯出 CSV | 設定中按「匯出 CSV」→ 系統儲存對話框，由使用者選位置；匯出 `daily_tokens` 與每小時的額度歷史，欄位同資料表，不含 `scan_state`、`seen_ids`、`meta` |
-| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`，執行 `VACUUM`；**保留** `scan_state` 與 `seen_ids`，避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表一起清除，從現有對話紀錄重建 |
+| 匯出 CSV | 設定中按「匯出 CSV」→ 系統儲存對話框，由使用者選位置；匯出 `daily_tokens` 與每小時的額度歷史，欄位同資料表，不含 `scan_state`、`seen_ids`、`file_tokens`、`meta` |
+| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`，執行 `VACUUM`；**保留** `scan_state`、`seen_ids` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表一起清除，從現有對話紀錄重建 |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
 估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 每年數十萬列；整個檔案預期 < 50 MB。
@@ -168,7 +176,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 ### 7. 效能（NFR-8、NFR-10）
 
-- 增量掃描：只讀 `offset` 之後新增的位元組；同一個 `(device, inode)` 的檔案變小或 `mtime` 倒退時（被改寫）從頭重掃該檔，以 `seen_ids`（Claude、Codex record）或累計值（Codex token_count）避免重複計入。
+- 增量掃描：只讀 `offset` 之後新增的位元組；同一個 `(device, inode)` 的檔案變小或 `mtime` 倒退時（被改寫）從頭重掃該檔，Claude 以 `seen_ids` 避免重複計入；Codex 先扣掉 `file_tokens` 中該檔的貢獻再重算（第 4 節）。
 - **首次掃描分段**：每次執行最多處理 64 MB 或 15 秒（先到者為準），其餘留給下次；以 `nice` 執行。以本機約 520 MB 的紀錄估計，首次約需 9 次執行（45 分鐘）。
 - 一般情況每次執行增加的時間 < 1 秒，須以測試量測並寫進 PR。
 - App 只在面板或統計視窗開啟時查詢資料庫；查詢結果在面板開啟期間快取，收到 `usage.json` 變更時才重新查詢。面板關閉時關閉資料庫連線。
