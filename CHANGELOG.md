@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 收集器 Token 統計（v1.7，FR-40～FR-44，ADR-0009）：讀這台 Mac 的 Claude Code 與 Codex CLI 對話紀錄（只列舉 ADR 列出的檔案、不跟隨符號連結、每行只取白名單欄位），把 `input`、`cache_write`、`cache_read`、`output`、`reasoning` 與任務時間分開累加到 `history.sqlite3`（schema 2：`daily_tokens`、`hourly_tokens`、`records`、`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）。Claude 以訊息 ID 去重並補串流差額；Codex 每檔一種來源、改寫或換來源時先扣再重算；首次掃描每次最多 64 MB 或 15 秒並記錄進度；一般執行約增加 8 ms。`install-launchd.sh` 把 `CLAUDE_CONFIG_DIR`／`CODEX_HOME` 寫進 `config.json`；Mac App 支援 schema 2，「清除歷史」把 Codex 帳本歸零、「清除並重新掃描」一併清除任務去重與首次掃描狀態
 - `scripts/codex-review.sh`：以 Codex（固定 `gpt-6.1-sol`、reasoning effort medium、唯讀）審查 `origin/main...HEAD` 的變更（`--diff`，預設）或整個 repo（`--full`），報告存到 `~/Documents/ai-usage-monitor-work/reviews/<分支>-codex.md`；模型無法使用或額度不足時印出原因並以非 0 結束，不改用其他模型。專案 skill `.claude/skills/codex-review` 說明何時跑與 triage 的寫法，CLAUDE.md 加上「開 PR 前先審查」
 - `scripts/tests/`：shell 腳本的測試（以 `AUM_INSTALL_DIR` 與假 xcodebuild 跑完整的 `install-mac-app.sh` 流程、`codex-review.sh` 的參數與失敗處理、檢查沒有緊接非 ASCII 字元的 `$VAR`），接進 `verify-all.sh` 與 CI
 - Mac 面板「接下來的重置」：重置時間已過、收集器還沒拿到新重置時間的額度，在「現在」的位置顯示圓點與「剛重置」；服務回報沒有重置時間（已用 0%、新一輪要等下次使用才開始）時，時間軸下方列「Codex 5h：已重置，下次使用時開始計時」

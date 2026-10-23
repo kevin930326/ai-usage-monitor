@@ -89,8 +89,8 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | 檔案 | 位置 | 內容 |
 |---|---|---|
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個） |
-| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 與 codex 的完整路徑、啟用的服務（`enabled_providers`） |
-| 額度歷史 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3` | 見下方「額度歷史」 |
+| 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 與 codex 的完整路徑、啟用的服務（`enabled_providers`）、對話紀錄資料夾（`claude_config_dir`、`codex_home`） |
+| 額度歷史與 Token 統計 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3` | 見下方「額度歷史」「Token 統計」 |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
 | 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
 
@@ -112,6 +112,36 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 - **歷史是附加功能**：寫在 `usage.json` 與上傳之後；資料庫被鎖住、損毀、版本較新或資料夾不能寫入時，只在日誌記一行「略過額度歷史（例外類別）」，不影響 `usage.json`、上傳與結束碼。損毀的檔案不會被自動刪除或覆蓋。
 - 只有收集器執行 migration；App 只讀（清除歷史、縮短保留期間除外）。
 - 每次執行增加的時間：`python3 scripts/measure-history.py`（一年的資料量，一般執行約 1 ms，每天第一次含清理約 3 ms）。
+
+### Token 統計
+
+`--write-local` 時，寫完額度歷史後讀這台 Mac 的 Claude Code 與 Codex CLI 對話紀錄，把 Token 累加進同一個 `history.sqlite3`（schema 2，[ADR-0009](../docs/adr/0009-local-history-and-token-stats.md) 第 3、4、7 節），給 Mac 面板的 Token 統計使用。只算這台 Mac，**不上傳**。
+
+**讀哪些檔案**（一般檔案，不跟隨符號連結；資料夾依序取 `config.json` 的 `claude_config_dir`／`codex_home`、環境變數 `CLAUDE_CONFIG_DIR`／`CODEX_HOME`、預設的 `~/.claude`／`~/.codex`，安裝腳本會把 shell 中的環境變數寫進 `config.json`）：
+
+| 服務 | 檔案 | 只取的欄位 |
+|---|---|---|
+| Claude Code | `<claude>/projects/*/<uuid>.jsonl`、`<claude>/projects/*/<uuid>/subagents/*.jsonl` | assistant 行的時間、`message.id`／`requestId`、模型、四種 Token 數、是否為子代理；user 行的時間、`isMeta`、是否為子代理、內容**是否為** `tool_result`（只看型別） |
+| Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、時間；`token_count` 的累計用量與時間；`turn_context` 的模型；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` |
+
+不讀憑證、設定、`history.jsonl`、`tool-results/` 或上表以外的檔案。每一行先以位元組比對篩選，解析後立刻只取上表的欄位；資料庫只存數字、時間、服務、模型名稱（白名單，其他記為 `other`）與 ID，`file_key` 只用檔名中的 UUID。例外只記錄類別名稱與檔案序號。
+
+| 資料表 | 內容 |
+|---|---|
+| `daily_tokens`／`hourly_tokens` | 每天（每小時）× 服務 × 模型的 `input`、`cache_write`、`cache_read`、`output`（含推理）、`reasoning`（明細）、任務數、任務時間、最長任務。日期與小時用掃描當下的本機時區 |
+| `record_days` | 每天每個服務的主數字，不套用保留期間（單日最高與連續天數以它計算） |
+| `records` | 個人紀錄（不隨保留期間刪除）：`total_tokens`、`best_day_tokens`、`longest_task_seconds`、`longest_streak_days`，以及加上 `:claude`／`:codex` 的各服務版本 |
+| `scan_state` | 每個紀錄檔讀到哪裡（inode、大小、mtime、offset、Codex 的來源與上一筆累計值、跨次掃描的任務狀態） |
+| `seen_ids`／`seen_tasks` | 已計入的訊息、回應與任務 ID 與當時的數值（去重與補差額），永久保留 |
+| `file_tokens` | 每個 Codex 紀錄檔對加總的貢獻；檔案被改寫或改用 `token_usage_record` 時先扣掉再重算 |
+
+- 主數字（「Token」）= `input + cache_write + output`，`cache_read` 不計入。
+- Claude 以 `message.id` 去重，串流被切在兩次掃描之間時補差額；`--resume` 與舊副本靠 `seen_ids` 跨檔去重。任務：真人提示到下一個真人提示之前最後一則回覆，上限 6 小時。
+- Codex 每個檔案只用一種來源：有 `token_usage_record` 就用它（以 `response_id` 去重），否則用 `token_count` 相鄰兩筆累計值的正差值（變小時視為 compaction，重新起算）。
+- 首次掃描每次執行最多處理 64 MB 或 15 秒，進度寫在 `meta.first_scan_progress`，完成時 `meta.first_scan_done = 1`；以 `nice` 執行。無法解析與過長（> 4 MB）的行略過並計數（`meta.token_bad_lines`、`token_long_lines`）。
+- 與額度歷史一樣是附加功能：資料庫被鎖住時整次放棄、只記一行日誌，不影響 `usage.json`、上傳與結束碼。
+- 每日資料套用保留期間，每小時資料只留 90 天，超過 90 天沒看到的紀錄檔刪掉掃描進度。
+- 量測（假紀錄 683 MB、1,700 個檔案）：首次掃描 11 次執行完成（合計 2.7 秒），之後一般執行約 8 ms。
 
 ## 設定中繼 API
 

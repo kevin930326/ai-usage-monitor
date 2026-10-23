@@ -15,7 +15,7 @@ final class HistoryStore {
     static let shared = HistoryStore(url: UsageStore.shared.locator.historyFile)
 
     /// App 支援的資料庫版本（`meta.schema_version`）；收集器的 `history.SCHEMA_VERSION` 改了這裡要一起改
-    nonisolated static let supportedSchema = 1
+    nonisolated static let supportedSchema = 2
     /// 面板需要的範圍：本週走勢最長 7 天、額度消耗 7 天、近期速度 24 小時，多留一天給跨日的差值
     nonisolated static let lookback: TimeInterval = 8 * 86400
     /// 讀取時最多等收集器多久（WAL 模式下讀取通常不會被寫入擋住）
@@ -245,12 +245,18 @@ final class HistoryStore {
 
     /// 清除歷史（ADR-0009 第 5 節）。`rescan` 為真時連同掃描進度與去重表一起清除（Token 統計會從對話紀錄重建；
     /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
+    /// 不重新掃描時 `file_tokens` 歸零而不刪除：對應的加總已清除，之後收集器重算該檔時只清空、不會扣到新的資料。
     nonisolated func clear(rescan: Bool) throws {
-        var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records"]
-        if rescan { tables += ["scan_state", "seen_ids", "file_tokens"] }
+        var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days"]
+        if rescan { tables += ["scan_state", "seen_ids", "seen_tasks", "file_tokens"] }
         try write(vacuum: true) { db in
             Self.existingTables(db, tables).allSatisfy { Self.exec(db, "DELETE FROM \($0)", []) }
-                && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key = 'first_scan_progress'", []))
+                && (rescan || Self.existingTables(db, ["file_tokens"]).allSatisfy {
+                    Self.exec(db, "UPDATE \($0) SET input_tokens = 0, cache_write_tokens = 0, cache_read_tokens = 0,"
+                        + " output_tokens = 0, reasoning_tokens = 0", [])
+                })
+                && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
+                    + " 'token_bad_lines', 'token_long_lines')", []))
         }
     }
 

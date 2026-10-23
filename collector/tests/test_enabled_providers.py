@@ -203,7 +203,8 @@ class InstallLaunchdTest(unittest.TestCase):
     「找不到 claude」的案例會變成找得到；codex 的候選位置以 AUM_CODEX_FALLBACKS 清空。"""
 
     def install(self, *, claude_found: bool, claude_logged_in: bool = True, claude_dir: bool = False,
-                codex: str | None, codex_dir: bool = False, existing: dict | None = None) -> tuple[dict, str]:
+                codex: str | None, codex_dir: bool = False, existing: dict | None = None,
+                extra_env: dict | None = None) -> tuple[dict, str]:
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             home, bin_dir, config_dir = root / "home", root / "bin", root / "config"
@@ -230,7 +231,7 @@ class InstallLaunchdTest(unittest.TestCase):
             if existing is not None:
                 (config_dir / "config.json").write_text(json.dumps(existing))
             env = {"HOME": str(home), "PATH": f"{bin_dir}:/usr/bin:/bin", "AI_USAGE_MONITOR_HOME": str(config_dir),
-                   "LANG": "en_US.UTF-8", "AUM_CODEX_FALLBACKS": ""}
+                   "LANG": "en_US.UTF-8", "AUM_CODEX_FALLBACKS": "", **(extra_env or {})}
             result = subprocess.run([str(SCRIPTS / "install-launchd.sh")], env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             config_path = config_dir / "config.json"
@@ -253,6 +254,14 @@ class InstallLaunchdTest(unittest.TestCase):
         self.assertEqual(config["iphone_udid"], "x")
         self.assertIn("codex_path", config)
 
+    def test_log_dirs_follow_the_shell(self):
+        # launchd 不會傳入 CLAUDE_CONFIG_DIR／CODEX_HOME：安裝時寫進 config.json，沒設定時寫 null（Token 統計用預設資料夾）
+        existing = {"claude_config_dir": "/old/claude", "codex_home": "/old/codex"}
+        config, _ = self.install(claude_found=True, codex="chatgpt", existing=existing,
+                                 extra_env={"CLAUDE_CONFIG_DIR": "/custom/claude dir"})
+        self.assertEqual(config["claude_config_dir"], "/custom/claude dir")
+        self.assertIsNone(config["codex_home"])
+
     def test_logged_out_claude_is_disabled(self):
         config, out = self.install(claude_found=True, claude_logged_in=False, codex="chatgpt")
         self.assertEqual(config["enabled_providers"], ["codex"])
@@ -274,7 +283,8 @@ class InstallLaunchdTest(unittest.TestCase):
         # 重新執行安裝時 shell 找不到 claude：既有的 Claude 啟用不能被悄悄關掉
         existing = {"relay_url": "https://relay.example", "enabled_providers": ["claude", "codex"]}
         config, out = self.install(claude_found=False, claude_dir=True, codex="chatgpt", existing=existing)
-        self.assertEqual({k: v for k, v in config.items() if k != "codex_path"}, existing)
+        self.assertEqual({k: v for k, v in config.items()
+                          if k not in ("codex_path", "claude_config_dir", "codex_home")}, existing)
         self.assertIn("找不到 claude 指令", out)
         self.assertIn("Claude 用量：不確定", out)
         self.assertIn("Codex 用量：啟用", out)
