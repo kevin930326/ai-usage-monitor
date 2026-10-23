@@ -106,7 +106,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 所有平台（iPhone App、Live Activity、Mac 面板與桌面小工具、手錶 App 與複雜功能）都遵守：
 
-- **最吃緊的一項永遠放在最顯眼的位置**（FR-15）：所有服務的可見額度中剩餘最少的一項；排除 `hidden` 額度與有錯誤的服務；同分時取較早重置的；已重置的額度視為剩餘 100%。一律用 `UsageSnapshot.tightestWindow(at:)`（Live Activity 用 `UsageActivityState.tightest(at:)`），不要自己挑。
+- **剩餘最少的額度永遠放在最顯眼的位置**（FR-15）：所有服務的可見額度中剩餘最少的一項；畫面上**不加「剩餘最少」之類的標題**，用服務圖示＋服務名稱＋額度名稱（「Claude 每週」，`ProviderWindow.displayName`）表達；VoiceOver 仍說完整的「剩餘最少的額度：Claude 每週，剩 67%」（`leastRemainingAccessibilityLabel(mode:at:)`）；排除 `hidden` 額度與有錯誤的服務；同分時取較早重置的；已重置的額度視為剩餘 100%。一律用 `UsageSnapshot.tightestWindow(at:)`（Live Activity 用 `UsageActivityState.tightest(at:)`），不要自己挑。
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
 - **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
   來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
@@ -115,9 +115,9 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 - **已用／剩餘設定只在 iPhone**（FR-17，預設剩餘）：iPhone App、Live Activity（含手錶智慧型堆疊的版面）與 iPhone 主畫面／鎖定畫面小工具依設定，用 `displayedPct(mode, at:)`。Mac 選單列、面板、桌面小工具，以及手錶 App 與錶面複雜功能**固定顯示剩餘 %**（`effectiveRemainingPct`；`ComplicationView` 用預設的 `.remaining`），設定不會同步到 Mac 或手錶。
 - **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
   來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。
-- **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大最吃緊的一項、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
+- **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大剩餘最少的額度、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
   來源：`collector/usage_collector/providers/__init__.py`（`enabled_providers`）、`apple/UsageKit/Sources/UsageKitUI/NoProvidersNotice.swift`、`apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`LargeUsageView`）。
-- **單一服務失敗只影響該服務**（FR-12）：該服務顯示錯誤訊息，其他服務照常顯示；最吃緊的一項從正常的服務中挑。Live Activity 的錯誤訊息截短到 60 字以控制大小。
+- **單一服務失敗只影響該服務**（FR-12）：該服務顯示錯誤訊息，其他服務照常顯示；剩餘最少的額度從正常的服務中挑。Live Activity 的錯誤訊息截短到 60 字以控制大小。
   來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/Shared/UsageViews.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
 - **一律顯示最後更新時間**；過期時改為「資料已過期 · HH:mm 更新」（門檻見第 4 節）。錶面空間不足的複雜功能以灰色表示過期。
   來源：`ActivityViews.swift`（`ActivityFooter`）、`apple/MacMenuBar/Shared/UsageViews.swift`（`UpdatedText`）、`apple/iOSApp/AIUsageMonitor/Views/HomeView.swift`（`UpdatedFooter`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
@@ -148,7 +148,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
    ```bash
    SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
    ```
-   回到主畫面，卡片會縮成動態島精簡版。情境：`normal`（Claude 最吃緊）、`codex`（Codex 最吃緊）、`stale`、`error`、`reset`、`used`，以及只有一個服務的 `claude-only`、`codex-only` 與沒有服務的 `none`（見第 6 節「只有一個服務」）。
+   回到主畫面，卡片會縮成動態島精簡版。情境：`normal`（Claude 剩最少）、`codex`（Codex 剩最少）、`stale`、`error`、`reset`、`used`，以及只有一個服務的 `claude-only`、`codex-only` 與沒有服務的 `none`（見第 6 節「只有一個服務」）。
    - `xcrun simctl io screenshot` **拍不到動態島內容**，要用模擬器控制工具的截圖。
    - 深色、淺色各拍一次：`xcrun simctl ui booted appearance dark|light`。
    - **主畫面小工具**：示範情境會經由 App Group 傳給小工具。回到主畫面長按「AI 用量」圖示選尺寸（或編輯 →「加入小工具」），用 `xcrun simctl io booted screenshot` 截圖（主畫面拍得到）；長按小工具可直接換尺寸。
@@ -167,8 +167,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ### 選單列圖示
 
-- 預設**雙圓環**：外圈＝剩餘 %（顏色同進度條，第 1 節），內圈＝距離重置的剩餘時間占額度長度的比例（中性 `secondary`；額度長度不明時不畫）。另有橫條、只有 %、圓環＋% 三種樣式，由設定選擇；顯示的額度預設「自動（最吃緊）」＝`tightestWindow(at:)`。
-- 四種狀態**不能只靠顏色區分**：正常；用得太快＝右上角提示色小點；剩 < 20%＝外圈轉紅；資料過期＝整個轉灰且外圈改為虛線（橫條為虛線外框；灰色優先）。「只有 %」樣式以符號區分：`↑` 太快、`!` 剩 < 20%、`–` 過期（只顯示優先的一個）。`accessibilityLabel` 用完整句子（「Claude 5 小時 剩餘 27%，用得較快」）。
+- 預設**雙圓環**：外圈＝剩餘 %（顏色同進度條，第 1 節），內圈＝距離重置的剩餘時間占額度長度的比例（中性 `secondary`；額度長度不明時不畫）。另有橫條、只有 %、圓環＋% 三種樣式，由設定選擇；顯示的額度預設「自動（剩最少的）」＝`tightestWindow(at:)`。
+- 四種狀態**不能只靠顏色區分**：正常；用得太快＝右上角提示色小點；剩 < 20%＝外圈轉紅；資料過期＝整個轉灰且外圈改為虛線（橫條為虛線外框；灰色優先）。「只有 %」樣式以符號區分：`↑` 太快、`!` 剩 < 20%、`–` 過期（只顯示優先的一個）。`accessibilityLabel` 用完整句子（自動時「剩餘最少的額度：Claude 5 小時，剩 27%，用得較快」；指定額度時不加前綴）。
 - 以非範本點陣圖繪製（選單列會把 SF Symbol 與文字轉成單色）；每分鐘最多重繪一次，只在內容改變時換圖。
 - **不得有持續或循環的動畫**；數值改變時最多 0.3 秒的轉場，「減少動態效果」時直接換圖。
 
@@ -185,7 +185,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 - 預設順序：主圓環卡片 → 額度卡片 →（之後的區塊）。頁首（標題、更新時間、更新、設定、結束）與頁尾不能關閉或移動。
 - 區塊以穩定的字串 `id` 識別，順序與開關存在 `UserDefaults`；新區塊依預設順序插入、預設開啟；不認得的 id 保留但不顯示。
 - 卡片可以收合，收合時不建立內容視圖（不計算、不播動畫）。
-- **保留現有資訊**：最吃緊的一項、所有可見額度、方案、重置倒數或「已重置」、服務錯誤、`NoProvidersNotice`、更新時間與「資料已過期」、讀檔錯誤與路徑。
+- **保留現有資訊**：剩餘最少的額度、所有可見額度、方案、重置倒數或「已重置」、服務錯誤、`NoProvidersNotice`、更新時間與「資料已過期」、讀檔錯誤與路徑。
 - 統計類卡片標示範圍：Token 統計＝「這台 Mac」（滑鼠移上去說明不含網頁、手機 App、其他電腦與雲端 session）；額度相關＝「整個帳號」（ADR-0011 第 4 節）。
 
 ### 動畫原則（ADR-0010）
