@@ -293,7 +293,9 @@ public struct WeeklyForecast: Equatable, Sendable {
             let used = w.effectiveUsedPct(at: now)
             let recent = history.recentRate(provider: key, windowID: w.id, now: now)
             var rate = recent
-            if rate == nil, let elapsed = w.elapsedFraction(at: now), let duration = w.duration, elapsed > 0 {
+            if rate == nil, let elapsed = w.elapsedFraction(at: now), let duration = w.duration {
+                // 平均速度與「用得太快」同一規則（ADR-0008 第 4 節）：剛開始時一次大請求就會誤判，先不預測
+                guard elapsed >= UsagePace.minimumElapsed || used >= 100 else { return nil }
                 rate = used / (elapsed * duration)
             }
             let outcome: Outcome

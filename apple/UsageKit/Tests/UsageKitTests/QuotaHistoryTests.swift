@@ -264,6 +264,23 @@ import Testing
         #expect(UsagePace(window: weekly, provider: "claude", history: history, stale: false, now: now)?.isTooFast == false)
     }
 
+    @Test func weeklyForecastWaitsLikeUsagePaceRightAfterReset() {
+        // 剛重置 10 分鐘、用了 1%，沒有近期速度：平均速度會說 16.5 小時後用完，但與「用得太快」同一規則先不預測
+        let resetsAt = at(7 * 86400)
+        let now = resetsAt.addingTimeInterval(-(7 * 86400 - 600))
+        let weekly = UsageWindow(id: "weekly", label: "每週", usedPct: 1, resetsAt: resetsAt)
+        let s = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [weekly])])
+        #expect(WeeklyForecast.list(snapshot: s, history: .empty, now: now).isEmpty)
+        #expect(UsagePace(window: weekly, stale: false, now: now) == nil)
+        // 經過 10% 以上且照平均速度會用完：兩者一致
+        let later = resetsAt.addingTimeInterval(-0.8 * 7 * 86400)
+        let heavy = UsageWindow(id: "weekly", label: "每週", usedPct: 40, resetsAt: resetsAt)
+        let s2 = UsageSnapshot(updatedAt: later, providers: ["claude": ProviderUsage(windows: [heavy])])
+        let forecast = WeeklyForecast.list(snapshot: s2, history: .empty, now: later)
+        guard case .runsOut = forecast.first?.outcome else { Issue.record("應預測用完"); return }
+        #expect(UsagePace(window: heavy, stale: false, now: later)?.isTooFast == true)
+    }
+
     @Test func weeklyForecastFallsBackToAverageAndCanLast() {
         // 經過 4 天用了 20%：平均每天 5%，剩 80% 撐得過剩下的 3 天
         let now = at(4 * 86400)
