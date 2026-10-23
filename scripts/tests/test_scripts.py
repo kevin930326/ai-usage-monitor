@@ -249,6 +249,21 @@ class CodexReviewTests(unittest.TestCase):
         self.assertIn("沒有共同祖先", result.stderr)
         self.assertFalse(self.args_file.exists())
 
+    def test_publish_failure_keeps_previous_report(self):
+        self.commit_change()
+        self.reviews.mkdir()
+        old = self.reviews / "feat-some-change-codex.md"
+        old.write_text("舊報告\n")
+        # Codex 成功，但之後報告資料夾變成唯讀：組報告的暫存檔建不出來
+        self.fake_codex("""
+            echo '模型：fake' > "$OUT"; echo '沒有發現問題' >> "$OUT"
+            chmod 555 "$AUM_REVIEW_DIR"
+        """)
+        self.addCleanup(os.chmod, self.reviews, 0o755)
+        result = self.review()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(old.read_bytes(), "舊報告\n".encode())
+
     def test_unknown_argument(self):
         result = self.review("--fast")
         self.assertEqual(result.returncode, 2)

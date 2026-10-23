@@ -110,10 +110,14 @@ if [ -n "$WHY" ]; then
   exit 4
 fi
 
+# 標頭與內容先寫成同資料夾的暫存檔，成功後才以 rename 取代正式報告（中途失敗時舊報告不變）
+FINAL_TMP=$(mktemp "$OUT_DIR/.codex-review.XXXXXX")
+trap 'rm -f "$TMP_REPORT" "$FINAL_TMP"' EXIT
 {
   echo "<!-- codex-review.sh：${MODEL}，reasoning effort ${EFFORT}，sandbox read-only；範圍：${RANGE}；$(date '+%Y-%m-%d %H:%M %Z') -->"
   echo
   cat "$TMP_REPORT"
-} >"$REPORT"
+} >"$FINAL_TMP"
+mv -f "$FINAL_TMP" "$REPORT"
 echo "報告：${REPORT}" >&2
 echo "下一步：寫 triage（${REPORT%.md}-triage.md），見 .claude/skills/codex-review/SKILL.md" >&2
