@@ -237,6 +237,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - `record_days (day, provider, tokens)`：每天每個服務的主數字，**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，保留期間較短或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它。「清除歷史」時與 `records` 一起清除。
 - `records` 另有各服務的版本（鍵加上 `:claude`／`:codex`），給面板的「全部／Claude／Codex」切換使用。個人紀錄同樣大時記最早的那天。
 - 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
+- `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
 
 ## 決定（使用者於 2026-10-23 決定）
 

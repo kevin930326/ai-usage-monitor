@@ -213,6 +213,26 @@ import Testing
         #expect(!TokenHeatmap(data: forever, scope: .all, now: now, weeks: 22, calendar: cal).truncated)
     }
 
+    @Test func deletedDaysStayUnavailableAfterRetentionIsExtended() {
+        // 先保留 7 天（10/29 以前已刪除），再改回 1 年或永久：10/29 以前仍然沒有資料，不能畫成 0
+        for retention in [365, 0] {
+            let data = TokenStatsData(days: [row("2026-11-05", main: 40), row("2026-10-29", main: 7)],
+                                      records: ["total_tokens": TokenRecord(value: 5000)], firstScanDone: true,
+                                      retentionDays: retention, dataFrom: "2026-10-29")
+            #expect(TokenCalendar.key(data.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-10-29")
+            let map = TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: cal)
+            #expect(map.truncated)
+            let days = TokenActivity.bars(data: data, scope: .all, range: .days30, now: now, calendar: cal)
+            #expect(days.filter(\.available).count == 8)
+            #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).changePct == nil)
+        }
+        // 刪除邊界比目前的保留期間早時，以保留期間為準
+        let older = TokenStatsData(days: [row("2026-11-05", main: 40)], retentionDays: 7, dataFrom: "2026-01-01")
+        #expect(TokenCalendar.key(older.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-10-29")
+        // 沒有刪除過、永久保留：全部可用
+        #expect(TokenStatsData(retentionDays: 0).firstAvailableDay(now: now, calendar: cal) == nil)
+    }
+
     @Test func dayKeysRoundTrip() {
         let date = TokenCalendar.date("2026-02-28", calendar: cal)!
         #expect(TokenCalendar.key(date, calendar: cal) == "2026-02-28")

@@ -124,10 +124,14 @@ public struct TokenStatsData: Equatable, Sendable {
     public var skippedLines: Int
     /// 保留期間（天，0＝永久）
     public var retentionDays: Int
+    /// 實際還有每日資料的第一天（`meta.token_days_from`，`YYYY-MM-DD`）：保留期間縮短或清除歷史後延長保留期間，
+    /// 已刪除的日子不會回來，不能只看目前的保留期間；沒有記錄時為 nil
+    public var dataFrom: String?
 
     public init(days: [TokenDayRow] = [], hours: [TokenHourRow] = [], records: [String: TokenRecord] = [:],
                 recordDays: [String: [String: Int64]] = [:],
-                firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365) {
+                firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365,
+                dataFrom: String? = nil) {
         self.days = days
         self.hours = hours
         self.records = records
@@ -136,6 +140,7 @@ public struct TokenStatsData: Equatable, Sendable {
         self.firstScanProgress = firstScanProgress
         self.skippedLines = skippedLines
         self.retentionDays = retentionDays
+        self.dataFrom = dataFrom
     }
 
     public static let empty = TokenStatsData()
@@ -150,11 +155,17 @@ public struct TokenStatsData: Equatable, Sendable {
         ["claude", "codex"].filter { p in days.contains { $0.provider == p && $0.counts.main > 0 } || (records["total_tokens:\(p)"]?.value ?? 0) > 0 }
     }
 
-    /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）；永久保留時為 nil
+    /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）：目前保留期間的起點與
+    /// `dataFrom` 較晚的一個；永久保留且沒有刪除過時為 nil
     public func firstAvailableDay(now: Date, calendar base: Calendar = .current) -> Date? {
-        guard retentionDays > 0 else { return nil }
         let calendar = TokenCalendar.make(base)
-        return calendar.startOfDay(for: now.addingTimeInterval(-TimeInterval(retentionDays) * 86400))
+        let byRetention = retentionDays > 0
+            ? calendar.startOfDay(for: now.addingTimeInterval(-TimeInterval(retentionDays) * 86400)) : nil
+        let deleted = dataFrom.flatMap { TokenCalendar.date($0, calendar: base) }
+        switch (byRetention, deleted) {
+        case let (a?, b?): return max(a, b)
+        case let (a, b): return a ?? b
+        }
     }
 
     /// 每天（依範圍）的合計

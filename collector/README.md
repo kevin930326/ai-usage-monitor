@@ -105,7 +105,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 |---|---|
 | `quota_samples` | 每次收集 × 每個額度（不含有錯誤的服務）一列：`ts`（快照的 `updated_at`，Unix 秒）、`provider`、`window_id`、`used_pct`、`resets_at` |
 | `collector_runs` | 每次收集一列：`ts`、`ok`（成功次數）、`runs`（代表幾次執行）。分辨「沒有紀錄」（Mac 睡眠、收集器停止）與「沒有使用」的依據 |
-| `meta` | `schema_version`、`device_id`（隨機 UUID）、`device_name`（「這台 Mac」）、`retention_days`、`last_cleanup_day`、`downsampled_before` |
+| `meta` | `schema_version`、`device_id`（隨機 UUID）、`device_name`（「這台 Mac」）、`retention_days`、`last_cleanup_day`、`downsampled_before`；App 另寫 `token_days_from`（延長保留期間或清除歷史後，實際還有每日 Token 的第一天） |
 
 - 只存數字、時間、服務與額度 id：不存方案名稱、錯誤訊息、額度顯示名稱。**不上傳。**
 - SQLite WAL 模式、`busy_timeout` 5 秒；資料庫與 `-wal`／`-shm` 權限 `0600`。
