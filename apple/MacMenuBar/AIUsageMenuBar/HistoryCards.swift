@@ -134,11 +134,13 @@ struct ResetsCardContent: View {
     let stale: Bool
     let now: Date
 
+    @Environment(\.panelMotion) private var motion
+
     var body: some View {
         let resets = UpcomingReset.list(snapshot: snapshot, now: now)
         let forecasts = WeeklyForecast.list(snapshot: snapshot, history: history, now: now)
         VStack(alignment: .leading, spacing: 12) {
-            ResetTimeline(resets: resets, stale: stale)
+            ResetTimeline(resets: resets, stale: stale, progress: motion.timeline)
             if !forecasts.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(forecasts, id: \.provider) { forecast in
@@ -151,9 +153,17 @@ struct ResetsCardContent: View {
 }
 
 /// 時間軸：左端是「現在」，右端是 8 小時後；每個會重置的額度一個圓點，下方標名稱與時間。
-struct ResetTimeline: View {
+/// `Animatable`：圓點依序出發需要逐格的進度（只改終點的話 SwiftUI 只會把位置線性補間，沒有先後）。
+struct ResetTimeline: View, Animatable {
     let resets: [UpcomingReset]
     let stale: Bool
+    /// 圓點滑到位置的進度（0→1）
+    var progress: Double
+
+    nonisolated var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
 
     @Environment(\.panelMotion) private var motion
 
@@ -237,7 +247,7 @@ struct ResetTimeline: View {
     private func stagger(_ index: Int) -> Double {
         let delay = 0.08 * Double(index)
         let span = max(1 - 0.08 * Double(max(resets.count - 1, 0)), 0.4)
-        let t = min(max((motion.timeline - delay) / span, 0), 1)
+        let t = min(max((progress - delay) / span, 0), 1)
         return 1 - pow(1 - t, 3)
     }
 
@@ -316,7 +326,7 @@ struct HistorySkeleton: View {
                     .padding(12)
             }
             .frame(height: height)
-            .overlay { shimmer }
+            .overlay { ShimmerOverlay(progress: motion.shimmer) }
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             Text(message)
                 .font(.caption)
@@ -335,9 +345,20 @@ struct HistorySkeleton: View {
         }
     }
 
-    @ViewBuilder
-    private var shimmer: some View {
-        let phase = motion.shimmer - floor(motion.shimmer)
+}
+
+/// 骨架的掃光：進度 0→3 掃三次（整數時光在畫面外）。`Animatable` 讓每一格都拿到中間的進度，
+/// 否則 0 和 3 的小數部分都是 0，掃光不會出現。
+private struct ShimmerOverlay: View, Animatable {
+    var progress: Double
+
+    nonisolated var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var body: some View {
+        let phase = progress - floor(progress)
         if phase > 0 {
             GeometryReader { geo in
                 LinearGradient(colors: [.clear, Color.primary.opacity(0.10), .clear], startPoint: .leading, endPoint: .trailing)
@@ -473,10 +494,16 @@ private struct TrendChartBlock: View {
 
 /// 剩餘 % 曲線＋漸層、照時間的預期（虛線）、沒有紀錄的時段（斜線，中間以點線連接）。
 /// 曲線依 `progress` 由左往右描繪，最後的圓點在描繪完時輕彈一下。
-struct TrendChart: View {
+struct TrendChart: View, Animatable {
     let trend: QuotaTrend
     let tint: Color
-    let progress: Double
+    var progress: Double
+
+    // Canvas 的繪圖不會被補間：讓 SwiftUI 逐格更新 progress，曲線才會由左往右描繪
+    nonisolated var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
 
     var body: some View {
         Canvas { context, size in
