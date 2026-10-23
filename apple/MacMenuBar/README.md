@@ -4,8 +4,10 @@
 
 | 部分 | 內容 |
 |---|---|
-| 選單列 | 圓點 + 最吃緊額度的剩餘 %（FR-21）；圓點是該服務的識別色，剩餘 < 20% 轉紅，資料超過 30 分鐘未更新時轉灰（FR-16） |
-| 面板 | 點選單列圖示打開：最吃緊的一項大字顯示、各服務各額度的進度條與重置倒數、更新時間（FR-22）；重置時間已過顯示「已重置」，過期資料轉灰並標示「資料已過期」 |
+| 選單列 | 預設雙圓環（外圈剩餘 %、內圈距離重置的時間），另有橫條、只有 %、圓環＋%（FR-33，[ADR-0008](../../docs/adr/0008-mac-panel-layout.md)）；用得太快加小點、剩 < 20% 轉紅、資料超過 30 分鐘未更新轉灰；可選擇顯示哪個額度（預設最吃緊）；沒有動畫 |
+| 面板 | 點選單列圖示打開，單一長版、卡片式（FR-34）：主圓環卡片（最吃緊的一項、用得較快時顯示約幾分鐘後用完）、額度卡片（各服務各額度的進度條、預期進度標記、重置倒數）；卡片可收合（FR-36）；重置時間已過顯示「已重置」，過期資料轉灰並標示「資料已過期」 |
+| 設定 | 面板的齒輪按鈕：選單列圖示樣式與顯示的額度、面板區塊的開關與拖曳排序、預期進度標記（FR-35） |
+| 動畫 | 只在面板開啟時執行，「減少動態效果」時直接顯示（[ADR-0010](../../docs/adr/0010-mac-animation-principles.md)）；面板關閉後相對時間文字也停止更新（NFR-8） |
 | 桌面小工具 | 小：最吃緊的一項；中：兩個服務並排（FR-24） |
 
 面板的趨勢圖（FR-23）尚未實作，需要先決定歷史資料存放方式（ADR-0004）。
@@ -65,7 +67,10 @@ Debug 版本支援下列環境變數。用 `open` 啟動時環境變數不會傳
 |---|---|
 | `AI_USAGE_MONITOR_HOME` | 改讀這個資料夾的 `usage.json`；設定時不會寫入 App Group |
 | `AUM_DEMO_PANEL=1` | 另開一般視窗顯示面板（選單列面板無法以程式打開，截圖用） |
-| `AUM_RENDER_DIR` | 把小工具兩種尺寸輸出成 `widget-small.png`、`widget-medium.png` |
+| `AUM_RENDER_DIR` | 以 ImageRenderer 輸出 PNG（淺色、深色）：小工具 `widget-*.png`、面板 `panel-*.png`、選單列圖示 `menubar-icons-*.png`、設定 `settings-*.png` |
+| `AUM_RENDER_FRAMES=1` | 搭配 `AUM_RENDER_DIR`：每個動畫以 30 fps 輸出 PNG 序列並組成 GIF（`anim-*.gif`） |
+| `AUM_RENDER_EXIT=1` | 輸出完就結束 |
+| `AUM_DEMO_PERF=1` | 搭配 `AUM_DEMO_PANEL=1`：依固定時間表開關面板與觸發動畫，給 `scripts/measure-panel-perf.sh` 量測 CPU 與記憶體 |
 
 ```bash
 AI_USAGE_MONITOR_HOME=/tmp/aum-fixture AUM_DEMO_PANEL=1 \

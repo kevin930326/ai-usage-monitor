@@ -62,7 +62,7 @@ public struct UsagePace: Equatable, Sendable {
 }
 
 /// 選單列圖示的狀態（ADR-0008 第 1 節）。不能只靠顏色區分：太快有小點、過期整個轉灰。
-public enum MenuBarState: Equatable, Sendable {
+public enum MenuBarState: Hashable, Sendable {
     case normal
     case tooFast
     case critical
