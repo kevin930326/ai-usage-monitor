@@ -1,6 +1,6 @@
 ---
 name: ai-usage-monitor-design
-description: AI Usage Monitor 的設計與識別規則：服務識別色、原創服務圖示（Claude 八芒星、Codex 六瓣雲）的精確定義、不收錄官方 logo、各平台資料過期門檻、不能更改的識別字（Bundle ID、App Group、小工具 kind、Keychain），以及 UI 驗證方式。修改 apple/ 下任何畫面、顏色、圖示、Live Activity、小工具、錶面複雜功能、Info.plist／project.yml 識別字，或新增服務時先讀這份。
+description: AI Usage Monitor 的設計與識別規則：服務識別色、原創服務圖示（Claude 八芒星、Codex 六瓣雲）的精確定義、不收錄官方 logo、各平台資料過期門檻、不能更改的識別字（Bundle ID、App Group、小工具 kind、Keychain），Mac 選單列圖示（雙圓環）、卡片式面板與動畫原則，以及 UI 驗證方式。修改 apple/ 下任何畫面、顏色、圖示、Live Activity、小工具、錶面複雜功能、Info.plist／project.yml 識別字，或新增服務時先讀這份。
 ---
 
 # AI Usage Monitor 設計規則
@@ -100,7 +100,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
 
-另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改。
+另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（提議中，ADR-0009）也是收集器與 App 共用。
 
 ## 6. 資訊排列
 
@@ -136,7 +136,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | iPhone 主畫面小工具 reload 25 分鐘 | 小工具自己抓中繼，每 25 分鐘（資料過期時 60 分鐘）；App 背景取得新資料時另外 reload（約 5 次／天），前景與按鈕 Intent 不扣次數。一般約 51 次／天、最多約 63 次 | `apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`refreshInterval`）、`apple/iOSApp/Shared/SharedStore.swift`（`publish`）、`apple/iOSApp/README.md`「重新整理次數」 |
 | 手錶背景更新約 30 分鐘 | 每次背景更新 reload 一次複雜功能，約 48 次／天；實際時間由 watchOS 決定，過期門檻因此是 45 分鐘 | `apple/WatchApp/AIUsageWatch/AIUsageWatchApp.swift`（`backgroundInterval`） |
 | WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`WidgetReloadThrottle` 註解、`UsageTimelineSchedule.entryDates`） |
-| Mac 動畫與 3D 效果只在面板開啟時執行 | 面板關閉時不能佔 CPU／GPU；計時器允許系統合併喚醒（FR-25、NFR-8）。FR-25 尚未實作，實作時要遵守 | `docs/01-requirements.md`（FR-25、NFR-8）、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
+| Mac 動畫只在面板或統計視窗開啟時執行 | 面板關閉時不能佔 CPU／GPU；選單列圖示不得有持續動畫；計時器允許系統合併喚醒；規則與量測方法見第 9 節（FR-25、NFR-8、NFR-10） | `docs/adr/0010-mac-animation-principles.md`、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
 | 介面語言為繁體中文（zh-Hant） | 所有使用者看得到的文字用繁體中文；開發區域設為 zh-Hant | `apple/UsageKit/Package.swift`（`defaultLocalization`）、三個 `project.yml` 的 `CFBundleDevelopmentRegion` |
 
 ## 8. UI 驗證方式
@@ -158,7 +158,42 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
    xcrun simctl get_app_container <手錶 UDID> io.github.kevin930326.AIUsageMonitor.watchkitapp data
    ```
    `Documents/` 下有 `complication-circular.png`（深色）、`-circular-light.png`（淺色背景）、`-circular-tinted.png`（模擬單色／主題色：只用 alpha 再套主題色）。
-4. **Mac**：`AUM_DEMO_PANEL=1` 把面板放進一般視窗；`AUM_RENDER_DIR=<資料夾>` 輸出桌面小工具 PNG（見 `apple/MacMenuBar/README.md`）。
+4. **Mac**：`AUM_DEMO_PANEL=1` 把面板放進一般視窗；`AUM_RENDER_DIR=<資料夾>` 輸出 PNG（見 `apple/MacMenuBar/README.md`）。面板、選單列圖示與動畫的截圖一律用 `ImageRenderer`（螢幕關閉也能產生），動畫輸出成 PNG 序列再組成 GIF，淺色、深色各一份。
 5. **檢查重點**：在實際尺寸（不是放大圖）下確認八芒星八個角都看得到、雲朵中間的 `>_` 可辨認；主題色模擬中鏤空處透出背景；深色與淺色都清楚。
 6. 截圖放在 `docs/screenshots/`，PR 描述附上前後對照。截圖前確認畫面上沒有中繼網址或密鑰。
 7. 示範模式、截圖工具與 `AUM_*` 環境變數都要包在 `#if DEBUG` 裡。
+
+## 9. Mac 選單列圖示與面板（ADR-0008、ADR-0010）
+
+### 選單列圖示
+
+- 預設**雙圓環**：外圈＝剩餘 %（顏色同進度條，第 1 節），內圈＝距離重置的剩餘時間占額度長度的比例（中性 `secondary`；額度長度不明時不畫）。另有橫條、只有 %、圓環＋% 三種樣式，由設定選擇；顯示的額度預設「自動（最吃緊）」＝`tightestWindow(at:)`。
+- 四種狀態**不能只靠顏色區分**：正常；用得太快＝右上角提示色小點；剩 < 20%＝外圈轉紅；資料過期＝整個轉灰（灰色優先）。`accessibilityLabel` 用完整句子（「Claude 5 小時 剩餘 27%，用得較快」）。
+- 以非範本點陣圖繪製（選單列會把 SF Symbol 與文字轉成單色）；每分鐘最多重繪一次，只在內容改變時換圖。
+- **不得有持續或循環的動畫**；數值改變時最多 0.3 秒的轉場，「減少動態效果」時直接換圖。
+
+### 預期進度與用量節奏
+
+- 額度長度由 `id` 推得：`five_hour` 5 小時、`weekly`／`weekly_*` 7 天、`<n>h`、`<n>m`；其他為不明，不畫預期標記、不判斷節奏。一律用 UsageKit 的共用函式，不要在畫面裡自己算。
+- 預期剩餘 = `100 × (1 − 經過比例)`；用得太快 = 已用 % 比預期多 ≥ 10 個百分點且經過 ≥ 10%，資料過期或已重置時不判斷。
+- 「約 N 分鐘後用完」只在早於重置時間時顯示（FR-18）。文字用提示色（第 1 節），不用紅色。
+
+### 面板
+
+- 單一長版、**卡片式**：寬 360pt；卡片圓角 12pt、半透明填色（primary 4.5%）加細邊框，不疊材質（面板視窗本身已是系統材質；`ImageRenderer` 畫不出材質）；深淺色跟隨系統。
+- 按鈕、開關等控制項自己畫（`ButtonStyle`／`ToggleStyle`），不用 AppKit 實作的控制項，`ImageRenderer` 才能截圖。
+- 預設順序：主圓環卡片 → 額度卡片 →（之後的區塊）。頁首（標題、更新時間、更新、設定、結束）與頁尾不能關閉或移動。
+- 區塊以穩定的字串 `id` 識別，順序與開關存在 `UserDefaults`；新區塊依預設順序插入、預設開啟；不認得的 id 保留但不顯示。
+- 卡片可以收合，收合時不建立內容視圖（不計算、不播動畫）。
+- **保留現有資訊**：最吃緊的一項、所有可見額度、方案、重置倒數或「已重置」、服務錯誤、`NoProvidersNotice`、更新時間與「資料已過期」、讀檔錯誤與路徑。
+- 統計類卡片標示範圍：Token 統計＝「這台 Mac」（滑鼠移上去說明不含網頁、手機 App、其他電腦與雲端 session）；額度相關＝「整個帳號」（ADR-0011 第 4 節）。
+
+### 動畫原則（ADR-0010）
+
+1. 只在面板或視窗開啟時執行；關閉後停止所有動畫與為面板而設的 `TimelineView`／計時器（唯一例外：`UsageStore` 每 60 秒的計時器，負責選單列圖示，只更新資料、不啟動動畫）。選單列面板關閉時視圖仍在，以視窗的 occlusion／key 狀態判斷；看不見時把 `Text(date, style: .relative)` 換成固定文字（它在收起的視窗裡仍會定時重算）。
+2. `accessibilityReduceMotion` 時改為直接顯示（只允許 ≤ 0.15 秒淡入淡出）。
+3. 一次性、有終點：單次 ≤ 1.2 秒（多數 0.2～0.6 秒），重複類最多 3 次、總長 ≤ 4 秒。
+4. 由資料改變或使用者操作觸發，不為動畫輪詢。
+5. 以 SwiftUI 內建動畫為主（`withAnimation`、`.contentTransition(.numericText())`、`PhaseAnimator`／`KeyframeAnimator`），不用 Metal／SceneKit。
+6. **每個動畫都量測效能**：`scripts/measure-panel-perf.sh`（`ps -o %cpu=,rss=`）記錄面板開啟靜止（≤ 2%）、播放中（記錄最大值）、關閉後 1 分鐘（≤ 0.3%）、第二次開關後記憶體不累積（≤ +5 MB），結果寫進 PR。
+7. 每個動畫寫成 0…1 的進度值，執行時由 `withAnimation` 驅動，截圖工具以相同曲線逐格指定，輸出 PNG 序列與 GIF。
