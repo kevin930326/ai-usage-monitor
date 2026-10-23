@@ -4,9 +4,10 @@
     python3 scripts/make-demo-history.py <資料夾> [normal|few|fresh|none]
 
 - normal：過去 7 天，每晚 01:00～08:30 Mac 睡眠（沒有紀錄）、3 天前下午關機 4 小時；
-  Claude 5 小時快用完（剩 15%，用得較快）、Codex 還充足，會出現「建議接下來用」；每週額度 4 天前重置過
-- few：剛安裝 15 分鐘，每個額度 3 筆
-- fresh：剛安裝，每個額度只有 1 筆（走勢與額度消耗顯示骨架畫面）
+  Claude 5 小時快用完（剩 15%，用得較快）、Codex 還充足，會出現「建議接下來用」；每週額度 4 天前重置過；
+  Token 統計有一年的每日資料（Codex 約 200 天）、90 天的每小時資料，目前連續 9 天（新紀錄）
+- few：剛安裝 15 分鐘，每個額度 3 筆；Token 統計只有最近 3 天
+- fresh：剛安裝，每個額度只有 1 筆（走勢與額度消耗顯示骨架畫面）；Token 統計首次掃描 37%
 - none：沒有 history.sqlite3（收集器還沒更新）
 資料庫用收集器自己的 history 模組建立，schema 與實際相同。
 """
@@ -65,6 +66,67 @@ def series(now: float, start: float, resets: list[float], current: float, phase:
     return out
 
 
+def write_tokens(conn, now: int, scenario: str) -> None:
+    """假的 Token 統計（第三階段面板與完整統計視窗）：一年的每日資料、90 天的每小時資料、個人紀錄。
+    normal：兩個服務都有、目前連續 9 天（是新紀錄）；few：剛完成首次掃描、只有最近 3 天；fresh：首次掃描 37%。"""
+    if scenario == "fresh":
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_progress', '37')")
+        conn.commit()
+        return
+    device = history.meta(conn, "device_id") or ""
+    today = datetime.fromtimestamp(now).astimezone().date()
+    days = 3 if scenario == "few" else 365
+    daily, hourly, record_days = [], [], {}
+    models = {"claude": ["claude-opus-5-5", "claude-sonnet-5-5"], "codex": ["gpt-6.1-sol", "gpt-6.1-sol-mini"]}
+    for back in range(days):
+        day = today - timedelta(days=back)
+        key = day.isoformat()
+        # 目前連續 9 天；更早每週休息一到兩天、每 5 週休一週
+        if scenario == "normal" and back >= 9 and (back == 9 or day.weekday() == 6 or (back // 7) % 5 == 4 or (back * 7) % 11 == 0):
+            continue
+        season = 0.6 + 0.4 * math.sin(back / 365 * 2 * math.pi) + (0.3 if back < 60 else 0)
+        for provider, phase in (("claude", 0.0), ("codex", 2.0)):
+            if provider == "codex" and back > 200:
+                continue  # Codex 大約半年前才開始用
+            base = 2_400_000 if provider == "claude" else 900_000
+            amount = int(base * season * (0.5 + 0.5 * abs(math.sin(back * 1.7 + phase))))
+            for m, model in enumerate(models[provider]):
+                share = 0.75 if m == 0 else 0.25
+                inp, cw, out = int(amount * share * 0.35), int(amount * share * 0.45), int(amount * share * 0.2)
+                cr = int(amount * share * 6)
+                longest = int(600 + 5400 * abs(math.sin(back * 0.9 + m))) if m == 0 else 0
+                daily.append((device, key, provider, model, inp, cw, cr, out, out // 5, 6 if m == 0 else 0,
+                              longest * 3, longest, now))
+                record_days.setdefault((key, provider), 0)
+                record_days[(key, provider)] += inp + cw + out
+                if back < 90:
+                    for hour in range(9, 24):
+                        weight = 1 + math.sin((hour - 9) / 14 * math.pi) + (0.6 if hour >= 20 else 0)
+                        f = weight / 26
+                        hourly.append((device, key, hour, provider, model, int(inp * f), int(cw * f), int(cr * f),
+                                       int(out * f), int(out * f) // 5, 0, 0, 0, now))
+    conn.executemany(f"INSERT OR REPLACE INTO daily_tokens VALUES ({', '.join('?' * 13)})", daily)
+    conn.executemany(f"INSERT OR REPLACE INTO hourly_tokens VALUES ({', '.join('?' * 14)})", hourly)
+    conn.executemany("INSERT OR REPLACE INTO record_days VALUES (?, ?, ?)", [(d, p, v) for (d, p), v in record_days.items()])
+    records = []
+    for suffix, provs in (("", ("claude", "codex")), (":claude", ("claude",)), (":codex", ("codex",))):
+        per_day = {}
+        for (d, p), v in record_days.items():
+            if p in provs:
+                per_day[d] = per_day.get(d, 0) + v
+        if not per_day:
+            continue
+        best = max(per_day.items(), key=lambda kv: (kv[1], [-ord(c) for c in kv[0]]))
+        longest = max(((r[11], r[1]) for r in daily if r[2] in provs), default=(0, None))
+        records += [(f"best_day_tokens{suffix}", best[1], best[0]), (f"total_tokens{suffix}", sum(per_day.values()) + 1_234_567, None),
+                    (f"longest_task_seconds{suffix}", longest[0], longest[1]),
+                    (f"longest_streak_days{suffix}", 9 if scenario == "normal" else 3, today.isoformat())]
+    conn.executemany("INSERT OR REPLACE INTO records VALUES (?, ?, ?)", records)
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_progress', '100')")
+    conn.commit()
+
+
 def main() -> None:
     folder = Path(sys.argv[1])
     scenario = sys.argv[2] if len(sys.argv) > 2 else "normal"
@@ -106,6 +168,7 @@ def main() -> None:
                 for w in p["windows"]:
                     w["used_pct"] = max(w["used_pct"] - (count - 1 - i), 0)
             history.write_samples(conn, snap)
+        write_tokens(conn, now, scenario)
         conn.close()
         return
     start = now - 7 * 86400
@@ -125,6 +188,7 @@ def main() -> None:
             rows.append((t, provider, wid, values[t], reset - max(k, 0) * duration))
     conn.executemany("INSERT OR REPLACE INTO collector_runs VALUES (?, ?, ?)", runs)
     conn.executemany("INSERT OR REPLACE INTO quota_samples VALUES (?, ?, ?, ?, ?)", rows)
+    write_tokens(conn, now, scenario)
     conn.close()
 
 

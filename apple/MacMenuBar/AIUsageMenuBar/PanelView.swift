@@ -12,6 +12,7 @@ struct PanelView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     /// Debug 截圖工具直接指定動畫進度；一般執行時為 nil，由面板自己驅動
     var fixedMotion: PanelMotion?
@@ -24,17 +25,24 @@ struct PanelView: View {
     @State private var resetSignature: [String: [String: Date]] = [:]
     /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
     @State private var motionGeneration = 0
+    /// Debug 量測用：捲到這個區塊（統計卡片在面板最下方，量測時要看得見才會繪製）
+    @State private var scrollTarget: PanelSection?
 
     private var animates: Bool { visible && !reduceMotion && fixedMotion == nil }
 
     var body: some View {
         if scrolls {
-            ScrollView { content }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(width: 360)
-                .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
-                .fixedSize(horizontal: false, vertical: true)
-                .modifier(behavior)
+            ScrollViewReader { proxy in
+                ScrollView { content }
+                    .onChange(of: scrollTarget) { _, target in
+                        if let target { proxy.scrollTo(target, anchor: .bottom) }
+                    }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(width: 360)
+            .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(behavior)
         } else {
             content.frame(width: 360).modifier(behavior)
         }
@@ -75,6 +83,7 @@ struct PanelView: View {
                     let sections = settings.visibleSections
                     ForEach(sections) { section in
                         card(section, snapshot: snapshot, stale: stale)
+                            .id(section)
                     }
                     if sections.isEmpty {
                         allHidden
@@ -83,6 +92,10 @@ struct PanelView: View {
                 footer
             }
             .padding(16)
+            // 面板開著時收集器寫入新的紀錄：連續天數創新紀錄也要彈一次
+            .onChange(of: historyStore.tokens) {
+                if visible { celebrateStreakIfNeeded() }
+            }
     }
 
     /// Debug 的效能量測腳本用來觸發動畫（Release 不含）
@@ -98,6 +111,17 @@ struct PanelView: View {
                 playDeparting("\(next.provider)/\(next.window.id)")
                 playGlow(next.provider)
             }
+        case "stats-scroll": scrollTarget = .stats
+        case "stats-scope":
+            // 依序切換全部／Claude／Codex
+            let scopes = TokenScopeChips.scopes(historyStore.tokens)
+            if let i = scopes.firstIndex(of: settings.statsScope), !scopes.isEmpty {
+                selectStatsScope(scopes[(i + 1) % scopes.count])
+            }
+        case "stats-range":
+            let all = TokenActivityRange.allCases
+            selectStatsRange(all[((all.firstIndex(of: settings.statsRange) ?? 0) + 1) % all.count])
+        case "stats-window": showStatsWindow()
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break
@@ -163,7 +187,57 @@ struct PanelView: View {
                     }
                 }
             }
+        case .stats:
+            PanelCard(id: section.rawValue, accessibilityTitle: section.title, collapsed: collapsed) {
+                StatsCardHeader()
+            } content: {
+                StatsCardContent(data: historyStore.tokens, status: historyStore.status, scope: settings.statsScope,
+                                 range: settings.statsRange, now: store.now, selectScope: selectStatsScope, selectRange: selectStatsRange)
+            }
         }
+    }
+
+    /// 切換全部／Claude／Codex：交叉淡入，長條與熱力圖重新長出、數字滾動（ADR-0010 第三階段）
+    private func selectStatsScope(_ scope: TokenScope) {
+        guard scope != settings.statsScope else { return }
+        settings.statsScope = scope
+        replayStatsCharts()
+    }
+
+    private func selectStatsRange(_ range: TokenActivityRange) {
+        guard range != settings.statsRange else { return }
+        settings.statsRange = range
+        guard animates else { return }
+        motion.statsBars = 0
+        withAnimation(PanelTiming.statsBars) { motion.statsBars = 1 }
+    }
+
+    private func replayStatsCharts() {
+        guard animates else { return }
+        motion.statsBars = 0
+        motion.heatmap = 0
+        withAnimation(PanelTiming.statsBars) { motion.statsBars = 1 }
+        withAnimation(PanelTiming.heatmap) { motion.heatmap = 1 }
+    }
+
+    /// 連續天數創新紀錄：🔥 彈一下，每個新紀錄只播一次（記在設定裡）。統計卡片隱藏或收合時不算
+    private func celebrateStreakIfNeeded() {
+        guard settings.visibleSections.contains(.stats), !settings.collapsed.contains(PanelSection.stats.rawValue) else { return }
+        let summary = TokenSummary(data: historyStore.tokens, scope: .all, now: store.now)
+        guard summary.streakIsRecord, summary.currentStreak > 1, summary.currentStreak > settings.celebratedStreak else { return }
+        settings.celebratedStreak = summary.currentStreak
+        guard animates else { return }
+        let generation = motionGeneration
+        motion.streakPop = 0
+        withAnimation(PanelTiming.streakPop.delay(0.4)) { motion.streakPop = 1 } completion: {
+            guard generation == motionGeneration else { return }
+            motion.streakPop = 0
+        }
+    }
+
+    private func showStatsWindow() {
+        NSApplication.shared.activate()
+        openWindow(id: StatsWindowView.windowID)
     }
 
     /// 切換走勢的額度：新曲線重新由左往右描繪（舊曲線交叉淡出）。
@@ -196,6 +270,10 @@ struct PanelView: View {
         }
         if sections.contains(.consumption), let o = HistoryWindowOption.resolve(settings.consumptionWindow, in: options),
            !(readable && QuotaConsumption(provider: o.provider, windowID: o.window.id, history: history, now: store.now).hasEnoughData) {
+            return true
+        }
+        // 統計卡片在首次掃描完成前也是骨架
+        if sections.contains(.stats), !(readable && historyStore.tokens.firstScanDone) {
             return true
         }
         return false
@@ -236,6 +314,15 @@ struct PanelView: View {
 
     @ViewBuilder
     private var footer: some View {
+        if settings.visibleSections.contains(.stats), historyStore.tokens.hasData {
+            Button(action: showStatsWindow) {
+                Text("完整統計視窗 →").font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .help("一年熱力圖、30 天長條、各模型與時段分布")
+        }
         if let refreshHint {
             Text(refreshHint.text)
                 .font(.caption)
@@ -299,10 +386,13 @@ struct PanelView: View {
         withAnimation(PanelTiming.trend) { motion.trend = 1 }
         withAnimation(PanelTiming.suggest) { motion.suggest = 1 }
         withAnimation(PanelTiming.timeline) { motion.timeline = 1 }
+        withAnimation(PanelTiming.statsBars) { motion.statsBars = 1 }
+        withAnimation(PanelTiming.heatmap) { motion.heatmap = 1 }
         // 骨架掃光只在有骨架時播放（三次後停止），沒有骨架時不讓整個面板多重繪 3.6 秒
         if showsSkeleton {
             withAnimation(PanelTiming.shimmer) { motion.shimmer = PanelTiming.shimmerPasses }
         }
+        celebrateStreakIfNeeded()
     }
 
     /// 面板關閉：停止所有動畫並回到靜止狀態，關閉期間不播放任何東西（NFR-8）。

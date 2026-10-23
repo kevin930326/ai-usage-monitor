@@ -18,6 +18,13 @@ struct AIUsageMenuBarApp: App {
         }
         .menuBarExtraStyle(.window)
 
+        // 完整統計視窗：打開時才讀資料庫，關閉時釋放（FR-44、ADR-0009 第 7 節）
+        Window("完整統計", id: StatsWindowView.windowID) {
+            StatsWindowView(historyStore: history)
+        }
+        .defaultSize(width: 860, height: 700)
+        .windowResizability(.contentMinSize)
+
         // 設定視窗：關閉後釋放（ADR-0008 第 5 節）
         Settings {
             SettingsView()

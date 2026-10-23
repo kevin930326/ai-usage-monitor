@@ -16,6 +16,7 @@ import UsageKitUI
 @MainActor
 enum DebugTools {
     private static var panelWindow: NSWindow?
+    private static var statsWindow: NSWindow?
 
     static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
@@ -31,6 +32,7 @@ enum DebugTools {
             if name == "panel" {
                 renderMenuBarIcons(to: url)
                 renderSettings(to: url)
+                renderStats(to: url)
             }
             let only = env["AUM_RENDER_ANIMS"].map { Set($0.split(separator: ",").map(String.init)) }
             if env["AUM_RENDER_FRAMES"] == "1" { renderAnimations(to: url, only: only) }
@@ -51,6 +53,18 @@ enum DebugTools {
         UsageStore.log("demo panel window \(window.windowNumber)")
     }
 
+    /// 量測用：以一般視窗打開完整統計（與 Window scene 相同的視圖；關閉時釋放視窗與資料）
+    private static func showStatsWindow() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 700), styleMask: [.titled, .closable, .resizable],
+                              backing: .buffered, defer: false)
+        window.title = "完整統計"
+        window.contentView = NSHostingView(rootView: StatsWindowView(historyStore: HistoryStore.shared))
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        statsWindow = window
+    }
+
     // MARK: - 效能量測的時間表（ADR-0010 第 3 節）
 
     /// 每個步驟在 stderr 印出 `perf-mark <秒> <名稱>`，量測腳本依此把 ps 的取樣分段。
@@ -66,13 +80,20 @@ enum DebugTools {
             (41, "departing", { DebugAction.send("departing") }),
             (44, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
             (48, "appearance-light", { NSApplication.shared.appearance = nil }),
-            (52, "panel-close", { panelWindow?.orderOut(nil) }),
-            (52 + 60, "closed-60s", {}),
-            (52 + 90, "closed-90s", {}),
+            // 第三階段：捲到統計卡片，切換服務（長條與熱力圖重新長出、數字滾動）、切換 Token 活動範圍
+            (50, "stats-scroll", { DebugAction.send("stats-scroll") }),
+            (51, "stats-scope", { DebugAction.send("stats-scope") }),
+            (54, "stats-range", { DebugAction.send("stats-range") }),
+            (57, "panel-close", { panelWindow?.orderOut(nil) }),
+            (57 + 60, "closed-60s", {}),
+            (57 + 90, "closed-90s", {}),
             // 第二次開關：比較兩次關閉後的記憶體，確認沒有累積（第一次開啟會載入框架，不能和開啟前比）
-            (52 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
-            (52 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
-            (52 + 120, "exit", { exit(0) }),
+            (57 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
+            (57 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
+            // 完整統計視窗：打開 10 秒後關閉，關閉後資料應釋放
+            (57 + 120, "stats-open", { showStatsWindow() }),
+            (57 + 130, "stats-close", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
+            (57 + 150, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {
@@ -119,6 +140,49 @@ enum DebugTools {
             collapsed.reveal = [PanelSection.ring.rawValue: 0]
             write(panel(collapsed).background(Color(nsColor: .windowBackgroundColor)), scheme: scheme,
                   to: dir.appendingPathComponent("panel-collapsed-\(scheme.name).png"))
+        }
+    }
+
+    // MARK: - 統計卡片與完整統計視窗（第三階段）
+
+    /// 統計卡片單獨輸出（面板寬度），方便比較各種狀態
+    private static func statsCard(_ data: TokenStatsData, status: HistoryStore.Status = .ready, scope: TokenScope = .all,
+                                  range: TokenActivityRange = .days30, motion: PanelMotion = .settled) -> some View {
+        PanelCard(id: PanelSection.stats.rawValue, accessibilityTitle: PanelSection.stats.title, collapsed: .constant(false)) {
+            StatsCardHeader()
+        } content: {
+            StatsCardContent(data: data, status: status, scope: scope, range: range, now: .now, selectScope: { _ in }, selectRange: { _ in })
+        }
+        .frame(width: 328)
+        .padding(16)
+        .environment(\.panelMotion, motion)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private static func renderStats(to dir: URL) {
+        let data = HistoryStore.shared.tokens
+        var fresh = TokenStatsData.empty
+        fresh.firstScanProgress = 37
+        var none = TokenStatsData.empty
+        none.firstScanDone = true
+        // 保留 7 天：較早的每日資料已刪除，熱力圖與長條不畫成「沒有使用」
+        var short = data
+        short.retentionDays = 7
+        let cutoff = short.firstAvailableDay(now: .now).map { TokenCalendar.key($0, calendar: .current) } ?? ""
+        short.days.removeAll { $0.day < cutoff }
+        for scheme in [ColorScheme.light, .dark] {
+            let n = scheme.name
+            write(statsCard(data), scheme: scheme, to: dir.appendingPathComponent("stats-card-\(n).png"))
+            write(statsCard(data, scope: .codex, range: .weeks), scheme: scheme, to: dir.appendingPathComponent("stats-card-codex-weeks-\(n).png"))
+            write(statsCard(data, scope: .claude, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-claude-cumulative-\(n).png"))
+            write(statsCard(short, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-retention7-\(n).png"))
+            write(statsCard(fresh), scheme: scheme, to: dir.appendingPathComponent("stats-skeleton-\(n).png"))
+            write(statsCard(none), scheme: scheme, to: dir.appendingPathComponent("stats-empty-\(n).png"))
+            write(statsCard(data, status: .olderSchema(1)), scheme: scheme, to: dir.appendingPathComponent("stats-older-schema-\(n).png"))
+            if let full = HistoryStore.shared.loadFullTokenStats() {
+                write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
+                      scheme: scheme, to: dir.appendingPathComponent("stats-window-\(n).png"))
+            }
         }
     }
 
@@ -246,8 +310,71 @@ enum DebugTools {
                 writeGIF(frames, to: dir.appendingPathComponent("anim-\(name)-\(scheme.name).gif"))
             }
         }
+        renderStatsAnimations(to: dir, only: only)
         if only?.contains("trend-switch") ?? true { renderTrendSwitch(to: dir) }
         if only?.contains("theme") ?? true { renderThemeCrossfade(to: dir) }
+    }
+
+    /// 第三階段的動畫：只輸出統計卡片（面板寬度），GIF 比較小
+    private static func renderStatsAnimations(to dir: URL, only: Set<String>?) {
+        let data = HistoryStore.shared.tokens
+        guard data.hasData else { return }
+        let animations: [(String, Double, (Double) -> (PanelMotion, TokenScope))] = [
+            // Token 長條由下往上依序長出（每根晚 15ms，共 ≤ 0.9 秒）
+            ("stats-bars", 1.1, { t in
+                var m = PanelMotion.settled
+                m.statsBars = Curve.linear(t / 0.9)
+                return (m, .all)
+            }),
+            // 活動熱力圖由左到右以欄為單位淡入（≤ 1.0 秒）
+            ("stats-heatmap", 1.2, { t in
+                var m = PanelMotion.settled
+                m.heatmap = Curve.linear(t / 1.0)
+                return (m, .all)
+            }),
+            // 連續天數創新紀錄：🔥 彈一下（每個新紀錄一次）
+            ("stats-streak", 1.0, { t in
+                var m = PanelMotion.settled
+                let p = Curve.easeOut((t - 0.2) / 0.5)
+                m.streakPop = p >= 1 ? 0 : p
+                return (m, .all)
+            }),
+        ]
+        for (name, duration, at) in animations where only?.contains(name) ?? true {
+            for scheme in [ColorScheme.light, .dark] {
+                var frames: [CGImage] = []
+                for index in 0...Int(duration * fps) {
+                    let (m, scope) = at(Double(index) / fps)
+                    if let image = cgImage(statsCard(data, scope: scope, motion: m), scheme: scheme) { frames.append(image) }
+                }
+                writeFrames(frames, name: "anim-\(name)-\(scheme.name)", in: dir)
+            }
+        }
+        // 切換服務：交叉淡入 0.3 秒（新畫面的長條與熱力圖同時重新長出）。SwiftUI 的交叉淡入無法逐格指定，以兩張畫面的混合示意
+        guard only?.contains("stats-switch") ?? true, data.providers.count > 1 else { return }
+        for scheme in [ColorScheme.light, .dark] {
+            guard let old = cgImage(statsCard(data, scope: .all), scheme: scheme) else { continue }
+            var frames: [CGImage] = []
+            for index in 0...Int(1.1 * fps) {
+                let t = Double(index) / fps
+                var m = PanelMotion.settled
+                m.statsBars = Curve.linear(t / 0.9)
+                m.heatmap = Curve.linear(t / 1.0)
+                guard let new = cgImage(statsCard(data, scope: .claude, motion: m), scheme: scheme),
+                      let frame = blend(new, old, 1 - Curve.easeInOut(t / 0.3)) else { continue }
+                frames.append(frame)
+            }
+            writeFrames(frames, name: "anim-stats-switch-\(scheme.name)", in: dir)
+        }
+    }
+
+    private static func writeFrames(_ frames: [CGImage], name: String, in dir: URL) {
+        let folder = dir.appendingPathComponent(name)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for (index, frame) in frames.enumerated() {
+            writePNG(frame, to: folder.appendingPathComponent(String(format: "frame-%03d.png", index)))
+        }
+        writeGIF(frames, to: dir.appendingPathComponent("\(name).gif"))
     }
 
     /// 切換走勢的額度：舊曲線淡出（0.3 秒交叉淡入），新曲線重新由左往右描繪。
