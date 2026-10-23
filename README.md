@@ -141,7 +141,7 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
 | 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
 | 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
-| 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_started`／`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
+| 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 | 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字） | 事件內文、連結 |
 | Mac 選單列 App | `usage.json`、`history.sqlite3`、`service-status.json`（同一個資料夾） | 全部（都是收集器寫的、不含帳號資訊） | — |
 | iPhone、小工具、手錶 | 你的中繼 `GET /usage` | 用量快照 | — |
@@ -155,7 +155,7 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | 寫入者 | 位置 | 內容 |
 |---|---|---|
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（與上傳的內容相同） |
-| 收集器 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」與每次收集是否成功；Token 統計：每天／每小時 × 服務 × 模型的四種 Token 數、任務數與任務時間、個人紀錄、各紀錄檔讀到哪裡（以 UUID 識別）、已計入的訊息與任務 ID；隨機裝置 ID、裝置名稱固定為「這台 Mac」、保留期間。**不存**方案名稱、錯誤訊息、帳號資訊、對話內容、路徑或專案名稱。預設保留 1 年，35 天前的額度歷史降為每小時一筆 |
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」與每次收集是否成功；Token 統計：每天／每小時 × 服務 × 模型的四種 Token 數（Codex 另有推理明細）、任務數與任務時間、個人紀錄、各紀錄檔讀到哪裡（以 UUID 識別）、已計入的訊息與任務 ID；隨機裝置 ID、裝置名稱固定為「這台 Mac」、保留期間。**不存**方案名稱、錯誤訊息、帳號資訊、對話內容、路徑或專案名稱。預設保留 1 年，35 天前的額度歷史降為每小時一筆 |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/service-status.json`（`0600`） | 兩家狀態頁的精簡結果（見上表） |
 | 收集器的安裝腳本 | `config.json`、`~/Library/LaunchAgents/io.github.kevin930326.ai-usage-monitor.plist` | 設定；launchd 排程 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |

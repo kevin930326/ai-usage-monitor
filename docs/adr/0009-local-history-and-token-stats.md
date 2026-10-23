@@ -128,7 +128,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 服務 | 取用的欄位 | 不取用（舉例，會在同一行出現） |
 |---|---|---|
 | Claude | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的 `input_tokens`／`cache_creation_input_tokens`／`cache_read_input_tokens`／`output_tokens`、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`，以及 `message.content` **是否為 `tool_result`**（只判斷型別，不讀文字） | `message.content` 的文字、`cwd`、`gitBranch`、附件（含 `userEmail`、`gitStatus`）、檔案快照、`lastPrompt`、`customTitle` |
-| Codex | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`（`info` 為 null 時略過）；`turn_context` 的 `model`；`task_started`／`task_complete` 的 `turn_id`、`started_at`、`completed_at`、`duration_ms` | `task_complete.last_agent_message`、`turn_context.cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
+| Codex | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`（`info` 為 null 時略過）；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、`started_at`、`completed_at`、`duration_ms`（`task_started` 只在第 1 步的位元組篩選中，解析後不取任何欄位） | `task_complete.last_agent_message`、`turn_context.cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 
 > 限制：JSON 無法只解析部分欄位，篩選過的行仍會整行載入記憶體再丟棄（例如 user 行的提示文字）。規則是「載入後只取白名單、不保留、不輸出」，不是「完全不讀到」。測試在假紀錄的每一種行放入假的內容、路徑與 email，確認資料庫、CSV、日誌、stdout 都沒有出現。
 
