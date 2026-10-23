@@ -160,10 +160,12 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | 收集器的安裝腳本 | `config.json`、`~/Library/LaunchAgents/io.github.kevin930326.ai-usage-monitor.plist` | 設定；launchd 排程 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
 | 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容） |
-| Mac 選單列 App | App 的 UserDefaults | 面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`） |
+| Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`） |
 | Mac 選單列 App | `history.sqlite3` | 只在設定的「清除歷史」「縮短保留期間」「清除並重新掃描」確認後寫入 |
 | Mac 選單列 App | 你選擇的位置 | 「匯出 CSV」：每小時的額度歷史 |
 | Mac 選單列 App | 通知中心 | 通知內容（服務、額度名稱與剩餘 %），只在你打開通知開關後 |
+| Mac 選單列 App | 系統的登入項目（`SMAppService`） | 只在你打開「登入時自動打開」後；關掉開關即移除 |
+| Mac 選單列 App | 標準錯誤輸出（stderr，不寫入檔案） | 讀取的資料夾路徑、資料時間、送出的通知種類與服務／額度 id、觸發收集器的結束碼；不含用量數字或帳號資訊 |
 | 中繼（Cloudflare） | Worker KV `latest`；secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新一筆快照；兩把密鑰 |
 | iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組共用同一個項目 |
 | iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults（`relayURL`、`displayMode`）與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示） |
@@ -183,7 +185,8 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘） |
-| Mac 選單列 App、Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀本機檔案或 App 傳來的資料 | — |
+| Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
+| Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
 上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
