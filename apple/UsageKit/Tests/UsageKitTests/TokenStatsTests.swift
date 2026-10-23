@@ -1,0 +1,168 @@
+import Foundation
+import Testing
+@testable import UsageKit
+
+@Suite struct TokenStatsTests {
+    var cal: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Asia/Taipei")!
+        return c
+    }
+
+    /// 2026-11-05（星期四）15:00 台北
+    var now: Date { cal.date(from: DateComponents(year: 2026, month: 11, day: 5, hour: 15))! }
+
+    func row(_ day: String, _ provider: String = "claude", main: Int64, cacheRead: Int64 = 0, model: String = "claude-opus-5-5",
+             longest: Int = 0) -> TokenDayRow {
+        TokenDayRow(day: day, provider: provider, model: model,
+                    counts: TokenCounts(input: main / 2, cacheWrite: main / 4, cacheRead: cacheRead, output: main - main / 2 - main / 4),
+                    taskCount: longest > 0 ? 1 : 0, taskSeconds: longest, longestTaskSeconds: longest)
+    }
+
+    @Test func mainNumberExcludesCacheReadAndReasoning() {
+        let c = TokenCounts(input: 10, cacheWrite: 20, cacheRead: 1000, output: 30, reasoning: 5)
+        #expect(c.main == 60)
+        #expect((c + c).cacheRead == 2000)
+    }
+
+    @Test func thisWeekComparesWithSamePeriodLastWeek() {
+        // 本週一 11/2 起；上週同期 10/26～10/29
+        let data = TokenStatsData(days: [
+            row("2026-11-02", main: 100), row("2026-11-05", main: 50), row("2026-11-05", "codex", main: 50, model: "gpt-6.1-sol"),
+            row("2026-11-01", main: 999),  // 上週日：不屬於本週，也不在上週同期
+            row("2026-10-26", main: 80), row("2026-10-29", main: 20), row("2026-10-30", main: 500),
+        ], firstScanDone: true)
+        let all = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(all.thisWeek.main == 200)
+        #expect(all.lastWeekSamePeriod == 100)
+        #expect(all.changePct == 100)
+        let codex = TokenSummary(data: data, scope: .codex, now: now, calendar: cal)
+        #expect(codex.thisWeek.main == 50)
+        #expect(codex.changePct == nil)
+    }
+
+    @Test func recordsWinOverComputedAndScopeUsesSuffix() {
+        let data = TokenStatsData(days: [row("2026-11-04", main: 300, longest: 120)], records: [
+            "best_day_tokens": TokenRecord(value: 5000, day: "2026-01-01"),
+            "best_day_tokens:codex": TokenRecord(value: 40, day: "2026-02-02"),
+            "total_tokens": TokenRecord(value: 123_456),
+            "longest_task_seconds": TokenRecord(value: 60, day: "2026-03-03"),
+        ])
+        let all = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(all.bestDay == TokenRecord(value: 5000, day: "2026-01-01"))
+        #expect(all.total?.value == 123_456)
+        // 收集器的紀錄較小時（例如還沒更新）以每日資料為準
+        #expect(all.longestTaskSeconds == TokenRecord(value: 120, day: "2026-11-04"))
+        let claude = TokenSummary(data: data, scope: .claude, now: now, calendar: cal)
+        #expect(claude.bestDay == TokenRecord(value: 300, day: "2026-11-04"))
+    }
+
+    @Test func streakCountsTodayOrUntilYesterday() {
+        let days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"].map { row($0, main: 10) }
+        var data = TokenStatsData(days: days, records: ["longest_streak_days": TokenRecord(value: 3, day: "2026-10-10")])
+        var summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(summary.currentStreak == 4)  // 今天還沒用：算到昨天
+        #expect(summary.streakIsRecord)
+        #expect(summary.longestStreak?.value == 4)
+        data.days.append(row("2026-11-05", main: 1))
+        summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(summary.currentStreak == 5)
+        data.days.removeAll { $0.day == "2026-11-04" }
+        summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(summary.currentStreak == 1)
+        #expect(!summary.streakIsRecord)
+        #expect(TokenSummary(data: .empty, scope: .all, now: now, calendar: cal).currentStreak == 0)
+    }
+
+    @Test func streakUsesRetentionFreeDays() {
+        // 保留 7 天：每日資料只剩最近幾天，record_days 還有更早的
+        let data = TokenStatsData(days: [row("2026-11-04", main: 5), row("2026-11-05", main: 5)],
+                                  recordDays: ["2026-11-01": ["codex": 3], "2026-11-02": ["claude": 1], "2026-11-03": ["claude": 2],
+                                               "2026-11-04": ["claude": 5], "2026-11-05": ["claude": 5]])
+        #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).currentStreak == 5)
+        #expect(TokenSummary(data: data, scope: .claude, now: now, calendar: cal).currentStreak == 4)
+    }
+
+    @Test func activityBars() {
+        let data = TokenStatsData(days: [
+            row("2026-11-05", main: 40), row("2026-11-05", "codex", main: 60, model: "gpt-6.1-sol"),
+            row("2026-10-07", main: 7),  // 30 天的第一天
+            row("2026-10-06", main: 1000),  // 30 天之外
+        ], records: ["total_tokens": TokenRecord(value: 5000)])
+        let days = TokenActivity.bars(data: data, scope: .all, range: .days30, now: now, calendar: cal)
+        #expect(days.count == 30)
+        #expect(days.last?.main == 100)
+        #expect(days.last?.byProvider == ["claude": 40, "codex": 60])
+        #expect(days.first?.main == 7)
+        let weeks = TokenActivity.bars(data: data, scope: .all, range: .weeks, now: now, calendar: cal)
+        #expect(weeks.count == 12)
+        #expect(TokenCalendar.key(weeks.last!.start, calendar: cal) == "2026-11-02")
+        #expect(weeks.last?.main == 100)
+        // 累計：最後一天等於 records 的累計，往回扣掉之後每天的用量
+        let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
+        #expect(cumulative.last?.main == 5000)
+        #expect(cumulative[28].main == 4900)
+        #expect(cumulative.first?.main == 4900, "\(cumulative.map(\.main))")
+        #expect(cumulative.map(\.main) == cumulative.map(\.main).sorted())
+    }
+
+    @Test func heatmapShapeLevelsAndFuture() {
+        let data = TokenStatsData(days: [
+            row("2026-11-05", main: 400), row("2026-11-04", main: 100), row("2026-11-03", main: 200), row("2026-11-02", main: 300),
+        ])
+        let map = TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: cal)
+        #expect(map.cells.count == 22 * 7)
+        #expect(TokenCalendar.key(map.firstMonday, calendar: cal) == "2026-06-08")
+        let lastWeek = map.cells.suffix(7)
+        #expect(Array(lastWeek) == [300, 200, 100, 400, nil, nil, nil])
+        #expect(map.level(0) == 0)
+        #expect(map.level(100) == 1)
+        #expect(map.level(400) == 4)
+        #expect(TokenCalendar.key(map.date(column: 21, row: 3, calendar: cal), calendar: cal) == "2026-11-05")
+    }
+
+    @Test func modelsAndHours() {
+        let data = TokenStatsData(days: [
+            row("2026-11-05", main: 10, model: "claude-sonnet-5-5"), row("2026-11-04", main: 30),
+            row("2026-11-04", "codex", main: 20, model: "gpt-6.1-sol"),
+        ], hours: [
+            TokenHourRow(day: "2026-11-05", hour: 9, provider: "claude", model: "x", counts: TokenCounts(input: 5)),
+            TokenHourRow(day: "2026-11-04", hour: 9, provider: "codex", model: "x", counts: TokenCounts(output: 7)),
+            TokenHourRow(day: "2026-11-04", hour: 23, provider: "claude", model: "x", counts: TokenCounts(cacheRead: 99)),
+        ])
+        #expect(TokenBreakdown.models(data: data, scope: .all).map(\.model) == ["claude-opus-5-5", "gpt-6.1-sol", "claude-sonnet-5-5"])
+        #expect(TokenBreakdown.models(data: data, scope: .codex).map(\.model) == ["gpt-6.1-sol"])
+        let hours = TokenBreakdown.hours(data: data, scope: .all)
+        #expect(hours[9] == 12)
+        #expect(hours[23] == 0)
+        #expect(TokenBreakdown.hours(data: data, scope: .claude)[9] == 5)
+    }
+
+    @Test func providersAndHasData() {
+        #expect(!TokenStatsData.empty.hasData)
+        let onlyRecords = TokenStatsData(records: ["total_tokens": TokenRecord(value: 9), "total_tokens:codex": TokenRecord(value: 9)])
+        #expect(onlyRecords.hasData)
+        #expect(onlyRecords.providers == ["codex"])
+    }
+
+    @Test func formatting() {
+        #expect(TokenFormat.short(980) == "980")
+        #expect(TokenFormat.short(12_345) == "12.3K")
+        #expect(TokenFormat.short(1_500) == "1.5K")
+        #expect(TokenFormat.short(4_560_000) == "4.56M")
+        #expect(TokenFormat.short(123_000_000) == "123M")
+        #expect(TokenFormat.short(1_200_000_000) == "1.2B")
+        #expect(TokenFormat.full(12_345_678) == "12,345,678")
+        #expect(TokenFormat.duration(30) == "30 秒")
+        #expect(TokenFormat.duration(45 * 60) == "45 分")
+        #expect(TokenFormat.duration(3600 + 23 * 60) == "1 小時 23 分")
+        #expect(TokenFormat.duration(7200) == "2 小時")
+    }
+
+    @Test func dayKeysRoundTrip() {
+        let date = TokenCalendar.date("2026-02-28", calendar: cal)!
+        #expect(TokenCalendar.key(date, calendar: cal) == "2026-02-28")
+        #expect(TokenCalendar.date("bad", calendar: cal) == nil)
+        #expect(TokenCalendar.key(TokenCalendar.startOfWeek(now, calendar: TokenCalendar.make(cal)), calendar: cal) == "2026-11-02")
+    }
+}
