@@ -190,6 +190,8 @@ enum IslandLayout {
     static let sideInset: CGFloat = 8
     static let topInset: CGFloat = 4
     static let bottomInset: CGFloat = 4
+    /// 字級上限：展開版面的高度固定（約 160pt），更大的字會把最下方一行擠出去
+    static let maxTypeSize: DynamicTypeSize = .xLarge
 }
 
 /// 左上：剩餘最少的額度（名稱一行＋大數字，FR-15）。沒有服務時顯示提示。
@@ -216,6 +218,7 @@ struct IslandLeading: View {
         }
         .padding(.leading, IslandLayout.sideInset)
         .padding(.top, IslandLayout.topInset)
+        .dynamicTypeSize(...IslandLayout.maxTypeSize)
     }
 }
 
@@ -238,6 +241,7 @@ struct IslandTrailing<Trailing: View>: View {
         }
         .padding(.trailing, IslandLayout.sideInset)
         .padding(.top, IslandLayout.topInset)
+        .dynamicTypeSize(...IslandLayout.maxTypeSize)
     }
 }
 
@@ -256,6 +260,7 @@ struct IslandBottom: View {
         }
         .padding(.horizontal, IslandLayout.sideInset)
         .padding(.bottom, IslandLayout.bottomInset)
+        .dynamicTypeSize(...IslandLayout.maxTypeSize)
     }
 }
 

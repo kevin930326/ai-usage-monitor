@@ -170,7 +170,7 @@ SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AI
 
 示範情境也會寫進 App Group，主畫面／鎖定畫面小工具同樣只顯示假資料（以非示範模式重新啟動 App 即恢復）。截圖見 [`docs/screenshots/ios-widget/`](../../docs/screenshots/ios-widget/)；單一服務與沒有服務的情境見 [`docs/screenshots/single-provider/`](../../docs/screenshots/single-provider/)。
 
-另外設定 `AUM_RENDER=1` 時，App 會把動態島展開版面以 ImageRenderer 輸出到 App 容器的 `Documents/island-<情境>.png`（`normal`、`claude-only`、`error`、`stale`、`none`），各張的高度寫在 `island-sizes.json`。外框是近似的（寬 371pt、四周 12pt、黑底），只用來檢查內容高度與內距；實際版面以模擬器長按動態島的截圖為準：
+另外設定 `AUM_RENDER=1` 時，App 會把動態島展開版面以 ImageRenderer 輸出到 App 容器的 `Documents/island-<情境>.png`（每個示範情境一張，`normal` 與 `error` 另有最大一般字級的 `-xxxl`），各張的高度寫在 `island-sizes.json`，超過 160pt 的情境列在 `over`（應為空）。外框是近似的（寬 371pt、四周 12pt、黑底），只用來檢查內容高度與內距；實際版面以模擬器長按動態島的截圖為準：
 
 ```bash
 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER=1 xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor
