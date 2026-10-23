@@ -53,5 +53,7 @@ import Testing
         #expect(ServiceStatusSummary.explanation(health: outage, quotaExhausted: true, provider: "claude")
             == "Claude 的額度已用完，同時服務也有異常")
         #expect(ServiceStatusSummary.explanation(health: .unknown, quotaExhausted: false, provider: "claude") == nil)
+        #expect(ServiceStatusSummary.explanation(health: .maintenance(summary: "x"), quotaExhausted: false, provider: "codex")
+            == "Codex 正在維護，不是額度用完；稍後再試")
     }
 }

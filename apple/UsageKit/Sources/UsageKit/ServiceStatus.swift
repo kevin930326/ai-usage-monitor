@@ -116,9 +116,10 @@ public enum ServiceStatusSummary {
     /// 分辨「服務異常」與「額度用完」（FR-45）。兩者都成立時兩個都說；都沒有時 nil。
     public static func explanation(health: ServiceHealth, quotaExhausted: Bool, provider: String) -> String? {
         let name = ProviderInfo.displayName(provider)
+        let maintenance = if case .maintenance = health { true } else { false }
         switch (health.isProblem, quotaExhausted) {
-        case (true, true): return "\(name) 的額度已用完，同時服務也有異常"
-        case (true, false): return "\(name) 服務異常，不是額度用完；稍後再試"
+        case (true, true): return "\(name) 的額度已用完，同時服務也\(maintenance ? "在維護" : "有異常")"
+        case (true, false): return "\(name) \(maintenance ? "正在維護" : "服務異常")，不是額度用完；稍後再試"
         case (false, true): return "\(name) 的額度已用完（服務正常），等重置"
         default: return nil
         }
