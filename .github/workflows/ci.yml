@@ -76,7 +76,7 @@ jobs:
       matrix:
         include:
           - { project: iOSApp, xcodeproj: AIUsageMonitor, destination: "generic/platform=iOS Simulator", appex: "Debug-iphonesimulator/AIUsageMonitor.app/PlugIns/UsageWidget.appex" }
-          - { project: MacMenuBar, xcodeproj: AIUsageMenuBar, destination: "platform=macOS", appex: "Debug/AIUsageMenuBar.app/Contents/PlugIns/UsageDesktopWidget.appex" }
+          - { project: MacMenuBar, xcodeproj: AIUsageMenuBar, destination: "platform=macOS", appex: "" }
           - { project: WatchApp, xcodeproj: AIUsageWatch, destination: "generic/platform=watchOS Simulator", appex: "Debug-watchsimulator/AIUsageWatch.app/PlugIns/UsageComplications.appex" }
     steps:
       - uses: actions/checkout@v4
@@ -94,5 +94,7 @@ jobs:
           xcodebuild -project ${{ matrix.xcodeproj }}.xcodeproj -scheme ${{ matrix.xcodeproj }} \
             -configuration Debug -destination '${{ matrix.destination }}' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build
+      # Mac 沒有擴充（桌面小工具已移除）
       - name: Extension is embedded
+        if: matrix.appex != ''
         run: test -d "$RUNNER_TEMP/dd/Build/Products/${{ matrix.appex }}"

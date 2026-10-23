@@ -35,7 +35,7 @@ struct HomeEntry: TimelineEntry {
 struct HomeTimelineProvider: TimelineProvider {
     /// 重新整理間隔。每次 `getTimeline` 都扣 WidgetKit 的每日次數（約 40～70 次）。
     /// 收集器每 5 分鐘寫一次，抓到的資料最多 5 分鐘舊；25 分鐘後重新整理時還沒超過 30 分鐘的過期門檻，
-    /// 不會在兩次之間誤顯示「已過期」。一天最多 58 次（與 Mac 桌面小工具的節流相同）。
+    /// 不會在兩次之間誤顯示「已過期」。一天最多 58 次（24 × 60 ÷ 25）。
     static let refreshInterval: TimeInterval = 25 * 60
     /// 資料已過期（Mac 關機或睡眠）時放慢，省下夜間的次數；Mac 醒來後最多晚 1 小時，打開 App 會立即更新。
     static let staleRefreshInterval: TimeInterval = 60 * 60

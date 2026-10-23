@@ -9,8 +9,8 @@
 
 | # | 操作步驟 | 預期結果 | 結果 |
 |---|---|---|---|
-| 0.1 | 三個專案都選自己的 Team：`DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate`（iOSApp、WatchApp；MacMenuBar 用 `--spec project.team.yml`，見 `apple/MacMenuBar/README.md`「以 Team 簽署」） | 建置時不再出現「requires a development team」 | |
-| 0.2 | Xcode → 手錶 App、`UsageComplications`、Mac `UsageDesktopWidget` 的 Signing & Capabilities 檢查 App Group | 三個 target 都列出 `group.io.github.kevin930326.AIUsageMonitor`，且沒有紅色錯誤 | |
+| 0.1 | 三個專案都選自己的 Team：`DEVELOPMENT_TEAM=<你的 Team ID> xcodegen generate`（iOSApp、WatchApp；Mac 選單列 App 不需要 Team，以 Sign to Run Locally 建置） | 建置時不再出現「requires a development team」 | |
+| 0.2 | Xcode → 手錶 App、`UsageComplications` 的 Signing & Capabilities 檢查 App Group | 兩個 target 都列出 `group.io.github.kevin930326.AIUsageMonitor`，且沒有紅色錯誤 | |
 | 0.3 | Mac 終端機：`launchctl list \| grep ai-usage-monitor` | 有一行；`usage.json` 5 分鐘內有更新（`stat -f %Sm ~/Library/Application\ Support/AIUsageMonitor/usage.json`） | |
 
 ## 1. iPhone
@@ -62,10 +62,10 @@
 
 | # | 操作步驟 | 預期結果 | 結果 |
 |---|---|---|---|
-| 4.1 | `apple/MacMenuBar` 以 `project.team.yml` 產生專案後建置並執行 | 選單列出現圓點與剩餘最少的額度的剩餘 %：圓點是該服務的識別色，剩餘 < 20% 時為紅色 | |
+| 4.1 | `apple/MacMenuBar` 以 `xcodegen generate` 產生專案後建置並執行 | 選單列出現圓點與剩餘最少的額度的剩餘 %：圓點是該服務的識別色，剩餘 < 20% 時為紅色 | |
 | 4.2 | 點選單列圖示 | 面板列出所有額度、進度條（服務識別色）、重置倒數、更新時間；淺色與深色外觀都清楚 | |
 | 4.3 | 收集器下一次寫入（最多 5 分鐘） | 面板與選單列在幾秒內反映新數字 | |
-| 4.4 | 以 `DEVELOPMENT_TEAM=<Team ID> xcodegen generate --spec project.team.yml` 產生專案並執行 → 桌面右鍵 → 編輯小工具 → 加入「AI 用量」小、中尺寸；7 天後再看一次 | `codesign -d --entitlements` 兩個 bundle 都有 App Group；小工具顯示真實資料（不是範例），若顯示「範例資料」代表 App Group 沒有生效；記下 Personal Team 簽署 7 天後是否仍能開啟 | |
+| 4.4 | （已移除：Mac 桌面小工具不做，FR-24） | — | |
 | 4.5 | 活動監視器觀察 AIUsageMenuBar，面板關閉時閒置 5 分鐘 | CPU 接近 0%；能耗影響為「低」 | |
 
 ## 5. 隱私與安全抽查

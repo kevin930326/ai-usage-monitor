@@ -4,11 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
-import WidgetKit
 
 /// 開發用（只在 Debug 版本）：
 /// - `AUM_DEMO_PANEL=1`：把面板放進一般視窗。MenuBarExtra 無法以程式點開，截圖與量測用這個視窗。
-/// - `AUM_RENDER_DIR=<資料夾>`：用 ImageRenderer 輸出桌面小工具、面板、選單列圖示與設定視窗的 PNG（淺色、深色）。
+/// - `AUM_RENDER_DIR=<資料夾>`：用 ImageRenderer 輸出面板、選單列圖示與設定視窗的 PNG（淺色、深色）。
 /// - `AUM_RENDER_FRAMES=1`（搭配 `AUM_RENDER_DIR`）：每個動畫以 30 fps 輸出 PNG 序列並組成 GIF。
 /// - `AUM_RENDER_EXIT=1`：輸出完就結束。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
@@ -23,7 +22,6 @@ enum DebugTools {
         if let dir = env["AUM_RENDER_DIR"], !dir.isEmpty {
             let url = URL(fileURLWithPath: dir)
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            renderWidgets(to: url)
             renderPanel(to: url)
             renderMenuBarIcons(to: url)
             renderSettings(to: url)
@@ -79,20 +77,20 @@ enum DebugTools {
 
     // MARK: - 靜態截圖
 
-    private static var snapshot: UsageSnapshot { UsageStore.shared.snapshot ?? SharedSnapshot.sample() }
+    private static var snapshot: UsageSnapshot { UsageStore.shared.snapshot ?? sample() }
 
-    private static func renderWidgets(to dir: URL) {
-        let sizes: [(WidgetFamily, String, CGSize)] = [
-            (.systemSmall, "small", CGSize(width: 170, height: 170)),
-            (.systemMedium, "medium", CGSize(width: 364, height: 170)),
-        ]
-        for (family, name, size) in sizes {
-            let view = UsageWidgetView(snapshot: snapshot, family: family)
-                .padding(16)
-                .frame(width: size.width, height: size.height)
-                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 22))
-            write(view, scheme: .dark, to: dir.appendingPathComponent("widget-\(name).png"))
-        }
+    /// 還沒讀到 usage.json 時截圖用的範例資料
+    private static func sample(now: Date = .now) -> UsageSnapshot {
+        UsageSnapshot(updatedAt: now.addingTimeInterval(-120), providers: [
+            "claude": ProviderUsage(plan: "Max", windows: [
+                UsageWindow(id: "five_hour", label: "5 小時", usedPct: 62, resetsAt: now.addingTimeInterval(6000)),
+                UsageWindow(id: "weekly", label: "每週", usedPct: 35, resetsAt: now.addingTimeInterval(3 * 86400)),
+            ]),
+            "codex": ProviderUsage(plan: "Team", windows: [
+                UsageWindow(id: "five_hour", label: "5 小時", usedPct: 12, resetsAt: now.addingTimeInterval(14400)),
+                UsageWindow(id: "weekly", label: "每週", usedPct: 48, resetsAt: now.addingTimeInterval(5 * 86400)),
+            ]),
+        ])
     }
 
     private static func panel(_ motion: PanelMotion = .settled) -> some View {

@@ -44,6 +44,9 @@
 - 自動重裝腳本全程使用 launchd 指定的 Python，不再依 PATH 找 `python3`（C-13）
 - 收集器：Claude token 過期或 5 分鐘內到期時，委派 Claude Code 續期（`claude -p /usage`，不消耗額度）後重新讀取，不再因為幾小時沒用 Claude Code 而停止更新；續期失敗超過 30 分鐘發一次 macOS 通知。收集器本身仍不刷新、不寫入憑證（ADR-0005）（之後由 ADR-0006 取代，見 Changed）
 
+### Removed
+- Mac 桌面小工具（FR-24 改為不做）：移除 `UsageDesktopWidget` 擴充、App Group 快照複本與 25 分鐘 reload 節流（`WidgetReloadThrottle`）、`project.team.yml` 與 `*.team.entitlements`；Mac 選單列 App 不再需要 Team 簽署。iPhone 主畫面／鎖定畫面小工具與手錶複雜功能不受影響
+
 ## [0.5.0] - 2026-10-21
 
 涵蓋路線圖 v0.4（Live Activity）與 v0.5（捷徑）兩個里程碑，沒有單獨發布 v0.4.0。Mac 選單列 App（v1.2）與 Apple Watch App（v1.4）一起合併，以預覽版提供：需要 Team 簽署與 App Group，尚未在實機驗證。
