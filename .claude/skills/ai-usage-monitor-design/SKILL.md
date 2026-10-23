@@ -190,7 +190,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ### 動畫原則（ADR-0010）
 
-1. 只在面板或視窗開啟時執行；關閉後停止所有動畫與 `TimelineView`／計時器。選單列面板關閉時視圖仍在，以視窗的 occlusion／key 狀態判斷；看不見時把 `Text(date, style: .relative)` 換成固定文字（它在收起的視窗裡仍會定時重算）。
+1. 只在面板或視窗開啟時執行；關閉後停止所有動畫與為面板而設的 `TimelineView`／計時器（唯一例外：`UsageStore` 每 60 秒的計時器，負責選單列圖示，只更新資料、不啟動動畫）。選單列面板關閉時視圖仍在，以視窗的 occlusion／key 狀態判斷；看不見時把 `Text(date, style: .relative)` 換成固定文字（它在收起的視窗裡仍會定時重算）。
 2. `accessibilityReduceMotion` 時改為直接顯示（只允許 ≤ 0.15 秒淡入淡出）。
 3. 一次性、有終點：單次 ≤ 1.2 秒（多數 0.2～0.6 秒），重複類最多 3 次、總長 ≤ 4 秒。
 4. 由資料改變或使用者操作觸發，不為動畫輪詢。
