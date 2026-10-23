@@ -112,13 +112,16 @@ def _private_files() -> Iterator[None]:
 
 
 def _tighten_permissions(path: Path) -> None:
+    """既有的資料庫與 -wal／-shm 改成 0600；改不了就丟出 HistoryError，這次不寫入歷史。"""
     for suffix in ("", "-wal", "-shm"):
         p = Path(f"{path}{suffix}")
         try:
             if p.exists() and (p.stat().st_mode & 0o777) != 0o600:
                 os.chmod(p, 0o600)
+                if (p.stat().st_mode & 0o777) != 0o600:
+                    raise OSError
         except OSError:
-            pass  # 權限修不了不影響寫入
+            raise HistoryError("無法把 history.sqlite3 的權限設為 0600，略過這次寫入") from None
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -231,6 +234,8 @@ def record(snapshot: dict, path: Path | None = None, now: datetime | None = None
     path = path or HISTORY_PATH
     now = now or datetime.now(timezone.utc)
     with _private_files():
+        # 寫入前先確保既有檔案只有自己能讀（新檔案由 umask 077 保護）
+        _tighten_permissions(path)
         conn = connect(path)
         try:
             count = write_samples(conn, snapshot)

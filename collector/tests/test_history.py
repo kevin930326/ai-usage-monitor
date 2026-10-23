@@ -132,6 +132,29 @@ class SchemaTest(HistoryTestCase):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
 
+    def test_permissions_are_fixed_before_writing(self):
+        history.record(snapshot(T0), self.path)
+        os.chmod(self.path, 0o644)
+        seen = []
+        real_connect = history.connect
+        def spy(path):
+            seen.append(path.stat().st_mode & 0o777)
+            return real_connect(path)
+        with mock.patch.object(history, "connect", spy):
+            history.record(snapshot(T0 + 300), self.path)
+        self.assertEqual(seen, [0o600])
+
+    def test_unfixable_permissions_skip_the_write(self):
+        history.record(snapshot(T0), self.path)
+        os.chmod(self.path, 0o644)
+        err = io.StringIO()
+        with mock.patch.object(history.os, "chmod", side_effect=PermissionError), redirect_stderr(err):
+            self.assertFalse(history.record_safely(snapshot(T0 + 300), self.path))
+        os.chmod(self.path, 0o600)
+        self.assertEqual(self.count("collector_runs"), 1)
+        self.assertIn("0600", err.getvalue())
+
+
 class WriteTest(HistoryTestCase):
     def test_one_run_and_one_sample_per_window_skipping_errors(self):
         n = history.record(snapshot(T0, codex_error="尚未登入"), self.path)
