@@ -254,7 +254,8 @@ struct ResetTimeline: View, Animatable {
     /// 標籤太近時換到下一行（依時間軸寬約 300pt 估計；標籤寬 72pt）。
     private func labelRows() -> [Int] {
         var rows: [Int] = []
-        var lastX: [Int: Double] = [:]
+        // 第一行最左邊有「現在」（約 28pt）：標籤中心要在 68pt 以後才不會蓋到，否則換行
+        var lastX: [Int: Double] = [0: 68 - Double(Self.labelWidth)]
         for reset in resets {
             let x = reset.position * 300
             let row = (0..<4).first { r in lastX[r].map { x - $0 >= Double(Self.labelWidth) } ?? true } ?? 0
