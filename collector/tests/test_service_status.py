@@ -1,0 +1,114 @@
+import io
+import json
+import os
+import stat
+import tempfile
+import unittest
+from contextlib import redirect_stderr
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest import mock
+
+from usage_collector import service_status
+from usage_collector.models import ProviderError
+
+NOW = datetime(2026, 10, 24, 3, 0, tzinfo=timezone.utc)
+
+
+def summary(indicator="none", components=(), incidents=()):
+    """假的 Statuspage summary.json（只有用到的欄位，加上一些不該保留的欄位）"""
+    return {
+        "page": {"id": "x", "name": "Fake", "url": "https://example.invalid"},
+        "status": {"indicator": indicator, "description": "All Systems Operational" if indicator == "none" else "Partial outage"},
+        "components": [{"id": str(i), "name": n, "status": s, "description": "secret-ish text", "group": False}
+                       for i, (n, s) in enumerate(components)],
+        "incidents": [{"id": str(i), "name": n, "status": st, "impact": imp, "shortlink": "https://stspg.io/x",
+                       "incident_updates": [{"body": "long body text that must not be stored"}]}
+                      for i, (n, st, imp) in enumerate(incidents)],
+    }
+
+
+class ParseTest(unittest.TestCase):
+    def test_keeps_only_needed_fields(self):
+        data = service_status.parse("claude", summary(
+            "major",
+            components=[("claude.ai", "operational"), ("Claude Code", "partial_outage"), ("Claude API (api.anthropic.com)", "degraded_performance")],
+            incidents=[("Elevated errors on Claude Code", "investigating", "major"), ("Old one", "resolved", "minor")]))
+        self.assertEqual(data["indicator"], "major")
+        self.assertEqual(data["components"], [
+            {"name": "Claude Code", "status": "partial_outage", "related": True},
+            {"name": "Claude API (api.anthropic.com)", "status": "degraded_performance", "related": True},
+        ])
+        self.assertEqual(data["incidents"], [{"name": "Elevated errors on Claude Code", "impact": "major"}])
+        self.assertEqual(data["page"], "https://status.claude.com")
+        dumped = json.dumps(data)
+        for leaked in ("secret-ish", "long body", "stspg.io", "example.invalid"):
+            self.assertNotIn(leaked, dumped)
+
+    def test_unrelated_codex_components(self):
+        data = service_status.parse("codex", summary("minor", components=[("Image Generation", "degraded_performance"),
+                                                                           ("Codex in ChatGPT Desktop", "major_outage")]))
+        self.assertEqual([c["related"] for c in data["components"]], [False, True])
+
+    def test_bad_format_raises_and_items_are_capped(self):
+        with self.assertRaises(ProviderError):
+            service_status.parse("claude", {"status": {"indicator": "on fire"}})
+        with self.assertRaises(ProviderError):
+            service_status.parse("claude", [])
+        many = summary("minor", components=[(f"C{i} " + "x" * 300, "partial_outage") for i in range(20)])
+        data = service_status.parse("claude", many)
+        self.assertEqual(len(data["components"]), service_status.MAX_ITEMS)
+        self.assertTrue(all(len(c["name"]) <= service_status.MAX_TEXT for c in data["components"]))
+        weird = summary("none", components=[("ok", "melting"), (None, "partial_outage")])
+        self.assertEqual(service_status.parse("claude", weird)["components"], [])
+
+
+class UpdateTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.dir.name) / "service-status.json"
+        self.calls = []
+
+        def fake(url, headers, timeout=15):
+            self.calls.append((url, headers))
+            if "openai" in url:
+                raise ProviderError("網路錯誤")
+            return summary()
+        self.patch = mock.patch.object(service_status.http, "request_json", side_effect=fake)
+        self.patch.start()
+
+    def tearDown(self):
+        self.patch.stop()
+        self.dir.cleanup()
+
+    def test_writes_private_file_without_credentials(self):
+        self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW))
+        data = json.loads(self.path.read_text())
+        self.assertEqual(data["schema_version"], 1)
+        self.assertEqual(data["providers"]["claude"]["indicator"], "none")
+        self.assertEqual(data["providers"]["codex"]["error"], "網路錯誤")
+        self.assertIsNone(data["providers"]["codex"]["indicator"])
+        self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
+        self.assertEqual([c[1] for c in self.calls], [{}, {}])  # 不帶任何標頭（密鑰、cookie）
+        self.assertEqual([c[0] for c in self.calls], ["https://status.claude.com/api/v2/summary.json",
+                                                      "https://status.openai.com/api/v2/summary.json"])
+
+    def test_rate_limited_unless_providers_change(self):
+        service_status.update(["claude"], self.path, now=NOW)
+        self.assertFalse(service_status.update(["claude"], self.path, now=NOW + timedelta(seconds=60)))
+        self.assertEqual(len(self.calls), 1)
+        self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW + timedelta(seconds=61)))
+        self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW + timedelta(seconds=61 + 240)))
+        # 時鐘倒退：照常抓取
+        self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW - timedelta(hours=1)))
+
+    def test_unknown_providers_are_ignored(self):
+        service_status.update(["claude", "gemini"], self.path, now=NOW)
+        self.assertEqual(list(json.loads(self.path.read_text())["providers"]), ["claude"])
+
+    def test_update_safely_logs_class_only(self):
+        err = io.StringIO()
+        with mock.patch.object(service_status, "_write", side_effect=PermissionError("/secret/path")), redirect_stderr(err):
+            service_status.update_safely(["claude"], self.path)
+        self.assertIn("PermissionError", err.getvalue())
+        self.assertNotIn("/secret/path", err.getvalue())
