@@ -83,6 +83,17 @@ import Testing
         #expect(TokenSummary(data: data, scope: .claude, now: now, calendar: cal).currentStreak == 4)
     }
 
+    @Test func streakLongerThanAYear() {
+        // record_days 不受保留期間與圖表範圍限制：連續 400 天
+        var days: [String: [String: Int64]] = [:]
+        for back in 0..<400 {
+            days[TokenCalendar.key(now.addingTimeInterval(-Double(back) * 86400), calendar: cal)] = ["claude": 1]
+        }
+        let data = TokenStatsData(recordDays: days, retentionDays: 7)
+        #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).currentStreak == 400)
+        #expect(TokenSummary(data: data, scope: .codex, now: now, calendar: cal).currentStreak == 0)
+    }
+
     @Test func activityBars() {
         let data = TokenStatsData(days: [
             row("2026-11-05", main: 40), row("2026-11-05", "codex", main: 60, model: "gpt-6.1-sol"),

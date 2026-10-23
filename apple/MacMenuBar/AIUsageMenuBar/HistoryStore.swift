@@ -433,7 +433,7 @@ extension HistoryStore {
         let since = tokenDay(now.addingTimeInterval(-TimeInterval(tokenLookbackDays) * 86400))
         guard let days = tokenDays(db, device: device, since: since),
               let records = tokenRecords(db),
-              let recordDays = tokenRecordDays(db, since: since) else { return nil }
+              let recordDays = tokenRecordDays(db) else { return nil }
         let hours = hourly ? tokenHours(db, device: device) : []
         guard let hours else { return nil }
         let skipped = ["token_bad_lines", "token_long_lines"].compactMap { meta(db, $0).flatMap(Int.init) }.reduce(0, +)
@@ -495,8 +495,9 @@ extension HistoryStore {
         }.map { Dictionary($0, uniquingKeysWith: { a, _ in a }) }
     }
 
-    private nonisolated static func tokenRecordDays(_ db: OpaquePointer, since: String) -> [String: [String: Int64]]? {
-        rows(db, "SELECT day, provider, tokens FROM record_days WHERE day >= ?", [.text(since)]) { stmt -> (String, String, Int64)? in
+    /// 不設下界：目前的連續天數可能比圖表範圍長（每天最多兩列，多年也只有幾千列）
+    private nonisolated static func tokenRecordDays(_ db: OpaquePointer) -> [String: [String: Int64]]? {
+        rows(db, "SELECT day, provider, tokens FROM record_days", []) { stmt -> (String, String, Int64)? in
             guard let day = text(stmt, 0), let provider = text(stmt, 1) else { return nil }
             return (day, provider, sqlite3_column_int64(stmt, 2))
         }.map { list in
