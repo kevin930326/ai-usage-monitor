@@ -19,7 +19,7 @@ struct PanelView: View {
 
     @State private var motion = PanelMotion.settled
     @State private var visible = false
-    @State private var refreshHint = false
+    @State private var refreshHint: RefreshHint?
     @State private var resetSignature: [String: [String: Date]] = [:]
     /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
     @State private var motionGeneration = 0
@@ -44,7 +44,11 @@ struct PanelView: View {
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
             visible: $visible, onVisibleChange: { $0 ? playAppear() : stopAnimations() },
             snapshot: store.snapshot, now: store.now,
-            onSnapshotChange: { detectResets(old: $0, new: $1) },
+            onSnapshotChange: { old, new in
+                // 收集器寫入新資料後，「正在更新」之類的提示就不需要了
+                if old?.updatedAt != new?.updatedAt { refreshHint = nil }
+                detectResets(old: old, new: new)
+            },
             onDebugAction: debugAction
         )
     }
@@ -139,10 +143,10 @@ struct PanelView: View {
 
     @ViewBuilder
     private var footer: some View {
-        if refreshHint {
-            Text("資料沒有變化；收集器每 5 分鐘更新一次")
+        if let refreshHint {
+            Text(refreshHint.text)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(refreshHint.isProblem ? UsageColors.notice : .secondary)
                 .transition(.opacity)
         }
         if let error = store.errorMessage {
@@ -160,14 +164,18 @@ struct PanelView: View {
 
     // MARK: - 動作與動畫
 
+    /// 重讀 usage.json，並請 launchd 立即執行收集器（FR-50；60 秒內一次、24 小時最多 100 次）。
+    /// 收集器寫完後資料夾監看會自動重讀，不需要輪詢。
     private func refresh() {
         let before = store.snapshot?.updatedAt
         store.reload()
-        let unchanged = store.snapshot?.updatedAt == before && store.errorMessage == nil
-        guard animates else {
-            refreshHint = unchanged
-            return
+        let changed = store.snapshot?.updatedAt != before
+        Task {
+            let outcome = await CollectorTrigger.shared.trigger(usesCustomHome: store.usesCustomHome)
+            let hint = changed ? nil : RefreshHint(outcome)
+            withAnimation(animates ? PanelTiming.reducedFade : nil) { refreshHint = hint }
         }
+        guard animates else { return }
         let generation = motionGeneration
         withAnimation(PanelTiming.refreshSpin) {
             motion.refreshTurns += 1
@@ -176,7 +184,6 @@ struct PanelView: View {
             guard generation == motionGeneration else { return }
             withAnimation(PanelTiming.dotFlash) { motion.dotFlash = 1 } completion: { motion.dotFlash = 0 }
         }
-        withAnimation(PanelTiming.reducedFade) { refreshHint = unchanged }
     }
 
     private func showSettings() {
@@ -205,7 +212,7 @@ struct PanelView: View {
         motionGeneration += 1
         withTransaction(transaction) {
             motion = .settled
-            refreshHint = false
+            refreshHint = nil
         }
     }
 
