@@ -108,7 +108,7 @@
 按下時做兩件事：
 
 1. 立即重新讀取 `usage.json`（同現在）。
-2. 以 `launchctl kickstart gui/<uid>/io.github.kevin930326.ai-usage-monitor` 讓收集器立即執行一次。**60 秒內只觸發一次**：距上次觸發不到 60 秒時只重讀檔案，不再 kickstart（避免連按讓收集器重複執行 `claude -p /usage` 與 `codex app-server`）。收集器寫完新的 `usage.json` 後，App 既有的資料夾監看會自動重讀，不需要輪詢。
+2. 以 `launchctl kickstart gui/<uid>/io.github.kevin930326.ai-usage-monitor` 讓收集器立即執行一次。**60 秒內只觸發一次**：距上次觸發不到 60 秒時只重讀檔案，不再 kickstart（避免連按讓收集器重複執行 `claude -p /usage` 與 `codex app-server`）。另外**最近 24 小時最多 100 次**：收集器每次執行都會上傳一次快照到中繼，Cloudflare KV 免費額度每天 1,000 次寫入，排程本身每天約 288 次，100 次讓總數維持在 400 以內；超過時只重讀檔案，頁尾說明「24 小時內手動更新已達 100 次，改為每 5 分鐘自動更新」。兩項限制由 UsageKit 的 `CollectorKickThrottle` 計算，存在 App 的 UserDefaults（重新開 App 不會歸零）。收集器寫完新的 `usage.json` 後，App 既有的資料夾監看會自動重讀，不需要輪詢。
 
 - App 本身仍不連網：連網的是收集器（launchd 工作），App 只是請 launchd 提早執行它。選單列 App 沒有沙盒（只有桌面小工具在沙盒中），可以執行 `/bin/launchctl`。
 - launchd 工作沒有安裝（`launchctl` 回傳錯誤）時只重讀檔案，頁尾提示「收集器未安裝，請執行安裝腳本」；其他失敗只記錄類別，不顯示指令輸出。
@@ -133,7 +133,7 @@
 ## 決定（使用者於 2026-10-23 決定）
 
 1. 「用得太快」的門檻：多 10 個百分點且經過 ≥ 10%（採用建議值，第 4 節）。
-2. 「更新」按鈕：重新讀檔，並以 `launchctl kickstart` 觸發收集器，60 秒內只觸發一次；App 本身仍不連網（第 8 節）。
+2. 「更新」按鈕：重新讀檔，並以 `launchctl kickstart` 觸發收集器，60 秒內只觸發一次；App 本身仍不連網（第 8 節）。實作時另加「24 小時最多 100 次」，保護中繼 KV 的每日寫入額度。
 3. 服務狀態（FR-45）由收集器抓取並寫入本機 `service-status.json`，App 不連網。
 4. 選單列圖示的狀態線索（Codex 審查 C-07）：資料過期改為外圈虛線＋灰色；「只有 %」樣式以符號區分：`↑` 用得太快、`!` 剩不到 20%、`–` 資料過期（第 1 節）。
 

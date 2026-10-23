@@ -63,7 +63,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 | 動態視覺 | SwiftUI 內建動畫，只在面板或統計視窗開啟時執行、尊重「減少動態效果」（FR-25、[ADR-0010](adr/0010-mac-animation-principles.md)）；不用 Metal／SceneKit |
 | 設定視窗 | 選單列圖示樣式、面板區塊的開關與排序（FR-35，[ADR-0008](adr/0008-mac-panel-layout.md)） |
 
-- 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。面板的「更新」按鈕另以 `launchctl kickstart` 請 launchd 提早執行收集器（60 秒內一次，FR-50）；連網的仍只有收集器。
+- 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。面板的「更新」按鈕另以 `launchctl kickstart` 請 launchd 提早執行收集器（60 秒內一次、24 小時最多 100 次，FR-50）；連網的仍只有收集器。
 - 歷史與統計（[ADR-0009](adr/0009-local-history-and-token-stats.md)）：收集器另寫本機 `history.sqlite3`（額度歷史、這台 Mac 的每日 Token 加總），App 唯讀；不上傳。多裝置合併見 [ADR-0011](adr/0011-multi-device-usage.md)。
 - 以「Sign to Run Locally」簽署，不需付費帳號，也沒有 7 天期限。
 
