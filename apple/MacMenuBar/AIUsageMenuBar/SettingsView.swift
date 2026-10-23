@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
 
-/// 設定視窗（FR-35、FR-37、ADR-0008 第 5 節）：選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料。
+/// 設定視窗（FR-35、FR-37、ADR-0008 第 5 節）：登入時自動打開、選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料。
 /// 控制項自己畫（不用 AppKit 的 Toggle／Picker／List），ImageRenderer 才能截圖；鍵盤與 VoiceOver 仍可操作。
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
@@ -24,6 +24,8 @@ struct SettingsView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 22) {
+            LoginItemSection()
+            Divider()
             menuBarSection
             Divider()
             panelSection
