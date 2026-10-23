@@ -4,9 +4,9 @@
 #   scripts/measure-panel-perf.sh [Debug 版 AIUsageMenuBar.app] [輸出資料夾]
 #
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
-# 46 秒時關閉面板，138 秒時再開關一次，約 166 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
+# 49 秒時關閉面板，141 秒時再開關一次，約 169 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
-# 使用假資料（暫存資料夾的 usage.json），不讀真實的 usage.json；設定也用獨立的 demo 設定。
+# 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3），不讀真實資料；設定也用獨立的 demo 設定。
 # 任何一項門檻未通過時以非零結束。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -16,16 +16,8 @@ BIN="$APP/Contents/MacOS/AIUsageMenuBar"
 [ -x "$BIN" ] || { echo "找不到 $BIN（先建置 Debug 版）"; exit 2; }
 mkdir -p "$OUT"
 HOME_DIR=$(mktemp -d)
-python3 - "$HOME_DIR/usage.json" <<'PY'
-import json, sys, datetime as d
-now = d.datetime.now(d.timezone.utc).replace(microsecond=0)
-f = lambda m: (now + d.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
-w = lambda i, l, u, m: {"id": i, "label": l, "used_pct": u, "resets_at": f(m), "hidden": False}
-json.dump({"schema_version": 1, "updated_at": f(-2), "providers": {
-    "claude": {"plan": "Max", "error": None, "windows": [w("five_hour", "5 小時", 73, 120), w("weekly", "每週", 41, 71 * 60)]},
-    "codex": {"plan": "Team", "error": None, "windows": [w("five_hour", "5 小時", 18, 199), w("weekly", "每週", 35, 119 * 60)]},
-}}, open(sys.argv[1], "w"), ensure_ascii=False)
-PY
+# 假的 usage.json 與 7 天的 history.sqlite3（含睡眠空檔與重置），讓走勢、額度消耗等區塊都有東西畫
+python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" normal
 
 AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 "$BIN" 2>"$OUT/app.log" &
 PID=$!
@@ -52,7 +44,7 @@ base = window(o - 6, o)
 rows = [("開啟前（基準）", base, "avg")]
 rows.append(("面板開啟、靜止（開啟後 3～11 秒）", window(o + 3, o + 11), "avg"))
 anims = [("打開面板：圓環＋用量條", "panel-open"), ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
-         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light")]
+         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light")]
 for name, key in anims:
     rows.append((f"播放中：{name}", window(marks[key], marks[key] + 2), "peak"))
 rows.append(("關閉後 60～90 秒", window(c + 60, c + 90), "avg"))
