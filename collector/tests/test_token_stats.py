@@ -213,6 +213,7 @@ class EnumerationTest(TokenStatsTestCase):
         allowed = {
             self.claude_file(): f"claude:{SESSION}",
             self.project / f"{OTHER}.orphaned-1700000000.jsonl": f"claude:{OTHER}.orphaned-1700000000",
+            self.project / f"{SESSION}.superseded-abc_123.jsonl": f"claude:{SESSION}.superseded-abc_123",
             self.project / SESSION / "subagents" / "agent-a1b2c3.jsonl": "claude:agent-a1b2c3",
             self.codex_file(): f"codex:{ROLLOUT}",
             self.codex / "archived_sessions" / f"rollout-2026-01-01T00-00-00-{OTHER}.jsonl": f"codex:{OTHER}",
@@ -236,6 +237,14 @@ class EnumerationTest(TokenStatsTestCase):
             self.codex / "sessions" / "2026" / "09" / f"rollout-x-{OTHER}.jsonl",
             self.codex / "sessions" / "abcd" / "09" / "21" / f"rollout-x-{OTHER}.jsonl",
             self.sessions / f"other-{OTHER}.jsonl",
+            # 檔名不是固定格式（可能含專案或帳號名稱）：不列舉、不寫進資料庫
+            self.project / "customer-secret-project.jsonl",
+            self.project / f"{SESSION}.secret-project.jsonl",
+            self.project / f"{SESSION}.orphaned-secret project.jsonl",
+            self.project / SESSION / "subagents" / "agent-secret-project.jsonl",
+            self.project / SESSION / "subagents" / "helper.jsonl",
+            self.sessions / "rollout-customer-secret-project.jsonl",
+            self.codex / "archived_sessions" / "rollout-2026-01-01.jsonl",
             self.codex / "archived_sessions" / "sub" / f"rollout-x-{OTHER}.jsonl",
         ]
         for p in not_allowed:

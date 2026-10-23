@@ -35,7 +35,11 @@ RECORD_KEYS = ("total_tokens", "best_day_tokens", "longest_task_seconds", "longe
 
 _MODEL_RE = re.compile(r"^(claude-|gpt-|codex-|o[0-9])[a-z0-9._-]*$")
 _UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-_SAFE_STEM = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+# 檔名只接受固定格式（file_key 會寫進資料庫，不能帶出專案或帳號名稱）：
+# Claude 主紀錄 `<uuid>`、同一 session 的舊副本 `<uuid>.orphaned-…`／`<uuid>.superseded-…`、子代理 `agent-<hex>`
+_CLAUDE_MAIN = re.compile(r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+                          r"(?:\.(?:orphaned|superseded)-[0-9A-Za-z_]{1,40})?$")
+_CLAUDE_SUBAGENT = re.compile(r"^agent-[0-9a-f]{1,64}$")
 _DIGITS = {4: re.compile(r"^[0-9]{4}$"), 2: re.compile(r"^[0-9]{2}$")}
 
 _CLAUDE_NEEDLES = (b'"user"',)
@@ -141,18 +145,18 @@ def _subdir(path, name: str) -> str | None:
     return None
 
 
-def _file_key(provider: str, name: str) -> str | None:
+def _file_key(provider: str, name: str, subagent: bool = False) -> str | None:
+    """檔名中的 UUID（或子代理 ID）；格式不符的檔案不讀。"""
     stem = name[: -len(".jsonl")]
     if provider == "codex":
         ids = _UUID_RE.findall(stem)
-        if ids:
-            return "codex:" + ids[-1].lower()
-    if _SAFE_STEM.match(stem):
-        return f"{provider}:{stem}"
-    return None  # 檔名有其他字元：不讀（file_key 不能帶出其他內容）
+        return "codex:" + ids[-1].lower() if ids else None
+    if subagent:
+        return f"claude:{stem}" if _CLAUDE_SUBAGENT.match(stem) else None
+    return f"claude:{stem}" if _CLAUDE_MAIN.match(stem) else None
 
 
-def _claude_candidates(root: Path) -> Iterable[os.DirEntry]:
+def _claude_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
     projects = _subdir(root, "projects")
     if projects is None:
         return
@@ -161,21 +165,21 @@ def _claude_candidates(root: Path) -> Iterable[os.DirEntry]:
             continue
         for entry in _entries(project.path):
             if _is_file(entry) and entry.name.endswith(".jsonl"):
-                yield entry  # <claude>/projects/*/<uuid>.jsonl（含 .orphaned-／.superseded- 副本）
+                yield entry, False  # <claude>/projects/*/<uuid>.jsonl（含 .orphaned-／.superseded- 副本）
             elif _is_dir(entry):
                 subagents = _subdir(entry.path, "subagents")
                 if subagents is None:
                     continue  # tool-results 等其他子資料夾不讀
                 for sub in _entries(subagents):
                     if _is_file(sub) and sub.name.endswith(".jsonl"):
-                        yield sub
+                        yield sub, True
 
 
-def _codex_candidates(root: Path) -> Iterable[os.DirEntry]:
+def _codex_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
     def rollouts(path):
         for entry in _entries(path):
             if _is_file(entry) and entry.name.startswith("rollout-") and entry.name.endswith(".jsonl"):
-                yield entry
+                yield entry, False
 
     sessions = _subdir(root, "sessions")
     if sessions is not None:
@@ -198,8 +202,8 @@ def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
     files: dict[str, LogFile] = {}
     for provider, candidates in (("claude", _claude_candidates(dirs["claude"])),
                                  ("codex", _codex_candidates(dirs["codex"]))):
-        for entry in candidates:
-            key = _file_key(provider, entry.name)
+        for entry, subagent in candidates:
+            key = _file_key(provider, entry.name, subagent)
             if key is None:
                 continue
             try:
