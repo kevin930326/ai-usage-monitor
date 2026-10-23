@@ -24,37 +24,16 @@ enum UsageActivityConfiguration {
             let stale = state.isStale()
             let tightest = state.tightest()
             return DynamicIsland {
+                // 展開版面總高要在系統上限（約 160pt）內：只放剩餘最少的額度、各服務一行的 % 與細進度條、
+                // 一行更新時間；更新按鈕在右上。各區另加內距，避免文字碰到動態島的圓角（Shared/ActivityViews.swift）
                 DynamicIslandExpandedRegion(.leading) {
-                    if let tightest {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("\(ProviderInfo.displayName(tightest.provider)) · \(tightest.window.label)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            PercentText(item: tightest, mode: state.mode, stale: stale, size: 28)
-                        }
-                    }
+                    IslandLeading(state: state, now: .now)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    if let tightest {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(state.mode.label)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            ResetLabel(window: tightest.window, now: .now)
-                                .font(.caption)
-                        }
-                    }
+                    IslandTrailing(state: state, now: .now) { RefreshButton() }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 6) {
-                        if state.providers.isEmpty {
-                            NoProvidersNotice()
-                        }
-                        ForEach(state.providers) { provider in
-                            ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: .now)
-                        }
-                        ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError) { RefreshButton() }
-                    }
+                    IslandBottom(state: state, stale: stale, now: .now)
                 }
             } compactLeading: {
                 if let tightest {
