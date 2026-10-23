@@ -31,14 +31,14 @@ enum PanelSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .ring: "最吃緊的額度"
+        case .ring: "主圓環"
         case .quota: "額度"
         }
     }
 
     var detail: String {
         switch self {
-        case .ring: "雙圓環、剩餘 %、重置倒數與用量節奏"
+        case .ring: "剩餘最少的額度：雙圓環、剩餘 %、重置倒數與用量節奏"
         case .quota: "各服務的 5 小時與每週額度"
         }
     }

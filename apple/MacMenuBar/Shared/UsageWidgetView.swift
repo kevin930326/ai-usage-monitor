@@ -19,7 +19,7 @@ struct UsageWidgetView: View {
         }
     }
 
-    /// 小：最吃緊的一項大字。
+    /// 小：剩餘最少的額度大字。
     private var small: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let item = snapshot.tightestWindow(at: now) {

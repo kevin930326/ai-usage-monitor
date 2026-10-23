@@ -50,7 +50,7 @@ struct HomeView: View {
                     .buttonStyle(.borderedProminent)
             }
         } else if let snapshot = model.snapshot {
-            // 過期、已重置、百分比與最吃緊的一項都依時間計算；畫面停在前景時沒有其他狀態變化也每分鐘重算
+            // 過期、已重置、百分比與剩餘最少的額度都依時間計算；畫面停在前景時沒有其他狀態變化也每分鐘重算
             // （FR-11、FR-26）。TimelineView 在 App 進入背景後不會更新
             TimelineView(.everyMinute) { context in
                 UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode, now: context.date)
@@ -89,7 +89,8 @@ private struct UsageList: View {
             }
 
             if let tightest = snapshot.tightestWindow(at: now) {
-                Section("最吃緊") {
+                // 不加「剩餘最少」之類的標題：卡片上的服務圖示＋名稱已經說明是哪一項
+                Section {
                     TightestCard(item: tightest, mode: mode, dimmed: stale, now: now)
                 }
             }
@@ -123,8 +124,11 @@ private struct TightestCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
+            HStack(alignment: .center, spacing: 6) {
+                ProviderIcon(item.provider)
+                    .foregroundStyle(dimmed ? Color.gray : UsageColors.provider(item.provider))
+                    .frame(width: 16, height: 16)
+                Text(item.displayName)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -132,9 +136,11 @@ private struct TightestCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityHidden(true)
             Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
                 .font(.system(size: 44, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(dimmed ? .secondary : .primary)
+                .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: mode, at: now))
             UsageWindowRow(window: item.window, provider: item.provider, display: mode, dimmed: dimmed, now: now)
         }
         .padding(.vertical, 4)

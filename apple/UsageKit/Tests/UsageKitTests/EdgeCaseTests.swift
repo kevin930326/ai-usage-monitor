@@ -123,7 +123,7 @@ import Testing
         #expect([utc, taipei, newYork].allSatisfy { $0.isReset(at: justAfter) })
     }
 
-    // MARK: 最吃緊（FR-15）
+    // MARK: 剩餘最少的額度（FR-15）
 
     @Test func tiedResetWindowsPickEarlierReset() {
         let snap = snapshot(updatedAt: now, [

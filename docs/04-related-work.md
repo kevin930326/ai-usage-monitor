@@ -23,7 +23,7 @@
 | [CodeZeno/Claude-Code-Usage-Monitor](https://github.com/CodeZeno/Claude-Code-Usage-Monitor) | 629 | Windows 工作列 | 7 家 | 多服務、多帳號架構 |
 | [f-is-h/Usage4Claude](https://github.com/f-is-h/Usage4Claude) | 410 | Mac 選單列 | Claude、Codex | 隱私與安全章節完整，明列所有網路請求 |
 | [richhickson/claudecodeusage](https://github.com/richhickson/claudecodeusage) | 340 | Mac 選單列 | Claude | 顏色分級、各模型額度、服務中斷通知、喚醒後自動更新 |
-| [zetagao/LimitHUD](https://github.com/zetagao/LimitHUD) | 83 | Mac 浮動視窗 | Claude、Codex | 最吃緊額度置頂、用完時間預測、門檻通知 |
+| [zetagao/LimitHUD](https://github.com/zetagao/LimitHUD) | 83 | Mac 浮動視窗 | Claude、Codex | 剩餘最少的額度置頂、用完時間預測、門檻通知 |
 | [intelQong/claude-usage-iOS-widget](https://github.com/intelQong/claude-usage-iOS-widget) | 0 | iPhone（Scriptable） | Claude | 唯一的 iPhone 方案，以 secret Gist 作為中繼 |
 
 星數為調查當日數據。
@@ -47,7 +47,7 @@ Mac 選單列已有多個成熟專案，因此本專案的 Mac 版（v1.2）不�
 |---|---|---|---|
 | 快照格式加上 `schema_version` | Maciek | ✅ v0.2 | FR-13 |
 | 各模型的每週額度（Opus 等），預設隱藏 | LimitHUD、richhickson | ✅ v0.2 | FR-14 |
-| 最吃緊的額度放最顯眼位置 | LimitHUD | ✅ v0.4 | FR-15 |
+| 剩餘最少的額度放最顯眼位置 | LimitHUD | ✅ v0.4 | FR-15 |
 | 依剩餘比例顯示綠／黃／紅 | LimitHUD、richhickson | ✅ v0.4 | FR-16 |
 | 切換顯示「已用」或「剩餘」 | LimitHUD、CodeZeno | ✅ v0.4 | FR-17 |
 | 用完時間預測（只在早於重置時顯示） | LimitHUD、Maciek | ✅ v1.1 | FR-18 |

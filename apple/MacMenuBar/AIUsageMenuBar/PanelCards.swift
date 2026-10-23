@@ -6,10 +6,13 @@ import UsageKitUI
 // 文字一律 primary／secondary，顏色只用在圓環、進度條、服務圖示與提示文字（設計 skill 第 1 節）。
 
 /// 可收合的卡片：標題列＋內容。收合動畫結束後移除內容視圖，不再計算或播放動畫。
-struct PanelCard<Content: View>: View {
+/// 標題列可以是文字（`title:`），或能用圖示＋名稱表達時直接放內容（`header:`，例如主圓環卡片）。
+struct PanelCard<Header: View, Content: View>: View {
     let id: String
-    let title: String
+    /// VoiceOver 讀的標題
+    let accessibilityTitle: String
     @Binding var collapsed: Bool
+    @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
 
     @Environment(\.panelAnimates) private var animates
@@ -28,9 +31,7 @@ struct PanelCard<Content: View>: View {
                 toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    header()
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
@@ -40,7 +41,7 @@ struct PanelCard<Content: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(title)
+            .accessibilityLabel(accessibilityTitle)
             .accessibilityValue(collapsed ? "已收合" : "已展開")
             .accessibilityHint("按一下收合或展開")
 
@@ -91,7 +92,44 @@ struct PanelCard<Content: View>: View {
     }
 }
 
-/// 主圓環卡片的內容：最吃緊額度的雙圓環、大數字、服務、重置倒數、用量節奏。
+extension PanelCard where Header == PanelCardTitle {
+    init(id: String, title: String, collapsed: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) {
+        self.init(id: id, accessibilityTitle: title, collapsed: collapsed, header: { PanelCardTitle(text: title) }, content: content)
+    }
+}
+
+/// 一般卡片的文字標題（secondary）
+struct PanelCardTitle: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// 主圓環卡片的標題列：不加「剩餘最少」之類的標題文字，只放服務圖示＋服務名稱＋額度名稱（「Claude 每週」）。
+/// 收合時也留著，看得出收起來的是哪一項。
+struct RingCardHeader: View {
+    let item: ProviderWindow
+    let stale: Bool
+
+    @Environment(\.panelMotion) private var motion
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProviderIcon(item.provider)
+                .foregroundStyle(stale ? AnyShapeStyle(UsageColors.stale) : AnyShapeStyle(UsageColors.provider(item.provider)))
+                .frame(width: 15, height: 15)
+                .modifier(GlowEffect(progress: motion.glow[item.provider] ?? 0, color: UsageColors.provider(item.provider)))
+            Text(item.displayName)
+                .font(.callout.weight(.semibold))
+        }
+    }
+}
+
+/// 主圓環卡片的內容：剩餘最少的額度的雙圓環、大數字、重置倒數、用量節奏（服務與額度名稱在標題列）。
 struct RingCardContent: View {
     let item: ProviderWindow
     let stale: Bool
@@ -114,21 +152,16 @@ struct RingCardContent: View {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    ProviderIcon(item.provider)
-                        .foregroundStyle(stale ? AnyShapeStyle(UsageColors.stale) : AnyShapeStyle(UsageColors.provider(item.provider)))
-                        .frame(width: 15, height: 15)
-                        .modifier(GlowEffect(progress: motion.glow[item.provider] ?? 0, color: UsageColors.provider(item.provider)))
-                    Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
-                        .font(.callout.weight(.semibold))
-                }
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     RollingPercent(value: remaining * motion.appear, font: .system(size: 40, weight: .bold, design: .rounded))
                     Text("%").font(.title3.weight(.semibold))
                 }
                 .foregroundStyle(stale ? .secondary : .primary)
+                // 畫面上不寫「剩餘最少」，VoiceOver 仍要說清楚這是哪一項
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.leastRemainingAccessibilityLabel(at: now))
                 HStack(spacing: 4) {
-                    Text("剩餘 ·")
+                    Text("剩餘 ·").accessibilityHidden(true)
                     PanelResetText(window: item.window, now: now)
                 }
                 .font(.caption)

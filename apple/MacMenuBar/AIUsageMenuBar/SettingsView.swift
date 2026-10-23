@@ -52,9 +52,9 @@ struct SettingsView: View {
         }
     }
 
-    /// 自動（最吃緊）＋目前快照中每個服務的每個可見額度
+    /// 自動（剩最少的）＋目前快照中每個服務的每個可見額度
     private var windowChoices: [(MenuBarWindowChoice, String)] {
-        var choices: [(MenuBarWindowChoice, String)] = [(.automatic, "自動（最吃緊）")]
+        var choices: [(MenuBarWindowChoice, String)] = [(.automatic, "自動（剩最少的）")]
         if let snapshot = store.snapshot {
             for key in snapshot.orderedProviderKeys {
                 for window in snapshot.providers[key]?.visibleWindows ?? [] {
@@ -63,7 +63,7 @@ struct SettingsView: View {
             }
         }
         if case .specific = settings.iconWindow, !choices.contains(where: { $0.0 == settings.iconWindow }) {
-            // 指定的額度目前不存在（服務停用或改名）：圖示已退回最吃緊，這裡仍列出讓使用者看得到
+            // 指定的額度目前不存在（服務停用或改名）：圖示已退回剩餘最少的額度，這裡仍列出讓使用者看得到
             choices.append((settings.iconWindow, "\(settings.iconWindow.rawValue)（目前沒有資料）"))
         }
         return choices
@@ -71,7 +71,8 @@ struct SettingsView: View {
 
     private var previewContent: MenuBarIconContent? {
         guard let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) else { return nil }
-        return MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now)
+        return MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
+                                  isLeast: settings.iconWindow == .automatic)
     }
 
     // MARK: - 面板區塊

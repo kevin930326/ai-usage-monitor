@@ -1,9 +1,20 @@
 import Foundation
 
-/// 某個服務的某個額度，用來表示「最吃緊的額度」。
+/// 某個服務的某個額度，用來表示「剩餘最少的額度」（`tightestWindow(at:)`）。
 public struct ProviderWindow: Equatable, Sendable {
     public var provider: String
     public var window: UsageWindow
+
+    /// 畫面上代表這一項的名稱：服務名稱＋額度名稱，例如「Claude 每週」。
+    /// 能用服務圖示＋這個名稱表達時，不另外加「剩餘最少」之類的標題。
+    public var displayName: String { "\(ProviderInfo.displayName(provider)) \(window.label)" }
+
+    /// VoiceOver 用的完整說法：「剩餘最少的額度：Claude 每週，剩 67%」（已用模式為「已用 33%」）。
+    /// 畫面上只放圖示＋名稱，輔助說明仍要說清楚這是剩餘最少的一項。
+    public func leastRemainingAccessibilityLabel(mode: UsageDisplayMode = .remaining, at now: Date) -> String {
+        let pct = Int(window.displayedPct(mode, at: now).rounded())
+        return "剩餘最少的額度：\(displayName)，\(mode == .remaining ? "剩" : "已用") \(pct)%"
+    }
 }
 
 public extension UsageSnapshot {

@@ -81,7 +81,7 @@ public enum MenuBarState: Hashable, Sendable {
     }
 }
 
-/// 選單列圖示要顯示哪個額度：自動（最吃緊）或指定「服務/額度 id」。
+/// 選單列圖示要顯示哪個額度：自動（剩最少的）或指定「服務/額度 id」。
 public enum MenuBarWindowChoice: Hashable, Sendable {
     case automatic
     case specific(provider: String, windowID: String)
@@ -100,7 +100,7 @@ public enum MenuBarWindowChoice: Hashable, Sendable {
 }
 
 public extension UsageSnapshot {
-    /// 依選擇取額度；指定的額度不存在、被隱藏或服務有錯誤時退回最吃緊的一項，不顯示空白圖示。
+    /// 依選擇取額度；指定的額度不存在、被隱藏或服務有錯誤時退回剩餘最少的額度，不顯示空白圖示。
     func window(for choice: MenuBarWindowChoice, at now: Date) -> ProviderWindow? {
         if case let .specific(provider, windowID) = choice,
            let usage = providers[provider], usage.error == nil,

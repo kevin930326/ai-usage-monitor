@@ -51,14 +51,14 @@ Live Activity 以 `.supplementalActivityFamilies([.small])` 提供手錶版面�
 ### 2.5 共用套件 UsageKit (`apple/UsageKit/`)
 Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台加入 watchOS）：
 - `UsageSnapshot` 等資料模型與 JSON 解析（含 `schema_version` 檢查）
-- 最吃緊額度的挑選邏輯、顏色規則與色值（FR-15、FR-16）
+- 剩餘最少的額度的挑選邏輯、顏色規則與色值（FR-15、FR-16）
 - 共用的 SwiftUI 元件：額度進度條、重置倒數
 
 ### 2.6 Mac 選單列 App (`apple/MacMenuBar/`，v1.2)
 | 部分 | 作用 |
 |---|---|
-| 選單列圖示 | `MenuBarExtra` 顯示最吃緊額度的 % 與顏色（FR-21） |
-| 面板 | `.window` 樣式，單一長版、卡片式：最吃緊的額度、所有額度與預期進度、倒數、更新時間；區塊可開關、排序、收合（FR-22、FR-34～FR-36）；走勢與統計見 ADR-0008 的階段 |
+| 選單列圖示 | `MenuBarExtra` 顯示剩餘最少的額度的 % 與顏色（FR-21） |
+| 面板 | `.window` 樣式，單一長版、卡片式：剩餘最少的額度、所有額度與預期進度、倒數、更新時間；區塊可開關、排序、收合（FR-22、FR-34～FR-36）；走勢與統計見 ADR-0008 的階段 |
 | 桌面小工具 | WidgetKit Extension（FR-24） |
 | 動態視覺 | SwiftUI 內建動畫，只在面板或統計視窗開啟時執行、尊重「減少動態效果」（FR-25、[ADR-0010](adr/0010-mac-animation-principles.md)）；不用 Metal／SceneKit |
 | 設定視窗 | 選單列圖示樣式、面板區塊的開關與排序（FR-35，[ADR-0008](adr/0008-mac-panel-layout.md)） |
@@ -70,7 +70,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 ### 2.7 Apple Watch (`apple/WatchApp/`，v1.4)
 | 部分 | 作用 |
 |---|---|
-| 錶面複雜功能 | WidgetKit `accessoryCircular`／`accessoryRectangular`／`accessoryInline`，顯示最吃緊額度的剩餘 % 與顏色（FR-28） |
+| 錶面複雜功能 | WidgetKit `accessoryCircular`／`accessoryRectangular`／`accessoryInline`，顯示剩餘最少的額度的剩餘 % 與顏色（FR-28） |
 | 手錶 App | 列出所有可見額度與重置倒數（FR-29） |
 | 設定同步 | 手錶 App 開啟時以 WatchConnectivity 的 `sendMessage` 向 iPhone 要中繼網址與讀取密鑰（iPhone 儲存時若手錶 App 開著也會推送），手錶存入自己的 Keychain（FR-30）；不用 application context，系統不另存副本 |
 
