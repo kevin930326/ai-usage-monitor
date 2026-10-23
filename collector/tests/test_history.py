@@ -98,6 +98,27 @@ class SchemaTest(HistoryTestCase):
         self.assertIsNotNone(history.meta(conn, "device_id"))
         conn.close()
 
+    def test_prerelease_v2_without_record_days_is_repaired(self):
+        # 開發中的版本 2 沒有 record_days：重新開啟時補建，並以這台 Mac 的每日資料回填
+        conn = history.connect(self.path)
+        device = history.meta(conn, "device_id")
+        conn.execute("DROP TABLE record_days")
+        rows = [(device, "2026-09-20", "claude", "m", 10, 20, 999, 30), (device, "2026-09-20", "claude", "n", 1, 0, 0, 1),
+                (device, "2026-09-21", "codex", "m", 5, 0, 0, 5), ("other-mac", "2026-09-20", "claude", "m", 100, 0, 0, 0)]
+        conn.executemany("INSERT INTO daily_tokens (device_id, day, provider, model, input_tokens, cache_write_tokens,"
+                         " cache_read_tokens, output_tokens, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)", rows)
+        conn.close()
+        conn = history.connect(self.path)
+        self.assertEqual(conn.execute("SELECT day, provider, tokens FROM record_days ORDER BY day").fetchall(),
+                         [("2026-09-20", "claude", 62), ("2026-09-21", "codex", 10)])
+        conn.close()
+        # 已經有 record_days：不再回填（之後的掃描自己累加）
+        with self.db() as c:
+            c.execute("UPDATE record_days SET tokens = 1")
+        history.connect(self.path).close()
+        with self.db() as c:
+            self.assertEqual({r[0] for r in c.execute("SELECT tokens FROM record_days")}, {1})
+
     def test_newer_schema_is_left_untouched(self):
         with self.db() as c:
             c.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
