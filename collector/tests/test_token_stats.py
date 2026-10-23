@@ -553,7 +553,7 @@ class CodexTest(TokenStatsTestCase):
         self.scan()
         self.assertEqual(self.totals("codex")[:4], (40, 0, 0, 4))
         # 換成新的檔案（不同 inode、mtime 倒退）
-        os.unlink(self.codex_file())
+        os.rename(self.codex_file(), Path(self.dir.name) / "moved-away.jsonl")
         self.write(self.codex_file(), codex_turn(), codex_record("r1", T0, inp=9, out=1), codex_record("r2", T0, inp=1, out=1))
         os.utime(self.codex_file(), (T0 - DAY, T0 - DAY))
         self.scan()
@@ -572,11 +572,12 @@ class CodexTest(TokenStatsTestCase):
         with mock.patch.object(token_stats.os, "open", side_effect=PermissionError("denied")):
             self.scan()
         self.assertEqual({t: self.table(t) for t in before}, before)
-        # 列舉之後被換成另一個檔案（inode 不同）
+        # 列舉之後被換成另一個檔案（inode 不同）。舊檔移到紀錄資料夾外而不是刪除：
+        # Linux 會立刻重用剛釋放的 inode，新檔可能與列舉到的檔案 inode 相同
         real_list = token_stats.list_files
         def swapped(dirs):
             files = real_list(dirs)
-            os.unlink(self.codex_file())
+            os.rename(self.codex_file(), Path(self.dir.name) / "moved-away.jsonl")
             self.write(self.codex_file(), codex_count(T0, inp=5, out=5))
             return files
         with mock.patch.object(token_stats, "list_files", side_effect=swapped):
