@@ -1,3 +1,6 @@
+"""HTTP 用戶端，只用來上傳快照到自己的中繼 API（relay.py）。
+
+收集器不直接呼叫任何服務的用量端點（ADR-0006、ADR-0007），這裡唯一帶的密鑰是中繼的上傳密鑰。"""
 from __future__ import annotations
 
 import json
@@ -66,10 +69,6 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
         raise ProviderError("網路錯誤") from None
     except json.JSONDecodeError:
         raise ProviderError("回應不是 JSON，API 可能已變更") from None
-
-
-def get_json(url: str, headers: dict[str, str], timeout: float = 15) -> dict:
-    return request_json(url, headers, timeout=timeout)
 
 
 def post_json(url: str, headers: dict[str, str], body: dict, timeout: float = 15) -> dict:

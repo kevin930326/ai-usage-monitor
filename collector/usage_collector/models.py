@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 
 # 輸出 JSON 有不相容變更時遞增（FR-13）
 SCHEMA_VERSION = 1
+# 與中繼的 LIMITS.maxPct 相同：更大的值會讓中繼拒收整份快照（連其他服務的資料一起），改在這裡報錯
+MAX_PCT = 1000
+PCT_ERROR = "用量百分比缺少或格式不正確，API 可能已變更"
 
 
 def iso_utc(dt: datetime) -> str:
@@ -23,11 +26,16 @@ def parse_iso(value: str) -> datetime:
 def parse_pct(value: object) -> float:
     """API 回應中的使用百分比。缺少、null 或不是有限的非負數時報錯：
     不能當成 0（畫面會顯示「完全沒用」），NaN 也會讓輸出的 JSON 不合法。
-    超過 100（超額）照實傳出，顯示端會限制在 0～100。"""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) \
-            or not math.isfinite(value) or value < 0:
-        raise ProviderError("用量百分比缺少或格式不正確，API 可能已變更")
-    return float(value)
+    超過 100（超額）照實傳出，顯示端會限制在 0～100；超過 MAX_PCT 視為格式不正確。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ProviderError(PCT_ERROR)
+    try:
+        pct = float(value)  # 超大的整數（10**400）轉不成 float：同樣是格式不正確
+    except OverflowError:
+        raise ProviderError(PCT_ERROR) from None
+    if not math.isfinite(pct) or not 0 <= pct <= MAX_PCT:
+        raise ProviderError(PCT_ERROR)
+    return pct
 
 
 @dataclass

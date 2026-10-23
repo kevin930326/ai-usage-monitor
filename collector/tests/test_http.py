@@ -5,7 +5,7 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from usage_collector.http import get_json, post_json
+from usage_collector.http import post_json, request_json
 from usage_collector.models import ProviderError
 
 
@@ -74,7 +74,7 @@ class RedirectTest(unittest.TestCase):
     def test_cross_origin_redirect_does_not_forward_token(self):
         self.origin.routes["/usage"] = f"{self.other.origin}/steal"
         with self.assertRaises(ProviderError) as ctx:
-            get_json(f"{self.origin.origin}/usage", self.headers)
+            request_json(f"{self.origin.origin}/usage", self.headers)
         self.assertNotIn("secret-token", str(ctx.exception))
         self.assertEqual(self.other.seen, [])
 
@@ -88,19 +88,19 @@ class RedirectTest(unittest.TestCase):
         # 同一台主機、不同 port 仍是不同來源
         self.origin.routes["/usage"] = self.other.origin.replace("127.0.0.1", "localhost") + "/steal"
         with self.assertRaises(ProviderError):
-            get_json(f"{self.origin.origin}/usage", self.headers)
+            request_json(f"{self.origin.origin}/usage", self.headers)
         self.assertEqual(self.other.seen, [])
 
     def test_same_origin_redirect_is_followed(self):
         self.origin.routes["/usage"] = "/usage/"
-        self.assertEqual(get_json(f"{self.origin.origin}/usage", self.headers), {"path": "/usage/"})
+        self.assertEqual(request_json(f"{self.origin.origin}/usage", self.headers), {"path": "/usage/"})
         self.assertEqual(self.origin.seen[-1], ("/usage/", "Bearer secret-token"))
 
     def test_redirect_loop_is_an_error(self):
         self.origin.routes["/a"] = "/b"
         self.origin.routes["/b"] = "/a"
         with self.assertRaises(ProviderError):
-            get_json(f"{self.origin.origin}/a", self.headers)
+            request_json(f"{self.origin.origin}/a", self.headers)
 
 
 

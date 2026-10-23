@@ -1,62 +1,238 @@
-"""Codex provider。
+"""Codex provider（ADR-0007）。
 
-token 來源：Codex CLI 登入後的 ~/.codex/auth.json。
-用量來源：Codex 使用的 ChatGPT 非公開端點。
+執行未修改的 Codex CLI：`codex app-server --listen stdio://` 是 Codex 給桌面 App、編輯器外掛使用的本機介面
+（標準輸入輸出上一行一個 JSON-RPC 訊息）。收集器只送 `initialize` 與 `account/rateLimits/read`：
+不開對話、不呼叫模型、不消耗額度。收集器不讀取 Codex 的登入檔、不持有 token、不直接呼叫用量端點；
+token 的讀取與續期都由 Codex CLI 自己完成。
+
+app-server 標示為 experimental，回應格式沒有保證：只取認得的欄位，格式不對時整個視為格式改變，
+不猜測、不把缺少的欄位當成 0%。回應含帳號 ID 等資料，除了額度與方案名稱一律不保留；
+app-server 的 stderr 直接丟棄，錯誤訊息不帶出它的內容，不會進入日誌或快照。
 """
 from __future__ import annotations
 
 import json
+import os
+import re
+import selectors
+import signal
+import subprocess
+import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..http import get_json
+from .. import __version__, paths
 from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
-AUTH_PATH = Path.home() / ".codex" / "auth.json"
-USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+APP_SERVER_ARGS = ("app-server", "--listen", "stdio://")
+# ChatGPT.app 內附的 Codex CLI：安裝腳本沒寫入 codex_path 時（舊安裝）也找得到
+FALLBACK_PATHS = ("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",)
+TIMEOUT = 30  # 秒，整段對話；正常約 0.7 秒
+MAX_WINDOW_MINUTES = 366 * 24 * 60  # 更長的額度長度視為格式改變（window id 也不會超過中繼的長度上限）
+CLOSE_TIMEOUT = 3  # 關閉 stdin 後等 app-server 自己結束的秒數，超過就強制結束
+MAX_OUTPUT = 1024 * 1024  # 讀取的位元組上限，避免異常輸出吃光記憶體
 
-PLAN_NAMES = {"pro": "Pro", "plus": "Plus", "team": "Team", "business": "Business", "free": "Free"}
+FORMAT_CHANGED = "Codex app-server 的回應格式已改變，請更新收集器"
+
+PLAN_NAMES = {"pro": "Pro", "plus": "Plus", "team": "Team", "business": "Business", "free": "Free",
+              "go": "Go", "enterprise": "Enterprise", "edu": "Edu"}
+# 不在對照表的方案（prolite、edu_plus …）轉成 `Prolite`、`Edu Plus`；其他字元或太長時不顯示方案名稱
+PLAN_RE = re.compile(r"^[a-z0-9_]{1,32}$")
 
 
-def read_tokens(path: Path = AUTH_PATH) -> dict:
-    try:
-        tokens = json.loads(path.read_text())["tokens"]
-        return {"access_token": tokens["access_token"], "account_id": tokens["account_id"]}
-    except FileNotFoundError:
-        raise ProviderError("尚未登入 Codex CLI") from None
-    except (json.JSONDecodeError, KeyError, TypeError):
-        raise ProviderError("無法讀取 Codex 登入資訊") from None
+def resolve_codex_path(config_path: Path | None = None) -> str | None:
+    """config.json 的 codex_path（安裝腳本偵測），手動執行時退回 PATH 與 ChatGPT.app 內附的 codex。"""
+    return paths.resolve_executable("codex_path", "codex", FALLBACK_PATHS, config_path)
 
 
-def window_label(seconds: int) -> tuple[str, str]:
-    if seconds == 7 * 24 * 3600:
+class AppServer:
+    """一次性的 app-server 連線：啟動、依序送出請求並讀取對應的回應，結束時確實關閉。"""
+
+    def __init__(self, path: str):
+        self.deadline = time.monotonic() + TIMEOUT
+        self.buffer = b""
+        self.received = 0
+        self.next_id = 1
+        # 暫存資料夾：不讓 app-server 以收集器的工作目錄當成專案
+        self.cwd = tempfile.TemporaryDirectory(prefix="aum-codex-")
+        # npm 安裝的 codex 是 `#!/usr/bin/env node` 腳本，launchd 的 PATH 只有系統目錄：
+        # 把 codex 所在的資料夾（Homebrew 的 node 也在這）放到最前面
+        env = {**os.environ, "PATH": os.pathsep.join(filter(None, (os.path.dirname(path), os.environ.get("PATH"))))}
+        try:
+            # 自己的 process group：逾時時連同 app-server 可能啟動的子程序一起結束
+            self.proc = subprocess.Popen([path, *APP_SERVER_ARGS], cwd=self.cwd.name, env=env,
+                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                         stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            self.cwd.cleanup()
+            raise ProviderError("無法執行 codex，重新執行 scripts/install-launchd.sh") from None
+        try:
+            self.selector = selectors.DefaultSelector()
+            self.selector.register(self.proc.stdout, selectors.EVENT_READ)
+        except BaseException:
+            self.proc.kill()
+            self.proc.wait()
+            self.proc.stdin.close()
+            self.proc.stdout.close()
+            self.cwd.cleanup()
+            raise
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, *exc):
+        try:
+            self.close()
+        except Exception:
+            if exc_type is None:
+                raise
+            # 已經有錯誤在傳遞中：不讓清理時的錯誤蓋掉原本的錯誤
+
+    def send(self, message: dict) -> None:
+        try:
+            self.proc.stdin.write((json.dumps(message) + "\n").encode())
+            self.proc.stdin.flush()
+        except OSError:  # 含 BrokenPipeError：app-server 已經結束
+            raise ProviderError("Codex app-server 意外結束") from None
+
+    def request(self, method: str, params: dict | None = None) -> dict:
+        """送出請求並等待同一個 id 的回應，回傳整個回應物件（含 result 或 error）。"""
+        request_id = self.next_id
+        self.next_id += 1
+        self.send({"method": method, "id": request_id, "params": params})
+        while True:
+            message = self.read_message()
+            # 沒有 method 的才是回應；通知（沒有 id）與伺服器發來的請求都略過
+            if "method" not in message and message.get("id") == request_id:
+                return message
+
+    def read_message(self) -> dict:
+        while b"\n" not in self.buffer:
+            remaining = self.deadline - time.monotonic()
+            if remaining <= 0 or not self.selector.select(remaining):
+                raise ProviderError(f"Codex app-server 回應逾時（{TIMEOUT:g} 秒）")
+            chunk = os.read(self.proc.stdout.fileno(), 65536)
+            if not chunk:
+                raise ProviderError("Codex app-server 意外結束")
+            self.received += len(chunk)
+            if self.received > MAX_OUTPUT:
+                raise ProviderError(FORMAT_CHANGED)
+            self.buffer += chunk
+        line, _, self.buffer = self.buffer.partition(b"\n")
+        try:
+            message = json.loads(line)
+        except ValueError:  # 含 JSONDecodeError 與 UnicodeDecodeError
+            raise ProviderError(FORMAT_CHANGED) from None
+        if not isinstance(message, dict):
+            raise ProviderError(FORMAT_CHANGED)
+        return message
+
+    def close(self) -> None:
+        """關閉 stdin，app-server 收到 EOF 會自己結束（約 0.05 秒）；等不到就結束整個 process group，
+        不留下背景程序。"""
+        try:
+            self.selector.close()
+            try:
+                self.proc.stdin.close()
+            except OSError:
+                pass
+            for sig in (None, signal.SIGTERM, signal.SIGKILL):
+                if sig is not None:
+                    try:
+                        os.killpg(self.proc.pid, sig)
+                    except OSError:
+                        # 已經結束：沒有這個 group 是 ESRCH；macOS 對只剩殭屍的 group 回 EPERM。照樣 wait 收掉
+                        pass
+                try:
+                    self.proc.wait(CLOSE_TIMEOUT)
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
+        finally:
+            self.proc.stdout.close()
+            self.cwd.cleanup()
+
+
+def result_of(response: dict, failure: str) -> dict:
+    """取出回應的 result。錯誤訊息可能含帳號資訊，不帶出去，只用來判斷是不是沒登入。"""
+    error = response.get("error")
+    if error is not None:
+        message = error.get("message") if isinstance(error, dict) else None
+        if isinstance(message, str) and "authentication required" in message:
+            raise ProviderError("尚未登入 Codex CLI，請在終端機執行 codex login")
+        code = error.get("code") if isinstance(error, dict) else None
+        has_code = isinstance(code, int) and not isinstance(code, bool)
+        raise ProviderError(failure + (f"（代碼 {code}）" if has_code else ""))
+    result = response.get("result")
+    if not isinstance(result, dict):
+        raise ProviderError(FORMAT_CHANGED)
+    return result
+
+
+def window_label(minutes: int) -> tuple[str, str]:
+    if minutes == 7 * 24 * 60:
         return "weekly", "每週"
-    if seconds == 5 * 3600:
+    if minutes == 5 * 60:
         return "five_hour", "5 小時"
-    hours = round(seconds / 3600)
-    return f"{hours}h", f"{hours} 小時"
+    if minutes % 60 == 0:
+        return f"{minutes // 60}h", f"{minutes // 60} 小時"
+    return f"{minutes}m", f"{minutes} 分鐘"
 
 
-def parse(body: dict) -> ProviderUsage:
-    rate_limit = body.get("rate_limit") or {}
+def plan_name(plan: object) -> str | None:
+    if not isinstance(plan, str) or plan == "unknown" or not PLAN_RE.match(plan):
+        return None
+    return PLAN_NAMES.get(plan) or plan.replace("_", " ").title()
+
+
+def parse_window(w: object) -> Window:
+    if not isinstance(w, dict):
+        raise ProviderError(FORMAT_CHANGED)
+    minutes = w.get("windowDurationMins")
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= MAX_WINDOW_MINUTES:
+        raise ProviderError(FORMAT_CHANGED)  # 不知道是哪一種額度：不猜
+    wid, label = window_label(minutes)
+    resets = w.get("resetsAt")
+    if resets is None or resets == 0:
+        resets_at = None  # 舊端點的 0 也是「沒有重置時間」
+    elif isinstance(resets, bool) or not isinstance(resets, int) or resets < 0:
+        raise ProviderError(FORMAT_CHANGED)
+    else:
+        try:
+            resets_at = datetime.fromtimestamp(resets, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            raise ProviderError(FORMAT_CHANGED) from None
+    return Window(wid, label, parse_pct(w.get("usedPercent")), resets_at)
+
+
+def parse(result: dict) -> ProviderUsage:
+    """`account/rateLimits/read` 的 result → ProviderUsage。只讀 `rateLimits`（Codex 的主要額度，
+    與舊的用量端點相同）的 primary／secondary 與 planType；accountId、credits 等欄位不讀取。"""
+    snapshot = result.get("rateLimits")
+    if not isinstance(snapshot, dict):
+        raise ProviderError(FORMAT_CHANGED)
     windows = []
-    for key in ("primary_window", "secondary_window"):
-        w = rate_limit.get(key)
-        if not w:
-            continue
-        wid, label = window_label(int(w["limit_window_seconds"]))
-        resets_at = datetime.fromtimestamp(w["reset_at"], tz=timezone.utc) if w.get("reset_at") else None
-        windows.append(Window(wid, label, parse_pct(w.get("used_percent")), resets_at))
+    for key in ("primary", "secondary"):
+        if snapshot.get(key) is None:
+            continue  # 沒有這個額度：與舊端點回傳 null 時相同，略過
+        window = parse_window(snapshot[key])
+        if any(w.id == window.id for w in windows):
+            raise ProviderError(FORMAT_CHANGED)  # 兩個額度長度相同：不猜哪個才對
+        windows.append(window)
     if not windows:
-        raise ProviderError("回應中沒有用量資料，API 可能已變更")
-    plan = body.get("plan_type")
-    return ProviderUsage(plan=PLAN_NAMES.get(plan, plan), windows=windows)
+        raise ProviderError("Codex 回應中沒有用量資料")
+    return ProviderUsage(plan=plan_name(snapshot.get("planType")), windows=windows)
 
 
 def fetch() -> ProviderUsage:
-    tokens = read_tokens()
-    body = get_json(USAGE_URL, {
-        "Authorization": f"Bearer {tokens['access_token']}",
-        "ChatGPT-Account-Id": tokens["account_id"],
-    })
-    return parse(body)
+    path = resolve_codex_path()
+    if not path:
+        raise ProviderError("找不到 codex 執行檔，重新執行 scripts/install-launchd.sh")
+    with AppServer(path) as server:
+        result_of(server.request("initialize", {
+            "clientInfo": {"name": "ai_usage_monitor", "title": "AI Usage Monitor", "version": __version__},
+        }), "Codex app-server 初始化失敗")
+        server.send({"method": "initialized", "params": {}})
+        result = result_of(server.request("account/rateLimits/read"), "Codex app-server 查詢額度失敗")
+    return parse(result)

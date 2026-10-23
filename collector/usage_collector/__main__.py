@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import sys
 from datetime import datetime, timezone
 
@@ -67,4 +68,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # launchd 停止工作時送 SIGTERM：轉成 SystemExit，讓 provider 的清理（關閉 codex app-server）照常執行
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(128 + signal.SIGTERM))
     sys.exit(main())

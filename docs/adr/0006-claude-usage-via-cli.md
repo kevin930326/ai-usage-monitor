@@ -145,6 +145,8 @@ Current week (Fable): 0% used · resets Oct 28 at 7am (Asia/Taipei)
 
 ## 附錄：Codex 是否有類似的本機指令（只調查，不實作）
 
+> 後續：已依這份調查改用 `codex app-server`，見 [ADR-0007](0007-codex-usage-via-app-server.md)。
+
 現有 Codex provider 讀 `~/.codex/auth.json` 呼叫 `https://chatgpt.com/backend-api/wham/usage`，本 ADR 不修改。調查 Codex CLI 0.163.0-alpha.10.2（隨 ChatGPT.app 安裝在 `/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`）：
 
 | 候選 | 結果 |

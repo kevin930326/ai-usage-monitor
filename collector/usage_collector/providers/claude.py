@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -42,16 +41,8 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def resolve_claude_path(config_path: Path | None = None) -> str | None:
-    """安裝腳本把偵測到的完整路徑寫進 config.json 的 claude_path（launchd 的 PATH 找不到 claude）；
-    手動執行時退回 PATH。"""
-    try:
-        path = json.loads((config_path or paths.CONFIG_PATH).read_text()).get("claude_path")
-    except (FileNotFoundError, json.JSONDecodeError, AttributeError):
-        path = None
-    if not isinstance(path, str):
-        path = None  # config.json 被改成別的型別時當成沒設定，不讓 os.access 丟 TypeError
-    path = path or shutil.which("claude")
-    return path if path and os.access(path, os.X_OK) else None
+    """config.json 的 claude_path（安裝腳本偵測），手動執行時退回 PATH。"""
+    return paths.resolve_executable("claude_path", "claude", config_path=config_path)
 
 
 def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:

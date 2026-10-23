@@ -62,14 +62,14 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 ## 隱私與安全
 
-原則：收集器**不讀取 Claude Code 的 token**，Claude 用量由 Claude Code 自己的 `/usage` 指令取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)）；Codex 的 OAuth token **只在 Mac 上使用、不會上傳**（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
+原則：收集器**不讀取任何服務的 token**：Claude 用量由 Claude Code 自己的 `/usage` 指令取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)），Codex 用量由 Codex CLI 自己的 `codex app-server` 取得（[ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)），token 只由各自的 CLI 在 Mac 上使用（NFR-1）；上傳到雲端的只有用量百分比與重置時間；中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
 
 ### 網路請求
 
 | 發出者 | 目的地 | 認證 | 傳送／取得的內容 | 時機 |
 |---|---|---|---|---|
 | Mac 收集器 → Claude Code | 收集器本身不連線；執行 `claude -p /usage` 與 `claude auth status`，由 Claude Code 自己向 Anthropic 查詢 | 由 Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱（email 等其餘輸出直接丟棄） | launchd 每 5 分鐘 |
-| Mac 收集器 | `https://chatgpt.com/backend-api/wham/usage` | Codex CLI 的 token（`~/.codex/auth.json`） | 取得 Codex 用量 | launchd 每 5 分鐘 |
+| Mac 收集器 → Codex CLI | 收集器本身不連線；執行 `codex app-server` 查詢 `account/rateLimits/read`，由 Codex CLI 自己向 OpenAI 查詢 | 由 Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json`、不持有 token | 取得 Codex 額度與方案名稱（帳號 ID 等其餘欄位直接丟棄） | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰（與 App 共用的 Keychain 項目） | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |

@@ -23,8 +23,8 @@
 
 | ID | 需求 | 優先度 |
 |---|---|---|
-| FR-1 | 收集器能讀取 Claude Code 登入資訊並取得 Claude 用量 | Must |
-| FR-2 | 收集器能讀取 Codex CLI 登入資訊並取得 Codex 用量 | Must |
+| FR-1 | 收集器透過 Claude Code 本身取得 Claude 用量，不讀取它的登入資訊（ADR-0006） | Must |
+| FR-2 | 收集器透過 Codex CLI 本身取得 Codex 用量，不讀取它的登入資訊（ADR-0007） | Must |
 | FR-3 | 收集器輸出統一格式的 JSON（見架構文件） | Must |
 | FR-4 | 收集器每 5 分鐘自動執行（launchd） | Must |
 | FR-5 | 收集器將結果上傳至中繼 API | Must |
