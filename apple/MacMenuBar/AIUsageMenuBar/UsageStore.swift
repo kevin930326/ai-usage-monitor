@@ -86,6 +86,8 @@ final class UsageStore {
             Self.log("directory moved or deleted, polling until it comes back")
         }
         reload()
+        // 面板開著時：history.sqlite3 剛建立、或收集器關閉連線時 -wal 被合併刪除，也要重新查詢
+        HistoryStore.shared.collectorWrote()
     }
 
     /// 寫到 stderr（不經緩衝），方便測試時從 log 確認讀取的路徑與資料時間。

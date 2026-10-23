@@ -6,7 +6,7 @@ import UsageKit
 /// 讀取收集器寫的 `history.sqlite3`（FR-37、ADR-0009）。
 ///
 /// - App 只讀：只有收集器建表與執行 migration。例外是設定中的「清除歷史」與「縮短保留期間」，由 App 立即刪除。
-/// - 只在面板看得見時開啟連線並查詢；查詢結果在面板開啟期間保留，`usage.json` 有新內容時才重新查詢；
+/// - 只在面板看得見時開啟連線並查詢；面板開著時監看 `-wal`，收集器提交新資料（`PRAGMA data_version` 改變）才重新查詢；
 ///   面板關閉時關閉連線（ADR-0009 第 7 節、NFR-8）。
 /// - 不建立檔案：檔案不存在（收集器還沒更新或還沒執行）時狀態為 `.missing`，面板顯示「正在收集」。
 @Observable
@@ -54,6 +54,13 @@ final class HistoryStore {
     private(set) var loadedAt: Date?
 
     @ObservationIgnored private var db: OpaquePointer?
+    /// 面板看得見（open 到 close 之間）
+    @ObservationIgnored private var active = false
+    /// 上次查詢時的 `PRAGMA data_version`；收集器提交新資料後會變
+    @ObservationIgnored private var dataVersion: Int64?
+    /// 面板開著時監看 `-wal`：App 開著連線時收集器只改寫既有的 -wal，資料夾監看收不到
+    @ObservationIgnored private var walSource: DispatchSourceFileSystemObject?
+    @ObservationIgnored private var pendingCheck: DispatchWorkItem?
 
     init(url: URL) {
         self.url = url
@@ -63,6 +70,7 @@ final class HistoryStore {
 
     /// 面板變成看得見時呼叫：開啟連線並查詢。
     func open(now: Date = .now) {
+        active = true
         if db == nil {
             guard FileManager.default.fileExists(atPath: url.path) else {
                 status = .missing
@@ -83,6 +91,57 @@ final class HistoryStore {
             Self.tightenPermissions(url)
         }
         reload(now: now)
+        if walSource == nil { watchWAL() }
+    }
+
+    /// 收集器寫入後呼叫（資料夾或 -wal 有變動）：面板開著且資料庫有新的提交時才重新查詢。
+    /// 收集器先寫 usage.json、上傳後才寫歷史，只在 usage.json 更新時查詢會落後一輪（C-01）。
+    func collectorWrote() {
+        guard active else { return }
+        guard let db else {
+            // 之前檔案不存在或開不了：收集器可能剛建立
+            open()
+            return
+        }
+        guard Self.dataVersion(db) != dataVersion else { return }
+        reload()
+    }
+
+    /// 一次寫入會觸發好幾個事件：0.5 秒內合併成一次檢查
+    private func scheduleCheck() {
+        pendingCheck?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.collectorWrote() }
+        }
+        pendingCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    private func watchWAL() {
+        let fd = Darwin.open(url.path + "-wal", O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename], queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, let source = self.walSource else { return }
+                if !source.data.isDisjoint(with: [.delete, .rename]) {
+                    // -wal 被換掉：改監看新的檔案
+                    self.stopWatchingWAL()
+                    if self.active { self.watchWAL() }
+                }
+                self.scheduleCheck()
+            }
+        }
+        source.setCancelHandler { Darwin.close(fd) }
+        source.resume()
+        walSource = source
+    }
+
+    private func stopWatchingWAL() {
+        walSource?.cancel()
+        walSource = nil
+        pendingCheck?.cancel()
+        pendingCheck = nil
     }
 
     /// `usage.json` 有新內容時重新查詢（只在連線開著時）。
@@ -108,20 +167,26 @@ final class HistoryStore {
             return
         }
         history = QuotaHistory(samples: samples, runs: runs)
+        dataVersion = Self.dataVersion(db)
         loadedAt = now
     }
 
     /// 面板關閉時呼叫：關閉連線，查詢結果保留到下次開啟（不再重新查詢）。
     func close() {
+        active = false
+        stopWatchingWAL()
         guard let db else { return }
         sqlite3_close_v2(db)
         self.db = nil
+        dataVersion = nil
         status = .closed
     }
 
     private func fail(_ stage: String) {
         UsageStore.log("history: \(stage) failed")
+        let wasActive = active
         close()
+        active = wasActive
         status = .failed
         history = .empty
     }
@@ -270,6 +335,11 @@ final class HistoryStore {
     }
 
     /// `meta.schema_version`；沒有 meta 表或沒有這個鍵時為 0（舊版或空檔案），讀不了時為 nil。
+    /// 其他連線（收集器）每提交一次就會變；同一個連線自己的寫入不會改變它
+    nonisolated static func dataVersion(_ db: OpaquePointer) -> Int64? {
+        scalar(db, "PRAGMA data_version")
+    }
+
     nonisolated static func schemaVersion(_ db: OpaquePointer) -> Int? {
         guard scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'") != nil else { return nil }
         guard scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'") == 1 else { return 0 }
