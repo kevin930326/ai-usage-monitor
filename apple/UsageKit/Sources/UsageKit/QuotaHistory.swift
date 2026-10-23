@@ -368,21 +368,27 @@ public struct QuotaConsumption: Equatable, Sendable {
         self.days = days
         let todayStart = calendar.startOfDay(for: now)
         let first = calendar.date(byAdding: .day, value: -(days - 1), to: todayStart) ?? todayStart
-        var starts: [Date] = []
-        var cursor = first
-        while starts.count < days * 24 {
-            starts.append(cursor)
-            // 依日曆加一小時（日光節約時間的那天會少或多一個小時，固定 24 格以維持版面）
-            cursor = calendar.date(byAdding: .hour, value: 1, to: cursor) ?? cursor.addingTimeInterval(3600)
+        // 每個本機日期固定 24 格（第 h 格＝當天 h 點開始到下一格開始），日期與小時才不會錯位。
+        // 日光節約時間開始那天不存在的小時是 0 長度的格子；結束那天重複的小時併在同一格（2 小時）。
+        var spans: [TimeSpan] = []
+        for day in 0..<days {
+            let dayStart = calendar.date(byAdding: .day, value: day, to: first) ?? first.addingTimeInterval(Double(day) * 86400)
+            let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86400)
+            let starts = (0..<24).map { h in
+                h == 0 ? dayStart : calendar.date(bySettingHour: h, minute: 0, second: 0, of: dayStart) ?? dayStart.addingTimeInterval(Double(h) * 3600)
+            } + [nextDay]
+            for h in 0..<24 {
+                let start = min(starts[h], nextDay)
+                spans.append(TimeSpan(start: start, end: max(min(starts[h + 1], nextDay), start)))
+            }
         }
-        let spans = starts.map { TimeSpan(start: $0, end: $0.addingTimeInterval(3600)) }
         var consumed = [Double?](repeating: nil, count: spans.count)
         var estimated = [Bool](repeating: false, count: spans.count)
         var unknown = [Bool](repeating: false, count: spans.count)
         let range = TimeSpan(start: first, end: now)
 
         // 有收集紀錄的時段才算「有紀錄」，沒有使用時是 0
-        for (i, span) in spans.enumerated() where span.start < now {
+        for (i, span) in spans.enumerated() where span.start < now && span.duration > 0 {
             let observed = TimeSpan(start: span.start, end: min(span.end, now))
             let missing = history.gaps(in: observed).reduce(0) { $0 + $1.duration }
             if missing < observed.duration { consumed[i] = 0 }

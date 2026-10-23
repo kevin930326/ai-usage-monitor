@@ -302,6 +302,25 @@ import Testing
         #expect(c.dailyTotals[1].consumed == 4)
     }
 
+    @Test(arguments: [("2026-03-08", 23.0), ("2026-11-01", 25.0)])
+    func daylightSavingDaysKeepHoursAligned(day: String, length: Double) throws {
+        var la = Calendar(identifier: .gregorian)
+        la.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = la.timeZone
+        formatter.formatOptions = [.withFullDate]
+        let dayStart = la.startOfDay(for: try #require(formatter.date(from: day)))
+        let now = la.date(byAdding: .day, value: 1, to: dayStart)!.addingTimeInterval(1800)
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: .empty, now: now, days: 2, calendar: la)
+        // 第一天的 24 格加起來就是那天的實際長度，第二天從午夜開始
+        let first = c.hours.prefix(24)
+        #expect(first.first?.start == dayStart)
+        #expect(c.hours[24].start == la.date(byAdding: .day, value: 1, to: dayStart))
+        #expect(la.component(.hour, from: c.hours[5].start) == 5)
+        let total = zip(first, c.hours.dropFirst()).reduce(0.0) { $0 + $1.1.start.timeIntervalSince($1.0.start) }
+        #expect(total == length * 3600)
+    }
+
     @Test func oneSampleIsNotEnoughForConsumption() {
         let h = QuotaHistory(samples: [sample(hour, 3)], runs: [CollectorRun(ts: at(hour))])
         let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(hour + 60), days: 1, calendar: utc)
