@@ -9,6 +9,8 @@ import UsageKitUI
 /// - `AUM_DEMO_PANEL=1`：把面板放進一般視窗。MenuBarExtra 無法以程式點開，截圖與量測用這個視窗。
 /// - `AUM_RENDER_DIR=<資料夾>`：用 ImageRenderer 輸出面板、選單列圖示與設定視窗的 PNG（淺色、深色）。
 /// - `AUM_RENDER_FRAMES=1`（搭配 `AUM_RENDER_DIR`）：每個動畫以 30 fps 輸出 PNG 序列並組成 GIF。
+/// - `AUM_RENDER_NAME=<名稱>`：面板 PNG 的檔名前綴（預設 `panel`），換一份假歷史再輸出一次時用。
+/// - `AUM_RENDER_ANIMS=<名稱,名稱>`：只輸出這些動畫（預設全部）。
 /// - `AUM_RENDER_EXIT=1`：輸出完就結束。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
 @MainActor
@@ -22,10 +24,16 @@ enum DebugTools {
         if let dir = env["AUM_RENDER_DIR"], !dir.isEmpty {
             let url = URL(fileURLWithPath: dir)
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            renderPanel(to: url)
-            renderMenuBarIcons(to: url)
-            renderSettings(to: url)
-            if env["AUM_RENDER_FRAMES"] == "1" { renderAnimations(to: url) }
+            // 面板關著時不讀資料庫；截圖時沒有「打開面板」，所以先讀一次
+            HistoryStore.shared.open()
+            let name = env["AUM_RENDER_NAME"].flatMap { $0.isEmpty ? nil : $0 } ?? "panel"
+            renderPanel(to: url, name: name)
+            if name == "panel" {
+                renderMenuBarIcons(to: url)
+                renderSettings(to: url)
+            }
+            let only = env["AUM_RENDER_ANIMS"].map { Set($0.split(separator: ",").map(String.init)) }
+            if env["AUM_RENDER_FRAMES"] == "1" { renderAnimations(to: url, only: only) }
             if env["AUM_RENDER_EXIT"] == "1" { exit(0) }
         }
         if env["AUM_DEMO_PERF"] == "1" { runPerfSchedule() }
@@ -34,7 +42,7 @@ enum DebugTools {
     private static func showPanelWindow() {
         let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "AI 用量（面板預覽）"
-        window.contentView = NSHostingView(rootView: PanelView().environment(UsageStore.shared).environment(PanelSettings.shared))
+        window.contentView = NSHostingView(rootView: PanelView().environment(UsageStore.shared).environment(PanelSettings.shared).environment(HistoryStore.shared))
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -54,15 +62,17 @@ enum DebugTools {
             (27, "glow", { DebugAction.send("glow") }),
             (32, "collapse", { DebugAction.send("collapse") }),
             (35, "expand", { DebugAction.send("expand") }),
-            (38, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
-            (42, "appearance-light", { NSApplication.shared.appearance = nil }),
-            (46, "panel-close", { panelWindow?.orderOut(nil) }),
-            (46 + 60, "closed-60s", {}),
-            (46 + 90, "closed-90s", {}),
+            (38, "trend-next", { DebugAction.send("trend-next") }),
+            (41, "departing", { DebugAction.send("departing") }),
+            (44, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
+            (48, "appearance-light", { NSApplication.shared.appearance = nil }),
+            (52, "panel-close", { panelWindow?.orderOut(nil) }),
+            (52 + 60, "closed-60s", {}),
+            (52 + 90, "closed-90s", {}),
             // 第二次開關：比較兩次關閉後的記憶體，確認沒有累積（第一次開啟會載入框架，不能和開啟前比）
-            (46 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
-            (46 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
-            (46 + 120, "exit", { exit(0) }),
+            (52 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
+            (52 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
+            (52 + 120, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {
@@ -97,12 +107,14 @@ enum DebugTools {
         PanelView(fixedMotion: motion, scrolls: false)
             .environment(UsageStore.shared)
             .environment(PanelSettings.shared)
+            .environment(HistoryStore.shared)
     }
 
-    private static func renderPanel(to dir: URL) {
+    private static func renderPanel(to dir: URL, name: String) {
         for scheme in [ColorScheme.light, .dark] {
             write(panel().background(Color(nsColor: .windowBackgroundColor)), scheme: scheme,
-                  to: dir.appendingPathComponent("panel-\(scheme.name).png"))
+                  to: dir.appendingPathComponent("\(name)-\(scheme.name).png"))
+            guard name == "panel" else { continue }
             var collapsed = PanelMotion.settled
             collapsed.reveal = [PanelSection.ring.rawValue: 0]
             write(panel(collapsed).background(Color(nsColor: .windowBackgroundColor)), scheme: scheme,
@@ -115,6 +127,7 @@ enum DebugTools {
             let view = SettingsView(scrolls: false)
                 .environment(UsageStore.shared)
                 .environment(PanelSettings.shared)
+                .environment(HistoryStore.shared)
                 .background(Color(nsColor: .windowBackgroundColor))
             write(view, scheme: scheme, to: dir.appendingPathComponent("settings-\(scheme.name).png"))
         }
@@ -156,7 +169,7 @@ enum DebugTools {
 
     private static let fps = 30.0
 
-    private static func renderAnimations(to dir: URL) {
+    private static func renderAnimations(to dir: URL, only: Set<String>?) {
         let animations: [(String, Double, (Double) -> PanelMotion)] = [
             // 主圓環與用量條從 0 長到目前位置，預期標記稍後淡入
             ("appear", 0.9, { t in
@@ -184,8 +197,41 @@ enum DebugTools {
                 m.reveal = [PanelSection.ring.rawValue: p]
                 return m
             }),
+            // 第二階段（ADR-0010）：走勢曲線由左往右描繪，最後的圓點輕彈一下
+            ("trend", 0.9, { t in
+                var m = PanelMotion.settled
+                m.trend = Curve.easeOut(t / 0.6)
+                return m
+            }),
+            // 「建議接下來用」從上方滑入
+            ("suggest", 0.6, { t in
+                var m = PanelMotion.settled
+                m.suggest = Curve.easeOut(t / 0.3)
+                return m
+            }),
+            // 重置時間軸的圓點依序滑到位置
+            ("timeline", 0.8, { t in
+                var m = PanelMotion.settled
+                m.timeline = Curve.easeOut(t / 0.5)
+                return m
+            }),
+            // 額度重置：時間軸上的圓點在「現在」放大淡出，服務圖示同時閃光
+            ("reset-departing", 1.0, { t in
+                var m = PanelMotion.settled
+                let p = Curve.easeOut(t / 0.5)
+                if p < 1 { m.departing = ["claude/five_hour": p] }
+                let g = Curve.linear(t / 0.8)
+                m.glow = ["claude": g >= 1 ? 0 : g]
+                return m
+            }),
+            // 歷史不足時的骨架畫面：掃光三次後停止
+            ("skeleton", 3.9, { t in
+                var m = PanelMotion.settled
+                m.shimmer = min(t / 1.2, PanelTiming.shimmerPasses)
+                return m
+            }),
         ]
-        for (name, duration, motionAt) in animations {
+        for (name, duration, motionAt) in animations where only?.contains(name) ?? true {
             for scheme in [ColorScheme.light, .dark] {
                 let folder = dir.appendingPathComponent("anim-\(name)-\(scheme.name)")
                 try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -200,7 +246,38 @@ enum DebugTools {
                 writeGIF(frames, to: dir.appendingPathComponent("anim-\(name)-\(scheme.name).gif"))
             }
         }
-        renderThemeCrossfade(to: dir)
+        if only?.contains("trend-switch") ?? true { renderTrendSwitch(to: dir) }
+        if only?.contains("theme") ?? true { renderThemeCrossfade(to: dir) }
+    }
+
+    /// 切換走勢的額度：舊曲線淡出（0.3 秒交叉淡入），新曲線重新由左往右描繪。
+    /// SwiftUI 的交叉淡入無法逐格指定，這裡以兩張畫面的混合示意。
+    private static func renderTrendSwitch(to dir: URL) {
+        let settings = PanelSettings.shared
+        guard let snapshot = UsageStore.shared.snapshot else { return }
+        let options = HistoryWindowOption.options(snapshot)
+        guard options.count > 1, let current = HistoryWindowOption.resolve(settings.trendWindow, in: options),
+              let index = options.firstIndex(of: current) else { return }
+        let next = options[(index + 1) % options.count].id
+        defer { settings.trendWindow = current.id }
+        for scheme in [ColorScheme.light, .dark] {
+            settings.trendWindow = current.id
+            guard let old = cgImage(panel().background(Color(nsColor: .windowBackgroundColor)), scheme: scheme) else { continue }
+            settings.trendWindow = next
+            let folder = dir.appendingPathComponent("anim-trend-switch-\(scheme.name)")
+            try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            var frames: [CGImage] = []
+            for index in 0...Int(0.9 * fps) {
+                let t = Double(index) / fps
+                var m = PanelMotion.settled
+                m.trend = Curve.easeOut(t / 0.6)
+                guard let new = cgImage(panel(m).background(Color(nsColor: .windowBackgroundColor)), scheme: scheme),
+                      let frame = blend(new, old, 1 - Curve.easeInOut(t / 0.3)) else { continue }
+                writePNG(frame, to: folder.appendingPathComponent(String(format: "frame-%03d.png", index)))
+                frames.append(frame)
+            }
+            writeGIF(frames, to: dir.appendingPathComponent("anim-trend-switch-\(scheme.name).gif"))
+        }
     }
 
     /// 深淺色切換：SwiftUI 在兩個外觀的顏色之間過渡；這裡以兩張截圖的交叉淡入示意（0.3 秒）。

@@ -5,6 +5,11 @@ public struct ProviderWindow: Equatable, Sendable {
     public var provider: String
     public var window: UsageWindow
 
+    public init(provider: String, window: UsageWindow) {
+        self.provider = provider
+        self.window = window
+    }
+
     /// 畫面上代表這一項的名稱：服務名稱＋額度名稱，例如「Claude 每週」。
     /// 能用服務圖示＋這個名稱表達時，不另外加「剩餘最少」之類的標題。
     public var displayName: String { "\(ProviderInfo.displayName(provider)) \(window.label)" }

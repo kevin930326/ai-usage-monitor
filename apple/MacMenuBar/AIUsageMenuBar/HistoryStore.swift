@@ -1,0 +1,408 @@
+import Foundation
+import Observation
+import SQLite3
+import UsageKit
+
+/// 讀取收集器寫的 `history.sqlite3`（FR-37、ADR-0009）。
+///
+/// - App 只讀：只有收集器建表與執行 migration。例外是設定中的「清除歷史」與「縮短保留期間」，由 App 立即刪除。
+/// - 只在面板看得見時開啟連線並查詢；面板開著時監看 `-wal`，收集器提交新資料（`PRAGMA data_version` 改變）才重新查詢；
+///   面板關閉時關閉連線（ADR-0009 第 7 節、NFR-8）。
+/// - 不建立檔案：檔案不存在（收集器還沒更新或還沒執行）時狀態為 `.missing`，面板顯示「正在收集」。
+@Observable
+@MainActor
+final class HistoryStore {
+    static let shared = HistoryStore(url: UsageStore.shared.locator.historyFile)
+
+    /// App 支援的資料庫版本（`meta.schema_version`）；收集器的 `history.SCHEMA_VERSION` 改了這裡要一起改
+    nonisolated static let supportedSchema = 1
+    /// 面板需要的範圍：本週走勢最長 7 天、額度消耗 7 天、近期速度 24 小時，多留一天給跨日的差值
+    nonisolated static let lookback: TimeInterval = 8 * 86400
+    /// 讀取時最多等收集器多久（WAL 模式下讀取通常不會被寫入擋住）
+    nonisolated static let readBusyTimeoutMs: Int32 = 1000
+    nonisolated static let writeBusyTimeoutMs: Int32 = 5000
+    nonisolated static let retentionChoices: [(days: Int, title: String)] = [
+        (7, "7 天"), (30, "30 天"), (90, "90 天"), (365, "1 年"), (0, "永久"),
+    ]
+    nonisolated static let defaultRetentionDays = 365
+
+    enum Status: Equatable {
+        /// 面板關閉，沒有連線
+        case closed
+        /// 檔案不存在：收集器還沒寫入（剛安裝或收集器尚未更新）
+        case missing
+        case ready
+        /// 檔案版本比 App 支援的舊（收集器尚未更新）：請重新執行安裝腳本
+        case olderSchema(Int)
+        /// 檔案版本較新：照樣讀取，但不寫入（清除、改保留期間），請更新 App
+        case newerSchema(Int)
+        /// 讀不了（損毀、權限）；只記錄類別，不顯示 SQLite 的訊息（可能含路徑）
+        case failed
+
+        var canRead: Bool {
+            switch self {
+            case .ready, .newerSchema: true
+            default: false
+            }
+        }
+    }
+
+    let url: URL
+    private(set) var status: Status = .closed
+    private(set) var history: QuotaHistory = .empty
+    /// 最後一次查詢的時間（Debug 量測與測試用）
+    private(set) var loadedAt: Date?
+
+    @ObservationIgnored private var db: OpaquePointer?
+    /// 面板看得見（open 到 close 之間）
+    @ObservationIgnored private var active = false
+    /// 上次查詢時的 `PRAGMA data_version`；收集器提交新資料後會變
+    @ObservationIgnored private var dataVersion: Int64?
+    /// 面板開著時監看 `-wal`：App 開著連線時收集器只改寫既有的 -wal，資料夾監看收不到
+    @ObservationIgnored private var walSource: DispatchSourceFileSystemObject?
+    @ObservationIgnored private var pendingCheck: DispatchWorkItem?
+
+    init(url: URL) {
+        self.url = url
+    }
+
+    // MARK: - 面板用的唯讀連線
+
+    /// 面板變成看得見時呼叫：開啟連線並查詢。
+    func open(now: Date = .now) {
+        active = true
+        if db == nil {
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                status = .missing
+                history = .empty
+                return
+            }
+            // 不用 SQLITE_OPEN_READONLY：WAL 模式的唯讀連線在 -shm 不存在時開不了。
+            // 改以讀寫模式開啟（不建立檔案）並設 query_only，不會寫入任何資料。
+            var handle: OpaquePointer?
+            guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK else {
+                sqlite3_close(handle)
+                fail("open")
+                return
+            }
+            sqlite3_busy_timeout(handle, Self.readBusyTimeoutMs)
+            sqlite3_exec(handle, "PRAGMA query_only = ON", nil, nil, nil)
+            db = handle
+            Self.tightenPermissions(url)
+        }
+        reload(now: now)
+        if walSource == nil { watchWAL() }
+    }
+
+    /// 收集器寫入後呼叫（資料夾或 -wal 有變動）：面板開著且資料庫有新的提交時才重新查詢。
+    /// 收集器先寫 usage.json、上傳後才寫歷史，只在 usage.json 更新時查詢會落後一輪（C-01）。
+    func collectorWrote() {
+        guard active else { return }
+        guard let db else {
+            // 之前檔案不存在或開不了：收集器可能剛建立
+            open()
+            return
+        }
+        guard Self.dataVersion(db) != dataVersion else { return }
+        reload()
+    }
+
+    /// 一次寫入會觸發好幾個事件：0.5 秒內合併成一次檢查
+    private func scheduleCheck() {
+        pendingCheck?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { self?.collectorWrote() }
+        }
+        pendingCheck = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    private func watchWAL() {
+        let fd = Darwin.open(url.path + "-wal", O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .extend, .delete, .rename], queue: .main)
+        source.setEventHandler { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, let source = self.walSource else { return }
+                if !source.data.isDisjoint(with: [.delete, .rename]) {
+                    // -wal 被換掉：改監看新的檔案
+                    self.stopWatchingWAL()
+                    if self.active { self.watchWAL() }
+                }
+                self.scheduleCheck()
+            }
+        }
+        source.setCancelHandler { Darwin.close(fd) }
+        source.resume()
+        walSource = source
+    }
+
+    private func stopWatchingWAL() {
+        walSource?.cancel()
+        walSource = nil
+        pendingCheck?.cancel()
+        pendingCheck = nil
+    }
+
+    /// `usage.json` 有新內容時重新查詢（只在連線開著時）。
+    func reload(now: Date = .now) {
+        guard let db else { return }
+        let version = Self.schemaVersion(db)
+        switch version {
+        case nil:
+            fail("schema")
+            return
+        case let v? where v < Self.supportedSchema:
+            status = .olderSchema(v)
+            history = .empty
+            return
+        case let v? where v > Self.supportedSchema:
+            status = .newerSchema(v)
+        default:
+            status = .ready
+        }
+        let since = Int64(now.addingTimeInterval(-Self.lookback).timeIntervalSince1970)
+        guard let samples = Self.samples(db, since: since), let runs = Self.runs(db, since: since) else {
+            fail("query")
+            return
+        }
+        history = QuotaHistory(samples: samples, runs: runs)
+        dataVersion = Self.dataVersion(db)
+        loadedAt = now
+    }
+
+    /// 面板關閉時呼叫：關閉連線，查詢結果保留到下次開啟（不再重新查詢）。
+    func close() {
+        active = false
+        stopWatchingWAL()
+        guard let db else { return }
+        sqlite3_close_v2(db)
+        self.db = nil
+        dataVersion = nil
+        status = .closed
+    }
+
+    private func fail(_ stage: String) {
+        UsageStore.log("history: \(stage) failed")
+        let wasActive = active
+        close()
+        active = wasActive
+        status = .failed
+        history = .empty
+    }
+
+    // MARK: - 設定視窗（保留期間、匯出、清除）
+
+    struct Info: Equatable {
+        var status: Status
+        var retentionDays: Int
+        var sampleCount: Int
+        var oldest: Date?
+    }
+
+    /// 設定視窗顯示的資訊：每次另開一個短暫的連線，用完就關。
+    nonisolated func info() -> Info {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return Info(status: .missing, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
+        }
+        return withConnection(write: false) { db -> Info in
+            guard let version = Self.schemaVersion(db) else {
+                return Info(status: .failed, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
+            }
+            let status: Status = version < Self.supportedSchema ? .olderSchema(version)
+                : version > Self.supportedSchema ? .newerSchema(version) : .ready
+            let retention = Self.meta(db, "retention_days").flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } ?? Self.defaultRetentionDays
+            let count = Self.scalar(db, "SELECT COUNT(*) FROM quota_samples") ?? 0
+            let oldest = Self.scalar(db, "SELECT MIN(ts) FROM quota_samples").map { Date(timeIntervalSince1970: TimeInterval($0)) }
+            return Info(status: status, retentionDays: retention, sampleCount: Int(count), oldest: count > 0 ? oldest : nil)
+        } ?? Info(status: .failed, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
+    }
+
+    enum WriteError: Error, Equatable {
+        case missing
+        case unsupportedSchema
+        case failed
+    }
+
+    /// 改保留期間：寫入 `meta.retention_days`；縮短時立即刪除超出的資料（收集器每天也會依 meta 再刪一次）。
+    nonisolated func setRetention(days: Int, now: Date = .now) throws {
+        try write { db in
+            let old = Self.meta(db, "retention_days").flatMap(Int.init) ?? Self.defaultRetentionDays
+            guard Self.exec(db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('retention_days', ?)", [.text(String(days))]) else { return false }
+            let shorter = days > 0 && (old == 0 || days < old)
+            guard shorter else { return true }
+            let cutoff = Int64(now.timeIntervalSince1970) - Int64(days) * 86400
+            return Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens"]).allSatisfy { table in
+                let column = table.hasSuffix("_tokens") ? "day" : "ts"
+                if column == "day" {
+                    let day = Self.dayString(Date(timeIntervalSince1970: TimeInterval(cutoff)))
+                    return Self.exec(db, "DELETE FROM \(table) WHERE day < ?", [.text(day)])
+                }
+                return Self.exec(db, "DELETE FROM \(table) WHERE ts < ?", [.int(cutoff)])
+            }
+        }
+    }
+
+    /// 清除歷史（ADR-0009 第 5 節）。`rescan` 為真時連同掃描進度與去重表一起清除（Token 統計會從對話紀錄重建；
+    /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
+    nonisolated func clear(rescan: Bool) throws {
+        var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records"]
+        if rescan { tables += ["scan_state", "seen_ids", "file_tokens"] }
+        try write(vacuum: true) { db in
+            Self.existingTables(db, tables).allSatisfy { Self.exec(db, "DELETE FROM \($0)", []) }
+                && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key = 'first_scan_progress'", []))
+        }
+    }
+
+    /// 匯出 CSV 的內容：每小時的額度歷史（`QuotaHistoryCSV`）。
+    nonisolated func exportCSV() throws -> String {
+        guard FileManager.default.fileExists(atPath: url.path) else { throw WriteError.missing }
+        guard let csv = withConnection(write: false, { db in Self.samples(db, since: 0).map(QuotaHistoryCSV.make) }) ?? nil else {
+            throw WriteError.failed
+        }
+        return csv
+    }
+
+    // MARK: - SQLite
+
+    private nonisolated func write(vacuum: Bool = false, _ body: (OpaquePointer) -> Bool) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { throw WriteError.missing }
+        let result: Result<Void, WriteError>? = withConnection(write: true) { db in
+            guard Self.schemaVersion(db) == Self.supportedSchema else { return .failure(.unsupportedSchema) }
+            guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return .failure(.failed) }
+            guard body(db), sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK else {
+                sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+                return .failure(.failed)
+            }
+            if vacuum { sqlite3_exec(db, "VACUUM", nil, nil, nil) }
+            return .success(())
+        }
+        Self.tightenPermissions(url)
+        switch result {
+        case .success: return
+        case let .failure(error): throw error
+        case nil: throw WriteError.failed
+        }
+    }
+
+    private nonisolated func withConnection<T>(write: Bool, _ body: (OpaquePointer) -> T) -> T? {
+        var handle: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nil) == SQLITE_OK, let handle else {
+            sqlite3_close(handle)
+            return nil
+        }
+        defer { sqlite3_close_v2(handle) }
+        sqlite3_busy_timeout(handle, write ? Self.writeBusyTimeoutMs : Self.readBusyTimeoutMs)
+        if !write { sqlite3_exec(handle, "PRAGMA query_only = ON", nil, nil, nil) }
+        return body(handle)
+    }
+
+    enum Value {
+        case int(Int64)
+        case text(String)
+    }
+
+    private nonisolated static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+    private nonisolated static func exec(_ db: OpaquePointer, _ sql: String, _ values: [Value]) -> Bool {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        for (i, value) in values.enumerated() {
+            switch value {
+            case let .int(v): sqlite3_bind_int64(stmt, Int32(i + 1), v)
+            case let .text(v): sqlite3_bind_text(stmt, Int32(i + 1), v, -1, transient)
+            }
+        }
+        return sqlite3_step(stmt) == SQLITE_DONE
+    }
+
+    private nonisolated static func scalar(_ db: OpaquePointer, _ sql: String) -> Int64? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_step(stmt) == SQLITE_ROW, sqlite3_column_type(stmt, 0) != SQLITE_NULL else { return nil }
+        return sqlite3_column_int64(stmt, 0)
+    }
+
+    private nonisolated static func meta(_ db: OpaquePointer, _ key: String) -> String? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT value FROM meta WHERE key = ?", -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, key, -1, transient)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let text = sqlite3_column_text(stmt, 0) else { return nil }
+        return String(cString: text)
+    }
+
+    /// `meta.schema_version`；沒有 meta 表或沒有這個鍵時為 0（舊版或空檔案），讀不了時為 nil。
+    /// 其他連線（收集器）每提交一次就會變；同一個連線自己的寫入不會改變它
+    nonisolated static func dataVersion(_ db: OpaquePointer) -> Int64? {
+        scalar(db, "PRAGMA data_version")
+    }
+
+    nonisolated static func schemaVersion(_ db: OpaquePointer) -> Int? {
+        guard scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'") != nil else { return nil }
+        guard scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'meta'") == 1 else { return 0 }
+        return meta(db, "schema_version").flatMap(Int.init) ?? 0
+    }
+
+    private nonisolated static func existingTables(_ db: OpaquePointer, _ names: [String]) -> [String] {
+        names.filter { scalar(db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '\($0)'") == 1 }
+    }
+
+    private nonisolated static func samples(_ db: OpaquePointer, since: Int64) -> [QuotaSample]? {
+        var stmt: OpaquePointer?
+        let sql = "SELECT ts, provider, window_id, used_pct, resets_at FROM quota_samples WHERE ts >= ? ORDER BY ts"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, since)
+        var result: [QuotaSample] = []
+        while true {
+            let rc = sqlite3_step(stmt)
+            if rc == SQLITE_DONE { break }
+            guard rc == SQLITE_ROW, let provider = sqlite3_column_text(stmt, 1), let window = sqlite3_column_text(stmt, 2) else { return nil }
+            let resets = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? nil
+                : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 4)))
+            result.append(QuotaSample(
+                ts: Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 0))),
+                provider: String(cString: provider), windowID: String(cString: window),
+                usedPct: sqlite3_column_double(stmt, 3), resetsAt: resets))
+        }
+        return result
+    }
+
+    private nonisolated static func runs(_ db: OpaquePointer, since: Int64) -> [CollectorRun]? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT ts, ok, runs FROM collector_runs WHERE ts >= ? ORDER BY ts", -1, &stmt, nil) == SQLITE_OK else {
+            return nil
+        }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, since)
+        var result: [CollectorRun] = []
+        while true {
+            let rc = sqlite3_step(stmt)
+            if rc == SQLITE_DONE { break }
+            guard rc == SQLITE_ROW else { return nil }
+            result.append(CollectorRun(ts: Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 0))),
+                                       ok: Int(sqlite3_column_int64(stmt, 1)), runs: Int(sqlite3_column_int64(stmt, 2))))
+        }
+        return result
+    }
+
+    private nonisolated static func dayString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    /// App 開啟時 SQLite 可能建立 -shm／-wal（App 的 umask 是 022），改回 0600（ADR-0009 第 1 節）。
+    private nonisolated static func tightenPermissions(_ url: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            let path = url.path + suffix
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+                  let mode = attrs[.posixPermissions] as? Int, mode & 0o777 != 0o600 else { continue }
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
+        }
+    }
+}

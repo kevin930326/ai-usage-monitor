@@ -20,11 +20,21 @@ struct PanelMotion: Equatable {
     var glow: [String: Double] = [:]
     /// 只給 Debug 截圖用：指定卡片收合的進度（1＝展開、0＝收合），一般執行時由卡片自己的狀態決定
     var reveal: [String: Double] = [:]
+    /// 走勢曲線由左往右描繪，最後的圓點輕彈一下（第二階段）
+    var trend: Double = 1
+    /// 「建議接下來用」從上方滑入
+    var suggest: Double = 1
+    /// 重置時間軸的圓點依序滑到位置
+    var timeline: Double = 1
+    /// 額度重置時，時間軸上該圓點在「現在」的位置放大淡出，0→1 播放一次（依「服務/額度 id」）
+    var departing: [String: Double] = [:]
+    /// 骨架畫面的掃光：0→3 掃三次（整數時光在畫面外）
+    var shimmer: Double = 0
 
     static let settled = PanelMotion()
 
-    /// 打開面板時的起點：圓環、用量條、標記都從 0 開始
-    static let hidden = PanelMotion(appear: 0, marker: 0)
+    /// 打開面板時的起點：圓環、用量條、標記、走勢、建議、時間軸都從 0 開始
+    static let hidden = PanelMotion(appear: 0, marker: 0, trend: 0, suggest: 0, timeline: 0)
 }
 
 /// 各動畫的長度與曲線，集中在這裡方便量測與調整（ADR-0010 第 2 節）。
@@ -37,6 +47,15 @@ enum PanelTiming {
     static let glow = Animation.linear(duration: 0.8)
     static let collapse = Animation.easeInOut(duration: 0.25)
     static let colorScheme = Animation.easeInOut(duration: 0.3)
+    static let trend = Animation.easeOut(duration: 0.6)
+    static let suggest = Animation.easeOut(duration: 0.3)
+    static let timeline = Animation.easeOut(duration: 0.5)
+    static let departing = Animation.easeOut(duration: 0.5)
+    /// 骨架掃光：每次 1.2 秒、三次（ADR-0010：重複類最多 3 次、總長 ≤ 4 秒）
+    static let shimmerPasses = 3.0
+    static let shimmer = Animation.linear(duration: 1.2 * shimmerPasses)
+    /// 切換額度時新舊曲線交叉淡入
+    static let crossfade = Animation.easeInOut(duration: 0.3)
     /// 「減少動態效果」時只允許短暫淡入淡出
     static let reducedFade = Animation.easeInOut(duration: 0.15)
 }
