@@ -333,7 +333,7 @@ public struct QuotaTrend: Equatable, Sendable {
 
 // MARK: - 額度消耗（FR-42，ADR-0011 第一層）
 
-/// 每小時消耗的額度 %：同一額度相鄰兩筆的正差值；重置時以新值計（ADR-0009 第 4 節）。
+/// 每小時消耗的額度 %：同一額度相鄰兩筆的正差值；重置時以新值計，並只分到重置時間之後（ADR-0009 第 4 節）。
 /// 兩筆之間超過 15 分鐘（沒有紀錄）時，差值平均分配到這段時間並標成「估計」；
 /// 這段時間中有重置時不分配（不知道重置前後各用了多少），那幾個小時標成「沒有紀錄」。
 public struct QuotaConsumption: Equatable, Sendable {
@@ -400,11 +400,16 @@ public struct QuotaConsumption: Equatable, Sendable {
                 for (i, span) in spans.enumerated() where span.overlap(segment) > 0 { unknown[i] = true }
                 continue
             }
-            guard segment.duration > 0 else { continue }
+            // 重置時間落在兩筆之間：新一輪的用量只分到重置之後（不算進重置前的小時或前一天）
+            var allocation = segment
+            if reset, let resetsAt = a.resetsAt, resetsAt > a.ts, resetsAt < b.ts {
+                allocation = TimeSpan(start: resetsAt, end: b.ts)
+            }
+            guard allocation.duration > 0 else { continue }
             for (i, span) in spans.enumerated() {
-                let overlap = span.overlap(segment)
+                let overlap = span.overlap(allocation)
                 guard overlap > 0 else { continue }
-                consumed[i] = (consumed[i] ?? 0) + delta * overlap / segment.duration
+                consumed[i] = (consumed[i] ?? 0) + delta * overlap / allocation.duration
                 if isGap { estimated[i] = true }
             }
         }

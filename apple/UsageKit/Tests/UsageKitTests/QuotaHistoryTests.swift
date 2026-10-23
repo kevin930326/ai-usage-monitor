@@ -283,6 +283,25 @@ import Testing
         #expect(c.hours.allSatisfy { $0.consumed == nil })
     }
 
+    @Test func resetBetweenSamplesCountsOnlyAfterTheReset() {
+        // 00:55 已用 90%（01:00 重置）→ 01:05 已用 4%：新一輪的 4 點全部算在 01:00 那一小時
+        let h = QuotaHistory(samples: [sample(55 * minute, 90, resets: hour), sample(65 * minute, 4, resets: 6 * hour)],
+                             runs: runs(0, 2 * hour))
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(2 * hour), days: 1, calendar: utc)
+        #expect(c.hours[0].consumed == 0)
+        #expect(c.hours[1].consumed == 4)
+        #expect(!c.hours[1].estimated)
+    }
+
+    @Test func resetAtMidnightIsNotCountedInThePreviousDay() {
+        // 前一天 23:55 已用 90%（00:00 重置）→ 00:05 已用 4%
+        let h = QuotaHistory(samples: [sample(-5 * minute, 90, resets: 0), sample(5 * minute, 4, resets: 5 * hour)],
+                             runs: runs(-hour, hour))
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(hour), days: 2, calendar: utc)
+        #expect(c.dailyTotals[0].consumed == 0)
+        #expect(c.dailyTotals[1].consumed == 4)
+    }
+
     @Test func oneSampleIsNotEnoughForConsumption() {
         let h = QuotaHistory(samples: [sample(hour, 3)], runs: [CollectorRun(ts: at(hour))])
         let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(hour + 60), days: 1, calendar: utc)
