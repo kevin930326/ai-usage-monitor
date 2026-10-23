@@ -3,11 +3,12 @@ import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
 
-/// 設定視窗（FR-35、ADR-0008 第 5 節）：選單列圖示樣式與顯示的額度、面板區塊的開關與排序。
+/// 設定視窗（FR-35、FR-37、ADR-0008 第 5 節）：選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料。
 /// 控制項自己畫（不用 AppKit 的 Toggle／Picker／List），ImageRenderer 才能截圖；鍵盤與 VoiceOver 仍可操作。
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelSettings.self) private var settings
+    @Environment(HistoryStore.self) private var history
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
@@ -26,6 +27,8 @@ struct SettingsView: View {
             menuBarSection
             Divider()
             panelSection
+            Divider()
+            HistorySettingsSection(store: history, interactive: scrolls)
         }
         .padding(22)
     }
@@ -113,7 +116,7 @@ struct SettingsView: View {
                     if index < rows.count - 1 { Divider() }
                 }
             }
-            Text("之後加入的區塊（走勢、統計、服務狀態）會出現在這裡。卡片也可以在面板上直接收合。")
+            Text("之後加入的區塊（統計、服務狀態）會出現在這裡。卡片也可以在面板上直接收合。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -293,5 +296,180 @@ struct FlowLayout: Layout {
             rows[rows.count - 1].height = max(rows[rows.count - 1].height, size.height)
         }
         return rows
+    }
+}
+
+/// 歷史資料（FR-37、ADR-0009 第 5 節）：保留期間、匯出 CSV、清除歷史、清除並重新掃描。
+/// 每次打開設定視窗時另開短暫的連線讀取資訊，寫入（清除、縮短保留期間）由 App 直接執行。
+private struct HistorySettingsSection: View {
+    let store: HistoryStore
+    /// 截圖時不讀資料庫以外的東西、不開對話框
+    var interactive = true
+
+    @State private var info: HistoryStore.Info?
+    @State private var pendingRetention: Int?
+    @State private var confirmClear: Bool = false
+    @State private var confirmRescan: Bool = false
+    @State private var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("歷史資料").font(.headline)
+            Text("額度歷史存在這台 Mac 的 history.sqlite3（收集器每 5 分鐘寫入），不會上傳。面板的走勢、額度消耗與預測都用它。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let note = statusNote {
+                Label(note, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(UsageColors.notice)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("保留期間").font(.subheadline.weight(.semibold))
+            HStack(spacing: 6) {
+                ForEach(HistoryStore.retentionChoices, id: \.days) { choice in
+                    let selected = (info?.retentionDays ?? HistoryStore.defaultRetentionDays) == choice.days
+                    Button { choose(choice.days) } label: {
+                        Text(choice.title)
+                            .font(.callout)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(selected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05), in: Capsule())
+                            .overlay(Capsule().strokeBorder(selected ? Color.accentColor : .clear))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!writable)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            Text("預設 1 年；35 天前的資料降為每小時一筆。縮短時會立即刪除超出的資料。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let info, info.sampleCount > 0 {
+                Text(summary(info)).font(.caption).foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 8) {
+                Button("匯出 CSV…", action: export)
+                    .buttonStyle(PanelPillButtonStyle())
+                    .disabled(!(info?.status.canRead ?? false))
+                Button("清除歷史…") { confirmClear = true }
+                    .buttonStyle(PanelPillButtonStyle())
+                    .disabled(!writable)
+                Button("清除並重新掃描…") { confirmRescan = true }
+                    .buttonStyle(PanelPillButtonStyle())
+                    .disabled(!writable)
+            }
+            Text("「清除並重新掃描」另外清除對話紀錄的掃描進度，讓之後的 Token 統計（v1.7）從現有紀錄重建；額度歷史沒有來源可以重建。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let message {
+                Text(message).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .onAppear { if interactive { refresh() } else { info = store.info() } }
+        .confirmationDialog("縮短保留期間？", isPresented: Binding(get: { pendingRetention != nil }, set: { if !$0 { pendingRetention = nil } })) {
+            Button("縮短並刪除", role: .destructive) {
+                if let days = pendingRetention { apply(days) }
+            }
+        } message: {
+            Text("超出新保留期間的額度歷史會立即刪除，無法復原。")
+        }
+        .confirmationDialog("清除額度歷史？", isPresented: $confirmClear) {
+            Button("清除", role: .destructive) { clear(rescan: false) }
+        } message: {
+            Text("刪除所有額度歷史，面板的走勢與額度消耗會從頭開始收集。無法復原。")
+        }
+        .confirmationDialog("清除並重新掃描？", isPresented: $confirmRescan) {
+            Button("清除並重新掃描", role: .destructive) { clear(rescan: true) }
+        } message: {
+            Text("刪除所有歷史與掃描進度。無法復原。")
+        }
+    }
+
+    private var writable: Bool { info?.status == .ready }
+
+    private var statusNote: String? {
+        switch info?.status {
+        case .missing: "還沒有歷史資料：收集器更新後下一次執行會開始寫入（若一直沒有，請重新執行 collector/scripts/install-launchd.sh）"
+        case .olderSchema: "收集器的版本較舊，請重新執行 collector/scripts/install-launchd.sh"
+        case .newerSchema: "歷史資料的版本比 App 新：可以查看，但不能清除或修改，請更新 App"
+        case .failed: "無法讀取 history.sqlite3（檔案可能已損毀）"
+        default: nil
+        }
+    }
+
+    private func summary(_ info: HistoryStore.Info) -> String {
+        var text = "目前 \(info.sampleCount.formatted()) 筆"
+        if let oldest = info.oldest {
+            text += "，最早 " + oldest.formatted(.dateTime.year().month().day())
+        }
+        return text
+    }
+
+    private func refresh() {
+        let store = store
+        Task.detached {
+            let info = store.info()
+            await MainActor.run { self.info = info }
+        }
+    }
+
+    private func choose(_ days: Int) {
+        let current = info?.retentionDays ?? HistoryStore.defaultRetentionDays
+        guard days != current else { return }
+        let shorter = days > 0 && (current == 0 || days < current)
+        if shorter { pendingRetention = days } else { apply(days) }
+    }
+
+    private func apply(_ days: Int) {
+        pendingRetention = nil
+        run(done: "已更新保留期間") { try store.setRetention(days: days) }
+    }
+
+    private func clear(rescan: Bool) {
+        run(done: rescan ? "已清除歷史與掃描進度" : "已清除歷史") { try store.clear(rescan: rescan) }
+    }
+
+    private func run(done: String, _ action: @escaping @Sendable () throws -> Void) {
+        let store = store
+        Task.detached {
+            let result: String
+            do {
+                try action()
+                result = done
+            } catch HistoryStore.WriteError.unsupportedSchema {
+                result = "歷史資料的版本不符，沒有變更"
+            } catch {
+                result = "無法寫入 history.sqlite3，請稍後再試（收集器可能正在寫入）"
+            }
+            let info = store.info()
+            await MainActor.run {
+                self.message = result
+                self.info = info
+                // 面板開著時立即反映
+                HistoryStore.shared.reload()
+            }
+        }
+    }
+
+    private func export() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "ai-usage-history-\(Date.now.formatted(.iso8601.year().month().day())).csv"
+        panel.canCreateDirectories = true
+        NSApplication.shared.activate()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let csv = try store.exportCSV()
+            try Data(csv.utf8).write(to: url, options: .atomic)
+            message = "已匯出到 \(url.lastPathComponent)"
+        } catch {
+            message = "匯出失敗"
+        }
     }
 }
