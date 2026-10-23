@@ -93,11 +93,16 @@ acquire_lock() {
     pid=$(cat "$LOCK/pid" 2>/dev/null)
     lock_is_stale "$pid" || return 1
     # 先改名再刪，兩個程序同時接手時只有一個改名成功；改到的若已不是剛才看到的鎖就放回去。
-    # 放不回去（這段時間又有人建立了鎖）時保留改名後的資料夾、不刪：它可能是別人正在用的鎖
+    # 放回時以 mkdir 重建鎖再搬 pid（mv 到已存在的資料夾會搬進它裡面）；這段時間又有人建立了鎖
+    # 而放不回去時，保留改名後的資料夾、不刪：它是別人正在用的鎖
     stale="$LOCK.stale.$$"
     mv "$LOCK" "$stale" 2>/dev/null || return 1
     if [ "$(cat "$stale/pid" 2>/dev/null)" != "$pid" ]; then
-        mv "$stale" "$LOCK" 2>/dev/null || log "無法放回鎖，保留在 ${stale}"
+        if mkdir "$LOCK" 2>/dev/null && mv "$stale/pid" "$LOCK/pid" 2>/dev/null; then
+            rmdir "$stale" 2>/dev/null
+        else
+            log "無法放回鎖，保留在 ${stale}"
+        fi
         return 1
     fi
     rm -rf "$stale"

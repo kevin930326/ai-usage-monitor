@@ -159,23 +159,44 @@ class ReinstallLockTests(unittest.TestCase):
         self.assertTrue((lock / "pid").read_text().strip().isdigit())
         self.assertEqual(list(self.dir.glob(".reinstall.lock.stale.*")), [])
 
-    def test_lock_that_cannot_be_put_back_is_kept(self):
-        # 改名後發現是別人新建的鎖（PID 不同），而且這段時間又有人建立了鎖：不能刪掉改名後的資料夾
+    def take_over_prelude(self, third_pid: int | None) -> str:
+        """第一次 mv（把殘留的鎖改名）之後，模擬改到的其實是別人剛建立的新鎖（PID 424242）；
+        third_pid 不是 None 時，這段時間又有第三個程序建立了鎖。之後的 mv 都是真的 mv。"""
+        lock = self.dir / ".reinstall.lock"
+        third = f'mkdir "{lock}"; echo {third_pid} >"{lock}/pid"' if third_pid else ":"
+        return f"""
+            MV_CALLS=0
+            mv() {{
+                MV_CALLS=$((MV_CALLS + 1))
+                command mv "$@" || return
+                if [ "$MV_CALLS" = 1 ]; then echo 424242 >"$2/pid"; {third}; fi
+            }}
+        """
+
+    def test_someone_elses_lock_is_put_back(self):
         lock = self.dir / ".reinstall.lock"
         lock.mkdir()
         (lock / "pid").write_text("999999\n")
-        prelude = f"""
-            mv() {{
-                if [ "$2" = "{lock}" ]; then mkdir -p "{lock}"; return 1; fi   # 放回時已有新的鎖
-                command mv "$@" && echo 424242 >"$2/pid"                      # 改名時換成別人的新鎖
-            }}
-        """
-        result = self.run_acquire(prelude)
+        result = self.run_acquire(self.take_over_prelude(None))
         self.assertIn("result=1", result.stdout)
+        self.assertEqual((lock / "pid").read_text().strip(), "424242")
+        self.assertEqual(list(self.dir.glob(".reinstall.lock.stale.*")), [])
+
+    def test_lock_that_cannot_be_put_back_is_kept_outside_the_new_lock(self):
+        # 放回時第三個程序已建立新鎖：不能刪掉改名後的資料夾，也不能把它搬進新鎖裡
+        #（新鎖的持有者結束時 rm -rf 會連它一起刪掉）
+        lock = self.dir / ".reinstall.lock"
+        lock.mkdir()
+        (lock / "pid").write_text("999999\n")
+        result = self.run_acquire(self.take_over_prelude(555))
+        self.assertIn("result=1", result.stdout)
+        self.assertEqual(sorted(p.name for p in lock.iterdir()), ["pid"])
+        self.assertEqual((lock / "pid").read_text().strip(), "555")
         kept = list(self.dir.glob(".reinstall.lock.stale.*"))
         self.assertEqual(len(kept), 1)
         self.assertEqual((kept[0] / "pid").read_text().strip(), "424242")
-        self.assertIn("無法放回鎖", (self.dir / "reinstall.log").read_text())
+        log = (self.dir / "reinstall.log").read_text()
+        self.assertIn("無法放回鎖", log)
 
 
 class CodexReviewTests(unittest.TestCase):
