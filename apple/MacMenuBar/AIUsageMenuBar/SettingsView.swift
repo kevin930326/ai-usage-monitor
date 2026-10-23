@@ -42,7 +42,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            Text("雙圓環：外圈＝剩餘額度，內圈＝距離重置的剩餘時間。用得太快時右上角加小點、剩不到 20% 轉紅、資料過期轉灰。")
+            Text("雙圓環：外圈＝剩餘額度，內圈＝距離重置的剩餘時間。用得太快時右上角加小點、剩不到 20% 轉紅、資料過期轉灰並改為虛線。「只有 %」樣式以 ↑ 太快、! 剩不到 20%、– 過期區分。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
