@@ -16,6 +16,8 @@ from usage_collector.models import ProviderUsage, Window
 T0 = 1_790_000_000  # 2026-09-21，整點以外的時間
 HOUR = 3600
 DAY = 86400
+# 不能讀到這台電腦真的對話紀錄：呼叫 cli.main(--write-local) 的測試一律指到不存在的資料夾
+NO_LOGS = {"claude": Path("/nonexistent/claude"), "codex": Path("/nonexistent/codex")}
 
 
 def iso(ts: int) -> str:
@@ -68,7 +70,7 @@ class SchemaTest(HistoryTestCase):
             tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
             meta = dict(c.execute("SELECT key, value FROM meta"))
             mode = c.execute("PRAGMA journal_mode").fetchone()[0]
-        self.assertEqual(tables, {"quota_samples", "collector_runs", "meta"})
+        self.assertTrue({"quota_samples", "collector_runs", "meta", "daily_tokens", "seen_ids"} <= tables)
         self.assertEqual(meta["schema_version"], str(history.SCHEMA_VERSION))
         self.assertEqual(meta["retention_days"], "365")
         self.assertEqual(meta["device_name"], "這台 Mac")
@@ -284,6 +286,8 @@ class FailureIsolationTest(HistoryTestCase):
                                side_effect=lambda s: write(s, usage_path)), \
              mock.patch.object(relay, "upload") as upload, \
              mock.patch.object(history, "HISTORY_PATH", self.path), \
+             mock.patch.object(cli.token_stats, "log_dirs", return_value=NO_LOGS), \
+             mock.patch.object(cli.token_stats.os, "nice"), \
              redirect_stdout(io.StringIO()), redirect_stderr(err):
             code = cli.main(["--write-local", "--upload", "--quiet"])
         return code, usage_path, upload, err.getvalue()
@@ -295,6 +299,16 @@ class FailureIsolationTest(HistoryTestCase):
         upload.assert_called_once()
         self.assertEqual(self.count("collector_runs"), 1)
         self.assertEqual(err, "")
+
+    def test_token_stats_run_after_history_and_failure_keeps_exit_code(self):
+        order = []
+        with mock.patch.object(history, "record_safely", side_effect=lambda s: order.append("history")), \
+             mock.patch.object(cli.token_stats, "run", side_effect=RuntimeError("boom")) as run:
+            run.side_effect = lambda *a, **k: (order.append("tokens"), (_ for _ in ()).throw(RuntimeError("x")))
+            code, _, _, err = self.run_cli()
+        self.assertEqual(code, 0)
+        self.assertEqual(order, ["history", "tokens"])
+        self.assertIn("略過 Token 統計：RuntimeError", err)
 
     def test_corrupt_database(self):
         self.path.write_bytes(b"this is not a sqlite database at all" * 200)

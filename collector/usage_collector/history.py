@@ -22,9 +22,11 @@ from .paths import APP_SUPPORT_DIR
 HISTORY_PATH = APP_SUPPORT_DIR / "history.sqlite3"
 
 # App 宣告支援的版本範圍要跟著改（apple/MacMenuBar 的 HistoryStore）
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_RETENTION_DAYS = 365  # 0 = 永久
 DOWNSAMPLE_AFTER_DAYS = 35
+HOURLY_TOKENS_DAYS = 90  # hourly_tokens 只留 90 天（daily_tokens 已有同樣的加總）
+SCAN_STATE_DAYS = 90  # 超過 90 天沒看到的紀錄檔刪掉掃描進度
 BUSY_TIMEOUT_MS = 5000
 DEFAULT_DEVICE_NAME = "這台 Mac"  # 不用電腦名稱，避免把使用者名稱帶進資料（ADR-0009 第 6 節）
 
@@ -62,8 +64,83 @@ def _v1(conn: sqlite3.Connection) -> None:
     ])
 
 
-# MIGRATIONS[i] 把版本 i 升到 i + 1；之後的版本（Token 統計等）往後加
-MIGRATIONS = [_v1]
+_TOKEN_COLUMNS = """
+         input_tokens       INTEGER NOT NULL DEFAULT 0,
+         cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+         cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+         output_tokens      INTEGER NOT NULL DEFAULT 0,
+         reasoning_tokens   INTEGER NOT NULL DEFAULT 0"""
+_TASK_COLUMNS = """
+         task_count           INTEGER NOT NULL DEFAULT 0,
+         task_seconds         INTEGER NOT NULL DEFAULT 0,
+         longest_task_seconds INTEGER NOT NULL DEFAULT 0,
+         updated_at           INTEGER NOT NULL"""
+
+# Token 統計（ADR-0009 第 2 節）。與 ADR 的差異（都只有數字與 ID）：
+# - scan_state.state：跨次掃描要接著用的狀態（Claude 進行中任務的開始時間與第一則回覆 ID、Codex 目前的模型）
+# - seen_ids.file_key：Codex 的回應 ID 由哪個檔案計入；該檔重算時一併移除，才能重新計入
+# - seen_tasks：已計入的任務與當時的秒數。任務跨兩次掃描時補差額；重掃、--resume 副本不重複計算
+_V2_TABLES = (
+    f"""CREATE TABLE IF NOT EXISTS daily_tokens (
+         device_id TEXT NOT NULL,
+         day       TEXT NOT NULL,
+         provider  TEXT NOT NULL,
+         model     TEXT NOT NULL,{_TOKEN_COLUMNS},{_TASK_COLUMNS},
+         PRIMARY KEY (device_id, day, provider, model))""",
+    f"""CREATE TABLE IF NOT EXISTS hourly_tokens (
+         device_id TEXT    NOT NULL,
+         day       TEXT    NOT NULL,
+         hour      INTEGER NOT NULL,
+         provider  TEXT    NOT NULL,
+         model     TEXT    NOT NULL,{_TOKEN_COLUMNS},{_TASK_COLUMNS},
+         PRIMARY KEY (device_id, day, hour, provider, model))""",
+    "CREATE INDEX IF NOT EXISTS daily_tokens_day ON daily_tokens (day)",
+    "CREATE INDEX IF NOT EXISTS hourly_tokens_day ON hourly_tokens (day)",
+    "CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, value INTEGER NOT NULL, day TEXT)",
+    """CREATE TABLE IF NOT EXISTS scan_state (
+         file_key   TEXT PRIMARY KEY,
+         inode      INTEGER NOT NULL,
+         device     INTEGER NOT NULL,
+         size       INTEGER NOT NULL,
+         mtime      INTEGER NOT NULL,
+         offset     INTEGER NOT NULL,
+         source     TEXT,
+         last_total TEXT,
+         state      TEXT,
+         last_seen  INTEGER NOT NULL)""",
+    f"""CREATE TABLE IF NOT EXISTS seen_ids (
+         provider TEXT    NOT NULL,
+         id       TEXT    NOT NULL,
+         day      TEXT    NOT NULL,
+         hour     INTEGER NOT NULL,
+         model    TEXT    NOT NULL,{_TOKEN_COLUMNS},
+         file_key TEXT,
+         PRIMARY KEY (provider, id))""",
+    "CREATE INDEX IF NOT EXISTS seen_ids_file ON seen_ids (file_key) WHERE file_key IS NOT NULL",
+    f"""CREATE TABLE IF NOT EXISTS file_tokens (
+         file_key TEXT    NOT NULL,
+         day      TEXT    NOT NULL,
+         hour     INTEGER NOT NULL,
+         model    TEXT    NOT NULL,{_TOKEN_COLUMNS},
+         PRIMARY KEY (file_key, day, hour, model))""",
+    """CREATE TABLE IF NOT EXISTS seen_tasks (
+         provider TEXT    NOT NULL,
+         id       TEXT    NOT NULL,
+         day      TEXT    NOT NULL,
+         hour     INTEGER NOT NULL,
+         model    TEXT    NOT NULL,
+         seconds  INTEGER NOT NULL,
+         PRIMARY KEY (provider, id))""",
+)
+
+
+def _v2(conn: sqlite3.Connection) -> None:
+    for statement in _V2_TABLES:
+        conn.execute(statement)
+
+
+# MIGRATIONS[i] 把版本 i 升到 i + 1；之後的版本往後加
+MIGRATIONS = [_v1, _v2]
 
 
 def schema_version(conn: sqlite3.Connection) -> int:
@@ -144,6 +221,11 @@ def _epoch(value: str | None) -> int | None:
     return int(parse_iso(value).timestamp()) if value else None
 
 
+def local_day(ts: int) -> str:
+    """Unix 秒換算成本機時區的日期 YYYY-MM-DD（Token 統計的 day 欄位）。"""
+    return datetime.fromtimestamp(ts).date().isoformat()
+
+
 def meta(conn: sqlite3.Connection, key: str) -> str | None:
     row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
     return row[0] if row else None
@@ -187,6 +269,10 @@ def cleanup(conn: sqlite3.Connection, now: int) -> None:
             oldest = now - days * 86400
             conn.execute("DELETE FROM quota_samples WHERE ts < ?", (oldest,))
             conn.execute("DELETE FROM collector_runs WHERE ts < ?", (oldest,))
+            conn.execute("DELETE FROM daily_tokens WHERE day < ?", (local_day(oldest),))
+        hourly = min(days, HOURLY_TOKENS_DAYS) if days > 0 else HOURLY_TOKENS_DAYS
+        conn.execute("DELETE FROM hourly_tokens WHERE day < ?", (local_day(now - hourly * 86400),))
+        conn.execute("DELETE FROM scan_state WHERE last_seen < ?", (now - SCAN_STATE_DAYS * 86400,))
         # 上次降採樣到哪裡：之前的資料已是每小時一筆，不必再看（一年的資料全部重看要約 0.7 秒）
         try:
             lower = int(meta(conn, "downsampled_before") or 0)
