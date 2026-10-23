@@ -365,7 +365,7 @@ private struct HistorySettingsSection: View {
                     .buttonStyle(PanelPillButtonStyle())
                     .disabled(!writable)
             }
-            Text("「清除並重新掃描」另外清除對話紀錄的掃描進度，讓之後的 Token 統計（v1.7）從現有紀錄重建；額度歷史沒有來源可以重建。")
+            Text("「清除並重新掃描」另外清除對話紀錄的掃描進度，讓 Token 統計從現有的對話紀錄重建；額度歷史沒有來源可以重建。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
