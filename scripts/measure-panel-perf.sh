@@ -6,7 +6,8 @@
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
 # 46 秒時關閉面板，138 秒時再開關一次，約 166 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
-# 使用假資料（暫存資料夾的 usage.json），不讀真實的 usage.json。
+# 使用假資料（暫存資料夾的 usage.json），不讀真實的 usage.json；設定也用獨立的 demo 設定。
+# 任何一項門檻未通過時以非零結束。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 APP=${1:-$ROOT/build/verify/DerivedData/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app}
@@ -74,4 +75,6 @@ print()
 print(f"- 開啟靜止 ≤ 2%：{'通過' if ok_static else '未通過'}")
 print(f"- 關閉後 1 分鐘 ≤ 0.3%：{'通過' if ok_cpu else '未通過'}")
 print(f"- 第二次開關後 RSS 不超過第一次關閉後 +5 MB（{rss_limit / 1024:.1f} MB）：{'通過' if ok_rss else '未通過'}")
+# 任何一項未通過（含沒有取樣，平均為 NaN）就以非零結束
+sys.exit(0 if ok_static and ok_cpu and ok_rss else 1)
 PY
