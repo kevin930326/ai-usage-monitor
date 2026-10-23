@@ -381,7 +381,7 @@ struct HistorySkeleton: View {
 
 /// 骨架的掃光：進度 0→3 掃三次（整數時光在畫面外）。`Animatable` 讓每一格都拿到中間的進度，
 /// 否則 0 和 3 的小數部分都是 0，掃光不會出現。
-private struct ShimmerOverlay: View, Animatable {
+struct ShimmerOverlay: View, Animatable {
     var progress: Double
 
     nonisolated var animatableData: Double {

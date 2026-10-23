@@ -30,11 +30,17 @@ struct PanelMotion: Equatable {
     var departing: [String: Double] = [:]
     /// 骨架畫面的掃光：0→3 掃三次（整數時光在畫面外）
     var shimmer: Double = 0
+    /// 第三階段：Token 長條由下往上依序長出（每根晚 15ms）
+    var statsBars: Double = 1
+    /// 活動熱力圖由左到右以欄為單位淡入
+    var heatmap: Double = 1
+    /// 連續天數創新紀錄時 🔥 彈一下，0→1 播放一次（每個新紀錄一次）
+    var streakPop: Double = 0
 
     static let settled = PanelMotion()
 
     /// 打開面板時的起點：圓環、用量條、標記、走勢、建議、時間軸都從 0 開始
-    static let hidden = PanelMotion(appear: 0, marker: 0, trend: 0, suggest: 0, timeline: 0)
+    static let hidden = PanelMotion(appear: 0, marker: 0, trend: 0, suggest: 0, timeline: 0, statsBars: 0, heatmap: 0)
 }
 
 /// 各動畫的長度與曲線，集中在這裡方便量測與調整（ADR-0010 第 2 節）。
@@ -56,6 +62,14 @@ enum PanelTiming {
     static let shimmer = Animation.linear(duration: 1.2 * shimmerPasses)
     /// 切換額度時新舊曲線交叉淡入
     static let crossfade = Animation.easeInOut(duration: 0.3)
+    /// Token 長條：每根 0.45 秒、依序晚 15ms，30 根共約 0.9 秒（各根的曲線在 TokenBarsCanvas 裡）
+    static let statsBars = Animation.linear(duration: 0.9)
+    /// 熱力圖各欄依序淡入，共 1.0 秒
+    static let heatmap = Animation.linear(duration: 1.0)
+    /// 統計數字以 numericText 滾動
+    static let statsNumbers = Animation.easeInOut(duration: 0.4)
+    /// 🔥 彈一下
+    static let streakPop = Animation.easeOut(duration: 0.5)
     /// 「減少動態效果」時只允許短暫淡入淡出
     static let reducedFade = Animation.easeInOut(duration: 0.15)
 }

@@ -50,6 +50,8 @@ final class HistoryStore {
     let url: URL
     private(set) var status: Status = .closed
     private(set) var history: QuotaHistory = .empty
+    /// 這台 Mac 的 Token 統計（面板的統計卡片；不含每小時資料）
+    private(set) var tokens: TokenStatsData = .empty
     /// 最後一次查詢的時間（Debug 量測與測試用）
     private(set) var loadedAt: Date?
 
@@ -155,6 +157,7 @@ final class HistoryStore {
         case let v? where v < Self.supportedSchema:
             status = .olderSchema(v)
             history = .empty
+            tokens = .empty
             return
         case let v? where v > Self.supportedSchema:
             status = .newerSchema(v)
@@ -167,6 +170,8 @@ final class HistoryStore {
             return
         }
         history = QuotaHistory(samples: samples, runs: runs)
+        // Token 統計讀不了（例如收集器還在建立表）時不影響額度歷史
+        tokens = Self.tokenStats(db, now: now, hourly: false) ?? .empty
         dataVersion = Self.dataVersion(db)
         loadedAt = now
     }
@@ -189,6 +194,7 @@ final class HistoryStore {
         active = wasActive
         status = .failed
         history = .empty
+        tokens = .empty
     }
 
     // MARK: - 設定視窗（保留期間、匯出、清除）
@@ -410,5 +416,118 @@ final class HistoryStore {
                   let mode = attrs[.posixPermissions] as? Int, mode & 0o777 != 0o600 else { continue }
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
         }
+    }
+}
+
+// Token 統計的讀取（FR-43、ADR-0009 第 4、7 節）。只讀這台 Mac 的 device_id；查詢結果交給 UsageKit 的 TokenStats 計算。
+// 面板只讀最近一年的每日資料（熱力圖 22 週、活動 30 天／12 週、四個數字）；每小時資料只在完整統計視窗讀。
+
+extension HistoryStore {
+    /// 面板讀的每日資料範圍：完整統計視窗的一年熱力圖也用這個範圍
+    nonisolated static let tokenLookbackDays = 371
+
+    /// 面板開著時一起讀取（與額度歷史同一個連線）
+    nonisolated static func tokenStats(_ db: OpaquePointer, now: Date, hourly: Bool) -> TokenStatsData? {
+        guard existingTables(db, ["daily_tokens", "records", "record_days"]).count == 3 else { return nil }
+        let device = meta(db, "device_id") ?? ""
+        let since = tokenDay(now.addingTimeInterval(-TimeInterval(tokenLookbackDays) * 86400))
+        guard let days = tokenDays(db, device: device, since: since),
+              let records = tokenRecords(db),
+              let recordDays = tokenRecordDays(db, since: since) else { return nil }
+        let hours = hourly ? tokenHours(db, device: device) : []
+        guard let hours else { return nil }
+        let skipped = ["token_bad_lines", "token_long_lines"].compactMap { meta(db, $0).flatMap(Int.init) }.reduce(0, +)
+        let retention = meta(db, "retention_days").flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } ?? defaultRetentionDays
+        return TokenStatsData(
+            days: days, hours: hours, records: records, recordDays: recordDays,
+            firstScanDone: meta(db, "first_scan_done") == "1",
+            firstScanProgress: meta(db, "first_scan_progress").flatMap(Int.init).map { min(max($0, 0), 100) },
+            skippedLines: skipped, retentionDays: retention)
+    }
+
+    /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。
+    nonisolated func loadFullTokenStats(now: Date = .now) -> TokenStatsData? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return withConnection(write: false) { db -> TokenStatsData? in
+            guard let version = Self.schemaVersion(db), version >= Self.supportedSchema else { return nil }
+            return Self.tokenStats(db, now: now, hourly: true)
+        } ?? nil
+    }
+
+    private nonisolated static let tokenColumns = "input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, reasoning_tokens"
+
+    private nonisolated static func counts(_ stmt: OpaquePointer?, from column: Int32) -> TokenCounts {
+        TokenCounts(input: sqlite3_column_int64(stmt, column), cacheWrite: sqlite3_column_int64(stmt, column + 1),
+                    cacheRead: sqlite3_column_int64(stmt, column + 2), output: sqlite3_column_int64(stmt, column + 3),
+                    reasoning: sqlite3_column_int64(stmt, column + 4))
+    }
+
+    private nonisolated static func text(_ stmt: OpaquePointer?, _ column: Int32) -> String? {
+        sqlite3_column_text(stmt, column).map { String(cString: $0) }
+    }
+
+    private nonisolated static func tokenDays(_ db: OpaquePointer, device: String, since: String) -> [TokenDayRow]? {
+        let sql = """
+            SELECT day, provider, model, \(tokenColumns), task_count, task_seconds, longest_task_seconds
+            FROM daily_tokens WHERE device_id = ? AND day >= ? ORDER BY day
+            """
+        return rows(db, sql, [.text(device), .text(since)]) { stmt in
+            guard let day = text(stmt, 0), let provider = text(stmt, 1), let model = text(stmt, 2) else { return nil }
+            return TokenDayRow(day: day, provider: provider, model: model, counts: counts(stmt, from: 3),
+                               taskCount: Int(sqlite3_column_int64(stmt, 8)), taskSeconds: Int(sqlite3_column_int64(stmt, 9)),
+                               longestTaskSeconds: Int(sqlite3_column_int64(stmt, 10)))
+        }
+    }
+
+    private nonisolated static func tokenHours(_ db: OpaquePointer, device: String) -> [TokenHourRow]? {
+        guard existingTables(db, ["hourly_tokens"]).count == 1 else { return [] }
+        let sql = "SELECT day, hour, provider, model, \(tokenColumns) FROM hourly_tokens WHERE device_id = ?"
+        return rows(db, sql, [.text(device)]) { stmt in
+            guard let day = text(stmt, 0), let provider = text(stmt, 2), let model = text(stmt, 3) else { return nil }
+            return TokenHourRow(day: day, hour: Int(sqlite3_column_int64(stmt, 1)), provider: provider, model: model, counts: counts(stmt, from: 4))
+        }
+    }
+
+    private nonisolated static func tokenRecords(_ db: OpaquePointer) -> [String: TokenRecord]? {
+        rows(db, "SELECT key, value, day FROM records", []) { stmt -> (String, TokenRecord)? in
+            guard let key = text(stmt, 0) else { return nil }
+            return (key, TokenRecord(value: sqlite3_column_int64(stmt, 1), day: text(stmt, 2)))
+        }.map { Dictionary($0, uniquingKeysWith: { a, _ in a }) }
+    }
+
+    private nonisolated static func tokenRecordDays(_ db: OpaquePointer, since: String) -> [String: [String: Int64]]? {
+        rows(db, "SELECT day, provider, tokens FROM record_days WHERE day >= ?", [.text(since)]) { stmt -> (String, String, Int64)? in
+            guard let day = text(stmt, 0), let provider = text(stmt, 1) else { return nil }
+            return (day, provider, sqlite3_column_int64(stmt, 2))
+        }.map { list in
+            var result: [String: [String: Int64]] = [:]
+            for (day, provider, tokens) in list { result[day, default: [:]][provider] = tokens }
+            return result
+        }
+    }
+
+    /// 查詢每一列；`make` 回傳 nil 的列略過（欄位是 NULL），查詢失敗時整個回傳 nil
+    private nonisolated static func rows<T>(_ db: OpaquePointer, _ sql: String, _ values: [Value], _ make: (OpaquePointer?) -> T?) -> [T]? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        for (i, value) in values.enumerated() {
+            switch value {
+            case let .int(v): sqlite3_bind_int64(stmt, Int32(i + 1), v)
+            case let .text(v): sqlite3_bind_text(stmt, Int32(i + 1), v, -1, transient)
+            }
+        }
+        var result: [T] = []
+        while true {
+            let rc = sqlite3_step(stmt)
+            if rc == SQLITE_DONE { return result }
+            guard rc == SQLITE_ROW else { return nil }
+            if let item = make(stmt) { result.append(item) }
+        }
+    }
+
+    /// 收集器以本機時區寫入的 `YYYY-MM-DD`
+    nonisolated static func tokenDay(_ date: Date) -> String {
+        TokenCalendar.key(date, calendar: .current)
     }
 }
