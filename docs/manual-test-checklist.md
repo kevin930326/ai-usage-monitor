@@ -123,7 +123,7 @@
 | 9.2 | 用 Claude Code 問一個問題，6 分鐘後打開面板 | 「本週 Token」增加；滑鼠移到上面顯示 input、cache 寫入、output 與「快取讀取（不計入上方數字）」 | |
 | 9.3 | 切換全部／Claude／Codex，打開「完整統計視窗」 | 數字與熱力圖隨切換改變；視窗可調整大小、最小 720×520 | |
 | 9.4 | 打開再關閉完整統計視窗 5 次，看活動監視器的記憶體 | 關閉後記憶體回到接近打開前，沒有每次增加（FR-44） | |
-| 9.5 | 隱私抽查：`sqlite3 ~/Library/Application\ Support/AIUsageMonitor/history.sqlite3 .dump \| grep -ci <最近一個專案資料夾的名稱>`，再以最近一次提問中的一個特別的詞重做 | 兩次都是 `0`；`collector.log` 也搜不到（NFR-9）。不要把輸出貼到任何地方 | |
+| 9.5 | 隱私抽查：在終端機先設定要找的詞（最近一個專案資料夾的名稱），再匯出資料庫內容搜尋：`needle='專案資料夾名稱'; sqlite3 "$HOME/Library/Application Support/AIUsageMonitor/history.sqlite3" .dump \| grep -Fci -- "$needle"`；之後把 `needle` 換成最近一次提問中的一個特別的詞再執行一次；最後對 `~/Library/Logs/AIUsageMonitor/collector.log` 執行 `grep -Fci -- "$needle"` | 每次都只印出 `0`（`-F` 照字面比對，名稱含空白、括號或 `.*` 也不影響）；若出現 `Error:` 或 `unable to open` 是指令失敗、不算通過（NFR-9）。不要把輸出貼到任何地方 | |
 | 9.6 | 設定 › 歷史資料 按「清除並重新掃描」並確認 | 統計回到「正在整理過去的紀錄」，完成後的累計與清除前相同（保留期間外的每日資料除外） | |
 
 ## 10. Mac v1.8：服務狀態、通知、右鍵選單、快捷鍵
