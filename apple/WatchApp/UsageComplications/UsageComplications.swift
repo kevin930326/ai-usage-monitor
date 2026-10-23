@@ -17,7 +17,7 @@ struct UsageComplication: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("AI 用量")
-        .description("最吃緊額度的剩餘百分比。")
+        .description("剩餘最少的額度的百分比。")
         .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }

@@ -42,7 +42,7 @@ extension LockScreenActivityView where Trailing == RefreshButton {
     }
 }
 
-/// 最吃緊的一項：大字百分比（FR-15）。
+/// 剩餘最少的額度：大字百分比（FR-15）。名稱就是標題，不另加「剩餘最少」。
 struct TightestHeader: View {
     let item: ProviderWindow
     let mode: UsageDisplayMode
@@ -54,13 +54,15 @@ struct TightestHeader: View {
         HStack(alignment: .center, spacing: 10) {
             Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
                 .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: mode, at: now))
             VStack(alignment: .leading, spacing: 0) {
-                Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
+                Text(item.displayName)
                     .font(.caption.weight(.semibold))
-                Text("\(mode.label) · 最吃緊")
+                Text(mode.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+            .accessibilityHidden(true)
             Spacer()
             ResetLabel(window: item.window, now: now)
                 .font(.caption)
@@ -181,7 +183,7 @@ extension ActivityFooter where Trailing == EmptyView {
     }
 }
 
-/// Apple Watch 智慧型堆疊的精簡版面：只顯示最吃緊的一項（FR-27）。
+/// Apple Watch 智慧型堆疊的精簡版面：只顯示剩餘最少的額度（FR-27）。
 struct WatchActivityView: View {
     let state: UsageActivityState
     var now: Date = .now

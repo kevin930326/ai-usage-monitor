@@ -63,7 +63,7 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
         }))
     }
 
-    /// 最吃緊的額度（FR-15），已重置的額度視為剩餘 100%（FR-26）。
+    /// 剩餘最少的額度（FR-15），已重置的額度視為剩餘 100%（FR-26）。
     public func tightest(at now: Date = .now) -> ProviderWindow? {
         snapshot.tightestWindow(at: now)
     }

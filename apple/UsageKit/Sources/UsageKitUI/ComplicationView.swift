@@ -5,7 +5,7 @@ import SwiftUI
 import UsageKit
 import WidgetKit
 
-/// 錶面複雜功能（FR-28）與 iPhone 鎖定畫面小工具共用：最吃緊額度的百分比，
+/// 錶面複雜功能（FR-28）與 iPhone 鎖定畫面小工具共用：剩餘最少的額度的百分比，
 /// 進度條與服務標示用 FR-16 的顏色。尺寸以參數傳入，App 也能用 ImageRenderer 輸出同一個畫面。
 /// 過期門檻依平台傳入：手錶 `UsageSnapshot.watchStaleAfter`、iPhone `UsageSnapshot.staleAfter`（FR-11）。
 public struct ComplicationView: View {
@@ -39,6 +39,18 @@ public struct ComplicationView: View {
     }
 
     public var body: some View {
+        if let item {
+            // 畫面上只有圖示＋名稱＋百分比，VoiceOver 說完整的「剩餘最少的額度：Claude 每週，剩 67%」
+            content
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: mode, at: now) + (stale ? "，資料已過期" : ""))
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch family {
         case .accessoryCircular:
             Gauge(value: pct, in: 0...100) {

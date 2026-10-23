@@ -13,7 +13,8 @@ struct MenuBarLabel: View {
 
     var body: some View {
         if let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) {
-            let content = MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now)
+            let content = MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
+                                             isLeast: settings.iconWindow == .automatic)
             MenuBarIconView(content: content, style: settings.iconStyle)
         } else {
             Image(systemName: "gauge.with.dots.needle.0percent")
@@ -29,25 +30,30 @@ struct MenuBarIconContent: Hashable {
     var timeRemaining: Int?
     var state: MenuBarState
     var label: String
+    /// 顯示的是「自動」挑出的剩餘最少的額度（VoiceOver 要說出來）
+    var isLeast: Bool
 
-    init(provider: String, remainingPct: Int, timeRemaining: Int?, state: MenuBarState, label: String) {
+    init(provider: String, remainingPct: Int, timeRemaining: Int?, state: MenuBarState, label: String, isLeast: Bool = true) {
         self.provider = provider
         self.remainingPct = remainingPct
         self.timeRemaining = timeRemaining
         self.state = state
         self.label = label
+        self.isLeast = isLeast
     }
 
-    init(item: ProviderWindow, stale: Bool, now: Date) {
+    init(item: ProviderWindow, stale: Bool, now: Date, isLeast: Bool) {
+        self.isLeast = isLeast
         provider = item.provider
         remainingPct = Int(item.window.effectiveRemainingPct(at: now).rounded())
         timeRemaining = item.window.timeRemainingFraction(at: now).map { Int(($0 * 50).rounded()) * 2 }
         state = MenuBarState(window: item.window, stale: stale, now: now)
-        label = "\(ProviderInfo.displayName(item.provider)) \(item.window.label)"
+        label = item.displayName
     }
 
     var accessibilityText: String {
-        var text = "\(label) 剩餘 \(remainingPct)%"
+        // 「剩餘最少的額度：Claude 每週，剩 67%」；指定額度時不加前綴
+        var text = "\(isLeast ? "剩餘最少的額度：" : "")\(label)，剩 \(remainingPct)%"
         switch state {
         case .tooFast: text += "，用得較快"
         case .critical: text += "，剩不到 20%"

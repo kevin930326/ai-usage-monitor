@@ -3,7 +3,7 @@ import UsageKit
 import UsageKitUI
 
 /// 點開選單列後的面板（FR-22、FR-34）：單一長版、卡片式，區塊依設定排序與開關（FR-35）。
-/// 保留原本面板的所有資訊：最吃緊的一項、所有額度、方案、重置倒數或已重置、服務錯誤、
+/// 保留原本面板的所有資訊：剩餘最少的額度、所有額度、方案、重置倒數或已重置、服務錯誤、
 /// 沒有服務的提示、更新時間與資料過期、讀檔錯誤與路徑、結束按鈕。
 struct PanelView: View {
     @Environment(UsageStore.self) private var store
@@ -97,7 +97,9 @@ struct PanelView: View {
         switch section {
         case .ring:
             if let item = snapshot.tightestWindow(at: store.now) {
-                PanelCard(id: section.rawValue, title: section.title, collapsed: collapsed) {
+                PanelCard(id: section.rawValue, accessibilityTitle: item.displayName, collapsed: collapsed) {
+                    RingCardHeader(item: item, stale: stale)
+                } content: {
                     RingCardContent(item: item, stale: stale, now: store.now)
                 }
             }

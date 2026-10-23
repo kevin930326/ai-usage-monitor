@@ -11,7 +11,7 @@ enum DemoData {
         case error    // Codex 失敗、Claude 正常（FR-12）
         case reset    // Claude 5 小時的重置時間已過（FR-26）
         case used     // 顯示已用 %（FR-17）
-        case codex    // Codex 最吃緊：動態島與錶面顯示 Codex 圖示
+        case codex    // Codex 剩最少：動態島與錶面顯示 Codex 圖示
         case claudeOnly = "claude-only"  // 只用 Claude：收集器沒有啟用 Codex
         case codexOnly = "codex-only"    // 只用 Codex：收集器沒有啟用 Claude
         case noProviders = "none"  // 收集器沒有啟用任何服務

@@ -2,7 +2,7 @@ import SwiftUI
 import UsageKit
 import UsageKitUI
 
-/// 手錶 App（FR-29）：最吃緊的一項與所有服務的可見額度、重置倒數。
+/// 手錶 App（FR-29）：剩餘最少的額度與所有服務的可見額度、重置倒數。
 struct UsageListView: View {
     @Environment(WatchModel.self) private var model
 
@@ -51,10 +51,12 @@ private struct UsageList: View {
                             Text("\(Int(item.window.effectiveRemainingPct(at: now).rounded()))%")
                                 .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
                                 .foregroundStyle(stale ? .secondary : .primary)
-                            Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label) 剩餘")
+                            Text("\(item.displayName) 剩餘")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(item.leastRemainingAccessibilityLabel(at: now))
                     }
                 }
                 if snapshot.hasNoProviders {

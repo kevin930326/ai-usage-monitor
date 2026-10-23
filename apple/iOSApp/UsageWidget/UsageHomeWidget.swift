@@ -4,7 +4,7 @@ import UsageKit
 import UsageKitUI
 import WidgetKit
 
-/// 主畫面與鎖定畫面小工具：最吃緊的一項放最顯眼（FR-15），中、大尺寸再列出各服務的額度。
+/// 主畫面與鎖定畫面小工具：剩餘最少的額度放最顯眼（FR-15），中、大尺寸再列出各服務的額度。
 /// 小工具自己以讀取密鑰呼叫中繼（網址在 App Group、密鑰在共用的 Keychain），
 /// 不必等 App 開啟；抓不到時顯示 App Group 中最後一份資料。
 struct UsageHomeWidget: Widget {
@@ -14,7 +14,7 @@ struct UsageHomeWidget: Widget {
                 .containerBackground(for: .widget) { Color(uiColor: .systemBackground) }
         }
         .configurationDisplayName("AI 用量")
-        .description("Claude 與 Codex 的剩餘額度，最吃緊的一項放最大。")
+        .description("Claude 與 Codex 的剩餘額度，剩餘最少的額度放最大。")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
                             .accessoryCircular, .accessoryRectangular, .accessoryInline])
         // 中型沿用 Live Activity 的版面，它自己留邊界；小、大型在下面自行加 padding
@@ -155,7 +155,7 @@ struct HomeWidgetView: View {
     }
 }
 
-/// 小：只顯示最吃緊的一項（FR-15）。
+/// 小：只顯示剩餘最少的額度（FR-15）。
 private struct SmallUsageView: View {
     let state: UsageActivityState
     let now: Date
@@ -170,17 +170,20 @@ private struct SmallUsageView: View {
                     ProviderIcon(item.provider)
                         .frame(width: 14, height: 14)
                         .foregroundStyle(stale ? Color.gray : UsageColors.provider(item.provider))
-                    Text("\(ProviderInfo.displayName(item.provider)) · \(item.window.label)")
+                    Text(item.displayName)
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
+                .accessibilityHidden(true)
                 Text("\(Int(pct.rounded()))%")
                     .font(.system(size: 40, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(stale ? .secondary : .primary)
-                Text("\(state.mode.label) · 最吃緊")
+                    .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: state.mode, at: now))
+                Text(state.mode.label)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 ProgressView(value: pct, total: 100)
                     .tint(UsageColors.bar(item.window, provider: item.provider, stale: stale, now: now))
                 Label {
@@ -207,8 +210,8 @@ private struct SmallUsageView: View {
     }
 }
 
-/// 大：最吃緊的一項 + 每個服務的所有可見額度（與 App 主畫面相同的 `UsageWindowRow`）。
-/// 只用一個服務時（收集器沒有啟用另一個）放大最吃緊的一項、額度改單欄，不留下半部空白。
+/// 大：剩餘最少的額度 + 每個服務的所有可見額度（與 App 主畫面相同的 `UsageWindowRow`）。
+/// 只用一個服務時（收集器沒有啟用另一個）放大剩餘最少的額度、額度改單欄，不留下半部空白。
 private struct LargeUsageView: View {
     let state: UsageActivityState
     let now: Date
@@ -276,7 +279,7 @@ private struct LargeUsageView: View {
     }
 }
 
-/// 大尺寸只有一個服務時的最吃緊一項：大字百分比與重置倒數。
+/// 大尺寸只有一個服務時剩餘最少的額度：大字百分比與重置倒數。
 private struct LargeTightestHeader: View {
     let item: ProviderWindow
     let mode: UsageDisplayMode
@@ -285,13 +288,15 @@ private struct LargeTightestHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("\(item.window.label) · \(mode.label) · 最吃緊")
+            Text("\(item.window.label) · \(mode.label)")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             HStack(alignment: .firstTextBaseline) {
                 Text("\(Int(item.window.displayedPct(mode, at: now).rounded()))%")
                     .font(.system(size: 52, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(stale ? .secondary : .primary)
+                    .accessibilityLabel(item.leastRemainingAccessibilityLabel(mode: mode, at: now))
                 Spacer()
                 ResetLabel(window: item.window, now: now)
                     .font(.caption)

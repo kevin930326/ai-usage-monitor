@@ -43,7 +43,7 @@ import Testing
     }
 
     @Test func resetWindowIsNoLongerTightest() {
-        // 03:30Z 重置後 5 小時額度視為 100%，最吃緊換成每週
+        // 03:30Z 重置後 5 小時額度視為 100%，剩餘最少的額度換成每週
         let afterReset = updatedAt.addingTimeInterval(31 * 60)
         #expect(snapshot.tightestWindow(at: afterReset)?.window.id == "weekly")
     }

@@ -55,3 +55,18 @@ import Testing
         #expect(snap.tightestWindow(at: now)?.provider == "codex")
     }
 }
+
+@Suite struct LeastRemainingWordingTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func displayNameIsProviderAndWindow() {
+        let item = ProviderWindow(provider: "claude", window: UsageWindow(id: "weekly", label: "每週", usedPct: 33))
+        #expect(item.displayName == "Claude 每週")
+    }
+
+    @Test func accessibilityLabelSaysItIsTheLeastRemaining() {
+        let item = ProviderWindow(provider: "claude", window: UsageWindow(id: "weekly", label: "每週", usedPct: 33))
+        #expect(item.leastRemainingAccessibilityLabel(at: now) == "剩餘最少的額度：Claude 每週，剩 67%")
+        #expect(item.leastRemainingAccessibilityLabel(mode: .used, at: now) == "剩餘最少的額度：Claude 每週，已用 33%")
+    }
+}
