@@ -234,6 +234,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - `scan_state.state`（JSON）：跨次掃描要接著用的狀態——Claude 進行中任務的開始時間、第一則回覆的 ID 與模型；Codex 目前的模型（`turn_context`）。
 - `seen_ids.file_key`：Codex 的回應 ID 由哪個檔案計入。該檔重算（第 4 節）時一併移除，才能重新計入。
 - `seen_tasks (provider, id, day, hour, model, seconds)`：已計入的任務（Claude 以任務第一則回覆的 ID、Codex 以 `turn_id`）與當時的秒數。任務跨兩次掃描時補差額；重掃、`--resume` 副本與 Codex 重算時任務不重複計算。與 `seen_ids` 一樣永久保留，「清除並重新掃描」時一併清除。
+- `record_days (day, provider, tokens)`：每天每個服務的主數字，**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，保留期間較短或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它。「清除歷史」時與 `records` 一起清除。
 - `records` 另有各服務的版本（鍵加上 `:claude`／`:codex`），給面板的「全部／Claude／Codex」切換使用。個人紀錄同樣大時記最早的那天。
 - 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
 

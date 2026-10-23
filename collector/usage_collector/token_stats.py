@@ -250,6 +250,18 @@ class Totals:
     def flush(self, conn: sqlite3.Connection, file_key: str | None, cutoffs: tuple[str, str]) -> None:
         daily_cutoff, hourly_cutoff = cutoffs
         cols = ", ".join(TOKEN_FIELDS)
+        # 個人紀錄用的每日主數字：不套用保留期間（超過保留期間的舊紀錄也算進單日最高與連續天數）
+        record_days: dict[tuple[str, str], int] = {}
+        for (provider, day, _, _), b in self.buckets.items():
+            record_days[(day, provider)] = record_days.get((day, provider), 0) + main_tokens(b)
+        for (day, provider), delta in record_days.items():
+            if delta > 0:
+                conn.execute("INSERT INTO record_days (day, provider, tokens) VALUES (?, ?, ?)"
+                             " ON CONFLICT (day, provider) DO UPDATE SET tokens = tokens + excluded.tokens",
+                             (day, provider, delta))
+            elif delta < 0:
+                conn.execute("UPDATE record_days SET tokens = max(0, tokens + ?) WHERE day = ? AND provider = ?",
+                             (delta, day, provider))
         sets = ", ".join(f"{c} = max(0, {c} + excluded.{c})" for c in TOKEN_FIELDS + ("task_count", "task_seconds"))
         for (provider, day, hour, model), b in self.buckets.items():
             values = [max(0, v) for v in b[:7]] + [b[7], self.now]
@@ -612,15 +624,13 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     return st.offset
 
 
-def _update_records(conn: sqlite3.Connection, device_id: str) -> None:
-    """單日最高與最長連續天數：從 daily_tokens 重算，只在變大時更新。"""
+def _update_records(conn: sqlite3.Connection) -> None:
+    """單日最高與最長連續天數：從 record_days（不套用保留期間）重算，只在變大時更新。"""
     for provider in (None, *PROVIDERS):
         suffix = f":{provider}" if provider else ""
-        where, args = ("WHERE device_id = ? AND provider = ?", (device_id, provider)) if provider else \
-            ("WHERE device_id = ?", (device_id,))
+        where, args = ("WHERE provider = ?", (provider,)) if provider else ("", ())
         days = conn.execute(
-            f"SELECT day, SUM(input_tokens + cache_write_tokens + output_tokens) AS t FROM daily_tokens {where}"
-            " GROUP BY day HAVING t > 0 ORDER BY day", args).fetchall()
+            f"SELECT day, SUM(tokens) AS t FROM record_days {where} GROUP BY day HAVING t > 0 ORDER BY day", args).fetchall()
         if not days:
             continue
         best = min(days, key=lambda r: (-r[1], r[0]))
@@ -698,7 +708,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
         if stale:
             conn.executemany("UPDATE scan_state SET last_seen = ?, mtime = ? WHERE file_key = ?", stale)
         if changed:
-            _update_records(conn, device_id)
+            _update_records(conn)
         c = result.counters
         for key, value in (("token_bad_lines", c.bad_lines), ("token_long_lines", c.long_lines)):
             if value:

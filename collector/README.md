@@ -129,6 +129,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | 資料表 | 內容 |
 |---|---|
 | `daily_tokens`／`hourly_tokens` | 每天（每小時）× 服務 × 模型的 `input`、`cache_write`、`cache_read`、`output`（含推理）、`reasoning`（明細）、任務數、任務時間、最長任務。日期與小時用掃描當下的本機時區 |
+| `record_days` | 每天每個服務的主數字，不套用保留期間（單日最高與連續天數以它計算） |
 | `records` | 個人紀錄（不隨保留期間刪除）：`total_tokens`、`best_day_tokens`、`longest_task_seconds`、`longest_streak_days`，以及加上 `:claude`／`:codex` 的各服務版本 |
 | `scan_state` | 每個紀錄檔讀到哪裡（inode、大小、mtime、offset、Codex 的來源與上一筆累計值、跨次掃描的任務狀態） |
 | `seen_ids`／`seen_tasks` | 已計入的訊息、回應與任務 ID 與當時的數值（去重與補差額），永久保留 |

@@ -686,6 +686,28 @@ class ScanTest(TokenStatsTestCase):
             self.assertEqual(c.execute("SELECT SUM(input_tokens) FROM hourly_tokens").fetchone()[0], 30)
         self.assertEqual(self.records()["total_tokens"][0], 60)
 
+    def test_records_ignore_retention(self):
+        # 首次掃描的紀錄全部超過保留期間：單日最高與連續天數仍要算出來
+        self.write(self.claude_file(), *[claude_assistant(f"old{i}", T0 - (400 - i) * DAY, inp=1000, out=0) for i in range(3)])
+        self.scan(now=T0)
+        records = self.records()
+        self.assertEqual(records["total_tokens"][0], 3000)
+        self.assertEqual(records["best_day_tokens"][0], 1000)
+        self.assertEqual(records["longest_streak_days"][0], 3)
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM daily_tokens").fetchone()[0], 0)
+        # 保留 7 天、連續使用 12 天：最長連續天數是 12
+        with self.db() as c:
+            c.execute("UPDATE meta SET value = '7' WHERE key = 'retention_days'")
+            c.commit()
+        for i in range(12):
+            self.write(self.claude_file(), claude_assistant(f"d{i}", T0 + i * DAY, inp=1, out=0))
+            self.scan(now=T0 + i * DAY + HOUR)
+            conn = history.connect(self.path)
+            history.cleanup(conn, T0 + i * DAY + HOUR)
+            conn.close()
+        self.assertEqual(self.records()["longest_streak_days"][0], 12)
+
     def test_cleanup_applies_retention_to_token_tables(self):
         self.write(self.claude_file(), claude_assistant("a", T0 - 50 * DAY, inp=1, out=0),
                    claude_assistant("b", T0 - 5 * DAY, inp=2, out=0))

@@ -80,6 +80,7 @@ _TASK_COLUMNS = """
 # - scan_state.state：跨次掃描要接著用的狀態（Claude 進行中任務的開始時間與第一則回覆 ID、Codex 目前的模型）
 # - seen_ids.file_key：Codex 的回應 ID 由哪個檔案計入；該檔重算時一併移除，才能重新計入
 # - seen_tasks：已計入的任務與當時的秒數。任務跨兩次掃描時補差額；重掃、--resume 副本不重複計算
+# - record_days：每天每個服務的主數字，不套用保留期間；單日最高與連續天數這兩項個人紀錄以它計算
 _V2_TABLES = (
     f"""CREATE TABLE IF NOT EXISTS daily_tokens (
          device_id TEXT NOT NULL,
@@ -97,6 +98,11 @@ _V2_TABLES = (
     "CREATE INDEX IF NOT EXISTS daily_tokens_day ON daily_tokens (day)",
     "CREATE INDEX IF NOT EXISTS hourly_tokens_day ON hourly_tokens (day)",
     "CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, value INTEGER NOT NULL, day TEXT)",
+    """CREATE TABLE IF NOT EXISTS record_days (
+         day      TEXT    NOT NULL,
+         provider TEXT    NOT NULL,
+         tokens   INTEGER NOT NULL,
+         PRIMARY KEY (day, provider))""",
     """CREATE TABLE IF NOT EXISTS scan_state (
          file_key   TEXT PRIMARY KEY,
          inode      INTEGER NOT NULL,
