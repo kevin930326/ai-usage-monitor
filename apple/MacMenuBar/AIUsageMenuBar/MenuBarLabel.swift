@@ -4,7 +4,8 @@ import UsageKit
 import UsageKitUI
 
 /// 選單列圖示（FR-33、ADR-0008 第 1 節）：預設雙圓環，另有橫條、只有 %、圓環＋%。
-/// 四種狀態不只靠顏色：太快有提示色小點、剩 < 20% 外圈轉紅、過期整個轉灰。
+/// 四種狀態不只靠顏色：太快有提示色小點、剩 < 20% 外圈轉紅、過期整個轉灰且外圈改為虛線；
+/// 「只有 %」樣式以符號區分（↑ 太快、! 剩 < 20%、– 過期）。
 /// 沒有任何動畫；`store.now` 每分鐘更新一次，圖示只在內容改變時重畫（`MenuBarIcon.image` 有快取）。
 struct MenuBarLabel: View {
     let store: UsageStore
@@ -104,7 +105,7 @@ enum MenuBarIcon {
     private static func draw(_ c: MenuBarIconContent, style: MenuBarIconStyle) -> NSImage {
         let size: NSSize = switch style {
         case .bar: NSSize(width: 22, height: 16)
-        case .percent: NSSize(width: 7, height: 16)
+        case .percent: NSSize(width: 8, height: 16)
         case .dualRing, .ringPercent: NSSize(width: 18, height: 16)
         }
         let notice = NSColor(UsageColors.notice)
@@ -118,7 +119,8 @@ enum MenuBarIcon {
             switch style {
             case .dualRing, .ringPercent:
                 let center = NSPoint(x: 8, y: rect.midY)
-                ring(center: center, radius: 6.6, width: 2.4, fraction: Double(c.remainingPct) / 100, color: main)
+                ring(center: center, radius: 6.6, width: 2.4, fraction: Double(c.remainingPct) / 100, color: main,
+                     dashed: c.state == .stale)
                 if style == .dualRing, let time = c.timeRemaining {
                     ring(center: center, radius: 3.2, width: 1.8, fraction: Double(time) / 100,
                          color: c.state == .stale ? .tertiaryLabelColor : .secondaryLabelColor)
@@ -132,10 +134,18 @@ enum MenuBarIcon {
                 fill.size.width = max(track.width * CGFloat(c.remainingPct) / 100, c.remainingPct > 0 ? 2 : 0)
                 main.setFill()
                 NSBezierPath(roundedRect: fill, xRadius: 2.5, yRadius: 2.5).fill()
+                if c.state == .stale {
+                    // 過期：除了轉灰，再加虛線外框（不只靠顏色）
+                    let outline = NSBezierPath(roundedRect: track.insetBy(dx: -1, dy: -1), xRadius: 3.5, yRadius: 3.5)
+                    outline.lineWidth = 1
+                    outline.setLineDash([1.6, 1.4], count: 2, phase: 0)
+                    NSColor.systemGray.setStroke()
+                    outline.stroke()
+                }
                 if c.state == .tooFast { dot(at: NSPoint(x: 19.5, y: rect.maxY - 3.5), color: notice) }
             case .percent:
-                // 只有 % 時，非正常狀態在數字後加一個點：太快＝提示色、剩 < 20%＝紅、過期＝灰
-                dot(at: NSPoint(x: 3.5, y: rect.midY), color: c.state == .tooFast ? notice : main, radius: 3)
+                // 只有 % 時，非正常狀態在數字後加一個符號，形狀本身就能區分：↑ 太快、! 剩 < 20%、– 過期
+                symbol(c.state, in: rect, color: c.state == .tooFast ? notice : main)
             }
             return true
         }
@@ -144,11 +154,15 @@ enum MenuBarIcon {
         return image
     }
 
-    /// 從 12 點鐘方向順時針畫 `fraction` 的弧，底下是淡色軌道。
-    private static func ring(center: NSPoint, radius: CGFloat, width: CGFloat, fraction: Double, color: NSColor) {
+    /// 從 12 點鐘方向順時針畫 `fraction` 的弧，底下是淡色軌道。`dashed`（資料過期）時軌道與弧都改為虛線。
+    private static func ring(center: NSPoint, radius: CGFloat, width: CGFloat, fraction: Double, color: NSColor,
+                             dashed: Bool = false) {
+        // 周長約 41pt，1.8＋1.6 的虛線約 12 段，16pt 的圖示上也看得出斷開
+        let dash: [CGFloat] = [1.8, 1.6]
         let track = NSBezierPath()
         track.appendArc(withCenter: center, radius: radius, startAngle: 0, endAngle: 360)
         track.lineWidth = width
+        if dashed { track.setLineDash(dash, count: dash.count, phase: 0) }
         NSColor.tertiaryLabelColor.withAlphaComponent(0.35).setStroke()
         track.stroke()
         let clamped = min(max(fraction, 0), 1)
@@ -156,9 +170,31 @@ enum MenuBarIcon {
         let arc = NSBezierPath()
         arc.appendArc(withCenter: center, radius: radius, startAngle: 90, endAngle: 90 - 360 * clamped, clockwise: true)
         arc.lineWidth = width
-        arc.lineCapStyle = .round
+        if dashed {
+            arc.setLineDash(dash, count: dash.count, phase: 0)
+            arc.lineCapStyle = .butt
+        } else {
+            arc.lineCapStyle = .round
+        }
         color.setStroke()
         arc.stroke()
+    }
+
+    /// 「只有 %」樣式的狀態符號，置中畫在 `rect` 裡。正常狀態不會呼叫（`MenuBarIconView` 不加圖）。
+    private static func symbol(_ state: MenuBarState, in rect: NSRect, color: NSColor) {
+        let text: String = switch state {
+        case .tooFast: "↑"
+        case .critical: "!"
+        case .stale: "–"
+        case .normal: ""
+        }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12, weight: .bold),
+            .foregroundColor: color,
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let size = string.size()
+        string.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
     }
 
     private static func dot(at point: NSPoint, color: NSColor, radius: CGFloat = 2.2) {
