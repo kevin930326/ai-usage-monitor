@@ -37,6 +37,8 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
 
     let model = WatchModel()
     private var scheduling: Task<Void, Never>?
+    /// 每次 scheduleBackgroundRefresh 加一；較舊的要求失敗時不重試
+    private var requestID = 0
 
     func applicationDidFinishLaunching() {
         scheduleBackgroundRefresh()
@@ -57,28 +59,44 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
         }
     }
 
-    /// 同一時間只會有一個排程，重複呼叫會取代前一個。排程失敗時依 `BackgroundRefreshRetry`
+    /// 同一時間只會有一個排程，重複呼叫會取代前一個。第一次直接送出排程要求（背景工作 `handle()`
+    /// 在 `setTaskCompleted` 之前就已送出，整合審查 D-c）；失敗時才依 `BackgroundRefreshRetry`
     /// 延後重試（最多 3 次），否則背景更新會中斷到使用者再打開 App。
     func scheduleBackgroundRefresh() {
         scheduling?.cancel()
+        scheduling = nil
+        requestID += 1
+        let id = requestID
+        submitRequest { ok in
+            // 已有較新的排程要求時不重試
+            guard !ok, id == self.requestID else { return }
+            self.retryScheduling()
+        }
+    }
+
+    private func retryScheduling() {
         scheduling = Task {
-            await BackgroundRefreshRetry.schedule {
-                // 已有較新的排程要求時停止重試
+            await BackgroundRefreshRetry.schedule(alreadyFailed: 1) {
                 guard !Task.isCancelled else { return true }
                 return await withCheckedContinuation { continuation in
-                    WKApplication.shared().scheduleBackgroundRefresh(
-                        withPreferredDate: Date(timeIntervalSinceNow: Self.backgroundInterval),
-                        userInfo: nil
-                    ) { error in
-                        if let error {
-                            print("背景重新整理排程失敗：\(error.localizedDescription)")
-                        }
-                        continuation.resume(returning: error == nil)
-                    }
+                    self.submitRequest { continuation.resume(returning: $0) }
                 }
             } sleep: { delay in
                 try? await Task.sleep(for: .seconds(delay))
             }
+        }
+    }
+
+    /// 送出一次排程要求；結果在 main actor 上回報
+    private func submitRequest(_ done: @escaping @MainActor (Bool) -> Void) {
+        WKApplication.shared().scheduleBackgroundRefresh(
+            withPreferredDate: Date(timeIntervalSinceNow: Self.backgroundInterval),
+            userInfo: nil
+        ) { error in
+            if let error {
+                print("背景重新整理排程失敗：\(error.localizedDescription)")
+            }
+            Task { @MainActor in done(error == nil) }
         }
     }
 }

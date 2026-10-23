@@ -14,13 +14,19 @@ public enum BackgroundRefreshRetry {
     }
 
     /// 呼叫 `attempt` 排程（成功回傳 true），失敗時依 `delay(afterFailures:)` 等待後重試。
-    /// 在呼叫端的 actor 上執行（手錶 App 在 MainActor 呼叫 WatchKit）。
+    /// `alreadyFailed`：呼叫端已經同步試過並失敗的次數（手錶 App 第一次直接送出排程要求，整合審查 D-c），
+    /// 大於 0 時先等待再試，總次數不變。在呼叫端的 actor 上執行（手錶 App 在 MainActor 呼叫 WatchKit）。
     public static func schedule(
         isolation: isolated (any Actor)? = #isolation,
+        alreadyFailed: Int = 0,
         attempt: () async -> Bool,
         sleep: (TimeInterval) async -> Void
     ) async {
-        var failures = 0
+        var failures = alreadyFailed
+        if failures > 0 {
+            guard let delay = delay(afterFailures: failures) else { return }
+            await sleep(delay)
+        }
         while !(await attempt()) {
             failures += 1
             guard let delay = delay(afterFailures: failures) else { return }
