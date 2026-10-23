@@ -63,15 +63,16 @@ enum DebugTools {
             (32, "collapse", { DebugAction.send("collapse") }),
             (35, "expand", { DebugAction.send("expand") }),
             (38, "trend-next", { DebugAction.send("trend-next") }),
-            (41, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
-            (45, "appearance-light", { NSApplication.shared.appearance = nil }),
-            (49, "panel-close", { panelWindow?.orderOut(nil) }),
-            (49 + 60, "closed-60s", {}),
-            (49 + 90, "closed-90s", {}),
+            (41, "departing", { DebugAction.send("departing") }),
+            (44, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
+            (48, "appearance-light", { NSApplication.shared.appearance = nil }),
+            (52, "panel-close", { panelWindow?.orderOut(nil) }),
+            (52 + 60, "closed-60s", {}),
+            (52 + 90, "closed-90s", {}),
             // 第二次開關：比較兩次關閉後的記憶體，確認沒有累積（第一次開啟會載入框架，不能和開啟前比）
-            (49 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
-            (49 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
-            (49 + 120, "exit", { exit(0) }),
+            (52 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
+            (52 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
+            (52 + 120, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {

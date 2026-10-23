@@ -92,6 +92,12 @@ struct PanelView: View {
         case "refresh": refresh()
         case "glow": if animates { playGlow(store.snapshot?.tightestWindow(at: store.now)?.provider ?? "claude") }
         case "trend-next": switchTrendWindow()
+        case "departing":
+            // 模擬時間軸上最近的額度重置：圓點在「現在」放大淡出，服務圖示閃光
+            if animates, let snapshot = store.snapshot, let next = UpcomingReset.list(snapshot: snapshot, now: store.now).first {
+                playDeparting("\(next.provider)/\(next.window.id)")
+                playGlow(next.provider)
+            }
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break

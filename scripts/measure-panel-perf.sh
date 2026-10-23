@@ -2,9 +2,10 @@
 # 量測 Mac 面板動畫的 CPU% 與記憶體（NFR-10、ADR-0010 第 3 節）。
 #
 #   scripts/measure-panel-perf.sh [Debug 版 AIUsageMenuBar.app] [輸出資料夾]
+#   AUM_PERF_SCENARIO=fresh scripts/measure-panel-perf.sh …   # 歷史只有 1 筆：量測骨架掃光
 #
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
-# 49 秒時關閉面板，141 秒時再開關一次，約 169 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
+# 52 秒時關閉面板，144 秒時再開關一次，約 172 秒後結束），每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
 # 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3），不讀真實資料；設定也用獨立的 demo 設定。
 # 任何一項門檻未通過時以非零結束。
@@ -17,7 +18,9 @@ BIN="$APP/Contents/MacOS/AIUsageMenuBar"
 mkdir -p "$OUT"
 HOME_DIR=$(mktemp -d)
 # 假的 usage.json 與 7 天的 history.sqlite3（含睡眠空檔與重置），讓走勢、額度消耗等區塊都有東西畫
-python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" normal
+# AUM_PERF_SCENARIO=fresh 時每個額度只有 1 筆，走勢與額度消耗顯示骨架畫面（打開面板時掃光三次）
+SCENARIO=${AUM_PERF_SCENARIO:-normal}
+python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" "$SCENARIO"
 
 AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 "$BIN" 2>"$OUT/app.log" &
 PID=$!
@@ -31,7 +34,7 @@ while kill -0 "$PID" 2>/dev/null; do
 done
 rm -rf "$HOME_DIR"
 
-python3 - "$OUT/samples.tsv" "$OUT/app.log" <<'PY' | tee "$OUT/summary.md"
+python3 - "$OUT/samples.tsv" "$OUT/app.log" "$SCENARIO" <<'PY' | tee "$OUT/summary.md"
 import re, sys
 samples = [tuple(map(float, l.split())) for l in open(sys.argv[1]) if l.strip()]
 marks = {m.group(2): float(m.group(1)) for m in re.finditer(r"perf-mark ([\d.]+) (\S+)", open(sys.argv[2]).read())}
@@ -42,15 +45,20 @@ def peak(rows, i): return max((r[i] for r in rows), default=float("nan"))
 o, c = marks["panel-open"], marks["panel-close"]
 base = window(o - 6, o)
 rows = [("開啟前（基準）", base, "avg")]
-rows.append(("面板開啟、靜止（開啟後 3～11 秒）", window(o + 3, o + 11), "avg"))
-anims = [("打開面板：圓環＋用量條", "panel-open"), ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
-         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light")]
+# 骨架掃光播放 3.6 秒，靜止從開啟後 5 秒算起
+rows.append(("面板開啟、靜止（開啟後 5～11 秒）", window(o + 5, o + 11), "avg"))
+opening = "打開面板：圓環＋用量條＋骨架掃光" if sys.argv[3] == "fresh" else "打開面板：圓環＋用量條＋走勢"
+rows.append((f"播放中：{opening}（開啟後 0～4 秒）", window(o, o + 4), "peak"))
+anims = [ ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
+         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light")]
 for name, key in anims:
     rows.append((f"播放中：{name}", window(marks[key], marks[key] + 2), "peak"))
 rows.append(("關閉後 60～90 秒", window(c + 60, c + 90), "avg"))
 c2 = marks.get("panel-close-2")
 if c2:
     rows.append(("第二次關閉後 5～18 秒", window(c2 + 5, c2 + 18), "avg"))
+print(f"情境：{sys.argv[3]}（scripts/make-demo-history.py）")
+print()
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
 print("|---|---|---|---|")
 for name, r, kind in rows:
@@ -58,7 +66,7 @@ for name, r, kind in rows:
     print(f"| {name} | {len(r)} | {cpu:.1f}（{'平均' if kind == 'avg' else '最大'}） | {peak(r, 2) / 1024:.1f} |")
 closed = window(c + 60, c + 90)
 ok_cpu = avg(closed, 1) <= 0.3
-ok_static = avg(window(o + 3, o + 11), 1) <= 2
+ok_static = avg(window(o + 5, o + 11), 1) <= 2
 # 第一次開啟會載入 SwiftUI 與字型，RSS 不會回到開啟前；改為比較兩次關閉後，確認沒有累積
 second = window(c2 + 5, c2 + 18) if c2 else []
 rss_limit = peak(closed, 2) + 5 * 1024
