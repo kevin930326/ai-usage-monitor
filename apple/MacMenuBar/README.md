@@ -66,7 +66,7 @@ Debug 版本支援下列環境變數。用 `open` 啟動時環境變數不會傳
 | 變數 | 作用 |
 |---|---|
 | `AI_USAGE_MONITOR_HOME` | 改讀這個資料夾的 `usage.json`；設定時不會寫入 App Group |
-| `AUM_DEMO_PANEL=1` | 另開一般視窗顯示面板（選單列面板無法以程式打開，截圖用） |
+| `AUM_DEMO_PANEL=1` | 另開一般視窗顯示面板（選單列面板無法以程式打開，截圖用）；改用每次清空的獨立設定，不動到正式設定 |
 | `AUM_RENDER_DIR` | 以 ImageRenderer 輸出 PNG（淺色、深色）：小工具 `widget-*.png`、面板 `panel-*.png`、選單列圖示 `menubar-icons-*.png`、設定 `settings-*.png` |
 | `AUM_RENDER_FRAMES=1` | 搭配 `AUM_RENDER_DIR`：每個動畫以 30 fps 輸出 PNG 序列並組成 GIF（`anim-*.gif`） |
 | `AUM_RENDER_EXIT=1` | 輸出完就結束 |
