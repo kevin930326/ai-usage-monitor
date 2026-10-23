@@ -5,12 +5,14 @@ struct AIUsageMenuBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = UsageStore.shared
     @State private var settings = PanelSettings.shared
+    @State private var history = HistoryStore.shared
 
     var body: some Scene {
         MenuBarExtra {
             PanelView()
                 .environment(store)
                 .environment(settings)
+                .environment(history)
         } label: {
             MenuBarLabel(store: store, settings: settings)
         }
@@ -21,6 +23,7 @@ struct AIUsageMenuBarApp: App {
             SettingsView()
                 .environment(store)
                 .environment(settings)
+                .environment(history)
         }
     }
 }
