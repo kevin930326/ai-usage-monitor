@@ -102,7 +102,7 @@ import Testing
         let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
         #expect(cumulative.last?.main == 5000)
         #expect(cumulative[28].main == 4900)
-        #expect(cumulative.first?.main == 4900, "\(cumulative.map(\.main))")
+        #expect(cumulative.first?.main == 4900)
         #expect(cumulative.map(\.main) == cumulative.map(\.main).sorted())
     }
 
@@ -172,6 +172,28 @@ import Testing
             #expect(summary.currentStreak == 2)
             #expect(TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: other).cells.suffix(7).prefix(4) == [100, 0, 10, 5])
         }
+    }
+
+    @Test func dataBeforeRetentionIsUnavailableNotZero() {
+        // 保留 7 天：11/5 - 7 天 = 10/29 起才有每日資料
+        let data = TokenStatsData(days: [row("2026-11-05", main: 40), row("2026-10-29", main: 7)],
+                                  records: ["total_tokens": TokenRecord(value: 5000)], firstScanDone: true, retentionDays: 7)
+        let map = TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: cal)
+        #expect(map.truncated)
+        let firstShown = map.cells.firstIndex { $0 != nil }!
+        #expect(TokenCalendar.key(map.date(column: firstShown / 7, row: firstShown % 7, calendar: cal), calendar: cal) == "2026-10-29")
+        let days = TokenActivity.bars(data: data, scope: .all, range: .days30, now: now, calendar: cal)
+        #expect(days.filter(\.available).count == 8)
+        #expect(!days[0].available)
+        let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
+        #expect(cumulative.first(where: \.available)?.main == 4960)
+        #expect(cumulative.last?.main == 5000)
+        // 上週同期（10/26～10/29）已部分超過保留期間：不比較
+        #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).changePct == nil)
+        // 永久保留：全部可用
+        var forever = data
+        forever.retentionDays = 0
+        #expect(!TokenHeatmap(data: forever, scope: .all, now: now, weeks: 22, calendar: cal).truncated)
     }
 
     @Test func dayKeysRoundTrip() {

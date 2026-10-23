@@ -366,7 +366,8 @@ struct TokenActivityChart: View {
     }
 
     private var caption: String {
-        switch range {
+        if bars.contains(where: { !$0.available }) { return "保留期間以前的日子沒有資料，不畫" }
+        return switch range {
         case .days30: "最近 30 天，每根一天（不含快取讀取）"
         case .weeks: "最近 12 週，每根一週（星期一起）"
         case .cumulative: "累計 Token（含保留期間以前）"
@@ -378,6 +379,7 @@ struct TokenActivityChart: View {
         let bar = bars[hovered]
         let day = TokenDateText.string(bar.start, "M/d")
         let when = range == .weeks ? "\(day) 那週" : day
+        guard bar.available else { return "\(when)：超過保留期間，沒有資料" }
         if range == .cumulative { return "\(when)：累計 \(TokenFormat.short(bar.main))" }
         var text = "\(when)：\(TokenFormat.short(bar.main))"
         if scope == .all, bar.byProvider.count > 1 {
@@ -429,13 +431,14 @@ struct TokenBarsCanvas: View, Animatable {
                            with: .color(Color.primary.opacity(0.1)), lineWidth: 1)
             if cumulative {
                 // 累計：面積圖，由左往右描繪
-                guard bars.count > 1 else { return }
-                let low = Double(bars.first?.main ?? 0) * 0.9
+                // 只畫保留期間內（算得出當天累計）的日子
+                guard let firstIndex = bars.firstIndex(where: \.available), bars.count - firstIndex > 1 else { return }
+                let low = Double(bars[firstIndex].main) * 0.9
                 func y(_ v: Int64) -> CGFloat { size.height - CGFloat((Double(v) - low) / max(peak - low, 1)) * (size.height - 4) }
                 var line = Path(), area = Path()
-                for (i, bar) in bars.enumerated() {
+                for (i, bar) in bars.enumerated() where i >= firstIndex {
                     let p = CGPoint(x: slot * (CGFloat(i) + 0.5), y: y(bar.main))
-                    if i == 0 { line.move(to: p); area.move(to: CGPoint(x: p.x, y: size.height)); area.addLine(to: p) } else { line.addLine(to: p); area.addLine(to: p) }
+                    if i == firstIndex { line.move(to: p); area.move(to: CGPoint(x: p.x, y: size.height)); area.addLine(to: p) } else { line.addLine(to: p); area.addLine(to: p) }
                 }
                 area.addLine(to: CGPoint(x: slot * (CGFloat(bars.count) - 0.5), y: size.height))
                 area.closeSubpath()
@@ -447,7 +450,7 @@ struct TokenBarsCanvas: View, Animatable {
                 clipped.stroke(line, with: .color(tint.opacity(scope == .all ? 0.7 : 1)), style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                 return
             }
-            for (i, bar) in bars.enumerated() {
+            for (i, bar) in bars.enumerated() where bar.available {
                 let grow = Self.grow(progress, index: i, count: bars.count)
                 let x = slot * CGFloat(i) + (slot - barWidth) / 2
                 let scale: CGFloat = i == hovered ? 1.08 : 1
@@ -493,7 +496,7 @@ struct TokenHeatmapView: View {
                     }
             }
             HStack(spacing: 2) {
-                Text(hoverText ?? "每格一天")
+                Text(hoverText ?? (map.truncated ? "每格一天 · 保留期間以前不顯示" : "每格一天"))
                 Spacer(minLength: 6)
                 Text("少")
                 ForEach(0..<5, id: \.self) { level in

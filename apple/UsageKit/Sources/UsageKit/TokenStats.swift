@@ -150,6 +150,13 @@ public struct TokenStatsData: Equatable, Sendable {
         ["claude", "codex"].filter { p in days.contains { $0.provider == p && $0.counts.main > 0 } || (records["total_tokens:\(p)"]?.value ?? 0) > 0 }
     }
 
+    /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）；永久保留時為 nil
+    public func firstAvailableDay(now: Date, calendar base: Calendar = .current) -> Date? {
+        guard retentionDays > 0 else { return nil }
+        let calendar = TokenCalendar.make(base)
+        return calendar.startOfDay(for: now.addingTimeInterval(-TimeInterval(retentionDays) * 86400))
+    }
+
     /// 每天（依範圍）的合計
     public func dailyTotals(scope: TokenScope) -> [String: TokenCounts] {
         var result: [String: TokenCounts] = [:]
@@ -233,7 +240,10 @@ public struct TokenSummary: Equatable, Sendable {
             last += totals[TokenCalendar.key(TokenCalendar.adding(-7, to: day, calendar: calendar), calendar: calendar)]?.main ?? 0
         }
         thisWeek = week
-        lastWeekSamePeriod = last
+        // 上週同期已超過保留期間：無法比較
+        let lastWeekStart = TokenCalendar.adding(-7, to: monday, calendar: calendar)
+        let comparable = data.firstAvailableDay(now: now, calendar: base).map { lastWeekStart >= $0 } ?? true
+        lastWeekSamePeriod = comparable ? last : 0
 
         // 個人紀錄以 records 為準（不受保留期間影響）；收集器還沒寫入時從每日資料算
         func record(_ base: String) -> TokenRecord? { data.records[scope.recordKey(base)] }
@@ -292,6 +302,8 @@ public struct TokenBar: Equatable, Sendable {
     /// 依服務分開的主數字（疊加長條用）
     public var byProvider: [String: Int64]
     public var counts: TokenCounts
+    /// 這段期間的每日資料還在保留期間內（否則不畫，也不當成 0）
+    public var available: Bool = true
 
     public var main: Int64 { counts.main }
 }
@@ -304,6 +316,8 @@ public enum TokenActivity {
                             calendar base: Calendar = .current) -> [TokenBar] {
         let calendar = TokenCalendar.make(base)
         let today = calendar.startOfDay(for: now)
+        let first = data.firstAvailableDay(now: now, calendar: base)
+        func available(_ date: Date) -> Bool { first.map { date >= $0 } ?? true }
         var byDay: [String: (counts: TokenCounts, providers: [String: Int64])] = [:]
         for row in data.days where scope.includes(row.provider) {
             byDay[row.day, default: (.zero, [:])].counts += row.counts
@@ -318,7 +332,7 @@ public enum TokenActivity {
             return (0..<dayCount).map { i in
                 let date = TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)
                 let (counts, providers) = day(date)
-                return TokenBar(start: date, byProvider: providers, counts: counts)
+                return TokenBar(start: date, byProvider: providers, counts: counts, available: available(date))
             }
         case .weeks:
             let monday = TokenCalendar.startOfWeek(now, calendar: calendar)
@@ -331,10 +345,12 @@ public enum TokenActivity {
                     counts += c
                     providers.merge(p, uniquingKeysWith: +)
                 }
-                return TokenBar(start: start, byProvider: providers, counts: counts)
+                return TokenBar(start: start, byProvider: providers, counts: counts,
+                                available: available(TokenCalendar.adding(6, to: start, calendar: calendar)))
             }
         case .cumulative:
-            // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣
+            // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣。
+            // 保留期間以前的日子算不出當天的累計，不畫
             let daily = (0..<dayCount).map { i in day(TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)) }
             let windowTotal = daily.reduce(Int64(0)) { $0 + $1.0.main }
             let allTotals = data.dailyTotals(scope: scope).values.reduce(Int64(0)) { $0 + $1.main }
@@ -342,7 +358,7 @@ public enum TokenActivity {
             return daily.enumerated().map { i, value in
                 running += value.0.main
                 let date = TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)
-                return TokenBar(start: date, byProvider: [:], counts: TokenCounts(input: running))
+                return TokenBar(start: date, byProvider: [:], counts: TokenCounts(input: running), available: available(date))
             }
         }
     }
@@ -358,6 +374,8 @@ public struct TokenHeatmap: Equatable, Sendable {
     public var cells: [Int64?]
     /// 分成 4 級的門檻（非零值的四分位數）
     public var thresholds: [Int64]
+    /// 有格子在保留期間以前（不畫，與「沒有使用」區分）
+    public var truncated: Bool
 
     public init(data: TokenStatsData, scope: TokenScope, now: Date, weeks: Int, calendar base: Calendar = .current) {
         let calendar = TokenCalendar.make(base)
@@ -365,12 +383,20 @@ public struct TokenHeatmap: Equatable, Sendable {
         let today = calendar.startOfDay(for: now)
         self.weeks = weeks
         firstMonday = TokenCalendar.adding(-7 * (weeks - 1), to: TokenCalendar.startOfWeek(now, calendar: calendar), calendar: calendar)
+        let first = data.firstAvailableDay(now: now, calendar: base)
         var cells: [Int64?] = []
+        var truncated = false
         for i in 0..<(weeks * 7) {
             let date = TokenCalendar.adding(i, to: firstMonday, calendar: calendar)
+            if let first, date < first {
+                truncated = true
+                cells.append(nil)
+                continue
+            }
             cells.append(date > today ? nil : totals[TokenCalendar.key(date, calendar: calendar)]?.main ?? 0)
         }
         self.cells = cells
+        self.truncated = truncated
         let nonZero = cells.compactMap { $0 }.filter { $0 > 0 }.sorted()
         thresholds = nonZero.isEmpty ? [] : [0.25, 0.5, 0.75].map { nonZero[Int(Double(nonZero.count - 1) * $0)] }
     }

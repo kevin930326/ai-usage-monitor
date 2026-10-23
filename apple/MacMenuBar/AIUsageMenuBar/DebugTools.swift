@@ -165,11 +165,17 @@ enum DebugTools {
         fresh.firstScanProgress = 37
         var none = TokenStatsData.empty
         none.firstScanDone = true
+        // 保留 7 天：較早的每日資料已刪除，熱力圖與長條不畫成「沒有使用」
+        var short = data
+        short.retentionDays = 7
+        let cutoff = short.firstAvailableDay(now: .now).map { TokenCalendar.key($0, calendar: .current) } ?? ""
+        short.days.removeAll { $0.day < cutoff }
         for scheme in [ColorScheme.light, .dark] {
             let n = scheme.name
             write(statsCard(data), scheme: scheme, to: dir.appendingPathComponent("stats-card-\(n).png"))
             write(statsCard(data, scope: .codex, range: .weeks), scheme: scheme, to: dir.appendingPathComponent("stats-card-codex-weeks-\(n).png"))
             write(statsCard(data, scope: .claude, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-claude-cumulative-\(n).png"))
+            write(statsCard(short, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-retention7-\(n).png"))
             write(statsCard(fresh), scheme: scheme, to: dir.appendingPathComponent("stats-skeleton-\(n).png"))
             write(statsCard(none), scheme: scheme, to: dir.appendingPathComponent("stats-empty-\(n).png"))
             write(statsCard(data, status: .olderSchema(1)), scheme: scheme, to: dir.appendingPathComponent("stats-older-schema-\(n).png"))
