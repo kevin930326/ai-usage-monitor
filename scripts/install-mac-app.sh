@@ -59,15 +59,27 @@ fi
 BUILT=$DERIVED/Build/Products/Release/$NAME.app
 [ -d "$BUILT" ] || { echo "找不到建置結果 $BUILT" >&2; exit 1; }
 
-# 先請 App 自己結束，5 秒內沒結束再送 TERM
+# 等 App 結束，最多 $1 秒；結束了回傳 0
+wait_quit() {
+  local i
+  for ((i = 0; i < $1 * 2; i++)); do
+    pgrep -x "$NAME" >/dev/null || return 0
+    sleep 0.5
+  done
+  ! pgrep -x "$NAME" >/dev/null
+}
+
+# 先請 App 自己結束，5 秒內沒結束再送 TERM；再等 5 秒仍在執行就停止，不換掉舊版本
 if [ "$QUIT" = 1 ] && pgrep -x "$NAME" >/dev/null; then
   echo "結束執行中的 App…"
   osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || true
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    pgrep -x "$NAME" >/dev/null || break
-    sleep 0.5
-  done
-  pkill -x "$NAME" 2>/dev/null || true
+  if ! wait_quit 5; then
+    pkill -TERM -x "$NAME" 2>/dev/null || true
+    if ! wait_quit 5; then
+      echo "App 沒有結束（可能被 Xcode 除錯器暫停），沒有安裝；結束它之後再執行一次" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # 先複製到同一個資料夾的暫存名稱，成功後才換掉舊版本（複製失敗時舊版本不受影響）
