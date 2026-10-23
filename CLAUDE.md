@@ -12,3 +12,8 @@
 
 - 搬移 worktree 用 `git worktree move`，不要直接 `mv`；PR 合併後用 `git worktree remove` 移除，再刪掉本機與遠端分支。
 - `~/Documents/ai-usage-monitor-work/archive/` 放不再使用的舊資料夾（不是 worktree）。
+
+## 開 PR 前
+
+- `scripts/verify-all.sh` 通過後，**先跑 `scripts/codex-review.sh` 並寫 triage**，再開 PR（或 push 最後一版）。流程、triage 格式與 Codex 額度不足時的替代做法見 `.claude/skills/codex-review/SKILL.md`。
+- 只修 triage 中接受的項目，每項一個 commit；PR 內文附 triage 摘要。

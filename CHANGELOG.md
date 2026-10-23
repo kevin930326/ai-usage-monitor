@@ -5,6 +5,8 @@
 ## [Unreleased]
 
 ### Added
+- `scripts/codex-review.sh`：以 Codex（固定 `gpt-6.1-sol`、reasoning effort medium、唯讀）審查 `origin/main...HEAD` 的變更（`--diff`，預設）或整個 repo（`--full`），報告存到 `~/Documents/ai-usage-monitor-work/reviews/<分支>-codex.md`；模型無法使用或額度不足時印出原因並以非 0 結束，不改用其他模型。專案 skill `.claude/skills/codex-review` 說明何時跑與 triage 的寫法，CLAUDE.md 加上「開 PR 前先審查」
+- `scripts/tests/`：shell 腳本的測試（以 `AUM_INSTALL_DIR` 與假 xcodebuild 跑完整的 `install-mac-app.sh` 流程、`codex-review.sh` 的參數與失敗處理、檢查沒有緊接非 ASCII 字元的 `$VAR`），接進 `verify-all.sh` 與 CI
 - Mac 面板「接下來的重置」：重置時間已過、收集器還沒拿到新重置時間的額度，在「現在」的位置顯示圓點與「剛重置」；服務回報沒有重置時間（已用 0%、新一輪要等下次使用才開始）時，時間軸下方列「Codex 5h：已重置，下次使用時開始計時」
 - `scripts/install-mac-app.sh`：Mac 選單列 App 以 Release 建置、結束執行中的 App、舊版本移到垃圾桶後安裝到「應用程式」並打開；設定新增「一般 › 登入時自動打開」（`SMAppService`，只在安裝於「應用程式」時可開啟）
 - Mac 面板第二階段（FR-39～FR-42、FR-46，ADR-0008～0011）：讀 `history.sqlite3` 新增「建議接下來用」「接下來的重置」（8 小時時間軸與每週額度可撐到星期幾）「本週額度走勢」（剩餘 % 曲線、照時間的預期、可切換額度、沒有紀錄的時段畫斜線）「額度消耗」（每小時熱力圖與每日合計，標「整個帳號」，空檔平均分配並標估計）；歷史不足 2 筆時顯示骨架畫面；資料庫只在面板看得見時開啟。「用得太快」改為「照目前速度會在重置前用完」，「目前速度」、「約 N 分鐘後用完」與「可撐到星期幾」都用近期速度（每週額度要有 12 小時的樣本），不足時退回平均速度
@@ -32,6 +34,7 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- `scripts/install-mac-app.sh` 安裝完成後中斷、沒有打開 App：`$DEST（` 在 macOS 的 bash 3.2（UTF-8 locale）會把全形括號當成變數名稱的一部分，`set -u` 下變成「unbound variable」。所有 shell 腳本中緊接非 ASCII 字元的變數改為 `${VAR}`
 - 整合後審查（#37／#38／#39／#40 合併後）：
   - 收集器：`/usage` 額度行的百分比位數多到溢位、重置時間的小時不在 1～12、同一個額度印兩行、模型名稱含奇怪字元或超過 32 字，一律回報格式改變；各模型額度的 id 改為 `[a-z0-9_]`（`Sonnet 4.5 only` → `weekly_sonnet_4_5`）；解析前去除終端機色碼並以 `NO_COLOR` 執行 claude；`config.json` 的 `claude_path` 不是字串時當成沒設定
   - 收集器：中繼回 4xx 時把它的錯誤原因附在日誌（之前只有「HTTP 422」）
