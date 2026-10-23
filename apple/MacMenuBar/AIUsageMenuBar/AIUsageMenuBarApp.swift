@@ -39,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             UsageStore.shared.start()
+            // 第四階段（FR-19、FR-47）：通知、右鍵選單、全域快捷鍵
+            QuotaNotifier.shared.start()
+            AppActions.installRightClickMenu()
+            GlobalHotKey.shared.apply(PanelSettings.shared.hotKey)
             #if DEBUG
             DebugTools.runIfRequested()
             #endif

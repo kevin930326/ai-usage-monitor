@@ -91,6 +91,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個） |
 | 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 與 codex 的完整路徑、啟用的服務（`enabled_providers`）、對話紀錄資料夾（`claude_config_dir`、`codex_home`） |
 | 額度歷史與 Token 統計 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3` | 見下方「額度歷史」「Token 統計」 |
+| 服務狀態 | `~/Library/Application Support/AIUsageMonitor/service-status.json` | 見下方「服務狀態」；只在本機、不上傳 |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
 | 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
 
@@ -142,6 +143,20 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 - 與額度歷史一樣是附加功能：資料庫被鎖住時整次放棄、只記一行日誌，不影響 `usage.json`、上傳與結束碼。
 - 每日資料套用保留期間，每小時資料只留 90 天，超過 90 天沒看到的紀錄檔刪掉掃描進度。
 - 量測（假紀錄 683 MB、1,700 個檔案）：首次掃描 11 次執行完成（合計 2.7 秒），之後一般執行約 8 ms。
+
+### 服務狀態
+
+`--write-local` 時，最後讀 Anthropic 與 OpenAI 的公開狀態頁，寫入本機的 `service-status.json`（FR-45，權限 `0600`），讓 Mac 面板分辨「服務異常」與「額度用完」。Mac App 只讀這個檔案、自己不連網。
+
+| 服務 | 狀態頁 | 保留的欄位 |
+|---|---|---|
+| Claude | `https://status.claude.com/api/v2/summary.json` | 整體狀態（`indicator`、說明）、不是「正常」的元件名稱與狀態、未解決事件的名稱與影響程度 |
+| Codex | `https://status.openai.com/api/v2/summary.json` | 同上 |
+
+- 不帶任何密鑰、cookie 或帳號資訊，不跟隨到其他主機的重新導向；只送出固定的 User-Agent。
+- 名稱與說明最長 120 字、各最多 8 項；事件的內文、連結與其他欄位不保存。元件名稱含「Claude Code」「Claude API」（Codex：「Codex」「Responses」）時標記為與這個工具相關。
+- 兩次抓取至少間隔 4 分鐘（啟用的服務改變時立刻重抓）；每個狀態頁逾時 8 秒。抓不到時該服務記錯誤類別，其他照常。
+- 不放進快照、不上傳到中繼；失敗只記錯誤類別，不影響 `usage.json`、上傳與結束碼。
 
 ## 設定中繼 API
 

@@ -14,6 +14,8 @@ final class UsageStore {
     let locator = UsageFileLocator()
     private(set) var snapshot: UsageSnapshot?
     private(set) var errorMessage: String?
+    /// 收集器寫的服務狀態（FR-45）；沒有檔案或讀不懂時為 nil
+    private(set) var serviceStatus: ServiceStatusFile?
     /// 每分鐘更新，讓選單列在沒有新資料時也能轉灰或顯示已重置
     private(set) var now = Date.now
 
@@ -44,20 +46,31 @@ final class UsageStore {
             watchDirectory()
             reload()
         }
+        // 重置時間到了（快照沒變）也要判斷通知
+        QuotaNotifier.shared.evaluate(snapshot: snapshot, now: now)
     }
 
     func reload() {
+        loadServiceStatus()
         do {
             let loaded = try locator.load()
             errorMessage = nil
             guard loaded != snapshot else { return }
             snapshot = loaded
             Self.log("loaded updated_at=\(loaded.updatedAt.ISO8601Format())")
+            QuotaNotifier.shared.evaluate(snapshot: loaded, now: .now)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             errorMessage = "找不到 usage.json，請確認 Mac 收集器正在執行"
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 服務狀態檔很小（幾 KB），每次資料夾有變動就重讀；內容相同時不觸發畫面更新
+    private func loadServiceStatus() {
+        let url = locator.directory.appendingPathComponent(ServiceStatusFile.fileName)
+        let loaded = (try? Data(contentsOf: url)).flatMap(ServiceStatusFile.decode)
+        if loaded != serviceStatus { serviceStatus = loaded }
     }
 
     private func watchDirectory() {

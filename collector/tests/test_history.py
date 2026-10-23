@@ -309,8 +309,10 @@ class FailureIsolationTest(HistoryTestCase):
              mock.patch.object(history, "HISTORY_PATH", self.path), \
              mock.patch.object(cli.token_stats, "log_dirs", return_value=NO_LOGS), \
              mock.patch.object(cli.token_stats.os, "nice"), \
+             mock.patch.object(cli.service_status, "update_safely") as status, \
              redirect_stdout(io.StringIO()), redirect_stderr(err):
             code = cli.main(["--write-local", "--upload", "--quiet"])
+        self.status_providers = [c.args[0] for c in status.call_args_list]
         return code, usage_path, upload, err.getvalue()
 
     def test_success_writes_history_after_usage_and_upload(self):
@@ -320,6 +322,7 @@ class FailureIsolationTest(HistoryTestCase):
         upload.assert_called_once()
         self.assertEqual(self.count("collector_runs"), 1)
         self.assertEqual(err, "")
+        self.assertEqual(self.status_providers, [["claude"]])
 
     def test_token_stats_run_after_history_and_failure_keeps_exit_code(self):
         order = []

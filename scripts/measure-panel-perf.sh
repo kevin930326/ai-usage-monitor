@@ -5,7 +5,7 @@
 #   AUM_PERF_SCENARIO=fresh scripts/measure-panel-perf.sh …   # 歷史只有 1 筆：量測骨架掃光
 #
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
-# 57 秒時關閉面板，149 秒時再開關一次，177 秒打開完整統計視窗、187 秒關閉，約 207 秒後結束），
+# 64 秒時關閉面板，156 秒時再開關一次，184 秒打開完整統計視窗、194 秒關閉，約 214 秒後結束），
 # 每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
 # 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3），不讀真實資料；設定也用獨立的 demo 設定。
@@ -52,7 +52,8 @@ opening = "打開面板：圓環＋用量條＋骨架掃光" if sys.argv[3] == "
 rows.append((f"播放中：{opening}（開啟後 0～4 秒）", window(o, o + 4), "peak"))
 anims = [ ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
          ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light"),
-         ("統計切換服務", "stats-scope"), ("統計切換範圍", "stats-range")]
+         ("統計切換服務", "stats-scope"), ("統計切換範圍", "stats-range"),
+         ("服務狀態橘點呼吸", "status-pulse"), ("點通知後卡片亮一下", "highlight")]
 for name, key in anims:
     rows.append((f"播放中：{name}", window(marks[key], marks[key] + 2), "peak"))
 rows.append(("關閉後 60～90 秒", window(c + 60, c + 90), "avg"))

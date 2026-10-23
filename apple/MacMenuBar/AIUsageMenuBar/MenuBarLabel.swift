@@ -11,7 +11,20 @@ struct MenuBarLabel: View {
     let store: UsageStore
     let settings: PanelSettings
 
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
+
     var body: some View {
+        icon
+            // 右鍵選單與快捷鍵在 SwiftUI 之外，借用這裡的 openWindow／openSettings（選單列標籤一直存在）
+            .onAppear {
+                AppActions.openStats = { [openWindow] in openWindow(id: StatsWindowView.windowID) }
+                AppActions.openSettings = { [openSettings] in openSettings() }
+            }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
         if let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) {
             let content = MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
                                              isLeast: settings.iconWindow == .automatic)

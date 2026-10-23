@@ -35,7 +35,9 @@ struct PanelView: View {
             ScrollViewReader { proxy in
                 ScrollView { content }
                     .onChange(of: scrollTarget) { _, target in
-                        if let target { proxy.scrollTo(target, anchor: .bottom) }
+                        guard let target else { return }
+                        withAnimation(animates ? PanelTiming.collapse : nil) { proxy.scrollTo(target, anchor: .bottom) }
+                        scrollTarget = nil
                     }
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -52,10 +54,13 @@ struct PanelView: View {
         PanelBehavior(
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
             visible: $visible, onVisibleChange: { isVisible in
+                PanelVisibility.isVisible = isVisible && fixedMotion == nil
                 if isVisible {
                     // 只在面板看得見時開啟資料庫並查詢（ADR-0009 第 7 節）
                     historyStore.open(now: store.now)
                     playAppear()
+                    // 點通知打開面板：捲到對應的卡片並亮一下（減少動態效果時只捲動）
+                    playPendingHighlight()
                 } else {
                     stopAnimations()
                     historyStore.close()
@@ -96,6 +101,14 @@ struct PanelView: View {
             .onChange(of: historyStore.tokens) {
                 if visible { celebrateStreakIfNeeded() }
             }
+            // 面板開著時服務轉為異常：橘點呼吸 3 次
+            .onChange(of: store.serviceStatus) { old, _ in
+                if visible, !statusDisrupted(old) { playStatusPulse() }
+            }
+            // 面板已經開著時點了通知
+            .onReceive(NotificationCenter.default.publisher(for: PanelVisibility.highlightRequested)) { _ in
+                playPendingHighlight()
+            }
     }
 
     /// Debug 的效能量測腳本用來觸發動畫（Release 不含）
@@ -122,6 +135,12 @@ struct PanelView: View {
             let all = TokenActivityRange.allCases
             selectStatsRange(all[((all.firstIndex(of: settings.statsRange) ?? 0) + 1) % all.count])
         case "stats-window": showStatsWindow()
+        case "status-pulse":
+            scrollTarget = .status
+            playStatusPulse()
+        case "highlight":
+            AppActions.pendingHighlight = PanelSection.quota.rawValue
+            playPendingHighlight()
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break
@@ -194,6 +213,52 @@ struct PanelView: View {
                 StatsCardContent(data: historyStore.tokens, status: historyStore.status, scope: settings.statsScope,
                                  range: settings.statsRange, now: store.now, selectScope: selectStatsScope, selectRange: selectStatsRange)
             }
+        case .status:
+            // 都正常時一行低調顯示；有服務異常或額度用完時才是卡片（FR-45）
+            let rows = ServiceStatusRow.rows(snapshot: snapshot, status: store.serviceStatus, now: store.now)
+            if !rows.isEmpty {
+                if ServiceStatusRow.allQuiet(rows) {
+                    ServiceStatusLine(rows: rows)
+                } else {
+                    PanelCard(id: section.rawValue, title: section.title, collapsed: collapsed) {
+                        ServiceStatusCardContent(rows: rows)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 第四階段：服務狀態與通知（ADR-0010）
+
+    private func statusDisrupted(_ status: ServiceStatusFile?) -> Bool {
+        guard let snapshot = store.snapshot else { return false }
+        return ServiceStatusRow.hasDisruption(ServiceStatusRow.rows(snapshot: snapshot, status: status, now: store.now))
+    }
+
+    /// 服務異常時橘點呼吸 3 次後停止（3 × 0.8 秒）。卡片隱藏或收合時不播
+    private func playStatusPulse() {
+        guard animates, settings.visibleSections.contains(.status), !settings.collapsed.contains(PanelSection.status.rawValue),
+              statusDisrupted(store.serviceStatus) else { return }
+        let generation = motionGeneration
+        motion.statusPulse = 0
+        withAnimation(PanelTiming.statusPulse) { motion.statusPulse = PanelTiming.statusPulses } completion: {
+            guard generation == motionGeneration else { return }
+            motion.statusPulse = 0
+        }
+    }
+
+    /// 點通知打開面板：捲到對應的卡片，卡片亮一下（0.6 秒）。減少動態效果時只捲動
+    private func playPendingHighlight() {
+        guard let id = AppActions.pendingHighlight else { return }
+        AppActions.pendingHighlight = nil
+        guard let section = PanelSection(rawValue: id), settings.visibleSections.contains(section) else { return }
+        scrollTarget = section
+        guard animates else { return }
+        let generation = motionGeneration
+        motion.highlight[id] = 0
+        withAnimation(PanelTiming.highlight.delay(0.25)) { motion.highlight[id] = 1 } completion: {
+            guard generation == motionGeneration else { return }
+            motion.highlight[id] = nil
         }
     }
 
@@ -393,6 +458,7 @@ struct PanelView: View {
             withAnimation(PanelTiming.shimmer) { motion.shimmer = PanelTiming.shimmerPasses }
         }
         celebrateStreakIfNeeded()
+        playStatusPulse()
     }
 
     /// 面板關閉：停止所有動畫並回到靜止狀態，關閉期間不播放任何東西（NFR-8）。

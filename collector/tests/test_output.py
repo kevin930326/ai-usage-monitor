@@ -85,7 +85,9 @@ class MainTest(unittest.TestCase):
         self.assertIn("HTTP 500", err)
 
     def test_write_local_calls_store(self):
-        with mock.patch.object(local_store, "write_snapshot") as write:
+        # 服務狀態會連網：測試一律換掉
+        with mock.patch.object(local_store, "write_snapshot") as write, \
+             mock.patch.object(cli.service_status, "update_safely"):
             self.run_main("--write-local", "--quiet")
         self.assertEqual(write.call_args.args[0]["schema_version"], SCHEMA_VERSION)
 

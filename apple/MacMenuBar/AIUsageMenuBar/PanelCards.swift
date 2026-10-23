@@ -57,6 +57,7 @@ struct PanelCard<Header: View, Content: View>: View {
         .padding(14)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)))
+        .modifier(HighlightEffect(progress: motion.highlight[id] ?? 0))
         .onAppear {
             contentAlive = !collapsed
             reveal = collapsed ? 0 : 1
@@ -396,4 +397,21 @@ struct QuotaBar: View {
     }
 
     static let markerHitWidth: CGFloat = 12
+}
+
+/// 卡片亮一下（點通知打開面板時，ADR-0010 第四階段：0.6 秒）：進度 0→1 之間邊框與底色亮起再消失。
+struct HighlightEffect: ViewModifier, Animatable {
+    var progress: Double
+
+    nonisolated var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let intensity = progress > 0 && progress < 1 ? sin(.pi * progress) : 0
+        content
+            .background(Color.accentColor.opacity(0.14 * intensity), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.accentColor.opacity(0.8 * intensity), lineWidth: 2))
+    }
 }

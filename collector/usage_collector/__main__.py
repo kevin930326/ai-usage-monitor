@@ -7,7 +7,7 @@ import signal
 import sys
 from datetime import datetime, timezone
 
-from . import history, local_store, relay, token_stats
+from . import history, local_store, relay, service_status, token_stats
 from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         history.record_safely(snapshot)
         # Token 統計（ADR-0009）：最後執行、降低優先順序；首次掃描每次最多 64 MB 或 15 秒
         token_stats.run_safely()
+        # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘
+        service_status.update_safely(list(snapshot["providers"]))
 
     # 全部 provider 失敗或上傳失敗時回傳非 0，方便 launchd / 腳本判斷
     return 0 if ok else 1
