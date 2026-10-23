@@ -36,6 +36,10 @@ struct PanelMotion: Equatable {
     var heatmap: Double = 1
     /// 連續天數創新紀錄時 🔥 彈一下，0→1 播放一次（每個新紀錄一次）
     var streakPop: Double = 0
+    /// 第四階段：服務異常時橘點呼吸 3 次，0→3
+    var statusPulse: Double = 0
+    /// 點通知打開面板時，對應的卡片亮一下，0→1 播放一次（依卡片 id）
+    var highlight: [String: Double] = [:]
 
     static let settled = PanelMotion()
 
@@ -70,6 +74,11 @@ enum PanelTiming {
     static let statsNumbers = Animation.easeInOut(duration: 0.4)
     /// 🔥 彈一下
     static let streakPop = Animation.easeOut(duration: 0.5)
+    /// 服務狀態的橘點：每次呼吸 0.8 秒、三次（重複類最多 3 次）
+    static let statusPulses = 3.0
+    static let statusPulse = Animation.linear(duration: 0.8 * statusPulses)
+    /// 卡片亮一下
+    static let highlight = Animation.easeOut(duration: 0.6)
     /// 「減少動態效果」時只允許短暫淡入淡出
     static let reducedFade = Animation.easeInOut(duration: 0.15)
 }

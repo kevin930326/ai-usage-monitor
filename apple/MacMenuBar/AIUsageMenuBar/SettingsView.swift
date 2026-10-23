@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
 
-/// 設定視窗（FR-35、FR-37、ADR-0008 第 5 節）：登入時自動打開、選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料。
+/// 設定視窗（FR-35、FR-37、FR-19、FR-47，ADR-0008 第 5 節）：登入時自動打開、選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料、通知、快捷鍵。
 /// 控制項自己畫（不用 AppKit 的 Toggle／Picker／List），ImageRenderer 才能截圖；鍵盤與 VoiceOver 仍可操作。
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
@@ -31,6 +31,10 @@ struct SettingsView: View {
             panelSection
             Divider()
             HistorySettingsSection(store: history, interactive: scrolls)
+            Divider()
+            NotificationSettingsSection(interactive: scrolls)
+            Divider()
+            HotKeySettingsSection(interactive: scrolls)
         }
         .padding(22)
     }
@@ -118,7 +122,7 @@ struct SettingsView: View {
                     if index < rows.count - 1 { Divider() }
                 }
             }
-            Text("之後加入的區塊（統計、服務狀態）會出現在這裡。卡片也可以在面板上直接收合。")
+            Text("卡片也可以在面板上直接收合。服務狀態在都正常時只有一行。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

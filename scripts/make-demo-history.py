@@ -5,10 +5,12 @@
 
 - normal：過去 7 天，每晚 01:00～08:30 Mac 睡眠（沒有紀錄）、3 天前下午關機 4 小時；
   Claude 5 小時快用完（剩 15%，用得較快）、Codex 還充足，會出現「建議接下來用」；每週額度 4 天前重置過；
-  Token 統計有一年的每日資料（Codex 約 200 天）、90 天的每小時資料，目前連續 9 天（新紀錄）
+  Token 統計有一年的每日資料（Codex 約 200 天）、90 天的每小時資料，目前連續 9 天（新紀錄）；
+  服務狀態：Claude 有一個示範用的事件（影響 Claude Code）、Codex 正常
 - few：剛安裝 15 分鐘，每個額度 3 筆；Token 統計只有最近 3 天
 - fresh：剛安裝，每個額度只有 1 筆（走勢與額度消耗顯示骨架畫面）；Token 統計首次掃描 37%
 - none：沒有 history.sqlite3（收集器還沒更新）
+- normal 以外的服務狀態都正常；服務狀態的名稱都是編的，標「示範」
 資料庫用收集器自己的 history 模組建立，schema 與實際相同。
 """
 from __future__ import annotations
@@ -127,6 +129,21 @@ def write_tokens(conn, now: int, scenario: str) -> None:
     conn.commit()
 
 
+def write_service_status(folder: Path, now: int, scenario: str) -> None:
+    """與收集器 service_status.py 相同格式的 service-status.json（FR-45）"""
+    def page(url: str) -> dict:
+        return {"indicator": "none", "description": "All Systems Operational", "components": [], "incidents": [],
+                "page": url, "error": None}
+    providers = {"claude": page("https://status.claude.com"), "codex": page("https://status.openai.com")}
+    if scenario == "normal":
+        providers["claude"].update(
+            indicator="minor", description="Minor Service Outage",
+            components=[{"name": "Claude Code", "status": "degraded_performance", "related": True}],
+            incidents=[{"name": "示範：Claude Code 回應變慢", "impact": "minor"}])
+    data = {"schema_version": 1, "updated_at": iso(now - 60), "providers": providers}
+    (folder / "service-status.json").write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
 def main() -> None:
     folder = Path(sys.argv[1])
     scenario = sys.argv[2] if len(sys.argv) > 2 else "normal"
@@ -151,6 +168,7 @@ def main() -> None:
         snapshot["providers"][provider]["windows"].append(
             {"id": wid, "label": label, "used_pct": current[(provider, wid)], "resets_at": iso(reset), "hidden": False})
     (folder / "usage.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
+    write_service_status(folder, now, scenario)
 
     db = folder / "history.sqlite3"
     for suffix in ("", "-wal", "-shm"):

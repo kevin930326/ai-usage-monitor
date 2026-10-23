@@ -33,6 +33,7 @@ enum DebugTools {
                 renderMenuBarIcons(to: url)
                 renderSettings(to: url)
                 renderStats(to: url)
+                renderStatus(to: url)
             }
             let only = env["AUM_RENDER_ANIMS"].map { Set($0.split(separator: ",").map(String.init)) }
             if env["AUM_RENDER_FRAMES"] == "1" { renderAnimations(to: url, only: only) }
@@ -69,6 +70,7 @@ enum DebugTools {
 
     /// 每個步驟在 stderr 印出 `perf-mark <秒> <名稱>`，量測腳本依此把 ps 的取樣分段。
     private static func runPerfSchedule() {
+        let close = 64.0
         let steps: [(TimeInterval, String, @MainActor () -> Void)] = [
             (0, "launch", {}),
             (10, "panel-open", { showPanelWindow() }),
@@ -84,16 +86,19 @@ enum DebugTools {
             (50, "stats-scroll", { DebugAction.send("stats-scroll") }),
             (51, "stats-scope", { DebugAction.send("stats-scope") }),
             (54, "stats-range", { DebugAction.send("stats-range") }),
-            (57, "panel-close", { panelWindow?.orderOut(nil) }),
-            (57 + 60, "closed-60s", {}),
-            (57 + 90, "closed-90s", {}),
+            // 第四階段：捲到服務狀態，異常的橘點呼吸 3 次；點通知時額度卡片亮一下
+            (57, "status-pulse", { DebugAction.send("status-pulse") }),
+            (61, "highlight", { DebugAction.send("highlight") }),
+            (close, "panel-close", { panelWindow?.orderOut(nil) }),
+            (close + 60, "closed-60s", {}),
+            (close + 90, "closed-90s", {}),
             // 第二次開關：比較兩次關閉後的記憶體，確認沒有累積（第一次開啟會載入框架，不能和開啟前比）
-            (57 + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
-            (57 + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
+            (close + 92, "panel-reopen", { panelWindow?.makeKeyAndOrderFront(nil) }),
+            (close + 100, "panel-close-2", { panelWindow?.orderOut(nil) }),
             // 完整統計視窗：打開 10 秒後關閉，關閉後資料應釋放
-            (57 + 120, "stats-open", { showStatsWindow() }),
-            (57 + 130, "stats-close", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
-            (57 + 150, "exit", { exit(0) }),
+            (close + 120, "stats-open", { showStatsWindow() }),
+            (close + 130, "stats-close", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
+            (close + 150, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {
@@ -183,6 +188,60 @@ enum DebugTools {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
                       scheme: scheme, to: dir.appendingPathComponent("stats-window-\(n).png"))
             }
+        }
+    }
+
+    // MARK: - 服務狀態（第四階段）
+
+    private static func statusRows(_ health: [String: ServiceHealth], exhausted: Set<String> = []) -> [ServiceStatusRow] {
+        ["claude", "codex"].map { ServiceStatusRow(provider: $0, health: health[$0] ?? .operational, quotaExhausted: exhausted.contains($0)) }
+    }
+
+    private static func statusCard(_ rows: [ServiceStatusRow], motion: PanelMotion = .settled) -> some View {
+        Group {
+            if ServiceStatusRow.allQuiet(rows) {
+                ServiceStatusLine(rows: rows)
+            } else {
+                PanelCard(id: PanelSection.status.rawValue, title: PanelSection.status.title, collapsed: .constant(false)) {
+                    ServiceStatusCardContent(rows: rows)
+                }
+            }
+        }
+        .frame(width: 328)
+        .padding(16)
+        .environment(\.panelMotion, motion)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    /// 服務狀態的各種情況（假資料，事件名稱都是編的）
+    private static let statusCases: [(String, [ServiceStatusRow])] = [
+        ("normal", statusRows([:])),
+        ("disrupted", statusRows(["claude": .disrupted(summary: "示範：Claude Code 回應變慢", affectsTool: true)])),
+        ("quota", statusRows([:], exhausted: ["claude"])),
+        ("both", statusRows(["claude": .disrupted(summary: "示範：API 錯誤率升高", affectsTool: true)], exhausted: ["claude"])),
+        ("maintenance", statusRows(["codex": .maintenance(summary: "示範：排定的維護")])),
+        ("unknown", statusRows(["claude": .unknown, "codex": .unknown])),
+    ]
+
+    private static func renderStatus(to dir: URL) {
+        for scheme in [ColorScheme.light, .dark] {
+            for (name, rows) in statusCases {
+                write(statusCard(rows), scheme: scheme, to: dir.appendingPathComponent("status-\(name)-\(scheme.name).png"))
+            }
+        }
+    }
+
+    /// 服務異常：橘點呼吸 3 次後停止（3 × 0.8 秒）
+    private static func renderStatusPulse(to dir: URL) {
+        let rows = statusCases[1].1
+        for scheme in [ColorScheme.light, .dark] {
+            var frames: [CGImage] = []
+            for index in 0...Int(2.7 * fps) {
+                var m = PanelMotion.settled
+                m.statusPulse = min(Double(index) / fps / 0.8, PanelTiming.statusPulses)
+                if let image = cgImage(statusCard(rows, motion: m), scheme: scheme) { frames.append(image) }
+            }
+            writeFrames(frames, name: "anim-status-pulse-\(scheme.name)", in: dir)
         }
     }
 
@@ -288,6 +347,13 @@ enum DebugTools {
                 m.glow = ["claude": g >= 1 ? 0 : g]
                 return m
             }),
+            // 第四階段：點通知打開面板時，額度卡片亮一下（0.6 秒）
+            ("highlight", 0.9, { t in
+                var m = PanelMotion.settled
+                let p = Curve.easeOut(t / 0.6)
+                if p < 1 { m.highlight = [PanelSection.quota.rawValue: p] }
+                return m
+            }),
             // 歷史不足時的骨架畫面：掃光三次後停止
             ("skeleton", 3.9, { t in
                 var m = PanelMotion.settled
@@ -311,6 +377,7 @@ enum DebugTools {
             }
         }
         renderStatsAnimations(to: dir, only: only)
+        if only?.contains("status-pulse") ?? true { renderStatusPulse(to: dir) }
         if only?.contains("trend-switch") ?? true { renderTrendSwitch(to: dir) }
         if only?.contains("theme") ?? true { renderThemeCrossfade(to: dir) }
     }

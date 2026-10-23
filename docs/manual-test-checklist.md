@@ -87,3 +87,19 @@
 | 6.4 | `security lock-keychain ~/Library/Keychains/login.keychain-db` 後 `launchctl kickstart gui/$(id -u)/io.github.kevin930326.ai-usage-monitor`，看 `collector.log` 與 `ps` | 收集器在數秒內結束並記錄錯誤，不會卡住等待互動；之後解鎖鑰匙圈恢復正常（審查「不確定項目」：`security` 沒有 timeout） | |
 | 6.5 | 自動重裝在以下情境各執行一次 `scripts/reinstall-ios.sh`：中繼離線、讀取密鑰錯誤、設定 → Live Activity 關閉、手機鎖定 | 通知文字與實際結果一致：卡片沒有開回來時不應通知「已重開」（審查「不確定項目」，目前只確認 App 程序有啟動） | |
 | 6.6 | 自動重裝執行中 `kill -9` 該 bash 程序（`pgrep -f reinstall-ios.sh`），再執行一次（C-02） | 第二次在 `reinstall.log` 記錄「清除殘留的鎖」並繼續重新安裝 | |
+
+## 7. Mac v1.8：服務狀態、通知、右鍵選單、快捷鍵
+
+截圖與效能量測都用假資料（`scripts/make-demo-history.py`）；以下需要真的選單列、通知中心與鍵盤。
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 7.1 | 安裝後等收集器跑兩次，`ls -l ~/Library/Application\ Support/AIUsageMonitor/service-status.json` | 權限 `-rw-------`；`updated_at` 在 5 分鐘內；`collector.log` 沒有「略過服務狀態」 | |
+| 7.2 | 打開面板，捲到最下面 | 兩個狀態頁都正常時只有一行「服務正常 · Claude、Codex」 | |
+| 7.3 | 把 `service-status.json` 複製一份備份，手動把 `claude.indicator` 改成 `major`、`components` 加一項 `{"name": "Claude Code", "status": "major_outage", "related": true}`，再打開面板（5 分鐘內收集器會覆蓋回真的狀態） | 服務狀態變成卡片，Claude 橘點呼吸 3 次後停止、寫「可能影響 Claude Code」「服務異常，不是額度用完」；「狀態頁」在瀏覽器打開 status.claude.com | |
+| 7.4 | 設定 › 通知 打開「剩不到 20%」 | 系統跳出通知權限詢問；允許後開關維持開啟。拒絕時出現「打開通知設定」按鈕 | |
+| 7.5 | 等到某個額度剩不到 20%（無法以程式製造，等真實情境） | 只收到一次通知；點通知打開面板，額度卡片亮一下 | |
+| 7.6 | 7.5 的額度重置後（「額度重置」開關打開） | 收到一次「已重置」；點通知打開面板，「接下來的重置」卡片亮一下 | |
+| 7.7 | 右鍵（以及 Control＋點按）選單列圖示 | 出現系統選單：立即更新、完整統計…、設定…、結束 AI 用量；各項都有作用，「立即更新」60 秒內只觸發一次收集器 | |
+| 7.8 | 設定 › 快捷鍵 按「未設定」後按 ⌃⌥⌘U；切到其他 App 按 ⌃⌥⌘U 兩次 | 第一次打開面板、第二次關閉；按 Esc 取消錄製；只按字母（沒有 ⌘⌥⌃）時顯示「這個組合不能用」；結束 App 重開後快捷鍵仍有效 | |
+| 7.9 | 開啟「減少動態效果」後重做 7.3、7.5 | 橘點不呼吸、卡片不亮，但點通知仍會捲到對應卡片 | |

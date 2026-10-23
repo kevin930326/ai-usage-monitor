@@ -23,7 +23,7 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
 
 /// 面板的區塊（FR-34、FR-35）。之後的區塊（走勢、統計…）在這裡加一個 case 與預設順序即可，
 /// 舊的設定會依 `PanelLayout.resolve` 自動插入新區塊，不需要改設定格式。
-/// 順序同 ADR-0008 第 2 節的表；之後的統計、服務狀態接在後面。
+/// 順序同 ADR-0008 第 2 節的表。
 enum PanelSection: String, CaseIterable, Identifiable {
     case ring
     case suggest
@@ -32,6 +32,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
     case trend
     case consumption
     case stats
+    case status
 
     var id: String { rawValue }
 
@@ -44,6 +45,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .trend: "本週額度走勢"
         case .consumption: "額度消耗"
         case .stats: "統計"
+        case .status: "服務狀態"
         }
     }
 
@@ -56,6 +58,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .trend: "目前這一輪的剩餘 % 曲線與照時間的預期，沒有紀錄的時段畫斜線"
         case .consumption: "每小時消耗的額度 %（熱力圖與每日合計），包含所有裝置"
         case .stats: "這台 Mac 的 Token：本週、單日最高、最長任務、連續天數、Token 活動與活動熱力圖"
+        case .status: "Anthropic 與 OpenAI 公開狀態頁的結果，分辨服務異常與額度用完；正常時只有一行"
         }
     }
 
@@ -97,6 +100,10 @@ final class PanelSettings {
         static let statsScope = "panel.statsScope"
         static let statsRange = "panel.statsRange"
         static let celebratedStreak = "panel.celebratedStreak"
+        static let notifyLow = "notify.low"
+        static let notifyTooFast = "notify.tooFast"
+        static let notifyReset = "notify.reset"
+        static let hotKey = "hotKey.panel"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -145,6 +152,34 @@ final class PanelSettings {
         didSet { defaults.set(celebratedStreak, forKey: Key.celebratedStreak) }
     }
 
+    /// 通知的三個開關（FR-19）。預設關：使用者打開時才向系統要求通知權限
+    var notifyLow: Bool {
+        didSet { defaults.set(notifyLow, forKey: Key.notifyLow) }
+    }
+
+    var notifyTooFast: Bool {
+        didSet { defaults.set(notifyTooFast, forKey: Key.notifyTooFast) }
+    }
+
+    var notifyReset: Bool {
+        didSet { defaults.set(notifyReset, forKey: Key.notifyReset) }
+    }
+
+    func notifies(_ kind: QuotaAlertKind) -> Bool {
+        switch kind {
+        case .low: notifyLow
+        case .tooFast: notifyTooFast
+        case .reset: notifyReset
+        }
+    }
+
+    var notifiesAnything: Bool { notifyLow || notifyTooFast || notifyReset }
+
+    /// 打開面板的全域快捷鍵（FR-47）；預設不設定
+    var hotKey: HotKeyShortcut? {
+        didSet { defaults.set(hotKey?.encoded(), forKey: Key.hotKey) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         iconStyle = defaults.string(forKey: Key.iconStyle).flatMap(MenuBarIconStyle.init) ?? .dualRing
@@ -157,6 +192,10 @@ final class PanelSettings {
         statsScope = defaults.string(forKey: Key.statsScope).flatMap(TokenScope.init) ?? .all
         statsRange = defaults.string(forKey: Key.statsRange).flatMap(TokenActivityRange.init) ?? .days30
         celebratedStreak = defaults.integer(forKey: Key.celebratedStreak)
+        notifyLow = defaults.bool(forKey: Key.notifyLow)
+        notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
+        notifyReset = defaults.bool(forKey: Key.notifyReset)
+        hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
     }
 
     var visibleSections: [PanelSection] {
