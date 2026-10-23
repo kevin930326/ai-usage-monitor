@@ -110,8 +110,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
 - **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
   來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
-- **每個額度顯示**：名稱、剩餘或已用 %、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。
-  來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`）。
+- **每個額度顯示**：名稱、剩餘或已用 %、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。**例外：手錶 App 的 `List`** 裡不能放 `Text(date, style: .relative)`（重置倒數、頁尾更新時間都一樣），它每秒更新會讓 watchOS 版面不斷重算、CPU 吃滿；改用 `ResetCountdown.text(until:now:)`／`updatedText(since:now:)`，由 `TimelineView(.everyMinute)` 每分鐘更新。
+  來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`、`ResetCountdown`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
 - **已用／剩餘設定只在 iPhone**（FR-17，預設剩餘）：iPhone App、Live Activity（含手錶智慧型堆疊的版面）與 iPhone 主畫面／鎖定畫面小工具依設定，用 `displayedPct(mode, at:)`。Mac 選單列、面板、桌面小工具，以及手錶 App 與錶面複雜功能**固定顯示剩餘 %**（`effectiveRemainingPct`；`ComplicationView` 用預設的 `.remaining`），設定不會同步到 Mac 或手錶。
 - **重置時間已過**（FR-26）：顯示「已重置」，百分比顯示剩餘 100%（已用模式為 0%）。Mac 離線時資料停在重置前，舊數字已不正確。
   來源：`UsageWindow+Reset.swift`（`isReset`、`effectiveUsedPct`）、`UsageWindowRow.swift`。

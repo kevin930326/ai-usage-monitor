@@ -84,7 +84,8 @@ private struct UsageList: View {
                         if stale {
                             Text("資料已過期 · ") + Text(snapshot.updatedAt, style: .time) + Text(" 更新")
                         } else {
-                            Text(snapshot.updatedAt, style: .relative) + Text("前更新")
+                            // 同重置倒數：不用每秒更新的相對時間文字，由 TimelineView 每分鐘更新
+                            Text(ResetCountdown.updatedText(since: snapshot.updatedAt, now: now))
                         }
                     }
                     .font(.footnote)
@@ -122,8 +123,10 @@ private struct WatchWindowRow: View {
             Group {
                 if window.isReset(at: now) {
                     Text("已重置")
-                } else if let resetsAt = window.resetsAt {
-                    Text("重置 ") + Text(resetsAt, style: .relative)
+                } else if let resetsAt = window.resetsAt, let countdown = ResetCountdown.text(until: resetsAt, now: now) {
+                    // 不用 Text(resetsAt, style: .relative)：它每秒更新，在 watchOS 的 List 列裡會讓
+                    // 版面不斷重算、CPU 吃滿。`now` 來自外層的 TimelineView(.everyMinute)，每分鐘更新一次
+                    Text("重置 \(countdown)")
                 }
             }
             .font(.caption2)
