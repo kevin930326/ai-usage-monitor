@@ -424,9 +424,15 @@ private struct TrendChartBlock: View {
         let tint = stale ? UsageColors.stale : UsageColors.provider(option.provider)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text("目前剩 \(Int(current.rounded()))%")
-                if option.window.resetsAt != nil {
-                    Text("· 照時間應剩 \(Int(trend.expectedRemaining(at: now).rounded()))%").foregroundStyle(.secondary)
+                if option.window.isReset(at: now) {
+                    // 重置時間已過、收集器還沒寫入新一輪：曲線是上一輪的，不把它的最後一點當成目前剩餘（FR-26）
+                    Text("已重置")
+                    Text("· 等待新一輪的資料").foregroundStyle(.secondary)
+                } else {
+                    Text("目前剩 \(Int(current.rounded()))%")
+                    if option.window.resetsAt != nil {
+                        Text("· 照時間應剩 \(Int(trend.expectedRemaining(at: now).rounded()))%").foregroundStyle(.secondary)
+                    }
                 }
             }
             .font(.caption)
@@ -453,8 +459,13 @@ private struct TrendChartBlock: View {
     }
 
     private var accessibilityText: String {
-        var text = "\(option.item.displayName)走勢：目前剩 \(Int(current.rounded()))%"
-        if option.window.resetsAt != nil { text += "，照時間應剩 \(Int(trend.expectedRemaining(at: now).rounded()))%" }
+        var text: String
+        if option.window.isReset(at: now) {
+            text = "\(option.item.displayName)走勢：已重置，等待新一輪的資料"
+        } else {
+            text = "\(option.item.displayName)走勢：目前剩 \(Int(current.rounded()))%"
+            if option.window.resetsAt != nil { text += "，照時間應剩 \(Int(trend.expectedRemaining(at: now).rounded()))%" }
+        }
         if !trend.gaps.isEmpty { text += "，有 \(trend.gaps.count) 段時間沒有紀錄" }
         return text
     }
