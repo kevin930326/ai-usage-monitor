@@ -8,6 +8,7 @@ import UsageKitUI
 struct PanelView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelSettings.self) private var settings
+    @Environment(HistoryStore.self) private var historyStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
@@ -42,11 +43,24 @@ struct PanelView: View {
     private var behavior: PanelBehavior {
         PanelBehavior(
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
-            visible: $visible, onVisibleChange: { $0 ? playAppear() : stopAnimations() },
-            snapshot: store.snapshot, now: store.now,
+            visible: $visible, onVisibleChange: { isVisible in
+                if isVisible {
+                    // 只在面板看得見時開啟資料庫並查詢（ADR-0009 第 7 節）
+                    historyStore.open(now: store.now)
+                    playAppear()
+                } else {
+                    stopAnimations()
+                    historyStore.close()
+                }
+            },
+            snapshot: store.snapshot, now: store.now, history: historyStore.history,
             onSnapshotChange: { old, new in
                 // 收集器寫入新資料後，「正在更新」之類的提示就不需要了
-                if old?.updatedAt != new?.updatedAt { refreshHint = nil }
+                if old?.updatedAt != new?.updatedAt {
+                    refreshHint = nil
+                    // usage.json 有新內容時才重新查詢（收集器同一次執行也寫了歷史）
+                    if visible { historyStore.open(now: store.now) }
+                }
                 detectResets(old: old, new: new)
             },
             onDebugAction: debugAction
@@ -77,6 +91,7 @@ struct PanelView: View {
         switch action {
         case "refresh": refresh()
         case "glow": if animates { playGlow(store.snapshot?.tightestWindow(at: store.now)?.provider ?? "claude") }
+        case "trend-next": switchTrendWindow()
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break
@@ -103,11 +118,81 @@ struct PanelView: View {
                     RingCardContent(item: item, stale: stale, now: store.now)
                 }
             }
+        case .suggest:
+            if let suggestion = NextProviderSuggestion(snapshot: snapshot, now: store.now) {
+                SuggestBanner(suggestion: suggestion)
+                    .animation(animates ? PanelTiming.crossfade : nil, value: suggestion.provider)
+            }
         case .quota:
             PanelCard(id: section.rawValue, title: section.title, collapsed: collapsed) {
                 QuotaCardContent(snapshot: snapshot, stale: stale, now: store.now, showsMarker: settings.showsExpectedMarker)
             }
+        case .resets:
+            PanelCard(id: section.rawValue, accessibilityTitle: section.title, collapsed: collapsed) {
+                ResetsCardHeader()
+            } content: {
+                ResetsCardContent(snapshot: snapshot, history: historyStore.history, stale: stale, now: store.now)
+            }
+        case .trend:
+            let options = HistoryWindowOption.options(snapshot)
+            if let selected = HistoryWindowOption.resolve(settings.trendWindow, in: options) {
+                PanelCard(id: section.rawValue, title: section.title, collapsed: collapsed) {
+                    TrendCardContent(options: options, selected: selected, history: historyStore.history, status: historyStore.status,
+                                     stale: stale, now: store.now) { option in
+                        guard option != selected else { return }
+                        settings.trendWindow = option.id
+                        playTrend()
+                    }
+                }
+            }
+        case .consumption:
+            let options = HistoryWindowOption.options(snapshot)
+            if let selected = HistoryWindowOption.resolve(settings.consumptionWindow, in: options) {
+                PanelCard(id: section.rawValue, accessibilityTitle: section.title, collapsed: collapsed) {
+                    ConsumptionCardHeader()
+                } content: {
+                    ConsumptionCardContent(options: options, selected: selected, history: historyStore.history, status: historyStore.status,
+                                           stale: stale, now: store.now) { option in
+                        settings.consumptionWindow = option.id
+                    }
+                }
+            }
         }
+    }
+
+    /// 切換走勢的額度：新曲線重新由左往右描繪（舊曲線交叉淡出）。
+    private func playTrend() {
+        guard animates else { return }
+        motion.trend = 0
+        withAnimation(PanelTiming.trend) { motion.trend = 1 }
+    }
+
+    /// Debug 量測用：切到下一個可選的額度
+    private func switchTrendWindow() {
+        guard let snapshot = store.snapshot else { return }
+        let options = HistoryWindowOption.options(snapshot)
+        guard let current = HistoryWindowOption.resolve(settings.trendWindow, in: options),
+              let index = options.firstIndex(of: current), options.count > 1 else { return }
+        settings.trendWindow = options[(index + 1) % options.count].id
+        playTrend()
+    }
+
+    /// 走勢或額度消耗目前顯示骨架畫面（歷史不足）：打開面板時才需要掃光。
+    private var showsSkeleton: Bool {
+        guard let snapshot = store.snapshot else { return false }
+        let sections = Set(settings.visibleSections).subtracting(settings.collapsed.compactMap(PanelSection.init))
+        let options = HistoryWindowOption.options(snapshot)
+        let history = historyStore.history
+        let readable = historyStore.status.canRead
+        if sections.contains(.trend), let o = HistoryWindowOption.resolve(settings.trendWindow, in: options),
+           !(readable && QuotaTrend(provider: o.provider, window: o.window, history: history, now: store.now).hasEnoughData) {
+            return true
+        }
+        if sections.contains(.consumption), let o = HistoryWindowOption.resolve(settings.consumptionWindow, in: options),
+           !(readable && QuotaConsumption(provider: o.provider, windowID: o.window.id, history: history, now: store.now).hasEnoughData) {
+            return true
+        }
+        return false
     }
 
     private var allHidden: some View {
@@ -205,6 +290,13 @@ struct PanelView: View {
         motion = start
         withAnimation(PanelTiming.appear) { motion.appear = 1 }
         withAnimation(PanelTiming.marker) { motion.marker = 1 }
+        withAnimation(PanelTiming.trend) { motion.trend = 1 }
+        withAnimation(PanelTiming.suggest) { motion.suggest = 1 }
+        withAnimation(PanelTiming.timeline) { motion.timeline = 1 }
+        // 骨架掃光只在有骨架時播放（三次後停止），沒有骨架時不讓整個面板多重繪 3.6 秒
+        if showsSkeleton {
+            withAnimation(PanelTiming.shimmer) { motion.shimmer = PanelTiming.shimmerPasses }
+        }
     }
 
     /// 面板關閉：停止所有動畫並回到靜止狀態，關閉期間不播放任何東西（NFR-8）。
@@ -226,11 +318,22 @@ struct PanelView: View {
         guard animates else { return }
         for (provider, windows) in next {
             let previous = resetSignature[provider] ?? [:]
-            let didReset = windows.contains { id, resetsAt in
+            let reset = windows.filter { id, resetsAt in
                 guard let before = previous[id] else { return false }
                 return resetsAt > before
             }
-            if didReset { playGlow(provider) }
+            if !reset.isEmpty { playGlow(provider) }
+            for id in reset.keys { playDeparting("\(provider)/\(id)") }
+        }
+    }
+
+    /// 時間軸上重置的圓點在「現在」的位置放大淡出。
+    private func playDeparting(_ key: String) {
+        motion.departing[key] = 0
+        withAnimation(PanelTiming.departing) {
+            motion.departing[key] = 1
+        } completion: {
+            motion.departing[key] = nil
         }
     }
 
@@ -269,6 +372,7 @@ private struct PanelBehavior: ViewModifier {
     let onVisibleChange: (Bool) -> Void
     let snapshot: UsageSnapshot?
     let now: Date
+    let history: QuotaHistory
     let onSnapshotChange: (UsageSnapshot?, UsageSnapshot?) -> Void
     let onDebugAction: (String) -> Void
 
@@ -277,6 +381,7 @@ private struct PanelBehavior: ViewModifier {
             .environment(\.panelMotion, motion)
             .environment(\.panelAnimates, animates)
             .environment(\.panelLive, live)
+            .environment(\.quotaHistory, history)
             .animation(animates ? PanelTiming.colorScheme : nil, value: colorScheme)
             .background(WindowVisibilityReader { visible = $0 }.frame(width: 0, height: 0))
             .onChange(of: visible) { _, isVisible in onVisibleChange(isVisible) }

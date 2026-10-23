@@ -136,9 +136,11 @@ struct RingCardContent: View {
     let now: Date
 
     @Environment(\.panelMotion) private var motion
+    @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { item.window.effectiveRemainingPct(at: now) }
-    private var pace: UsagePace? { UsagePace(window: item.window, stale: stale, now: now) }
+    /// 「約 N 分鐘後用完」有歷史時用近期速度，不足時退回平均速度（ADR-0008 第 4 節）
+    private var pace: UsagePace? { UsagePace(window: item.window, provider: item.provider, history: history, stale: stale, now: now) }
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -325,9 +327,10 @@ struct QuotaRow: View {
 
     @Environment(\.panelMotion) private var motion
     @Environment(\.panelAnimates) private var animates
+    @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { window.effectiveRemainingPct(at: now) }
-    private var pace: UsagePace? { UsagePace(window: window, stale: stale, now: now) }
+    private var pace: UsagePace? { UsagePace(window: window, provider: provider, history: history, stale: stale, now: now) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
