@@ -25,17 +25,24 @@ struct PanelView: View {
     @State private var resetSignature: [String: [String: Date]] = [:]
     /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
     @State private var motionGeneration = 0
+    /// Debug 量測用：捲到這個區塊（統計卡片在面板最下方，量測時要看得見才會繪製）
+    @State private var scrollTarget: PanelSection?
 
     private var animates: Bool { visible && !reduceMotion && fixedMotion == nil }
 
     var body: some View {
         if scrolls {
-            ScrollView { content }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(width: 360)
-                .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
-                .fixedSize(horizontal: false, vertical: true)
-                .modifier(behavior)
+            ScrollViewReader { proxy in
+                ScrollView { content }
+                    .onChange(of: scrollTarget) { _, target in
+                        if let target { proxy.scrollTo(target, anchor: .bottom) }
+                    }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(width: 360)
+            .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(behavior)
         } else {
             content.frame(width: 360).modifier(behavior)
         }
@@ -76,6 +83,7 @@ struct PanelView: View {
                     let sections = settings.visibleSections
                     ForEach(sections) { section in
                         card(section, snapshot: snapshot, stale: stale)
+                            .id(section)
                     }
                     if sections.isEmpty {
                         allHidden
@@ -99,6 +107,7 @@ struct PanelView: View {
                 playDeparting("\(next.provider)/\(next.window.id)")
                 playGlow(next.provider)
             }
+        case "stats-scroll": scrollTarget = .stats
         case "stats-scope":
             // 依序切換全部／Claude／Codex
             let scopes = TokenScopeChips.scopes(historyStore.tokens)

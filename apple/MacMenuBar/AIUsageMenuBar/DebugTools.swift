@@ -80,7 +80,8 @@ enum DebugTools {
             (41, "departing", { DebugAction.send("departing") }),
             (44, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
             (48, "appearance-light", { NSApplication.shared.appearance = nil }),
-            // 第三階段：統計卡片切換服務（長條與熱力圖重新長出、數字滾動）、切換 Token 活動範圍
+            // 第三階段：捲到統計卡片，切換服務（長條與熱力圖重新長出、數字滾動）、切換 Token 活動範圍
+            (50, "stats-scroll", { DebugAction.send("stats-scroll") }),
             (51, "stats-scope", { DebugAction.send("stats-scope") }),
             (54, "stats-range", { DebugAction.send("stats-range") }),
             (57, "panel-close", { panelWindow?.orderOut(nil) }),
