@@ -182,9 +182,7 @@ private struct RecordsRow: View {
 enum StatNumbersText {
     static func day(_ key: String) -> String {
         guard let date = TokenCalendar.date(key, calendar: .current) else { return key }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy/M/d"
-        return f.string(from: date)
+        return TokenDateText.string(date, "yyyy/M/d")
     }
 }
 

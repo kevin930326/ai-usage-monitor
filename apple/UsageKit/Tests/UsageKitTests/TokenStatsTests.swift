@@ -159,6 +159,21 @@ import Testing
         #expect(TokenFormat.duration(7200) == "2 小時")
     }
 
+    @Test func otherCalendarsUseGregorianDayKeys() {
+        // 使用者選民國曆或佛曆：資料庫的日期鍵仍是西元
+        for id in [Calendar.Identifier.republicOfChina, .buddhist, .japanese] {
+            var other = Calendar(identifier: id)
+            other.timeZone = cal.timeZone
+            #expect(TokenCalendar.key(now, calendar: other) == "2026-11-05")
+            #expect(TokenCalendar.date("2026-11-02", calendar: other) == TokenCalendar.date("2026-11-02", calendar: cal))
+            let data = TokenStatsData(days: [row("2026-11-02", main: 100), row("2026-11-04", main: 10), row("2026-11-05", main: 5)])
+            let summary = TokenSummary(data: data, scope: .all, now: now, calendar: other)
+            #expect(summary.thisWeek.main == 115)
+            #expect(summary.currentStreak == 2)
+            #expect(TokenHeatmap(data: data, scope: .all, now: now, weeks: 22, calendar: other).cells.suffix(7).prefix(4) == [100, 0, 10, 5])
+        }
+    }
+
     @Test func dayKeysRoundTrip() {
         let date = TokenCalendar.date("2026-02-28", calendar: cal)!
         #expect(TokenCalendar.key(date, calendar: cal) == "2026-02-28")

@@ -162,24 +162,27 @@ public struct TokenStatsData: Equatable, Sendable {
 
 // MARK: - 日期
 
-/// 統計用的日曆：星期一開始（「本週」從本機時間星期一 00:00 起算，ADR-0009 第 4 節）。
+/// 統計用的日曆：西元曆、本機時區、星期一開始（「本週」從本機時間星期一 00:00 起算，ADR-0009 第 4 節）。
+/// 收集器寫的日期鍵是西元 `YYYY-MM-DD`：使用者選民國曆或佛曆時也必須用西元曆換算，否則年份對不上。
 public enum TokenCalendar {
     public static func make(_ base: Calendar = .current) -> Calendar {
-        var c = base
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = base.timeZone
+        c.locale = base.locale
         c.firstWeekday = 2
         c.minimumDaysInFirstWeek = 4
         return c
     }
 
     public static func key(_ date: Date, calendar: Calendar) -> String {
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let parts = make(calendar).dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     public static func date(_ key: String, calendar: Calendar) -> Date? {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
-        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        return make(calendar).date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
     }
 
     public static func startOfWeek(_ date: Date, calendar: Calendar) -> Date {

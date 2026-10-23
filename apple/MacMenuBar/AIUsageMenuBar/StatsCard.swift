@@ -17,6 +17,16 @@ extension EnvironmentValues {
     }
 }
 
+/// 畫面上的日期：與資料庫的日期鍵一樣用西元曆（使用者選民國曆或佛曆時年份也一致）
+enum TokenDateText {
+    static func string(_ date: Date, _ format: String) -> String {
+        let f = DateFormatter()
+        f.calendar = TokenCalendar.make()
+        f.dateFormat = format
+        return f.string(from: date)
+    }
+}
+
 /// 範圍標籤「這台 Mac」：滑鼠移上去說明不包含的來源（ADR-0011 第 4 節）。
 struct ThisMacBadge: View {
     static let help = "只包含這台 Mac 上 Claude Code 與 Codex CLI 的對話紀錄（含它們的桌面 App 與編輯器外掛）。不包含 claude.ai 網頁、手機 App、其他電腦與雲端 session。額度 % 是整個帳號的數字。"
@@ -272,9 +282,7 @@ private struct StatNumbers: View {
 
     static func dayText(_ key: String) -> String {
         guard let date = TokenCalendar.date(key, calendar: .current) else { return key }
-        let f = DateFormatter()
-        f.dateFormat = "M/d"
-        return f.string(from: date)
+        return TokenDateText.string(date, "M/d")
     }
 
     private func tile(_ title: String, detail: String? = nil, help: String? = nil, @ViewBuilder value: () -> some View) -> some View {
@@ -368,9 +376,8 @@ struct TokenActivityChart: View {
     private var hoverText: String? {
         guard let hovered, bars.indices.contains(hovered) else { return nil }
         let bar = bars[hovered]
-        let f = DateFormatter()
-        f.dateFormat = "M/d"
-        let when = range == .weeks ? "\(f.string(from: bar.start)) 那週" : f.string(from: bar.start)
+        let day = TokenDateText.string(bar.start, "M/d")
+        let when = range == .weeks ? "\(day) 那週" : day
         if range == .cumulative { return "\(when)：累計 \(TokenFormat.short(bar.main))" }
         var text = "\(when)：\(TokenFormat.short(bar.main))"
         if scope == .all, bar.byProvider.count > 1 {
@@ -512,9 +519,7 @@ struct TokenHeatmapView: View {
     private var hoverText: String? {
         guard let hovered, let value = map.cells[hovered] else { return nil }
         let date = map.date(column: hovered / 7, row: hovered % 7)
-        let f = DateFormatter()
-        f.dateFormat = "M/d"
-        return "\(f.string(from: date)) 週\(Self.weekday(hovered % 7))：\(value > 0 ? TokenFormat.short(value) : "沒有使用")"
+        return "\(TokenDateText.string(date, "M/d")) 週\(Self.weekday(hovered % 7))：\(value > 0 ? TokenFormat.short(value) : "沒有使用")"
     }
 
     private var accessibilityText: String {
@@ -586,7 +591,7 @@ struct HeatmapCanvas: View, Animatable {
                 context.draw(label, at: CGPoint(x: x0 - 4, y: y0 + CGFloat(row) * step + cell / 2), anchor: .trailing)
             }
             // 月份：每個月第一週所在的欄（與上一個標籤至少隔 3 欄）
-            let calendar = Calendar.current
+            let calendar = TokenCalendar.make()
             var lastMonth: Int?, lastLabel = -10
             for column in 0..<map.weeks {
                 let date = map.date(column: column, row: 0)
