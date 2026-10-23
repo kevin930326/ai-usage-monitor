@@ -239,7 +239,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
 - 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
 - 「匯出 CSV」（第 5 節）目前只匯出每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`），尚未匯出 `daily_tokens`；是否補上待使用者決定。
-- `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
+- `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
 
 ## 決定（使用者於 2026-10-23 決定）
 

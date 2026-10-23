@@ -231,7 +231,9 @@ final class HistoryStore {
     }
 
     /// 改保留期間：寫入 `meta.retention_days`；縮短時立即刪除超出的資料（收集器每天也會依 meta 再刪一次）。
-    /// 延長時舊期間以前的每日 Token 早已刪除，把那一天記在 `meta.token_days_from`，統計才不會把它們畫成 0。
+    /// 延長時舊期間以前的每日 Token 已刪除，把邊界記在 `meta.token_days_from`，統計才不會把它們畫成 0。
+    /// 收集器停過時實際刪到的地方比「現在 − 舊期間」早，所以取它與資料庫裡最早一天較早的一個：
+    /// 還在的資料一定不會被藏起來；最早一天之前若剛好沒有使用，會顯示成「沒有資料」而不是 0（保守）。
     nonisolated func setRetention(days: Int, now: Date = .now) throws {
         try write { db in
             let old = Self.meta(db, "retention_days").flatMap(Int.init) ?? Self.defaultRetentionDays
@@ -239,7 +241,12 @@ final class HistoryStore {
             let shorter = days > 0 && (old == 0 || days < old)
             guard shorter else {
                 guard old > 0, days != old else { return true }
-                return Self.raiseTokenDaysFrom(db, Self.tokenDay(now.addingTimeInterval(-TimeInterval(old) * 86400)))
+                var boundary = Self.tokenDay(now.addingTimeInterval(-TimeInterval(old) * 86400))
+                if Self.existingTables(db, ["daily_tokens"]).count == 1,
+                   let earliest = Self.firstTokenDay(db), earliest < boundary {
+                    boundary = earliest
+                }
+                return Self.raiseTokenDaysFrom(db, boundary)
             }
             let cutoff = Int64(now.timeIntervalSince1970) - Int64(days) * 86400
             return Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens"]).allSatisfy { table in
@@ -270,6 +277,15 @@ final class HistoryStore {
                 // 不重新掃描時，今天以前的每日 Token 不會再算回來
                 && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
         }
+    }
+
+    /// `daily_tokens` 最早的一天；沒有資料時為 nil
+    private nonisolated static func firstTokenDay(_ db: OpaquePointer) -> String? {
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, "SELECT MIN(day) FROM daily_tokens", -1, &stmt, nil) == SQLITE_OK,
+              sqlite3_step(stmt) == SQLITE_ROW, let text = sqlite3_column_text(stmt, 0) else { return nil }
+        return String(cString: text)
     }
 
     /// `meta.token_days_from` 只往後移（YYYY-MM-DD 可以直接比較字串）
