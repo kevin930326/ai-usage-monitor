@@ -229,6 +229,26 @@ class CodexReviewTests(unittest.TestCase):
         self.assertIn("not supported", result.stderr)
         self.assertFalse((self.reviews / "feat-some-change-codex.md").exists())
 
+    def test_missing_base_does_not_call_codex(self):
+        self.commit_change()
+        self.git("remote", "remove", "origin", cwd=self.repo)  # 連同 origin/main 一起移除，fetch 也會失敗
+        self.fake_codex("echo should-not-run > \"$OUT\"\n")
+        result = self.review()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("找不到 origin/main", result.stderr)
+        self.assertFalse(self.args_file.exists())
+
+    def test_no_common_ancestor_does_not_call_codex(self):
+        self.git("checkout", "-q", "--orphan", "unrelated", cwd=self.repo)
+        (self.repo / "b.txt").write_text("x\n")
+        self.git("add", "b.txt", cwd=self.repo)
+        self.git("commit", "-qm", "orphan", cwd=self.repo)
+        self.fake_codex("echo should-not-run > \"$OUT\"\n")
+        result = self.review()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("沒有共同祖先", result.stderr)
+        self.assertFalse(self.args_file.exists())
+
     def test_unknown_argument(self):
         result = self.review("--fast")
         self.assertEqual(result.returncode, 2)

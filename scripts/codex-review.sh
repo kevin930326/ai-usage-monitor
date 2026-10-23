@@ -6,7 +6,7 @@
 #   --diff  （預設）只審 git diff origin/main...HEAD 的變更
 #   --full  審查整個 repo 的目前狀態
 #
-# 報告：$AUM_REVIEW_DIR（預設 ~/Documents/ai-usage-monitor-work/reviews）/<分支，斜線換成 ->-codex.md，
+# 報告：${AUM_REVIEW_DIR}（預設 ~/Documents/ai-usage-monitor-work/reviews）/<分支，斜線換成 ->-codex.md，
 # Codex 的完整輸出在同名的 .log。模型固定 gpt-6.1-sol、reasoning effort medium、sandbox read-only；
 # 模型無法使用、額度不足或執行失敗時印出原因並以非 0 結束，不改用其他模型，也不覆蓋上一份報告。
 #
@@ -47,8 +47,24 @@ fi
 if [ "$MODE" = diff ]; then
   # 盡量比對最新的 main；離線時用本機已有的 origin/main
   git fetch -q origin main 2>/dev/null || echo "（無法 fetch origin/main，改用本機的 origin/main）" >&2
-  if git diff --quiet origin/main...HEAD; then
+  # 先確認比較基準存在，再區分「沒有變更」(0)、「有變更」(1)與 git 錯誤（其他），錯誤時不呼叫 Codex
+  if ! git rev-parse -q --verify 'origin/main^{commit}' >/dev/null; then
+    echo "找不到 origin/main，無法決定審查範圍（先 git fetch origin main，或用 --full）" >&2
+    exit 2
+  fi
+  if ! git merge-base origin/main HEAD >/dev/null 2>&1; then
+    echo "HEAD 與 origin/main 沒有共同祖先，無法決定審查範圍（或用 --full）" >&2
+    exit 2
+  fi
+  set +e
+  git diff --quiet origin/main...HEAD
+  DIFF_CODE=$?
+  set -e
+  if [ $DIFF_CODE -eq 0 ]; then
     echo "origin/main...HEAD 沒有變更，不需要審查（要審整個 repo 用 --full）" >&2
+    exit 2
+  elif [ $DIFF_CODE -ne 1 ]; then
+    echo "git diff 失敗（exit ${DIFF_CODE}），沒有呼叫 Codex" >&2
     exit 2
   fi
   SCOPE="只審查 \`git diff origin/main...HEAD\` 的變更（先執行這個指令取得 diff；需要時可閱讀相關檔案的完整內容作為上下文，但只回報與這些變更有關的問題）。"
