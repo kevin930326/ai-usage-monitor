@@ -61,6 +61,10 @@ class ParseTest(unittest.TestCase):
         self.assertTrue(all(len(c["name"]) <= service_status.MAX_TEXT for c in data["components"]))
         weird = summary("none", components=[("ok", "melting"), (None, "partial_outage")])
         self.assertEqual(service_status.parse("claude", weird)["components"], [])
+        # 陣列欄位不是陣列：當成沒有項目
+        odd = {"status": {"indicator": "minor"}, "components": 42, "incidents": "x"}
+        self.assertEqual(service_status.parse("claude", odd)["components"], [])
+        self.assertEqual(service_status.parse("claude", odd)["incidents"], [])
 
 
 class UpdateTest(unittest.TestCase):
@@ -101,6 +105,25 @@ class UpdateTest(unittest.TestCase):
         self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW + timedelta(seconds=61 + 240)))
         # 時鐘倒退：照常抓取
         self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW - timedelta(hours=1)))
+
+    def test_one_failing_page_does_not_stop_the_other(self):
+        for failing, error in (("claude", TimeoutError("timed out /secret")), ("codex", TypeError("bad /secret"))):
+            self.calls.clear()
+
+            def fake(url, headers, timeout=15):
+                self.calls.append((url, headers))
+                if ("claude" if "claude" in url else "codex") == failing:
+                    raise error
+                return summary("minor", components=[("Codex", "partial_outage")])
+            with self.subTest(failing=failing), mock.patch.object(service_status.http, "request_json", side_effect=fake):
+                self.path.unlink(missing_ok=True)
+                self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW))
+                data = json.loads(self.path.read_text())["providers"]
+                other = "codex" if failing == "claude" else "claude"
+                self.assertIsNone(data[failing]["indicator"])
+                self.assertEqual(data[failing]["error"], f"狀態頁讀取失敗（{type(error).__name__}）")
+                self.assertEqual(data[other]["indicator"], "minor")
+                self.assertNotIn("/secret", self.path.read_text())
 
     def test_unknown_providers_are_ignored(self):
         service_status.update(["claude", "gemini"], self.path, now=NOW)

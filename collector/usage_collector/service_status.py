@@ -47,6 +47,11 @@ def _text(value: object) -> str | None:
     return value[:MAX_TEXT] if value else None
 
 
+def _items(value: object) -> list:
+    """格式不符（不是陣列）時當成沒有項目"""
+    return value if isinstance(value, list) else []
+
+
 def parse(provider: str, summary: dict) -> dict:
     """把 summary.json 縮成畫面需要的欄位。格式不符的項目略過，不丟例外。"""
     status = summary.get("status") if isinstance(summary, dict) else None
@@ -54,7 +59,7 @@ def parse(provider: str, summary: dict) -> dict:
     if indicator not in INDICATORS:
         raise ProviderError("狀態頁格式不符")
     components = []
-    for c in summary.get("components") or []:
+    for c in _items(summary.get("components")):
         if not isinstance(c, dict) or c.get("group") is True:
             continue
         name, state = _text(c.get("name")), c.get("status")
@@ -62,7 +67,7 @@ def parse(provider: str, summary: dict) -> dict:
             components.append({"name": name, "status": state,
                                "related": any(key in name for key in RELATED[provider])})
     incidents = []
-    for i in summary.get("incidents") or []:
+    for i in _items(summary.get("incidents")):
         if not isinstance(i, dict) or i.get("status") in ("resolved", "postmortem"):
             continue
         name = _text(i.get("name"))
@@ -80,11 +85,15 @@ def parse(provider: str, summary: dict) -> dict:
 
 
 def fetch(provider: str) -> dict:
+    """抓一個服務的狀態頁。任何失敗（網路、讀取逾時、格式）只影響這個服務，錯誤只記固定訊息或類別。"""
     try:
         return parse(provider, http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT))
     except ProviderError as e:
-        return {"indicator": None, "description": None, "components": [], "incidents": [], "page": PAGES[provider],
-                "error": str(e)[:MAX_TEXT]}
+        error = str(e)[:MAX_TEXT]  # 收集器自己的訊息，不含回應內容
+    except Exception as e:  # noqa: BLE001 — 例如讀取回應時 TimeoutError；不記例外內容
+        error = f"狀態頁讀取失敗（{type(e).__name__}）"
+    return {"indicator": None, "description": None, "components": [], "incidents": [], "page": PAGES[provider],
+            "error": error}
 
 
 def _read(path: Path) -> dict | None:
