@@ -509,6 +509,21 @@ class CodexTest(TokenStatsTestCase):
         fresh = self.fresh((self.codex_file(), "codex"))
         self.assertEqual(self.table("daily_tokens"), self.table("daily_tokens", fresh))
 
+    def test_copied_codex_rollout_counts_once(self):
+        # 同一個 rollout 被複製（不是搬移）到 archived_sessions：token_count 沒有跨檔 ID，只算一份
+        lines = (codex_turn(), codex_count(T0, inp=100, out=10), codex_count(T0 + 1, inp=300, out=30))
+        self.write(self.codex_file(), *lines)
+        copy = self.codex / "archived_sessions" / self.codex_file().name
+        self.write(copy, *lines)
+        self.assertEqual([f.key for f in token_stats.list_files(self.dirs)], [f"codex:{ROLLOUT}"])
+        self.scan()
+        self.scan()
+        self.assertEqual(self.totals("codex")[:4], (300, 0, 0, 30))
+        # 原檔不見後改讀複本：視為同一檔被替換，先扣再重算，合計不變
+        self.codex_file().unlink()
+        self.scan()
+        self.assertEqual(self.totals("codex")[:4], (300, 0, 0, 30))
+
     def test_undecided_source_waits_for_token_events(self):
         self.write(self.codex_file(), codex_turn("gpt-6.1-sol"))
         self.scan()

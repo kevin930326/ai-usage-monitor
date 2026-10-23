@@ -211,8 +211,11 @@ def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
                 st = entry.stat(follow_symlinks=False)
             except OSError:
                 continue
-            if key in files:  # 同名的檔案出現在兩個地方（複製而不是搬移）：以 inode 區分
-                key = f"{key}#{st.st_ino}"
+            if key in files:  # 同名的檔案出現在兩個地方（複製而不是搬移）
+                if provider == "codex":
+                    # token_count 來源沒有跨檔的 ID 可以去重，兩份都算會重複計入：只算先列到的那份（sessions 優先）
+                    continue
+                key = f"{key}#{st.st_ino}"  # Claude 以訊息 ID 跨檔去重，兩份都讀
             files[key] = LogFile(provider, key, entry.path, st.st_dev, st.st_ino, st.st_size, int(st.st_mtime))
     # 舊的先處理：首次掃描時第一次計入的日期、任務的先後都與實際順序一致
     return sorted(files.values(), key=lambda f: (f.mtime, f.key))
