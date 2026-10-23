@@ -113,8 +113,34 @@ import Testing
         let window = UsageWindow(id: "five_hour", label: "5 小時", usedPct: 80, resetsAt: at(5 * hour))
         let h = QuotaHistory(samples: (0..<5).map { sample(2 * hour + Double($0) * 15 * minute, 80) })
         let pace = UsagePace(window: window, provider: "claude", history: h, stale: false, now: now)!
-        #expect(pace.isTooFast)  // 門檻不變：已用比照時間多 ≥ 10 個百分點
+        // 平均速度會在重置前用完，但最近一小時沒在用：照近期速度不會用完，不算太快
+        #expect(!pace.isTooFast)
         #expect(pace.exhaustsAt == nil)
+        #expect(UsagePace(window: window, provider: "claude", history: .empty, stale: false, now: now)!.isTooFast)
+    }
+
+    @Test func recentlyFastIsTooFastEvenWhenAverageIsBehind() {
+        // 經過 3 小時只用了 40%（平均會撐到重置），但最近 60 分鐘從 4% 用到 40%（每小時 36%）→ 100 分鐘後用完，早於重置
+        let now = at(3 * hour)
+        let window = UsageWindow(id: "five_hour", label: "5 小時", usedPct: 40, resetsAt: at(5 * hour))
+        #expect(!UsagePace(window: window, provider: "claude", history: .empty, stale: false, now: now)!.isTooFast)
+        let h = QuotaHistory(samples: [sample(2 * hour, 4), sample(2 * hour + 20 * minute, 16), sample(2 * hour + 40 * minute, 28), sample(3 * hour, 40)])
+        let pace = UsagePace(window: window, provider: "claude", history: h, stale: false, now: now)!
+        #expect(pace.isTooFast)
+        #expect(abs(pace.exhaustsAt!.timeIntervalSince(now) - 100 * minute) < 1)
+    }
+
+    @Test func weeklyRecentRateNeeds12Hours() {
+        #expect(QuotaHistory.recentMinimumSpan(windowID: "five_hour") == 30 * minute)
+        #expect(QuotaHistory.recentMinimumSpan(windowID: "weekly") == 12 * hour)
+        let now = at(4 * 86400)
+        let weekly = { (span: TimeInterval) in
+            QuotaHistory(samples: stride(from: 0, through: span, by: 300).map {
+                QuotaSample(ts: now.addingTimeInterval($0 - span), provider: "claude", windowID: "weekly", usedPct: 20 + $0 / 3600, resetsAt: at(7 * 86400))
+            })
+        }
+        #expect(weekly(11 * hour).recentRate(provider: "claude", windowID: "weekly", now: now) == nil)
+        #expect(weekly(12 * hour).recentRate(provider: "claude", windowID: "weekly", now: now) != nil)
     }
 
     // MARK: - 建議接下來用
@@ -185,6 +211,24 @@ import Testing
         #expect(forecast.count == 1)
         #expect(forecast[0].outcome == .runsOut(now.addingTimeInterval(50 * hour)))
         #expect(forecast[0].usesRecentRate)
+    }
+
+    @Test func weeklyForecastIgnoresShortIntenseHistory() {
+        // 剛開始收集 45 分鐘、這段用得很兇（每 5 分鐘 +1%）；每週已用 38%、經過 39% → 退回平均速度，撐得到重置
+        let resetsAt = at(7 * 86400)
+        let now = resetsAt.addingTimeInterval(-0.61 * 7 * 86400)
+        let weekly = UsageWindow(id: "weekly", label: "每週", usedPct: 38, resetsAt: resetsAt)
+        let s = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [weekly])])
+        let samples = (0...9).map { i in
+            QuotaSample(ts: now.addingTimeInterval(Double(i - 9) * 300), provider: "claude", windowID: "weekly",
+                        usedPct: 29 + Double(i), resetsAt: resetsAt)
+        }
+        let history = QuotaHistory(samples: samples)
+        let forecast = WeeklyForecast.list(snapshot: s, history: history, now: now)
+        #expect(forecast[0].outcome == .lastsUntilReset)
+        #expect(!forecast[0].usesRecentRate)
+        // 同一規則：每週額度不算用得太快
+        #expect(UsagePace(window: weekly, provider: "claude", history: history, stale: false, now: now)?.isTooFast == false)
     }
 
     @Test func weeklyForecastFallsBackToAverageAndCanLast() {

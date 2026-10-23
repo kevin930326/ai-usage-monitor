@@ -46,10 +46,10 @@ import Testing
         #expect(fiveHour(used: 0, resetsIn: 6 * 3600).elapsedFraction(at: now) == 0)
     }
 
-    @Test func tooFastNeedsTenPointsAhead() {
-        // 經過 50%（剩 2.5 小時）：已用 60% 超前 10 點 → 太快；59% 不算
-        #expect(UsagePace(window: fiveHour(used: 60, resetsIn: 9000), stale: false, now: now)?.isTooFast == true)
-        #expect(UsagePace(window: fiveHour(used: 59, resetsIn: 9000), stale: false, now: now)?.isTooFast == false)
+    @Test func tooFastWhenAverageRunsOutBeforeReset() {
+        // 經過 50%（剩 2.5 小時）：已用 51% 照平均速度會在重置前用完 → 太快；剛好 50% 在重置時才用完，不算
+        #expect(UsagePace(window: fiveHour(used: 51, resetsIn: 9000), stale: false, now: now)?.isTooFast == true)
+        #expect(UsagePace(window: fiveHour(used: 50, resetsIn: 9000), stale: false, now: now)?.isTooFast == false)
     }
 
     @Test func noPaceEarlyInWindowWhenStaleOrReset() {

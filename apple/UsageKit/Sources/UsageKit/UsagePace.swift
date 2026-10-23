@@ -1,6 +1,7 @@
 import Foundation
 
-// 預期進度與用量節奏（FR-38、ADR-0008 第 4 節）。只用快照本身的資料，不需要歷史。
+// 預期進度與用量節奏（FR-38、ADR-0008 第 4 節）。這裡只用快照本身的資料（平均速度）；
+// 有歷史時的近期速度在 QuotaHistory.swift。
 
 public extension UsageWindow {
     /// 額度長度，由 id 推得（收集器 `window_label` 的規則）：
@@ -41,18 +42,18 @@ public extension UsageWindow {
 }
 
 /// 用量節奏：是否用得太快，以及照目前速度大約何時用完。
+/// 「用得太快」＝照目前速度會在重置前用完（ADR-0008 第 4 節）。有歷史時用近期速度
+/// （`init(window:provider:history:stale:now:)`），不足時與沒有歷史時用本額度開始至今的平均速度。
 public struct UsagePace: Equatable, Sendable {
-    /// 已用 % 比照時間的預期多出這麼多個百分點才算太快
-    public static let fastMargin: Double = 10
     /// 額度剛開始時一次大請求就會超前，經過這個比例之前不判斷
     public static let minimumElapsed: Double = 0.1
 
     /// 已用 % 減去照時間的預期已用 %（正數＝超前）
     public let aheadBy: Double
-    /// 照本額度開始至今的平均速度，預計用完的時間；早於重置時間才有值（FR-18）
+    /// 照目前速度預計用完的時間；早於重置時間才有值（FR-18）
     public let exhaustsAt: Date?
 
-    public var isTooFast: Bool { aheadBy >= Self.fastMargin }
+    public var isTooFast: Bool { exhaustsAt != nil }
 
     init(aheadBy: Double, exhaustsAt: Date?) {
         self.aheadBy = aheadBy

@@ -130,9 +130,14 @@ public extension QuotaHistory {
     }
 
     static let recentMinimumSamples = 4
-    static let recentMinimumSpan: TimeInterval = 30 * 60
 
-    /// 近期速度（每秒消耗的百分點）：同一輪、回看範圍內至少 4 筆且跨度 ≥ 30 分鐘；不足時為 nil（退回平均速度）。
+    /// 近期速度至少要涵蓋多久：5 小時額度 30 分鐘；每週額度 12 小時（幾十分鐘的密集使用不能代表一整週）。
+    static func recentMinimumSpan(windowID: String) -> TimeInterval {
+        windowID == "five_hour" ? 30 * 60 : 12 * 3600
+    }
+
+    /// 近期速度（每秒消耗的百分點）：同一輪、回看範圍內至少 4 筆，且跨度達 `recentMinimumSpan`；
+    /// 不足時為 nil（退回本額度開始至今的平均速度）。「用得太快」「約 N 分鐘後用完」「可撐到星期幾」都用這個規則。
     /// 回看範圍內有「沒有紀錄」的時段也照算：速度是兩端的差除以時間，睡眠期間沒有使用本來就該拉低速度。
     func recentRate(provider: String, windowID: String, now: Date) -> Double? {
         guard let lookback = Self.recentLookback(windowID: windowID) else { return nil }
@@ -140,14 +145,14 @@ public extension QuotaHistory {
         let recent = cycle.filter { $0.ts >= now.addingTimeInterval(-lookback) && $0.ts <= now }
         guard recent.count >= Self.recentMinimumSamples, let first = recent.first, let last = recent.last else { return nil }
         let span = last.ts.timeIntervalSince(first.ts)
-        guard span >= Self.recentMinimumSpan else { return nil }
+        guard span >= Self.recentMinimumSpan(windowID: windowID) else { return nil }
         return max(last.usedPct - first.usedPct, 0) / span
     }
 }
 
 public extension UsagePace {
-    /// 有歷史時的用量節奏：「用得太快」的判斷不變（ADR-0008 第 4 節的門檻），
-    /// 預計用完的時間改用近期速度；近期速度不足時退回平均速度（與 `init(window:stale:now:)` 相同）。
+    /// 有歷史時的用量節奏：以近期速度估計用完的時間，會在重置前用完就是「用得太快」；
+    /// 近期速度不足時退回平均速度（與 `init(window:stale:now:)` 相同）。
     init?(window: UsageWindow, provider: String, history: QuotaHistory, stale: Bool, now: Date) {
         guard let base = UsagePace(window: window, stale: stale, now: now) else { return nil }
         guard let rate = history.recentRate(provider: provider, windowID: window.id, now: now),
