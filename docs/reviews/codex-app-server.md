@@ -39,6 +39,8 @@
 
 ## 使用者的決定
 
+使用者於 2026-10-23 再次確認以下兩項決定（第 1 項選 B、第 2 項接受），合併前不再變更。
+
 1. **Claude 與 Codex 的「不知道」規則不對稱**（#41 帶進來的既有行為：找不到 `claude` 一律視為「不知道」，只用 Codex、從沒裝 Claude Code 的人永遠不會寫入 `enabled_providers`，App 一直顯示 Claude 的錯誤）。
    → **選 B**：Claude 比照 Codex，找不到 `claude` 且 `~/.claude`（或 `CLAUDE_CONFIG_DIR`）不存在時視為沒用過、不啟用；資料夾存在時仍是「不知道」、不更動設定。只檢查資料夾是否存在，不讀內容。已實作並加測試（`test_codex_only_user_without_claude_code` 等）。
 2. **用 API key 登入 Codex CLI 的人**重新執行安裝腳本後 Codex 會被停用（舊做法會啟用，但也查不到訂閱額度）。
