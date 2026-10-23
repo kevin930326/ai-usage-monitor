@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 收集器寫入本機額度歷史 `history.sqlite3`（FR-37，ADR-0009）：每次收集一筆 `collector_runs`、每個額度一筆 `quota_samples`，只存時間、服務、額度 id、已用 % 與重置時間，不上傳；WAL、權限 `0600`；每天第一次執行時依保留期間（預設 1 年）刪除並把 35 天前的資料降為每小時一筆；鎖住、損毀或版本較新時只記日誌，不影響 `usage.json`、上傳與結束碼。`uninstall-launchd.sh` 詢問是否一併刪除（預設保留）
 - iPhone 主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行），kind `UsageHomeWidget`，放在既有的 `UsageWidget` 擴充；小工具自己以共用的 Keychain 讀取密鑰呼叫中繼，每 25 分鐘重新整理（資料過期時每小時），重置與過期時間點放在 timeline
 - UsageKitUI `ProviderIcon`：原創服務圖示（Claude 八芒星、Codex 六瓣雲鏤空 `>_`），三個平台共用，template 繪製並套服務識別色，附 VoiceOver 名稱
 - iOS／watchOS Debug 示範情境 `codex`（Codex 最吃緊）；手錶 `AUM_RENDER` 另輸出圓形複雜功能的淺色與主題色模擬
