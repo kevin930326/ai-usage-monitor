@@ -242,13 +242,17 @@ public struct UpcomingReset: Equatable, Sendable {
     }
 
     /// 時間軸上的可見額度，依時間排序（有錯誤的服務不列）：未來 `horizon` 內會重置的，
-    /// 以及重置時間已過、還沒有新重置時間的（`justReset`，位置 0）。
+    /// 以及重置時間已過、還沒有新重置時間的（`justReset`，位置 0）。資料過期時不標「剛重置」：
+    /// 收集器停了很久，重置可能早就發生，「剛」不成立。
     public static func list(snapshot: UsageSnapshot, now: Date, horizon: TimeInterval = 8 * 3600) -> [UpcomingReset] {
-        snapshot.orderedProviderKeys.flatMap { key -> [UpcomingReset] in
+        let stale = snapshot.isStale(now: now)
+        return snapshot.orderedProviderKeys.flatMap { key -> [UpcomingReset] in
             guard let p = snapshot.providers[key], p.error == nil else { return [] }
             return p.visibleWindows.compactMap { w in
                 guard let at = w.resetsAt, at.timeIntervalSince(now) <= horizon else { return nil }
-                if at <= now { return UpcomingReset(provider: key, window: w, resetsAt: at, position: 0, justReset: true) }
+                if at <= now {
+                    return stale ? nil : UpcomingReset(provider: key, window: w, resetsAt: at, position: 0, justReset: true)
+                }
                 return UpcomingReset(provider: key, window: w, resetsAt: at, position: at.timeIntervalSince(now) / horizon)
             }
         }

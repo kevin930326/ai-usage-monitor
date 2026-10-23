@@ -214,6 +214,8 @@ import Testing
             "codex": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 0, resetsAt: at(5 * hour))]),
         ])
         #expect(UpcomingReset.list(snapshot: next, now: at(5 * minute)).map(\.justReset) == [false])
+        // 收集器停了兩天（資料過期）：重置早就過了，不標「剛重置」
+        #expect(UpcomingReset.list(snapshot: s, now: at(2 * 86400)).isEmpty)
     }
 
     @Test func nullResetTimeAwaitsNextUse() {
