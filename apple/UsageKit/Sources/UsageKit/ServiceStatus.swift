@@ -120,6 +120,8 @@ public enum ServiceStatusSummary {
         switch (health.isProblem, quotaExhausted) {
         case (true, true): return "\(name) 的額度已用完，同時服務也\(maintenance ? "在維護" : "有異常")"
         case (true, false): return "\(name) \(maintenance ? "正在維護" : "服務異常")，不是額度用完；稍後再試"
+        // 只有確認狀態頁正常時才說「服務正常」；狀態不明時不下判斷
+        case (false, true) where health == .unknown: return "\(name) 的額度已用完，等重置（服務狀態暫時無法取得）"
         case (false, true): return "\(name) 的額度已用完（服務正常），等重置"
         default: return nil
         }

@@ -53,6 +53,13 @@ import Testing
         #expect(ServiceStatusSummary.explanation(health: outage, quotaExhausted: true, provider: "claude")
             == "Claude 的額度已用完，同時服務也有異常")
         #expect(ServiceStatusSummary.explanation(health: .unknown, quotaExhausted: false, provider: "claude") == nil)
+        // 狀態不明（缺檔、過期、抓取失敗都是 .unknown）時不說「服務正常」
+        for status in [nil, ServiceStatusFile.decode(file(disrupted, updatedAgo: 3600)),
+                       ServiceStatusFile.decode(file(#""claude": {"indicator": null, "components": [], "incidents": [], "error": "x"}"#))] {
+            let health = ServiceStatusSummary.health(status, provider: "claude", now: now)
+            #expect(ServiceStatusSummary.explanation(health: health, quotaExhausted: true, provider: "claude")
+                == "Claude 的額度已用完，等重置（服務狀態暫時無法取得）")
+        }
         #expect(ServiceStatusSummary.explanation(health: .maintenance(summary: "x"), quotaExhausted: false, provider: "codex")
             == "Codex 正在維護，不是額度用完；稍後再試")
     }
