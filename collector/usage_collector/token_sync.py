@@ -382,8 +382,12 @@ def forget(path: Path | None = None) -> None:
 
 
 def status(path: Path | None = None) -> dict:
-    """`python -m usage_collector.token_sync status`：上傳狀態（不含密鑰與資料內容）。"""
-    conn = history.connect(path or history.HISTORY_PATH)
+    """`python -m usage_collector.token_sync status`：上傳狀態（不含密鑰與資料內容）。
+    還沒有資料庫時不建立（收集器第一次執行時才以 0600 建立）。"""
+    path = path or history.HISTORY_PATH
+    if not path.exists():
+        return {"history": "尚未建立（收集器還沒執行過）"}
+    conn = history.connect(path)
     try:
         keys = ("upload_status", "upload_last_success", "upload_failures", "upload_more", "relay_device_id",
                 "sync_status", "sync_last_success")
