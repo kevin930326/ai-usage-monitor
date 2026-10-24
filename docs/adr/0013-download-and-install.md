@@ -1,9 +1,9 @@
 # ADR-0013：下載與安裝（三層：Mac、加 iPhone、加 PC）
 
-- 狀態：**提議中**（2026-10-24；牽涉發布、背景執行與安全，等使用者確認後改為「已採用」）
+- 狀態：**已採用**（2026-10-24 提議，同日由使用者採用）
 - 日期：2026-10-24
 - 相關需求：FR-4、FR-20、FR-50、FR-53、FR-55、FR-57（本 ADR 新增）、NFR-1、NFR-3、NFR-6、NFR-9
-- 相關：[ADR-0001](0001-cloudflare-worker-relay.md)（中繼）、[ADR-0006](0006-claude-usage-via-cli.md)、[ADR-0007](0007-codex-usage-via-app-server.md)（收集器怎麼拿用量）、[ADR-0008](0008-mac-panel-layout.md) 第 8 節（App 不連網）、[ADR-0011](0011-multi-device-usage.md)（第二層）、ADR-0012（配對，撰寫中：一次性短碼、到期、嘗試次數與密鑰保存方式在那裡決定）
+- 相關：[ADR-0001](0001-cloudflare-worker-relay.md)（中繼）、[ADR-0006](0006-claude-usage-via-cli.md)、[ADR-0007](0007-codex-usage-via-app-server.md)（收集器怎麼拿用量）、[ADR-0008](0008-mac-panel-layout.md) 第 8 節（App 不連網）、[ADR-0011](0011-multi-device-usage.md)（第二層）、[ADR-0012](0012-iphone-pairing.md)（配對：一次性短碼、到期、嘗試次數與密鑰保存方式）
 
 ## 背景
 
@@ -13,7 +13,7 @@
 |---|---|---|
 | 第 0 層 | 只用 Mac：收集器＋選單列 App | 下載 → 打開 → 完成；不用終端機、不用自己裝 Python |
 | 第 1 層 | 加 iPhone：部署自己的中繼、配對 | 一個腳本部署中繼；QR／短碼配對；iPhone App 的建置與安裝盡量自動 |
-| 第 2 層 | 加 PC：Windows 收集器＋第二層 Token 合併 | PowerShell 一行安裝，用短碼加入 |
+| 第 2 層 | 加 PC：Windows 收集器＋第二層 Token 合併 | PowerShell 一行安裝；以 `scripts/relay-device.sh` 產生的裝置密鑰加入（以短碼加入之後再做） |
 
 不能繞過的限制：沒有付費 Apple Developer 帳號 → Mac App 無法公證（Gatekeeper 會擋）、iPhone App 無法上架或 TestFlight；Claude Code／Codex 由使用者自己登入；不幫別人代管中繼（ADR-0001、BACKLOG 第 6 節）。
 
@@ -193,6 +193,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 - 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`）。
 - 第三方 action 固定到 commit SHA（供應鏈）。
 - 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳任何東西。
+- 第一次發布：使用者決定直接打 tag 產生草稿 Release、看過再發布，不先跑 `workflow_dispatch`。
 
 ## 後果
 
@@ -201,8 +202,11 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 - 新增：`scripts/fetch-python-runtime.sh`、`scripts/bundle-collector.sh`、`scripts/build-release.sh`、`scripts/install.sh`、`.github/workflows/release.yml`、App 的 `CollectorService`（偵測、註冊、遷移）、收集器的 `--agent app` 與 `setup` 指令。
 - 既有的 `install-launchd.sh` 與 `install-mac-app.sh`（開發版）保留，行為不變；使用者目前的安裝不受影響，遷移只在使用者按下時進行。
 
-## 需要使用者決定
+## 使用者的決定（2026-10-24）
 
-1. 發布的 `.dmg`／`.zip` 是否也放 x86_64 的 Python（Intel Mac）：目前 App 本身只有 arm64，建議維持只放 arm64。
-2. `.dmg` 安裝時「允許內建收集器執行」（移除 App 內的隔離屬性）要使用者按，還是首次打開時自動做：目前採用要使用者按（保守）。
-3. 這份 ADR 改為「已採用」。
+1. 採用這份 ADR。
+2. 發布的 `.dmg`／`.zip` **只放 arm64** 的 Python，不打包 x86_64。
+3. `.dmg` 安裝時「允許內建收集器執行」（移除 App 內的隔離屬性）**維持由使用者按**，首次打開時不自動移除。
+4. 第一次發布直接打 `v*` tag 產生**草稿** Release，看過再按發布；**不執行** `workflow_dispatch`（理由見第 7 節）。
+5. Windows 的 `install.ps1` 訊息維持英文（Windows PowerShell 5.1 以 Latin-1 解碼 `irm` 下載的內容）。
+6. `scripts/setup-relay.sh` 不建立 D1：第二層的 D1 照 `docs/tier2-setup.md` 另外建立。
