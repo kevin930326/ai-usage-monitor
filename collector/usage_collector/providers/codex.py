@@ -21,6 +21,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import IO, cast
 
 from .. import __version__, paths
 from ..models import ProviderError, ProviderUsage, Window, parse_pct
@@ -69,12 +70,12 @@ class AppServer:
             raise ProviderError("無法執行 codex，重新執行 scripts/install-launchd.sh") from None
         try:
             self.selector = selectors.DefaultSelector()
-            self.selector.register(self.proc.stdout, selectors.EVENT_READ)
+            self.selector.register(self._stdout, selectors.EVENT_READ)
         except BaseException:
             self.proc.kill()
             self.proc.wait()
-            self.proc.stdin.close()
-            self.proc.stdout.close()
+            self._stdin.close()
+            self._stdout.close()
             self.cwd.cleanup()
             raise
 
@@ -91,8 +92,8 @@ class AppServer:
 
     def send(self, message: dict) -> None:
         try:
-            self.proc.stdin.write((json.dumps(message) + "\n").encode())
-            self.proc.stdin.flush()
+            self._stdin.write((json.dumps(message) + "\n").encode())
+            self._stdin.flush()
         except OSError:  # 含 BrokenPipeError：app-server 已經結束
             raise ProviderError("Codex app-server 意外結束") from None
 
@@ -107,12 +108,21 @@ class AppServer:
             if "method" not in message and message.get("id") == request_id:
                 return message
 
+    # stdin／stdout 都是 PIPE，不會是 None（型別上是 Optional）
+    @property
+    def _stdin(self) -> IO[bytes]:
+        return cast("IO[bytes]", self.proc.stdin)
+
+    @property
+    def _stdout(self) -> IO[bytes]:
+        return cast("IO[bytes]", self.proc.stdout)
+
     def read_message(self) -> dict:
         while b"\n" not in self.buffer:
             remaining = self.deadline - time.monotonic()
             if remaining <= 0 or not self.selector.select(remaining):
                 raise ProviderError(f"Codex app-server 回應逾時（{TIMEOUT:g} 秒）")
-            chunk = os.read(self.proc.stdout.fileno(), 65536)
+            chunk = os.read(self._stdout.fileno(), 65536)
             if not chunk:
                 raise ProviderError("Codex app-server 意外結束")
             self.received += len(chunk)
@@ -134,7 +144,7 @@ class AppServer:
         try:
             self.selector.close()
             try:
-                self.proc.stdin.close()
+                self._stdin.close()
             except OSError:
                 pass
             for sig in (None, signal.SIGTERM, signal.SIGKILL):
@@ -150,7 +160,7 @@ class AppServer:
                 except subprocess.TimeoutExpired:
                     continue
         finally:
-            self.proc.stdout.close()
+            self._stdout.close()
             self.cwd.cleanup()
 
 
@@ -212,7 +222,7 @@ def parse(result: dict) -> ProviderUsage:
     snapshot = result.get("rateLimits")
     if not isinstance(snapshot, dict):
         raise ProviderError(FORMAT_CHANGED)
-    windows = []
+    windows: list[Window] = []
     for key in ("primary", "secondary"):
         if snapshot.get(key) is None:
             continue  # 沒有這個額度：與舊端點回傳 null 時相同，略過

@@ -4,9 +4,9 @@ import os
 import stat
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
-from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 from usage_collector import __main__ as cli
@@ -210,7 +210,7 @@ class ClaudeFetchTest(unittest.TestCase):
             self.assertNotIn(secret, text)
 
     def test_plan_is_optional(self):
-        with FakeClaude(auth="logged-out.txt") as fake:
+        with FakeClaude(auth="logged-out.txt"):
             usage = claude.fetch()
         self.assertIsNone(usage.plan)
         self.assertEqual(len(usage.windows), 3)

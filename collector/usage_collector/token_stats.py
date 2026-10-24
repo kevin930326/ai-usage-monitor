@@ -13,10 +13,10 @@ import os
 import re
 import sqlite3
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Mapping
 
 from . import history
 from .log import log
@@ -62,6 +62,10 @@ def normalize_model(value) -> str:
 def _count(value) -> int:
     # bool 是 int 的子類別，要排除；負數與其他型別當 0
     return value if type(value) is int and value > 0 else 0
+
+
+def _dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
 
 
 def _epoch(value) -> int | None:
@@ -270,7 +274,8 @@ class Totals:
             values = [max(0, v) for v in b[:7]] + [b[7], self.now]
             for table, key_cols, key_vals, cutoff in (
                     ("daily_tokens", "device_id, day, provider, model", [self.device_id, day, provider, model], daily_cutoff),
-                    ("hourly_tokens", "device_id, day, hour, provider, model", [self.device_id, day, hour, provider, model], hourly_cutoff)):
+                    ("hourly_tokens", "device_id, day, hour, provider, model",
+                     [self.device_id, day, hour, provider, model], hourly_cutoff)):
                 if day < cutoff:
                     continue  # 已超過保留期間（首次掃描讀到的舊紀錄）：只計入 records
                 if min(b[:7]) < 0:
@@ -400,7 +405,7 @@ def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Cou
         counters.bad_lines += 1
         return
     kind = obj.get("type")
-    message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+    message = _dict(obj.get("message"))
     # 只取白名單欄位，之後不再使用 obj／message
     ts = _epoch(obj.get("timestamp"))
     sidechain = obj.get("isSidechain") is True
@@ -461,7 +466,7 @@ def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Coun
         counters.bad_lines += 1
         return
     kind = obj.get("type")
-    payload = obj.get("payload") if isinstance(obj.get("payload"), dict) else {}
+    payload = _dict(obj.get("payload"))
     ts = _epoch(obj.get("timestamp"))
     if kind == "turn_context":
         st.state["model"] = normalize_model(payload.get("model"))

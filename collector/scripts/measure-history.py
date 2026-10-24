@@ -23,7 +23,8 @@ WINDOWS = [(p, w) for p in ("claude", "codex") for w in ("five_hour", "weekly")]
 
 
 def snapshot(ts: int) -> dict:
-    iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    def iso(t: int) -> str:
+        return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {"updated_at": iso(ts), "providers": {
         p: {"error": None, "windows": [
             {"id": w, "used_pct": 12.0, "resets_at": iso(ts + HOUR)} for q, w in WINDOWS if q == p]}
@@ -75,7 +76,8 @@ def main() -> None:
             med, mx, size = measure(days, cleanup)
             print(f"| {label} | {case} | {med * 1000:.1f} ms | {mx * 1000:.1f} ms | {size / 1e6:.1f} MB |")
     med, mx, size = measure(365, True, repeat=1, steady=False)
-    print(f"| 一年（沒有降採樣進度） | 第一次清理（只發生一次） | {med * 1000:.1f} ms | {mx * 1000:.1f} ms | {size / 1e6:.1f} MB |")
+    print(f"| 一年（沒有降採樣進度） | 第一次清理（只發生一次） | {med * 1000:.1f} ms | {mx * 1000:.1f} ms"
+          f" | {size / 1e6:.1f} MB |")
 
 
 if __name__ == "__main__":

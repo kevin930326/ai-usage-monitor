@@ -18,7 +18,7 @@ def update(path: Path, key: str, value: object) -> None:
     except FileNotFoundError:
         config = {}
     except json.JSONDecodeError as e:
-        raise SystemExit(f"{path} 不是有效的 JSON（{e}），沒有寫入，請先修正或刪除該檔案")
+        raise SystemExit(f"{path} 不是有效的 JSON（{e}），沒有寫入，請先修正或刪除該檔案") from None
     if not isinstance(config, dict):
         raise SystemExit(f"{path} 不是 JSON 物件，沒有寫入")
     config[key] = value
@@ -41,5 +41,5 @@ if __name__ == "__main__":
         try:
             value = json.loads(value)
         except json.JSONDecodeError as e:
-            raise SystemExit(f"value 不是有效的 JSON（{e}），沒有寫入")
+            raise SystemExit(f"value 不是有效的 JSON（{e}），沒有寫入") from None
     update(Path(args[0]), args[1], value)

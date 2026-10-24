@@ -55,10 +55,10 @@ def _items(value: object) -> list:
 def parse(provider: str, summary: dict) -> dict:
     """把 summary.json 縮成畫面需要的欄位。格式不符的項目略過，不丟例外。"""
     status = summary.get("status") if isinstance(summary, dict) else None
-    indicator = status.get("indicator") if isinstance(status, dict) else None
-    if indicator not in INDICATORS:
+    if not isinstance(status, dict) or status.get("indicator") not in INDICATORS:
         raise ProviderError("狀態頁格式不符")
-    components = []
+    indicator = status["indicator"]
+    components: list[dict] = []
     for c in _items(summary.get("components")):
         if not isinstance(c, dict) or c.get("group") is True:
             continue
@@ -66,7 +66,7 @@ def parse(provider: str, summary: dict) -> dict:
         if name and state in COMPONENT_STATUSES and state != "operational" and len(components) < MAX_ITEMS:
             components.append({"name": name, "status": state,
                                "related": any(key in name for key in RELATED[provider])})
-    incidents = []
+    incidents: list[dict] = []
     for i in _items(summary.get("incidents")):
         if not isinstance(i, dict) or i.get("status") in ("resolved", "postmortem"):
             continue

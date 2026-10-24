@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Iterable, Mapping
 
 
 def resolve_home(environ: Mapping[str, str] = os.environ) -> Path:

@@ -32,7 +32,8 @@ class ParseTest(unittest.TestCase):
     def test_keeps_only_needed_fields(self):
         data = service_status.parse("claude", summary(
             "major",
-            components=[("claude.ai", "operational"), ("Claude Code", "partial_outage"), ("Claude API (api.anthropic.com)", "degraded_performance")],
+            components=[("claude.ai", "operational"), ("Claude Code", "partial_outage"),
+                        ("Claude API (api.anthropic.com)", "degraded_performance")],
             incidents=[("Elevated errors on Claude Code", "investigating", "major"), ("Old one", "resolved", "minor")]))
         self.assertEqual(data["indicator"], "major")
         self.assertEqual(data["components"], [
@@ -110,7 +111,7 @@ class UpdateTest(unittest.TestCase):
         for failing, error in (("claude", TimeoutError("timed out /secret")), ("codex", TypeError("bad /secret"))):
             self.calls.clear()
 
-            def fake(url, headers, timeout=15):
+            def fake(url, headers, timeout=15, failing=failing, error=error):
                 self.calls.append((url, headers))
                 if ("claude" if "claude" in url else "codex") == failing:
                     raise error

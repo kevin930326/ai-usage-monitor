@@ -190,7 +190,8 @@ class WriteTest(HistoryTestCase):
         n = history.record(snapshot(T0, codex_error="尚未登入"), self.path)
         self.assertEqual(n, 2)
         with self.db() as c:
-            rows = c.execute("SELECT ts, provider, window_id, used_pct, resets_at FROM quota_samples ORDER BY window_id").fetchall()
+            rows = c.execute("SELECT ts, provider, window_id, used_pct, resets_at FROM quota_samples"
+                             " ORDER BY window_id").fetchall()
             runs = c.execute("SELECT ts, ok, runs FROM collector_runs").fetchall()
         self.assertEqual(rows, [(T0, "claude", "five_hour", 10.0, T0 + 5 * HOUR), (T0, "claude", "weekly", 40.0, None)])
         self.assertEqual(runs, [(T0, 1, 1)])

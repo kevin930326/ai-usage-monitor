@@ -4,6 +4,7 @@ from unittest import mock
 from usage_collector import __main__ as cli
 from usage_collector.models import ProviderError, ProviderUsage
 
+
 class CollectTest(unittest.TestCase):
     def test_one_provider_failure_does_not_break_other(self):
         ok = mock.Mock(fetch=mock.Mock(return_value=ProviderUsage(plan="Pro")))

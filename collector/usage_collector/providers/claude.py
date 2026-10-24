@@ -114,7 +114,7 @@ def window_for(scope: str | None) -> tuple[str, str, bool]:
 
 def parse(text: str, plan: str | None, now: datetime | None = None) -> ProviderUsage:
     now = now or datetime.now(timezone.utc)
-    windows = []
+    windows: list[Window] = []
     for line in ANSI_RE.sub("", text).splitlines():
         line = line.strip()
         if not line.startswith("Current "):

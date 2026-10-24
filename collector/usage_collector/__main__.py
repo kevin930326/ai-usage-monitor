@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
 
     snapshot = collect()
     if not snapshot["providers"]:
-        log("config.json 的 enabled_providers 沒有啟用任何服務，登入 Claude Code 或 Codex CLI 後重新執行 scripts/install-launchd.sh")
+        log("config.json 的 enabled_providers 沒有啟用任何服務，"
+            "登入 Claude Code 或 Codex CLI 後重新執行 scripts/install-launchd.sh")
     ok = any(p["error"] is None for p in snapshot["providers"].values())
     for name, p in snapshot["providers"].items():
         if p["error"]:
