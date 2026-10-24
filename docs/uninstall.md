@@ -1,11 +1,13 @@
 # 解除安裝
 
+下面指令裡的 `X.Y.Z` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的任何一個版本號（指向固定版本、不用 `latest`，見 [ADR-0013](adr/0013-download-and-install.md#1-mac-app-的發布格式)）；解除安裝的步驟各版相同。
+
 每一部分可以分開移除。預設**只移除程式與排程、保留資料**（額度歷史、Token 統計、設定），要連資料一起清掉時另外做最後一步。
 
 ## Mac 選單列 App 與內建收集器
 
 ```bash
-curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.sh | bash -s -- --uninstall
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash -s -- --uninstall
 ```
 
 - 停用 App 內建的收集器（SMAppService，「系統設定 › 一般 › 登入項目與延伸功能」的「AI 用量」會消失），再把 App 移到垃圾桶。
@@ -15,7 +17,7 @@ curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/latest/downl
 連資料一起移除（移到垃圾桶，不是直接刪除）：
 
 ```bash
-curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.sh | bash -s -- --uninstall --purge
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash -s -- --uninstall --purge
 ```
 
 `--purge` 把 `~/Library/Application Support/AIUsageMonitor`（usage.json、history.sqlite3、config.json）與 `~/Library/Logs/AIUsageMonitor` 移到垃圾桶。`install-launchd.sh` 的收集器還在用這個資料夾時會拒絕，先照下一節移除它。
@@ -77,7 +79,7 @@ cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新�
 ## Windows PC
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall
+& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1))) -Uninstall
 ```
 
 移除工作排程 `\AIUsageMonitor\Collector` 與 `%LOCALAPPDATA%\AIUsageMonitor\app`；`%LOCALAPPDATA%\AIUsageMonitor` 裡的 history.sqlite3、config.json、collector.log 保留，不需要時自行刪除。從 repo 安裝的用 `collector\windows\uninstall-task.ps1`（見 [windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md#移除)，#71 合併前在該分支上）。用 winget 裝的 Python 不會被移除（`winget uninstall Python.Python.3.13`）。

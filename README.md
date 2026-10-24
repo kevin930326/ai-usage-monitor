@@ -96,11 +96,13 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 **下載安裝**（不需要終端機、不需要自己裝 Python）：從 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 下載 `AIUsageMenuBar-<版本>.dmg`，把「AI 用量」拖到「應用程式」，第一次打開時到「系統設定 › 隱私權與安全性」按「強制打開」（App 用 ad-hoc 簽署，沒有 Apple 公證，見 [ADR-0013](docs/adr/0013-download-and-install.md)）。
 
-或用一行指令（會比對 SHA-256、裝到「應用程式」並打開，不會遇到 Gatekeeper 的「強制打開」）：
+或用一行指令（會比對 SHA-256、裝到「應用程式」並打開，不會遇到 Gatekeeper 的「強制打開」）。指令指向固定版本，把 `X.Y.Z` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的版本號：
 
 ```bash
-curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash
 ```
+
+想先看過再執行：`curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh`，看完 `install.sh` 再 `bash install.sh`。install.sh 裡寫死了該版本 zip 的 SHA-256，下載後比對、不符就停止；它與 zip 來自同一個 Release，保護的是下載與快取途中的完整性，**不能**防止 Release 本身被替換（[ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)）。
 
 第一次打開會出現**設定精靈**，每一步顯示 ✅ 或要處理的事；需要指令時附「複製」按鈕。App 內建收集器（Python 已內嵌），會在背景每 5 分鐘收集一次；之後可以從「設定 › 一般 › 重新執行設定精靈」再打開。
 
@@ -161,8 +163,10 @@ scripts/install-mac-app.sh             # 選單列 App（Release 建置，裝到
 Windows 收集器統計這台 PC 上 Claude Code 與 Codex CLI 的 Token（預設不收集額度、不上傳）。開 PowerShell（不需要系統管理員）：
 
 ```powershell
-irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1 | iex
+irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
 ```
+
+`X.Y.Z` 同樣換成 Releases 上的版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
 
 沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md)（在 #71 的分支上，合併後移到 main）。
 
