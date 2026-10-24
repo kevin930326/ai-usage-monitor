@@ -13,6 +13,8 @@ OUT=${VERIFY_OUT:-$ROOT/build/verify}
 DD=$OUT/DerivedData
 LOGS=$OUT/logs
 mkdir -p "$LOGS"
+# 建置產物不要被 Spotlight 索引（README「隱私與安全」）
+touch "$ROOT/build/.metadata_never_index" "$OUT/.metadata_never_index" 2>/dev/null
 names=()
 codes=()
 

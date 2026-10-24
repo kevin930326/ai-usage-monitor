@@ -109,7 +109,7 @@ render_ios() {
   rm -f "$docs"/*.png "$docs/island-sizes.json"
   SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
     xcrun simctl launch --terminate-running-process "$udid" "$IOS_BUNDLE" "${LANG_ARGS[@]}" >/dev/null
-  for _ in $(seq 120); do [ -f "$docs/island-sizes.json" ] && break; sleep 1; done
+  for _ in $(seq 300); do [ -f "$docs/island-sizes.json" ] && break; sleep 1; done
   xcrun simctl terminate "$udid" "$IOS_BUNDLE" 2>/dev/null || true
   [ "$booted_here" = 1 ] && xcrun simctl shutdown "$udid"
   [ -f "$docs/island-sizes.json" ] || { echo "iOS 截圖逾時"; exit 2; }

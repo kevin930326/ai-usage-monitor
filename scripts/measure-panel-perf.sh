@@ -17,6 +17,7 @@ OUT=${2:-$ROOT/build/perf}
 BIN="$APP/Contents/MacOS/AIUsageMenuBar"
 [ -x "$BIN" ] || { echo "找不到 ${BIN}（先建置 Debug 版）"; exit 2; }
 mkdir -p "$OUT"
+touch "$OUT/.metadata_never_index"  # 不讓 Spotlight 索引量測紀錄
 HOME_DIR=$(mktemp -d)
 # 假的 usage.json 與 7 天的 history.sqlite3（含睡眠空檔與重置），讓走勢、額度消耗等區塊都有東西畫
 # AUM_PERF_SCENARIO=fresh 時每個額度只有 1 筆，走勢與額度消耗顯示骨架畫面（打開面板時掃光三次）
