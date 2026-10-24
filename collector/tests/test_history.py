@@ -314,7 +314,7 @@ class FailureIsolationTest(HistoryTestCase):
              mock.patch.object(relay, "upload") as upload, \
              mock.patch.object(history, "HISTORY_PATH", self.path), \
              mock.patch.object(cli.token_stats, "log_dirs", return_value=NO_LOGS), \
-             mock.patch.object(cli.token_stats.os, "nice"), \
+             mock.patch.object(cli.token_stats.system, "lower_priority"), \
              mock.patch.object(cli.service_status, "update_safely") as status, \
              redirect_stdout(io.StringIO()), redirect_stderr(err):
             code = cli.main(["--write-local", "--upload", "--quiet"])
@@ -418,8 +418,10 @@ class PerformanceTest(HistoryTestCase):
         for ts in range(now - 35 * DAY, now, 300):
             runs.append((ts, 1, 1))
             rows += [(ts, p, w, 10.0, ts + HOUR) for p in ("claude", "codex") for w in ("five_hour", "weekly")]
-        conn.executemany("INSERT INTO collector_runs VALUES (?, ?, ?)", runs)
-        conn.executemany("INSERT INTO quota_samples VALUES (?, ?, ?, ?, ?)", rows)
+        with conn:  # 同一個交易：autocommit 下每列一次 fsync，Windows 要好幾分鐘
+            conn.execute("BEGIN")
+            conn.executemany("INSERT INTO collector_runs VALUES (?, ?, ?)", runs)
+            conn.executemany("INSERT INTO quota_samples VALUES (?, ?, ?, ?, ?)", rows)
         conn.close()
         start = time.monotonic()
         history.record(snapshot(now), self.path, now=datetime.fromtimestamp(now + DAY, timezone.utc))  # 含每日清理

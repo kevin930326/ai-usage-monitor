@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Mapping
-from datetime import tzinfo
+from datetime import datetime, tzinfo
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
@@ -82,6 +82,12 @@ def kill_tree(proc: subprocess.Popen) -> None:
     """強制結束子程序與它啟動的子程序。macOS 由呼叫端以 killpg 分段處理，這裡只給 Windows 用。"""
     subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL, creationflags=CREATE_NO_WINDOW, check=False)
+
+
+def local_datetime(ts: float) -> datetime:
+    """Unix 秒 → 本機時區的時間（不帶 tzinfo）。Token 統計的日期與小時都以它計算；
+    Windows 不能用 TZ／time.tzset 切換時區，測試改 patch 這個函式。"""
+    return datetime.fromtimestamp(ts)
 
 
 def zone(name: str, local: tzinfo | None) -> tzinfo | None:
