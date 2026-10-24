@@ -155,3 +155,20 @@
 | 11.4 | Mac：開啟「減少動態效果」後在面板開著時切換外觀（例如用快捷鍵打開面板、另一隻手在設定切換） | 直接切換，沒有過渡 | |
 | 11.5 | iPhone：設定 › 外觀 選與系統相反的外觀 | App 主畫面與設定畫面立即換外觀（0.3 秒淡入；減少動態效果時直接換）；鎖定畫面卡片、動態島、主畫面與鎖定畫面小工具**不變**（跟隨系統）；手錶不變 | |
 | 11.6 | iPhone：結束 App 重新打開 | 外觀設定保留；選「跟隨系統」後回到系統外觀 | |
+
+## 12. Mac 下載安裝與內建收集器（FR-53）
+
+不要在正在使用 `install-launchd.sh` 的 Mac 上直接試遷移；12.1～12.4 用安裝測試版，在暫存資料夾進行。
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 12.1 | `scripts/build-release.sh --test-home /tmp/aum/home --out /tmp/aum/out`，再 `AUM_INSTALL_DIR=/tmp/aum/Applications AUM_ZIP=/tmp/aum/out/AIUsageMenuBar-<版本>.zip AUM_EXPECT_BUNDLE_ID=io.github.kevin930326.AIUsageMenuBar.installtest AUM_TRASH_DIR=/tmp/aum/trash bash /tmp/aum/out/install.sh` | 「SHA-256 相符」「已安裝」；加 `--sha256 0000` 時「SHA-256 不符」、結束碼 4、沒有安裝 | |
+| 12.2 | `open -n --env AUM_TEST_AGENT=1 --env AUM_LAUNCH_AGENTS_DIR=/tmp/aum/home/LaunchAgents --env AI_USAGE_MONITOR_HOME=/tmp/aum/home/app --env CLAUDE_CONFIG_DIR=/tmp/aum/home/claude --env CODEX_HOME=/tmp/aum/home/codex --env HOME=/tmp/aum/home/fake --env PATH=/usr/bin:/bin /tmp/aum/Applications/AIUsageMenuBar.app`，等 20 秒 | `launchctl print gui/$(id -u)/io.github.kevin930326.AIUsageMenuBar.installtest.collector` 有 `runs = 1`；`/tmp/aum/home/app` 出現 usage.json、history.sqlite3、logs/collector.log；真的資料夾沒有變動 | |
+| 12.3 | 結束測試版，執行 12.1 的指令加 `--uninstall` | 「已停用內建收集器」「App 已移到垃圾桶」；12.2 的 `launchctl print` 找不到 | |
+| 12.4 | 「系統設定 › 一般 › 登入項目與延伸功能」 | 12.2 時出現「AI 用量」背景項目，12.3 後消失 | |
+| 12.5 | （正式版、沒有用過 install-launchd.sh 的 Mac）執行 Release 的一行安裝 | App 自動打開；設定 › 背景收集器「內建收集器執行中」；5 分鐘內面板有資料 | |
+| 12.6 | （正式版、有 install-launchd.sh 的 Mac）安裝後打開設定 › 背景收集器 | 「正在使用 install-launchd.sh 安裝的收集器」與「改用內建收集器」按鈕；**沒有**新的背景項目；collector.log 沒有重複的執行紀錄 | |
+| 12.7 | 12.6 按「改用內建收集器」 | 舊 plist 在垃圾桶；狀態變成「內建收集器執行中」；面板照常更新；`launchctl print gui/$(id -u)/io.github.kevin930326.ai-usage-monitor` 找不到 | |
+| 12.8 | 把 App 從「應用程式」拖到桌面再打開 | 背景收集器顯示「需要先把 App 放進『應用程式』資料夾」；拖回去打開後自動重新註冊 | |
+| 12.9 | 從瀏覽器下載 .dmg，拖到「應用程式」，第一次打開 | 被 Gatekeeper 擋下，到「隱私權與安全性」按「強制打開」後可以打開；背景收集器顯示「需要允許內建收集器執行」，按下後變成執行中 | |
+
