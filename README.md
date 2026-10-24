@@ -128,7 +128,14 @@ scripts/install-mac-app.sh             # 選單列 App（Release 建置，裝到
 
 第 1 層。iPhone 不直接連 Mac，資料經過你自己的 Cloudflare Worker（中繼）；Mac 上傳、iPhone 讀取，兩把密鑰分開（[ADR-0001](docs/adr/0001-cloudflare-worker-relay.md)）。
 
-1. **部署中繼**（需要 Node.js 23.6 以上、免費的 Cloudflare 帳號）：
+第 1 層的腳本在原始碼裡（用 DMG 安裝的也需要這一步）。先取得原始碼並進入資料夾，之後的指令都在這個資料夾執行；Python 3 用 Xcode 附的即可：
+
+```bash
+git clone https://github.com/kevin930326/ai-usage-monitor.git
+cd ai-usage-monitor
+```
+
+1. **部署中繼**（需要 Node.js 23.6 以上、免費的 Cloudflare 帳號；腳本會在 `relay/` 以 `npm ci` 安裝鎖定版本的 wrangler）：
 
    ```bash
    scripts/setup-relay.sh --dry-run   # 先看會做什麼
