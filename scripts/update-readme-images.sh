@@ -7,7 +7,8 @@
 # - 與 scripts/snapshots.sh 相同的固定時間、時區、語系與假資料（scripts/make-demo-history.py，暫存資料夾），不讀真實資料。
 # - Mac：Debug 版以 ImageRenderer 輸出（AUM_RENDER_DIR），統計切換的 GIF 是 AUM_RENDER_ANIMS=stats-tour。
 # - iPhone：模擬器以示範模式（AUM_DEMO）輸出 Live Activity 與動態島（ImageRenderer），設定畫面是模擬器截圖
-#   App 主畫面與設定畫面（AUM_DEMO_ACTION=settings）是模擬器截圖，暫時切換模擬器的外觀與狀態列，結束後還原。
+#   App 主畫面與設定畫面（AUM_DEMO_ACTION=settings：設定畫面一律顯示示範網址與假密鑰，不顯示模擬器裡存的設定）是模擬器截圖，
+#   暫時切換模擬器的外觀與狀態列，結束後還原。
 #   Live Activity 卡片與小工具不放：ImageRenderer 把 ProgressView 畫成黃色佔位符。手錶：模擬器截圖（示範模式）。
 # - README_IMAGES_MAC_APP／README_IMAGES_IOS_APP／README_IMAGES_WATCH_APP：已建置的 Debug 版 .app；沒給就自己建置到 build/readme-images。
 # - 畫面改變並以 scripts/update-snapshots.sh 更新基準後執行；scripts/check-readme-images.py 會提醒比基準舊的截圖。

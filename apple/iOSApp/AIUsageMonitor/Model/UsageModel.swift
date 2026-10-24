@@ -52,6 +52,11 @@ final class UsageModel {
         let env = ProcessInfo.processInfo.environment
         if let url = env["AUM_RELAY_URL"], !url.isEmpty { relayURL = url }
         if let token = env["AUM_READ_TOKEN"], !token.isEmpty { readToken = token }
+        // README 截圖（AUM_DEMO_ACTION=settings）：一律顯示示範用的中繼設定，不顯示模擬器裡存的網址（只在記憶體中，不寫回）
+        if demoScenario != nil, env["AUM_DEMO_ACTION"] == "settings" {
+            relayURL = "https://ai-usage-relay.example.workers.dev"
+            readToken = "demo-read-token"
+        }
         #endif
     }
 
