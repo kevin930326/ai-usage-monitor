@@ -108,6 +108,24 @@ jobs:
           if ($task.Actions[0].Arguments -notmatch '--tokens-only') { throw '預設應只統計 Token' }
           .\windows\uninstall-task.ps1
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw '沒有移除' }
+      - name: Install with -WithQuota (picks codex.cmd over codex.ps1, writes the config)
+        shell: powershell
+        run: |
+          $bin = Join-Path $env:RUNNER_TEMP 'fake-bin'
+          New-Item -ItemType Directory -Force -Path $bin | Out-Null
+          Set-Content (Join-Path $bin 'codex.ps1') 'exit 1'
+          Set-Content (Join-Path $bin 'codex.cmd') '@exit /b 1'
+          $env:PATH = "$bin;$env:PATH"
+          $env:CODEX_HOME = Join-Path $env:RUNNER_TEMP 'custom-codex'
+          .\windows\install-task.ps1 -WithQuota -Python (Get-Command python).Source
+          $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          $config | Format-List
+          if ($config.codex_path -notlike '*\codex.cmd') { throw "codex_path 應該是 codex.cmd：$($config.codex_path)" }
+          if (@($config.enabled_providers) -notcontains 'codex') { throw 'enabled_providers 沒有 codex' }
+          if ($config.codex_home -ne $env:CODEX_HOME) { throw 'codex_home 沒有寫入 config.json' }
+          $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
+          if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota 應以 --write-local 執行' }
+          .\windows\uninstall-task.ps1
 
   scripts:
     name: scripts (shell 腳本)
