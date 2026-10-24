@@ -66,6 +66,9 @@ if so and sc:
     rows.append(("播放中：打開完整統計視窗（0～3 秒）", window(so, so + 3), "peak"))
     rows.append(("完整統計視窗開啟、靜止（3～9 秒）", window(so + 3, so + 9), "avg"))
     rows.append(("完整統計視窗關閉後 5～18 秒", window(sc + 5, sc + 18), "avg"))
+sc2 = marks.get("stats-close-2")
+if sc2:
+    rows.append(("完整統計視窗第二次關閉後 5～18 秒", window(sc2 + 5, sc2 + 18), "avg"))
 print(f"情境：{sys.argv[3]}（scripts/make-demo-history.py）")
 print()
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
@@ -92,6 +95,11 @@ print(f"- 完整統計視窗靜止 ≤ 2%：{'通過' if ok_stats_static else '�
 print(f"- 完整統計視窗關閉後 RSS 不超過面板第二次關閉後 +5 MB（{stats_limit / 1024:.1f} MB）：{'通過' if ok_stats_rss else '未通過'}")
 print(f"- 關閉後 1 分鐘 ≤ 0.3%：{'通過' if ok_cpu else '未通過'}")
 print(f"- 第二次開關後 RSS 不超過第一次關閉後 +5 MB（{rss_limit / 1024:.1f} MB）：{'通過' if ok_rss else '未通過'}")
+# 參考（不設門檻）：統計視窗第二次關閉與第一次關閉的差，確認關閉後的 RSS 是一次性的成本、不是累積
+stats_after_2 = window(sc2 + 5, sc2 + 18) if sc2 else []
+if stats_after and stats_after_2:
+    grow = (peak(stats_after_2, 2) - peak(stats_after, 2)) / 1024
+    print(f"- （參考）完整統計視窗第二次關閉後比第一次：{grow:+.1f} MB")
 # 任何一項未通過（含沒有取樣，平均為 NaN）就以非零結束
 sys.exit(0 if ok_static and ok_cpu and ok_rss and ok_stats_static and ok_stats_rss else 1)
 PY
