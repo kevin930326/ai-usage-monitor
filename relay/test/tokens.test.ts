@@ -204,6 +204,8 @@ describe("POST /tokens/daily", () => {
     const device = await addDevice();
     const bad = [
       row({ day: "2026-02-30" }),
+      row({ day: "2026-13-01" }),
+      row({ day: "2026-00-10" }),
       row({ day: "2026/10/01" }),
       row({ day: daysAgo(401) }),
       row({ day: daysAgo(-2) }),
@@ -264,6 +266,7 @@ describe("GET /tokens/daily", () => {
     }
     assert.equal((await call("GET", "/tokens/daily", "read-secret")).status, 422);
     assert.equal((await call("GET", "/tokens/daily?from=yesterday", "read-secret")).status, 422);
+    assert.equal((await call("GET", "/tokens/daily?from=2026-13-01", "read-secret")).status, 422);
   });
 
   it("其他方法回 405", async () => {

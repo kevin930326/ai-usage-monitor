@@ -106,9 +106,11 @@ function utcDay(now: number, offsetDays: number): string {
   return new Date(now + offsetDays * 86_400_000).toISOString().slice(0, 10);
 }
 
-/** 真的存在的日期（2 月 30 日不算） */
+/** 真的存在的日期（2 月 30 日、13 月不算） */
 function isDay(v: unknown): v is string {
-  return typeof v === "string" && DAY.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+  if (typeof v !== "string" || !DAY.test(v)) return false;
+  const date = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === v;
 }
 
 /** 日期範圍：不早於 400 天前、不晚於明天（UTC；各電腦以本機時區記日期，前後多留一天） */
