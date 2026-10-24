@@ -65,6 +65,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 - 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。面板的「更新」按鈕另以 `launchctl kickstart` 請 launchd 提早執行收集器（60 秒內一次、24 小時最多 100 次，FR-50）；連網的仍只有收集器。
 - 歷史與統計（[ADR-0009](adr/0009-local-history-and-token-stats.md)）：收集器另寫本機 `history.sqlite3`（額度歷史、這台 Mac 的每日 Token 加總），App 唯讀；不上傳。多裝置合併見 [ADR-0011](adr/0011-multi-device-usage.md)。
 - 以「Sign to Run Locally」簽署，不需付費帳號，也沒有 7 天期限。
+- 發布版（[ADR-0013](adr/0013-download-and-install.md)，提議中）：App 內嵌 Python 執行環境與收集器，以 `SMAppService` 註冊 App 內的 LaunchAgent 取代 `install-launchd.sh`；偵測到舊安裝時不註冊、只提示遷移。App 仍不連網、不持有密鑰。開發版（`scripts/install-mac-app.sh`）不含內建收集器，行為不變。
 
 ### 2.7 Apple Watch (`apple/WatchApp/`，v1.4)
 | 部分 | 作用 |
