@@ -177,8 +177,8 @@ struct TokenHeatmapView: View {
                 Text(hoverText ?? (map.truncated ? "每格一天 · 保留期間以前不顯示" : "每格一天"))
                 Spacer(minLength: 6)
                 Text("少")
-                ForEach(0..<5, id: \.self) { level in
-                    RoundedRectangle(cornerRadius: 2).fill(HeatmapCanvas.color(level: level, tint: tint)).frame(width: 9, height: 9)
+                ForEach(0...UsagePalette.heatmapLevels, id: \.self) { level in
+                    RoundedRectangle(cornerRadius: 2).fill(UsageColors.heatmap(level: level, tint: tint)).frame(width: 9, height: 9)
                 }
                 Text("多")
             }
@@ -191,7 +191,8 @@ struct TokenHeatmapView: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    private var tint: Color { scope == .all ? Color.primary : UsageColors.provider(scope.rawValue) }
+    /// 「全部」用藍色色階（不代表任何服務），各服務用識別色
+    private var tint: Color? { scope == .all ? nil : UsageColors.provider(scope.rawValue) }
 
     static func weekday(_ row: Int) -> String {
         ["一", "二", "三", "四", "五", "六", "日"][row]
@@ -234,17 +235,13 @@ struct HeatmapLayout: Layout {
 
 struct HeatmapCanvas: View, Animatable {
     let map: TokenHeatmap
-    let tint: Color
+    let tint: Color?
     let hovered: Int?
     var progress: Double
 
     nonisolated var animatableData: Double {
         get { progress }
         set { progress = newValue }
-    }
-
-    static func color(level: Int, tint: Color) -> Color {
-        level == 0 ? Color.primary.opacity(0.07) : tint.opacity([0, 0.28, 0.5, 0.72, 0.95][min(level, 4)])
     }
 
     /// 第 c 欄的不透明度：由左到右依序淡入（每欄 0.4 的淡入，起點錯開，總長 1.0）
@@ -292,7 +289,7 @@ struct HeatmapCanvas: View, Animatable {
                 let shape = Path(roundedRect: rect, cornerRadius: min(2, cell / 4))
                 var layer = context
                 layer.opacity = opacity
-                layer.fill(shape, with: .color(Self.color(level: map.level(value), tint: tint)))
+                layer.fill(shape, with: .color(UsageColors.heatmap(level: map.level(value), tint: tint)))
                 if i == hovered { layer.stroke(shape, with: .color(.primary), lineWidth: 1) }
             }
         }

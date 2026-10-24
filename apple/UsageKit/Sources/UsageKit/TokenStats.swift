@@ -389,7 +389,7 @@ public struct TokenHeatmap: Equatable, Sendable {
     public var firstMonday: Date
     /// `weeks × 7`，依欄（週）再依列（星期一～日）排列
     public var cells: [Int64?]
-    /// 分成 4 級的門檻（非零值的四分位數）
+    /// 分成 5 級的門檻（非零值的五分位數）
     public var thresholds: [Int64]
     /// 有格子在保留期間以前（不畫，與「沒有使用」區分）
     public var truncated: Bool
@@ -415,10 +415,10 @@ public struct TokenHeatmap: Equatable, Sendable {
         self.cells = cells
         self.truncated = truncated
         let nonZero = cells.compactMap { $0 }.filter { $0 > 0 }.sorted()
-        thresholds = nonZero.isEmpty ? [] : [0.25, 0.5, 0.75].map { nonZero[Int(Double(nonZero.count - 1) * $0)] }
+        thresholds = nonZero.isEmpty ? [] : [0.2, 0.4, 0.6, 0.8].map { nonZero[Int(Double(nonZero.count - 1) * $0)] }
     }
 
-    /// 0（沒有使用）～4（最多）
+    /// 0（沒有使用）～5（最多）
     public func level(_ value: Int64) -> Int {
         guard value > 0 else { return 0 }
         return 1 + thresholds.filter { value > $0 }.count

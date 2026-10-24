@@ -128,7 +128,9 @@ import Testing
         #expect(Array(lastWeek) == [300, 200, 100, 400, nil, nil, nil])
         #expect(map.level(0) == 0)
         #expect(map.level(100) == 1)
-        #expect(map.level(400) == 4)
+        #expect(map.level(200) == 2)
+        #expect(map.level(300) == 4)
+        #expect(map.level(400) == 5)
         #expect(TokenCalendar.key(map.date(column: 21, row: 3, calendar: cal), calendar: cal) == "2026-11-05")
     }
 

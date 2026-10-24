@@ -394,6 +394,16 @@ public struct QuotaConsumption: Equatable, Sendable {
     /// 至少 2 筆樣本才畫（ADR-0009 第 8 節），否則顯示骨架畫面
     public var hasEnoughData: Bool { sampleCount >= QuotaHistory.minimumSamples && hours.contains { $0.consumed != nil } }
 
+    /// 單一小時的最大消耗（色階的上限，至少 1 個百分點）
+    public var peak: Double { max(hours.compactMap(\.consumed).max() ?? 0, 1) }
+
+    /// 熱力圖的色階：0（沒有消耗）～5，依占 `peak` 的比例等分
+    public func level(_ consumed: Double) -> Int {
+        guard consumed > 0 else { return 0 }
+        let levels = UsagePalette.heatmapLevels
+        return min(max(Int((min(consumed / peak, 1) * Double(levels)).rounded(.up)), 1), levels)
+    }
+
     /// 每天的合計（`days` 筆，今天在最後）；整天都沒有紀錄時為 nil。
     public var dailyTotals: [(start: Date, consumed: Double?, estimated: Bool)] {
         stride(from: 0, to: hours.count, by: 24).map { i in

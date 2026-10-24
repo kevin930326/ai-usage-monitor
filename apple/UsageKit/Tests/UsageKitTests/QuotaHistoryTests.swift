@@ -83,6 +83,20 @@ import Testing
         #expect(QuotaHistory.currentCycle(h.samples(provider: "claude", windowID: "five_hour")).count == 3)
     }
 
+    @Test func consumptionLevelsSplitPeakIntoFiveSteps() {
+        // 00:00 0% → 01:00 10% → 02:00 12%：peak 10，2 點落在第 1 階
+        let h = QuotaHistory(samples: [sample(0, 0), sample(hour, 10), sample(2 * hour, 12)], runs: runs(0, 3 * hour))
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(3 * hour), days: 1, calendar: utc)
+        #expect(c.peak == 10)
+        #expect(c.level(0) == 0)
+        #expect(c.level(0.1) == 1)
+        #expect(c.level(2) == 1)
+        #expect(c.level(2.1) == 2)
+        #expect(c.level(8) == 4)
+        #expect(c.level(10) == 5)
+        #expect(c.level(30) == 5)
+    }
+
     @Test func realisticResetAndCorrectionTogether() {
         // 5 小時額度：87%（00:10 重置）→ 00:15 3%（resets_at 往後 5 小時）→ 00:20 下修為 2% → 00:50 6%
         let resets = 5 * hour + 10 * minute
