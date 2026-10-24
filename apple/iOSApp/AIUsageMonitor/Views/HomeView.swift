@@ -216,7 +216,7 @@ private struct UpdatedFooter: View {
     var body: some View {
         HStack {
             Image(systemName: stale ? "clock.badge.exclamationmark" : "clock")
-            (Text("更新於 ") + Text(updatedAt, style: .relative) + Text("前"))
+            (Text("更新於 ") + Text.relative(to: updatedAt) + Text("前"))
             if stale {
                 Text("· Mac 可能已關機").foregroundStyle(UsageColors.notice)
             }

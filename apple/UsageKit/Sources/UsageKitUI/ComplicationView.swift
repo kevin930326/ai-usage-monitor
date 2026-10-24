@@ -16,7 +16,7 @@ public struct ComplicationView: View {
     var now: Date
 
     public init(snapshot: UsageSnapshot?, family: WidgetFamily, mode: UsageDisplayMode = .remaining,
-                staleAfter: TimeInterval = UsageSnapshot.watchStaleAfter, now: Date = .now) {
+                staleAfter: TimeInterval = UsageSnapshot.watchStaleAfter, now: Date = RenderClock.now) {
         self.snapshot = snapshot
         self.family = family
         self.mode = mode

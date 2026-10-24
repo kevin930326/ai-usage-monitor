@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UsageKitUI
 
 // 面板動畫的共用元件（FR-25、ADR-0010）。
 // 規則：只在面板開啟時執行；「減少動態效果」時直接顯示；一次性、有終點，不循環。
@@ -123,7 +124,7 @@ struct LiveRelativeText: View {
 
     var body: some View {
         if live {
-            Text(date, style: .relative)
+            Text.relative(to: date)
         } else {
             Text(verbatim: "")
         }

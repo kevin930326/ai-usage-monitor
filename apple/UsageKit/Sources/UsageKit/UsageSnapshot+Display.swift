@@ -53,7 +53,7 @@ public extension UsageSnapshot {
 
     /// 資料時間比裝置時間晚（未來）超過同一個門檻也算過期：兩邊時鐘差這麼多時無法判斷資料新舊，
     /// 不能讓 Mac 時鐘快了幾小時的舊資料一直顯示成新的。門檻內的小偏差照常顯示。
-    func isStale(now: Date = .now, after threshold: TimeInterval = staleAfter) -> Bool {
+    func isStale(now: Date = RenderClock.now, after threshold: TimeInterval = staleAfter) -> Bool {
         abs(now.timeIntervalSince(updatedAt)) > threshold
     }
 

@@ -13,7 +13,7 @@ public struct UsageWindowRow: View {
     var now: Date
 
     // 預設顯示剩餘，與分級顏色（依剩餘比例）一致
-    public init(window: UsageWindow, provider: String, display: UsageDisplayMode = .remaining, dimmed: Bool = false, now: Date = .now) {
+    public init(window: UsageWindow, provider: String, display: UsageDisplayMode = .remaining, dimmed: Bool = false, now: Date = RenderClock.now) {
         self.window = window
         self.provider = provider
         self.display = display
@@ -43,7 +43,7 @@ public struct UsageWindowRow: View {
                     .foregroundStyle(.secondary)
             } else if let resetsAt = window.resetsAt {
                 // relative 樣式會自己倒數，不需要重新抓資料
-                (Text("重置 ") + Text(resetsAt, style: .relative))
+                (Text("重置 ") + Text.relative(to: resetsAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     // 最大字級時換行，不要截成「重置 1小時39…」

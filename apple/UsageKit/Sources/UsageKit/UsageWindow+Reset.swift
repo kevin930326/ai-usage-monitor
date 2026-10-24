@@ -15,26 +15,26 @@ public enum UsageDisplayMode: String, Codable, CaseIterable, Sendable {
 
 public extension UsageWindow {
     /// 重置時間已過（FR-26）。Mac 離線時資料停在重置前，舊的百分比已不正確。
-    func isReset(at now: Date = .now) -> Bool {
+    func isReset(at now: Date = RenderClock.now) -> Bool {
         guard let resetsAt else { return false }
         return resetsAt <= now
     }
 
     /// 考慮重置後的已用百分比：重置時間已過就視為 0%。
-    func effectiveUsedPct(at now: Date = .now) -> Double {
+    func effectiveUsedPct(at now: Date = RenderClock.now) -> Double {
         isReset(at: now) ? 0 : min(max(usedPct, 0), 100)
     }
 
-    func effectiveRemainingPct(at now: Date = .now) -> Double {
+    func effectiveRemainingPct(at now: Date = RenderClock.now) -> Double {
         100 - effectiveUsedPct(at: now)
     }
 
-    func effectiveSeverity(at now: Date = .now) -> UsageSeverity {
+    func effectiveSeverity(at now: Date = RenderClock.now) -> UsageSeverity {
         UsageSeverity(remainingPct: effectiveRemainingPct(at: now))
     }
 
     /// 依顯示模式取百分比。
-    func displayedPct(_ mode: UsageDisplayMode, at now: Date = .now) -> Double {
+    func displayedPct(_ mode: UsageDisplayMode, at now: Date = RenderClock.now) -> Double {
         mode == .used ? effectiveUsedPct(at: now) : effectiveRemainingPct(at: now)
     }
 }
@@ -62,7 +62,7 @@ public extension UsageSnapshot {
 /// 版面會不斷重新計算，App 一直吃滿 CPU（直到被系統結束）。手錶 App 已用 `TimelineView(.everyMinute)`
 /// 每分鐘重繪，倒數精確到分鐘就夠了。時間已過回傳 nil（畫面顯示「已重置」）。
 public enum ResetCountdown {
-    public static func text(until date: Date, now: Date = .now) -> String? {
+    public static func text(until date: Date, now: Date = RenderClock.now) -> String? {
         let seconds = date.timeIntervalSince(now)
         guard seconds > 0 else { return nil }
         let minutes = Int(seconds / 60)
@@ -73,7 +73,7 @@ public enum ResetCountdown {
     }
 
     /// 手錶頁尾的更新時間（「12分鐘前更新」），同樣精確到分鐘；不到 1 分鐘為「剛剛更新」。
-    public static func updatedText(since date: Date, now: Date = .now) -> String {
+    public static func updatedText(since date: Date, now: Date = RenderClock.now) -> String {
         guard now.timeIntervalSince(date) >= 60, let elapsed = text(until: now, now: date) else { return "剛剛更新" }
         return "\(elapsed)前更新"
     }

@@ -64,12 +64,12 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
     }
 
     /// 剩餘最少的額度（FR-15），已重置的額度視為剩餘 100%（FR-26）。
-    public func tightest(at now: Date = .now) -> ProviderWindow? {
+    public func tightest(at now: Date = RenderClock.now) -> ProviderWindow? {
         snapshot.tightestWindow(at: now)
     }
 
     /// 超過 30 分鐘沒更新（FR-11）。
-    public func isStale(at now: Date = .now) -> Bool {
+    public func isStale(at now: Date = RenderClock.now) -> Bool {
         snapshot.isStale(now: now)
     }
 
@@ -85,7 +85,7 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
     /// 在過期那次重繪時一併顯示「已重置」（最多晚 30 分鐘）。
     /// 過期時間已過時改給下一個尚未到的重置時間，都已過去時回傳 nil。
     /// 給過去的時間會讓系統直接把卡片從鎖定畫面拿掉，而畫面本身已會依 `updatedAt` 顯示「資料已過期」。
-    public func staleDate(now: Date = .now) -> Date? {
+    public func staleDate(now: Date = RenderClock.now) -> Date? {
         let expiry = updatedAt.addingTimeInterval(UsageSnapshot.staleAfter)
         if expiry > now { return expiry }
         return providers.flatMap(\.windows).compactMap(\.resetsAt).filter { $0 > now }.min()
