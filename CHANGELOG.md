@@ -11,6 +11,7 @@
 - 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
 
 ### Added
+- 第二層：多台電腦的 Token 合併（FR-49，ADR-0011 第 2、4 節；選用，預設關閉）。中繼新增 D1（`relay/migrations/0001_tier2.sql`，`wrangler.toml` 的綁定預設註解）與 `POST`／`GET /tokens/daily`、`/devices`（新增、列出、換新、撤銷，`ADMIN_TOKEN`）；每台電腦一把寫入密鑰（中繼只存 SHA-256、`device_id` 由中繼決定），以（裝置、日期、服務、模型）覆蓋寫入。`scripts/relay-device.sh` 管理裝置；`collector/scripts/set-tier2.sh`（Mac，Keychain）與 `collector/windows/set-tier2.ps1`（Windows 認證管理員）開啟或關閉。收集器 `token_sync`：只上傳本機有變動的每日加總（不含任務次數、每小時資料），每小時＋日期改變後，失敗遞增間隔重試，連續兩次 401／403 停止；Mac 有讀取密鑰時下載其他電腦的加總（略過自己的所有 `device_id`）。`history.sqlite3` schema 3（`upload_state`、`devices`）。Mac 統計卡片與完整統計視窗：有其他電腦時標「所有電腦（N 台）」並可切換所有電腦／這台 Mac／各電腦，超過 48 小時沒有上傳標「N 天前更新」，密鑰失效時提示；說明見 `docs/tier2-setup.md`
 - Windows 收集器（FR-48）：同一份 Python 程式，平台差異集中在 `usage_collector/system.py`；`collector/windows/install-task.ps1`／`uninstall-task.ps1` 以工作排程器每 5 分鐘統計 Token（預設不收集額度、不上傳；`-WithQuota` 只寫本機）；`--tokens-only`、`--log-file` 選項；CI 加 Windows runner；說明見 `docs/windows.md`
 - 截圖比對：`scripts/snapshots.sh`（verify-all、CI）以固定時間與假資料產生 Mac 面板、完整統計、設定、選單列圖示與 iPhone 小工具、Live Activity、動態島，和 `apple/Snapshots/` 的基準比對；`scripts/update-snapshots.sh` 更新基準
 - 對話紀錄格式改變的偵測（ADR-0009 第 9 節）：一次掃描中無法解析的行 ≥ 20%（至少 100 行），或新讀 4 MB 以上卻沒有任何 Token，統計卡片顯示「紀錄格式可能已改變，統計可能不完整」
