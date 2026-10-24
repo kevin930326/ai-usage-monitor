@@ -68,6 +68,28 @@ class CheckDebugEnvTests(unittest.TestCase):
         self.assertIn("A.swift:5 AUM_DEMO", r.stdout)
         self.assertIn("A.swift:8 AUM_RENDER", r.stdout)
 
+    def test_mixed_conditions_that_release_can_satisfy_fail(self):
+        # Codex C-01：&& 比 || 優先，`DEBUG && os(macOS) || os(iOS)` 在 iOS Release 也成立
+        r = self.run_on({"apple/Mac/A.swift": '''
+            #if DEBUG && os(macOS) || os(iOS)
+            let a = env["AUM_DEMO"]
+            #endif
+            #if (DEBUG && os(macOS)) || os(iOS)
+            let b = env["AUM_DEMO"]
+            #endif
+            #if DEBUG && (os(macOS) || os(iOS))
+            let c = env["AUM_DEMO"]
+            #endif
+            #if (DEBUG && os(macOS)) || (DEBUG && os(iOS))
+            let d = env["AUM_DEMO"]
+            #endif
+            '''})
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("A.swift:3 AUM_DEMO", r.stdout)
+        self.assertIn("A.swift:6 AUM_DEMO", r.stdout)
+        self.assertNotIn("A.swift:9 ", r.stdout)
+        self.assertNotIn("A.swift:12 ", r.stdout)
+
     def test_tests_folders_are_skipped(self):
         r = self.run_on({"apple/UsageKit/Tests/T/A.swift": 'let a = ["AUM_DEMO": "1"]\n'})
         self.assertEqual(r.returncode, 0, r.stdout)
