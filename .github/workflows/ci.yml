@@ -99,15 +99,16 @@ jobs:
           python -X utf8 -m usage_collector --tokens-only --quiet --log-file (Join-Path $home2 'collector.log')
           if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $home2 'collector.log'); exit 1 }
           python -X utf8 -c $check (Join-Path $home2 'history.sqlite3') 14
+      # Windows PowerShell 5.1 reads the step script in the ANSI code page: keep these steps ASCII-only
       - name: Install and remove the scheduled task
         shell: powershell
         run: |
           .\windows\install-task.ps1 -Python (Get-Command python).Source
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
           $task.Actions | Format-List Execute, Arguments, WorkingDirectory
-          if ($task.Actions[0].Arguments -notmatch '--tokens-only') { throw '預設應只統計 Token' }
+          if ($task.Actions[0].Arguments -notmatch '--tokens-only') { throw 'expected --tokens-only by default' }
           .\windows\uninstall-task.ps1
-          if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw '沒有移除' }
+          if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
       - name: Install with -WithQuota (picks codex.cmd over codex.ps1, writes the config)
         shell: powershell
         run: |
@@ -120,11 +121,11 @@ jobs:
           .\windows\install-task.ps1 -WithQuota -Python (Get-Command python).Source
           $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $config | Format-List
-          if ($config.codex_path -notlike '*\codex.cmd') { throw "codex_path 應該是 codex.cmd：$($config.codex_path)" }
-          if (@($config.enabled_providers) -notcontains 'codex') { throw 'enabled_providers 沒有 codex' }
-          if ($config.codex_home -ne $env:CODEX_HOME) { throw 'codex_home 沒有寫入 config.json' }
+          if ($config.codex_path -notlike '*\codex.cmd') { throw "codex_path should be codex.cmd: $($config.codex_path)" }
+          if (@($config.enabled_providers) -notcontains 'codex') { throw 'enabled_providers lacks codex' }
+          if ($config.codex_home -ne $env:CODEX_HOME) { throw 'codex_home missing from config.json' }
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
-          if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota 應以 --write-local 執行' }
+          if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota should run with --write-local' }
           .\windows\uninstall-task.ps1
 
   scripts:
