@@ -88,6 +88,8 @@ struct PairingCodeSheet: View {
     @State private var code = ""
     @State private var working = false
     @State private var error: String?
+    /// 進行中的兌換；取消或關閉畫面時取消，回應晚到也不會套用（Codex C-01）
+    @State private var claimTask: Task<Void, Never>?
 
     private var cleanURL: String { RelayInput.clean(url) }
 
@@ -115,17 +117,19 @@ struct PairingCodeSheet: View {
             .navigationTitle("輸入短碼")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { claimTask?.cancel(); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if working {
                         ProgressView()
                     } else {
-                        Button("配對") { Task { await claim() } }
+                        Button("配對") { claimTask = Task { await claim() } }
                             .disabled(cleanURL.isEmpty || PairingCode.normalize(code) == nil)
                     }
                 }
             }
             .onAppear { url = initialURL }
+            // 滑動關閉也會走到這裡
+            .onDisappear { claimTask?.cancel() }
         }
     }
 
@@ -134,9 +138,12 @@ struct PairingCodeSheet: View {
         defer { working = false }
         do {
             let client = try await RelayClient.claimPairing(urlString: cleanURL, code: code)
+            // 取消與這裡都在主執行緒：取消之後回來的結果一律丟掉
+            guard !Task.isCancelled else { return }
             onPaired(client)
             dismiss()
         } catch {
+            guard !Task.isCancelled else { return }
             self.error = error.localizedDescription
         }
     }
