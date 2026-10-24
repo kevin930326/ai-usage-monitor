@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var testResult: TestResult?
     @State private var testing = false
     @State private var saveError: String?
+    @AppStorage(AppearanceChoice.storageKey) private var appearance = AppearanceChoice.system.rawValue
 
     // 貼上的值常帶前後空白或換行，判斷、測試與儲存都用去除後的值
     private var cleanURL: String { RelayInput.clean(url) }
@@ -47,6 +48,19 @@ struct SettingsView: View {
                     Text("百分比")
                 } footer: {
                     Text("App 與 Live Activity 都會依此顯示已用或剩餘的百分比。")
+                }
+
+                Section {
+                    Picker("外觀", selection: Binding(
+                        get: { AppearanceChoice(stored: appearance) }, set: { appearance = $0.rawValue }
+                    )) {
+                        ForEach(AppearanceChoice.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("外觀")
+                } footer: {
+                    Text("只套用到 App 本身。小工具與即時動態跟隨系統。")
                 }
 
                 Section {

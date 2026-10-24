@@ -20,7 +20,7 @@ rows.append(("面板開啟、靜止（開啟後 5～11 秒）", window(o + 5, o 
 opening = "打開面板：圓環＋用量條＋骨架掃光" if sys.argv[3] == "fresh" else "打開面板：圓環＋用量條＋走勢"
 rows.append((f"播放中：{opening}（開啟後 0～4 秒）", window(o, o + 4), "peak"))
 anims = [ ("更新按鈕", "refresh"), ("額度重置光芒", "glow"),
-         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("切到深色", "appearance-dark"), ("切回淺色", "appearance-light"),
+         ("卡片收合", "collapse"), ("卡片展開", "expand"), ("切換走勢額度", "trend-next"), ("重置圓點淡出＋光芒", "departing"), ("外觀切到與系統相反", "appearance-dark"), ("外觀回到跟隨系統", "appearance-light"),
          ("統計切換服務", "stats-scope"), ("統計切換範圍", "stats-range"),
          ("服務狀態橘點呼吸", "status-pulse"), ("點通知後卡片亮一下", "highlight")]
 for name, key in anims:

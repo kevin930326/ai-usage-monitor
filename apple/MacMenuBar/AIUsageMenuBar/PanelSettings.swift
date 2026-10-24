@@ -109,6 +109,11 @@ final class PanelSettings {
 
     @ObservationIgnored private let defaults: UserDefaults
 
+    /// 外觀（FR-51）：套用到面板、設定、完整統計與設定精靈的視窗（`windowAppearance`）；選單列圖示跟隨選單列
+    var appearance: AppearanceChoice {
+        didSet { defaults.set(appearance.rawValue, forKey: AppearanceChoice.storageKey) }
+    }
+
     var iconStyle: MenuBarIconStyle {
         didSet { defaults.set(iconStyle.rawValue, forKey: Key.iconStyle) }
     }
@@ -190,6 +195,7 @@ final class PanelSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        appearance = AppearanceChoice(stored: defaults.string(forKey: AppearanceChoice.storageKey))
         iconStyle = defaults.string(forKey: Key.iconStyle).flatMap(MenuBarIconStyle.init) ?? .dualRing
         iconWindow = MenuBarWindowChoice(rawValue: defaults.string(forKey: Key.iconWindow) ?? "auto")
         layout = PanelLayout.resolve(stored: defaults.data(forKey: Key.sections), defaultOrder: PanelSection.defaultOrder)

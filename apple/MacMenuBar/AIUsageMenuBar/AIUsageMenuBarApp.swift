@@ -10,6 +10,7 @@ struct AIUsageMenuBarApp: App {
     var body: some Scene {
         MenuBarExtra {
             PanelView()
+                .followsAppearanceSetting()
                 .environment(store)
                 .environment(settings)
                 .environment(history)
@@ -21,6 +22,8 @@ struct AIUsageMenuBarApp: App {
         // 完整統計視窗：打開時才讀資料庫，關閉時釋放（FR-44、ADR-0009 第 7 節）
         Window("完整統計", id: StatsWindowView.windowID) {
             StatsWindowView(historyStore: history)
+                .followsAppearanceSetting()
+                .environment(settings)
         }
         .defaultSize(width: 860, height: 700)
         .windowResizability(.contentMinSize)
@@ -28,6 +31,7 @@ struct AIUsageMenuBarApp: App {
         // 設定視窗：關閉後釋放（ADR-0008 第 5 節）
         Settings {
             SettingsView()
+                .followsAppearanceSetting()
                 .environment(store)
                 .environment(settings)
                 .environment(history)

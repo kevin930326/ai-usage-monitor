@@ -46,7 +46,7 @@ enum DebugTools {
     private static func showPanelWindow() {
         let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "AI 用量（面板預覽）"
-        window.contentView = NSHostingView(rootView: PanelView().environment(UsageStore.shared).environment(PanelSettings.shared).environment(HistoryStore.shared))
+        window.contentView = NSHostingView(rootView: PanelView().followsAppearanceSetting().environment(UsageStore.shared).environment(PanelSettings.shared).environment(HistoryStore.shared))
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -60,7 +60,8 @@ enum DebugTools {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 860, height: 700), styleMask: [.titled, .closable, .resizable],
                               backing: .buffered, defer: false)
         window.title = "完整統計"
-        window.contentView = NSHostingView(rootView: StatsWindowView(historyStore: HistoryStore.shared))
+        window.contentView = NSHostingView(rootView: StatsWindowView(historyStore: HistoryStore.shared)
+            .followsAppearanceSetting().environment(PanelSettings.shared))
         window.isReleasedWhenClosed = false
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -81,8 +82,9 @@ enum DebugTools {
             (35, "expand", { DebugAction.send("expand") }),
             (38, "trend-next", { DebugAction.send("trend-next") }),
             (41, "departing", { DebugAction.send("departing") }),
-            (44, "appearance-dark", { NSApplication.shared.appearance = NSAppearance(named: .darkAqua) }),
-            (48, "appearance-light", { NSApplication.shared.appearance = nil }),
+            // 設定「外觀」（FR-51）：切到與系統相反的外觀，再回到跟隨系統（走視窗外觀與面板的過渡）
+            (44, "appearance-dark", { PanelSettings.shared.appearance = systemIsDark ? .light : .dark }),
+            (48, "appearance-light", { PanelSettings.shared.appearance = .system }),
             // 第三階段：捲到統計卡片，切換服務（長條與熱力圖重新長出、數字滾動）、切換 Token 活動範圍
             (50, "stats-scroll", { DebugAction.send("stats-scroll") }),
             (51, "stats-scope", { DebugAction.send("stats-scope") }),
@@ -113,6 +115,10 @@ enum DebugTools {
                 }
             }
         }
+    }
+
+    private static var systemIsDark: Bool {
+        NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
     }
 
     // MARK: - 靜態截圖
