@@ -119,7 +119,9 @@ function Install-AIUsageCollector {
     Write-Host "OK  Python: $Python"
 
     # ---------- 2. Download and verify ----------
-    $Work = Join-Path ([IO.Path]::GetTempPath()) ('aum-install-' + [guid]::NewGuid().ToString('N'))
+    # Stage next to the install folder (same volume): the final moves are renames, not copies
+    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+    $Work = Join-Path $DataDir ('.install-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $Work | Out-Null
     try {
         if ($Zip) {
@@ -147,11 +149,23 @@ function Install-AIUsageCollector {
         }
 
         # ---------- 3. Install ----------
-        New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+        # A running collector keeps app\collector as its working directory: stop it and wait before moving
         $task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
-        if ($task) { Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue }
+        if ($task) {
+            Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+            for ($i = 0; $i -lt 30; $i++) {
+                if ((Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State -ne 'Running') { break }
+                Start-Sleep -Seconds 1
+            }
+        }
         if (Test-Path $OldDir) { Remove-Item -Recurse -Force $OldDir }
-        if (Test-Path $AppDir) { Move-Item $AppDir $OldDir }
+        if (Test-Path $AppDir) {
+            $moved = $false
+            for ($i = 0; $i -lt 15 -and -not $moved; $i++) {
+                try { Move-Item $AppDir $OldDir -ErrorAction Stop; $moved = $true } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $moved) { throw "Could not move the previous copy in $AppDir (still in use). Nothing was changed; try again in a minute." }
+        }
         Move-Item $Stage $AppDir
         Write-Host "OK  Installed to $AppDir"
     } finally {
