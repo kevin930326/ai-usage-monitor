@@ -64,6 +64,11 @@ import Testing
         #expect(d.menuTitle(.device(pcID), now: now) == "工作 PC")
         #expect(d.menuTitle(.device(laptopID), now: now) == "筆電（3 天前更新）")
         #expect(TokenDevices.staleNote(TokenDevice(id: "x", name: "x"), now: now) == "尚未上傳")
+        // 撤銷了密鑰但保留資料的電腦：分得出「沒在用」與「已撤銷」，仍算在「N 台」裡
+        var revoked = d
+        revoked.devices[1].revoked = true
+        #expect(revoked.menuTitle(.device(pcID), now: now) == "工作 PC（已撤銷）")
+        #expect(revoked.title(.all) == "所有電腦（3 台）")
     }
 
     @Test func helpListsEveryComputerWithItsLastUpload() {

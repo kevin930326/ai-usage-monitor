@@ -102,8 +102,10 @@ public struct TokenDevices: Equatable, Sendable {
         return "\(device.name)（\(note)）"
     }
 
-    /// 超過 48 小時沒有上傳：「N 天前更新」；從未上傳：「尚未上傳」；其他為 nil（合計仍包含它已上傳的資料）
+    /// 撤銷了密鑰（保留資料）：「已撤銷」；超過 48 小時沒有上傳：「N 天前更新」；從未上傳：「尚未上傳」；
+    /// 其他為 nil。合計仍包含它已上傳的資料
     public static func staleNote(_ device: TokenDevice, now: Date) -> String? {
+        if device.revoked { return "已撤銷" }
         guard let last = device.lastUpload else { return "尚未上傳" }
         let age = now.timeIntervalSince(last)
         return age > staleAfter ? "\(Int(age / 86400)) 天前更新" : nil
