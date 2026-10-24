@@ -3,10 +3,12 @@
   AI Usage Monitor - one-line install of the Windows collector (FR-48, ADR-0011, ADR-0013 section 7).
 
 .DESCRIPTION
-  irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1 | iex
+  irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
+
+  A fixed release tag, not latest (ADR-0013 section 1): replace X.Y.Z with the version on the Releases page.
 
   With options (for example -WithQuota or -Uninstall):
-  & ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -WithQuota
+  & ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1))) -WithQuota
 
   1. Finds Python 3.10+ (py launcher, then PATH). If missing, offers to install it with winget
      (Python.Python.3.13, current user only; winget shows its own agreements).
@@ -188,7 +190,7 @@ function Install-AIUsageCollector {
     if ($LASTEXITCODE -ne 0) { throw "Could not register the scheduled task (install-task.ps1 exit $LASTEXITCODE). The files are in $AppDir." }
     Write-Host ''
     Write-Host 'Done. The collector runs every 5 minutes while you are signed in. Remove it with:'
-    Write-Host '  & ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall'
+    Write-Host "  & ([scriptblock]::Create((irm https://github.com/$Repo/releases/download/v$Version/install.ps1))) -Uninstall"
 }
 
 # Explicit arguments rather than @PSBoundParameters: with `irm | iex` the parameters are simply unset

@@ -19,14 +19,15 @@ Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，�
 開啟 PowerShell（不需要系統管理員），貼上：
 
 ```powershell
-irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1 | iex
+irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
 ```
 
 - 找 Python 3.10 以上（`py -3`、PATH、`%LOCALAPPDATA%\Programs\Python`）；沒有時詢問是否用 **winget** 安裝 Python 3.13（只裝給目前的使用者，winget 會顯示它自己的條款）。
 - 從同一個 GitHub Release 下載 `AIUsageMonitor-collector-<版本>.zip`，比對寫在 `install.ps1` 裡的 **SHA-256**（Release 的 `SHA256SUMS` 也有）；不符就停止、不安裝。
 - 解壓到 `%LOCALAPPDATA%\AIUsageMonitor\app`（舊的那份移到 `app.old`），再以下面的 `install-task.ps1` 建立排程。
 - 想先看內容再執行：下載 `install.ps1` 與 `SHA256SUMS`，用 `Get-FileHash install.ps1` 比對後再執行 `powershell -ExecutionPolicy Bypass -File install.ps1`。
-- 加參數（`-WithQuota`、`-Uninstall`）時改用：`& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -WithQuota`
+- `X.Y.Z` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的版本號：指令指向固定版本、不用 `latest`（ADR-0013 第 1 節）。想先看過再執行：`irm …/install.ps1 -OutFile install.ps1`。
+- 加參數（`-WithQuota`、`-Uninstall`）時改用：`& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1))) -WithQuota`
 - `install.ps1` 的訊息是英文：Windows PowerShell 5.1 以 Latin-1 解讀 `irm` 下載的文字，中文會變亂碼。
 
 ### 從 repo 安裝
@@ -62,7 +63,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/ins
 一行安裝的：
 
 ```powershell
-& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall
+& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1))) -Uninstall
 ```
 
 從 repo 安裝的：
