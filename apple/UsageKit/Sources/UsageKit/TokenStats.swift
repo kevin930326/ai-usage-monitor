@@ -467,15 +467,15 @@ public enum TokenFormat {
     /// 「9,999」「1.23萬」「12.3萬」「1,470萬」「3.85億」：一萬以上用萬／億、三位有效數字，
     /// 不到一萬顯示整數。面板、統計視窗與 VoiceOver 都用這個；滑鼠說明用 `full`。
     public static func short(_ value: Int64) -> String {
-        let v = abs(Double(value))
-        guard v >= 10_000 else { return full(value) }
-        var scaled = significant(v / 1e4)
+        let magnitude = value.magnitude
+        guard magnitude >= 10_000 else { return full(value) }
+        var scaled = significant(magnitude, unit: 10_000)
         var unit = "萬"
-        if scaled >= 10_000 {  // 包含四捨五入後進位到一億（9,999.5 萬 → 1 億）
-            scaled = significant(v / 1e8)
+        if scaled.whole >= 10_000 {  // 包含四捨五入後進位到一億（9,999.5 萬 → 1 億）
+            scaled = significant(magnitude, unit: 100_000_000)
             unit = "億"
         }
-        return (value < 0 ? "-" : "") + trimmed(scaled) + unit
+        return (value < 0 ? "-" : "") + scaled.text + unit
     }
 
     /// 完整數字加千分位：「12,345,678」
@@ -497,22 +497,29 @@ public enum TokenFormat {
         return m == 0 ? "\(h) 小時" : "\(h) 小時 \(m) 分"
     }
 
-    /// 四捨五入到三位有效數字（`v` ≥ 1）
-    private static func significant(_ v: Double) -> Double {
-        let step = pow(10, floor(log10(v)) - 2)
-        return (v / step).rounded() * step
+    /// `value / unit` 四捨五入到三位有效數字（以整數計算：浮點的 9.995 會變成 9.99），
+    /// 回傳整數部分與文字：「1.47」「12.3」「147」「1,470」；小數尾端的 0 去掉（「1.5」）
+    private static func significant(_ value: UInt64, unit: UInt64) -> (whole: UInt64, text: String) {
+        let digits = String(value / unit).count
+        if digits >= 3 {
+            let scale = power(digits - 3)
+            let step = unit * scale
+            let whole = (value / step + (value % step >= step - step / 2 ? 1 : 0)) * scale
+            return (whole, full(Int64(whole)))
+        }
+        let decimals = 3 - digits
+        let scale = power(decimals)
+        let step = unit / scale
+        let rounded = value / step + (value % step >= step - step / 2 ? 1 : 0)
+        var fraction = String(rounded % scale)
+        fraction = String(repeating: "0", count: decimals - fraction.count) + fraction
+        while fraction.hasSuffix("0") { fraction.removeLast() }
+        let whole = rounded / scale
+        return (whole, fraction.isEmpty ? "\(whole)" : "\(whole).\(fraction)")
     }
 
-    /// 三位有效數字的文字：「1.47」「12.3」「147」「1,470」；小數尾端的 0 去掉（「1.5」）
-    private static func trimmed(_ v: Double) -> String {
-        guard v < 1000 else { return full(Int64(v.rounded())) }
-        let digits = v < 10 ? 2 : v < 100 ? 1 : 0
-        var s = String(format: "%.\(digits)f", v)
-        if s.contains(".") {
-            while s.hasSuffix("0") { s.removeLast() }
-            if s.hasSuffix(".") { s.removeLast() }
-        }
-        return s
+    private static func power(_ n: Int) -> UInt64 {
+        (0..<n).reduce(1) { result, _ in result * 10 }
     }
 }
 

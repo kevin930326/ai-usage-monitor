@@ -4,7 +4,8 @@
 //   build/compare-snapshots <基準資料夾> <新截圖資料夾> <差異圖資料夾>
 //
 // 每個像素四個通道中差最多的那個超過 PIXEL_TOLERANCE（0～255）算「不同」；
-// 不同的像素超過總數的 RATIO_TOLERANCE 或尺寸不同時，該張失敗並在差異圖資料夾輸出
+// 不同的像素超過總數的 RATIO_TOLERANCE、任一個 TILE×TILE 的格子裡超過 TILE_TOLERANCE（集中的小改變：
+// 一個數字、一個圓點；整張圖零星的反鋸齒差異不受影響），或尺寸不同時，該張失敗並在差異圖資料夾輸出
 // <名稱>-diff.png（不同的像素標紅，其他淡化）。基準有、新截圖沒有的也算失敗。
 // 結束碼：0＝全部相符，1＝只有畫面不符（像素或尺寸），2＝參數錯誤或沒有基準，3＝缺圖或讀不到圖。
 import CoreGraphics
@@ -14,6 +15,8 @@ import UniformTypeIdentifiers
 
 let pixelTolerance = Int(ProcessInfo.processInfo.environment["PIXEL_TOLERANCE"] ?? "") ?? 24
 let ratioTolerance = Double(ProcessInfo.processInfo.environment["RATIO_TOLERANCE"] ?? "") ?? 0.002
+let tile = max(Int(ProcessInfo.processInfo.environment["TILE"] ?? "") ?? 32, 1)
+let tileTolerance = Double(ProcessInfo.processInfo.environment["TILE_TOLERANCE"] ?? "") ?? 0.2
 
 struct Bitmap {
     let width: Int
@@ -91,13 +94,24 @@ for name in names {
         continue
     }
     var differing = 0
+    let columns = (base.width + tile - 1) / tile
+    var tiles = [Int](repeating: 0, count: columns * ((base.height + tile - 1) / tile))
     for i in stride(from: 0, to: base.pixels.count, by: 4)
     where (0..<4).contains(where: { abs(Int(base.pixels[i + $0]) - Int(new.pixels[i + $0])) > pixelTolerance }) {
         differing += 1
+        let pixel = i / 4
+        tiles[(pixel / base.width / tile) * columns + (pixel % base.width) / tile] += 1
     }
     let ratio = Double(differing) / Double(base.width * base.height)
+    // 邊緣不滿一格的格子以完整一格計（只會更寬鬆）
+    let worstTile = Double(tiles.max() ?? 0) / Double(tile * tile)
     if ratio > ratioTolerance {
         print(String(format: "FAIL %@：%.3f%% 的像素不同（容許 %.3f%%）", name, ratio * 100, ratioTolerance * 100))
+        writeDiff(base, new, to: diffDir.appendingPathComponent(name.replacingOccurrences(of: ".png", with: "-diff.png")))
+        failed += 1
+    } else if worstTile > tileTolerance {
+        print(String(format: "FAIL %@：有一個 %d×%d 的區域 %.0f%% 的像素不同（容許 %.0f%%）", name, tile, tile,
+                     worstTile * 100, tileTolerance * 100))
         writeDiff(base, new, to: diffDir.appendingPathComponent(name.replacingOccurrences(of: ".png", with: "-diff.png")))
         failed += 1
     } else {
