@@ -196,6 +196,7 @@ class SetupDetectionTests(unittest.TestCase):
         self.assertEqual(self.config.read_text(), "[1, 2]")
 
 
+@unittest.skipIf(sys.platform == "win32", "App 內建的收集器只在 macOS（ADR-0013）；日誌權限 0o600 是 POSIX 的")
 class AppAgentTests(unittest.TestCase):
     """`--agent app`：日誌寫在自己的檔案；install-launchd.sh 的收集器在時不執行。"""
 

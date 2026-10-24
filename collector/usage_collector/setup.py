@@ -84,10 +84,14 @@ def run_limited(argv: list[str], env: Mapping[str, str] | None = None, timeout: 
         try:
             out, _ = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+            # setup 只在 Mac App 內建的收集器執行（ADR-0013）；Windows 沒有 process group，只結束子程序本身
+            if sys.platform == "win32":
+                proc.kill()
+            else:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
             proc.communicate()
             return 124, ""
         return proc.returncode, out.decode("utf-8", "replace")
