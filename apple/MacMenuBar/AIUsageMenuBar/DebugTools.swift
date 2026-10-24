@@ -99,7 +99,10 @@ enum DebugTools {
             // 完整統計視窗：打開 10 秒後關閉，關閉後資料應釋放
             (close + 120, "stats-open", { showStatsWindow() }),
             (close + 130, "stats-close", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
-            (close + 150, "exit", { exit(0) }),
+            // 再開關一次：第一次打開的一次性成本（系統框架、字型、斷詞字典）之外，確認沒有累積
+            (close + 150, "stats-open-2", { showStatsWindow() }),
+            (close + 160, "stats-close-2", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
+            (close + 180, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {
