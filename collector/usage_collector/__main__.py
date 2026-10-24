@@ -1,4 +1,5 @@
-"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app] [--tokens-only] [--log-file 檔案]"""
+"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app]
+                                  [--tokens-only] [--log-file 檔案]"""
 from __future__ import annotations
 
 import argparse
