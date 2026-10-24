@@ -60,13 +60,21 @@ def find_executable(name: str, candidates: Iterable[str], environ: Mapping[str, 
     return None
 
 
-def run_limited(argv: list[str], timeout: float | None = None) -> tuple[int, str]:
+def child_env(path: str, environ: Mapping[str, str]) -> dict[str, str]:
+    """執行偵測用的環境：以 `environ` 為準（CLAUDE_CONFIG_DIR／CODEX_HOME 跟著傳下去），PATH 前面加上執行檔所在的資料夾。
+    npm／nvm 裝的 claude、codex 是 `#!/usr/bin/env node` 腳本，App 與 launchd 的 PATH 只有系統目錄，
+    node 通常和它們在同一個資料夾（與 providers/codex.py 相同的做法）。"""
+    path_dirs = (os.path.dirname(path), environ.get("PATH"), "/usr/bin:/bin")
+    return {**environ, "PATH": os.pathsep.join(filter(None, path_dirs))}
+
+
+def run_limited(argv: list[str], env: Mapping[str, str] | None = None, timeout: float | None = None) -> tuple[int, str]:
     """在自己的 process group 執行，逾時（預設 `TIMEOUT` 秒）就結束整組（回傳 124）。stdin 關閉、在暫存資料夾執行。"""
     timeout = TIMEOUT if timeout is None else timeout
     with tempfile.TemporaryDirectory(prefix="aum-setup-") as cwd:
         try:
-            proc = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, start_new_session=True)
+            proc = subprocess.Popen(argv, cwd=cwd, env=None if env is None else dict(env), stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
         except OSError:
             return 127, ""
         try:
@@ -85,7 +93,7 @@ def detect_claude(path: str | None, environ: Mapping[str, str] = os.environ) -> 
     if path is None:
         config_dir = environ.get("CLAUDE_CONFIG_DIR") or expand_home("~/.claude", environ)
         return "unknown" if os.path.isdir(config_dir) else "not_installed"
-    rc, _ = run_limited([path, "auth", "status", "--json"])
+    rc, _ = run_limited([path, "auth", "status", "--json"], child_env(path, environ))
     return {0: "enabled", 1: "not_logged_in"}.get(rc, "unknown")
 
 
@@ -93,7 +101,7 @@ def detect_codex(path: str | None, environ: Mapping[str, str] = os.environ) -> s
     if path is None:
         home = environ.get("CODEX_HOME") or expand_home("~/.codex", environ)
         return "unknown" if os.path.isdir(home) else "not_installed"
-    rc, out = run_limited([path, "login", "status"])
+    rc, out = run_limited([path, "login", "status"], child_env(path, environ))
     # 先比對「沒有訂閱額度」的 API key 登入，避免說明文字剛好提到 ChatGPT
     if rc == 0 and "API key" in out:
         return "api_key"

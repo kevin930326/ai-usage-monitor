@@ -75,6 +75,28 @@ class SetupDetectionTests(unittest.TestCase):
         (self.home / ".codex").mkdir()
         self.assertEqual(setup.detect_codex(None, self.env), "unknown")
 
+    def test_node_script_next_to_node_runs_with_a_bare_path(self):
+        # npm 版：`#!/usr/bin/env node` 腳本，node 在同一個資料夾，環境的 PATH 不含它
+        npm_bin = self.tmp / "npm" / "bin"
+        write_exec(npm_bin / "node", """
+            [ "$2 $3" = "login status" ] || exit 9
+            echo "Logged in using ChatGPT"
+        """)
+        codex = npm_bin / "codex"
+        codex.write_text("#!/usr/bin/env node\n")
+        codex.chmod(0o755)
+        env = {"HOME": str(self.home), "PATH": "/usr/bin:/bin"}
+        self.assertEqual(setup.detect_codex(str(codex), env), "enabled")
+
+    def test_detection_passes_config_dirs_to_the_cli(self):
+        seen = self.tmp / "seen"
+        path = write_exec(self.bin / "claude", f"""
+            echo "$CLAUDE_CONFIG_DIR" > "{seen}"
+            exit 0
+        """)
+        setup.detect_claude(str(path), {**self.env, "CLAUDE_CONFIG_DIR": "/custom/claude"})
+        self.assertEqual(seen.read_text().strip(), "/custom/claude")
+
     def test_timeout_is_unknown_and_kills_the_group(self):
         marker = self.tmp / "child-alive"
         path = write_exec(self.bin / "claude", f"""
