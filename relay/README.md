@@ -19,6 +19,22 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 
 需要 Cloudflare 帳號（免費方案即可）。
 
+### 一次完成（FR-56）
+
+```bash
+scripts/setup-relay.sh --dry-run    # 先看會做什麼：不登入、不建立資源、不產生密鑰、不寫設定
+scripts/setup-relay.sh              # 登入 Cloudflare → 建 KV → 部署 → 設定兩把密鑰 → 寫收集器設定
+```
+
+- 需要 Node.js 23.6 以上；wrangler 用 `relay/package-lock.json` 鎖定的版本。
+- KV 命名為 `<Worker 名稱>-usage`（預設 `ai-usage-relay-usage`，binding 仍是 `USAGE_KV`），id 寫在 `relay/wrangler.local.toml`（不進版控），不改 `relay/wrangler.toml`。
+- 兩把密鑰以 `openssl rand` 產生，只經由標準輸入交給 `wrangler secret put` 與 `security`，不印出、不寫檔：寫入密鑰存 Keychain `AIUsageMonitor-relay-write`，讀取密鑰存 `AIUsageMonitor-relay-read`（`scripts/setup-iphone.sh --pair-only qr` 用來顯示配對 QR 碼）。
+- **已經設定過就停止、不覆蓋**：config.json 已有 `relay_url`、Keychain 已有寫入密鑰、`relay/wrangler.local.toml` 已存在，Cloudflare 上已有同名的 Worker，或已有同名的 KV（`--name` 可以換名稱；帳號裡其他名稱的 KV 不會被沿用或改動）；查不到 Worker 狀態（網路、權限）時也停止。
+- 中途失敗（例如設定密鑰時斷線）時，錯誤訊息會列出這次建立的 KV id 與清理指令（`npx wrangler delete --config wrangler.local.toml`、`npx wrangler kv namespace delete --namespace-id <id>`、`rm wrangler.local.toml`），照做後重跑，或改用下面的手動步驟。
+- 結束碼：0 成功、2 環境或登入、3 已有部署或設定（沒有變更）、4 Cloudflare 操作失敗、5 本機設定失敗。
+
+### 手動
+
 ```bash
 cd relay
 npm install
