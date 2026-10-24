@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- App 內建收集器的 LaunchAgent（ADR-0013 第 3 節）。scripts/bundle-collector.sh 填入 __LABEL__ 與 __EXTRA_ENV__ 後，
+     放進 AIUsageMenuBar.app/Contents/Library/LaunchAgents/<label>.plist，由 App 以 SMAppService.agent 註冊。
+     BundleProgram 是 App 內的相對路徑；不能寫 ~ 開頭的路徑，日誌由收集器自己寫（--agent app）。 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>BundleProgram</key>
+    <string>Contents/Resources/python/bin/python3.13</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>python3.13</string>
+        <!-- -I 隔離模式（不讀 PYTHON* 環境變數與使用者的 site-packages）、-B 不寫 .pyc（寫入 App 內會讓簽章失效） -->
+        <string>-I</string>
+        <string>-B</string>
+        <string>-X</string>
+        <string>utf8</string>
+        <string>-m</string>
+        <string>usage_collector</string>
+        <string>--write-local</string>
+        <string>--upload</string>
+        <string>--quiet</string>
+        <string>--agent</string>
+        <string>app</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- 內嵌的 OpenSSL 用系統的根憑證（上傳中繼、服務狀態頁） -->
+        <key>SSL_CERT_FILE</key>
+        <string>/etc/ssl/cert.pem</string>
+__EXTRA_ENV__    </dict>
+
+    <!-- 每 5 分鐘執行一次，登入時也先跑一次（與 install-launchd.sh 相同） -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

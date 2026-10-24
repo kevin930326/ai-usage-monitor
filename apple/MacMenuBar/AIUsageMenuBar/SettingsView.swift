@@ -28,6 +28,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             LoginItemSection()
             Divider()
+            CollectorSettingsSection(interactive: scrolls)
+            Divider()
             appearanceSection
             Divider()
             menuBarSection

@@ -47,11 +47,43 @@
 
 讀取 `~/Library/Application Support/AIUsageMonitor/usage.json`，規則與收集器相同：設定環境變數 `AI_USAGE_MONITOR_HOME` 時改讀該資料夾。收集器以「寫暫存檔再改名」更新檔案，App 監看所在資料夾（改名後監看檔案本身會失效）。另有每 60 秒的計時器重新判斷過期與重置；只有在監看失效時（資料夾還不存在，或被刪除後重建）才改為每 60 秒讀檔，並在資料夾出現後重新監看。
 
-面板的「更新」按鈕（FR-50）：重新讀檔，並以 `launchctl kickstart gui/<uid>/io.github.kevin930326.ai-usage-monitor` 請 launchd 立即執行收集器，收集器寫完後資料夾監看會自動重讀。App 本身不連網。**60 秒內只觸發一次，最近 24 小時最多 100 次**（`CollectorKickThrottle`，存在 App 的 UserDefaults）：每次觸發收集器都會上傳一次快照到中繼，Cloudflare KV 免費額度每天 1,000 次寫入，排程本身已用約 288 次。超過限制時只重讀檔案，頁尾說明原因。設定 `AI_USAGE_MONITOR_HOME`（測試、截圖、效能量測）時不觸發收集器。
+面板的「更新」按鈕（FR-50）：重新讀檔，並以 `launchctl kickstart gui/<uid>/<label>` 請 launchd 立即執行收集器（內建收集器執行中時是 `io.github.kevin930326.AIUsageMenuBar.collector`，否則是 `install-launchd.sh` 的 `io.github.kevin930326.ai-usage-monitor`），收集器寫完後資料夾監看會自動重讀。App 本身不連網。**60 秒內只觸發一次，最近 24 小時最多 100 次**（`CollectorKickThrottle`，存在 App 的 UserDefaults）：每次觸發收集器都會上傳一次快照到中繼，Cloudflare KV 免費額度每天 1,000 次寫入，排程本身已用約 288 次。超過限制時只重讀檔案，頁尾說明原因。設定 `AI_USAGE_MONITOR_HOME`（測試、截圖、效能量測）時不觸發收集器。
 
 App 不開沙盒，才能讀取 `~/Library/Application Support` 與執行 `launchctl`。
 
-## 安裝到「應用程式」
+## 下載安裝與內建收集器（FR-53、[ADR-0013](../../docs/adr/0013-download-and-install.md)）
+
+發布版的 App 內嵌 Python 3.13（python-build-standalone，固定版本與 SHA-256）與收集器，不需要 repo、不需要自己裝 Python：
+
+```bash
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/v<版本>/install.sh | bash
+```
+
+下載固定版本的 zip → 比對腳本內的 SHA-256 → 確認 bundle ID 與簽章 → 舊版移到垃圾桶 → 裝到「應用程式」→ 打開。重跑即更新；`bash -s -- --uninstall` 停用內建收集器並把 App 移到垃圾桶，加 `--purge` 另外把資料與日誌移到垃圾桶（先詢問）。也可以下載 `.dmg` 拖到「應用程式」（第一次打開要到「系統設定 › 隱私權與安全性」按「強制打開」）。
+
+第一次打開時 App 以 `SMAppService.agent` 註冊 App 內的 LaunchAgent（`<bundle ID>.collector`，每 5 分鐘、日誌在 `~/Library/Logs/AIUsageMonitor/collector.log`），先以內建的 Python 執行 `usage_collector.setup` 找 claude／codex、偵測登入狀態寫進 `config.json`。設定 › 背景收集器顯示狀態與操作：
+
+| 狀態 | 顯示 | 按鈕 |
+|---|---|---|
+| 開發版（沒有內嵌 Python） | 使用 install-launchd.sh 安裝的收集器 | — |
+| 偵測到 `install-launchd.sh` 的收集器 | 正在使用 install-launchd.sh 安裝的收集器（**不會另外註冊**，避免重複執行與上傳） | 改用內建收集器（停止舊的、舊 plist 移到垃圾桶、註冊內建的） |
+| App 不在「應用程式」、或從 .dmg 直接打開 | 需要先把 App 放進「應用程式」資料夾 | — |
+| 內嵌的 Python 帶隔離屬性（.dmg） | 需要允許內建收集器執行 | 允許內建收集器執行 |
+| 已停用 | 內建收集器已停用 | 啟用 |
+| 在「登入項目」被關掉 | 需要在「登入項目」允許背景執行 | 打開「登入項目」設定 |
+| 執行中 | 內建收集器執行中（每 5 分鐘） | 停用 |
+
+App 搬到別的位置後 launchd 仍指向舊路徑，App 啟動時發現位置變了會自動重新註冊。內建收集器每次執行前也會檢查 `install-launchd.sh` 的 plist，在的話直接結束（即使兩個都註冊了也不會重複收集）。App 仍不連網、不持有密鑰。
+
+建置發布檔（只寫 `build/`，不上傳）：
+
+```bash
+scripts/build-release.sh --version 1.0.0
+```
+
+產出 `build/release/1.0.0/` 的 `.zip`、`.dmg`、寫好版本與 SHA-256 的 `install.sh` 與 `SHA256SUMS`。`--test-home <資料夾>` 建置安裝測試版（Debug、bundle ID 加 `.installtest`、收集器只讀寫該資料夾），驗證步驟見 [手動測試清單](../../docs/manual-test-checklist.md) 第 12 節。推 `v*` tag 時 `.github/workflows/release.yml` 建立草稿 Release。
+
+## 開發版安裝到「應用程式」
 
 ```bash
 scripts/install-mac-app.sh
