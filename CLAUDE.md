@@ -17,3 +17,10 @@
 
 - `scripts/verify-all.sh` 通過後，**先跑 `scripts/codex-review.sh` 並寫 triage**，再開 PR（或 push 最後一版）。流程、triage 格式與 Codex 額度不足時的替代做法見 `.claude/skills/codex-review/SKILL.md`。
 - 只修 triage 中接受的項目，每項一個 commit；PR 內文附 triage 摘要。
+
+## 截圖比對
+
+- `scripts/verify-all.sh` 會跑 `scripts/snapshots.sh`：以固定時間、時區與假資料用 ImageRenderer 產生 Mac 面板、完整統計、設定、選單列圖示，以及 iPhone 小工具、鎖定畫面 Live Activity、動態島（淺色、深色），和 `apple/Snapshots/` 的基準比對，容許小誤差。
+- 畫面**有意**改變時執行 `scripts/update-snapshots.sh` 更新基準，逐張檢查 `git diff` 中的圖再提交，PR 內文說明哪些截圖改了、為什麼。沒打算改畫面卻不符時，看 `build/snapshots/diff/` 的差異圖找原因，不要直接更新基準。
+- 基準綁定產生它的環境（`apple/Snapshots/ENVIRONMENT`：macOS、Xcode、模擬器）；環境不同時比對只印警告、不算失敗（CI 的 macOS runner 通常屬於這種）。升級 macOS 或 Xcode 後先在 main 上更新基準。
+

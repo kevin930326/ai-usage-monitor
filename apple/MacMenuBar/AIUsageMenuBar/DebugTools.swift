@@ -12,6 +12,7 @@ import UsageKitUI
 /// - `AUM_RENDER_NAME=<名稱>`：面板 PNG 的檔名前綴（預設 `panel`），換一份假歷史再輸出一次時用。
 /// - `AUM_RENDER_ANIMS=<名稱,名稱>`：只輸出這些動畫（預設全部）。
 /// - `AUM_RENDER_EXIT=1`：輸出完就結束。
+/// - `AUM_RENDER_NOW=<ISO 8601>`：畫面的「現在」固定成這個時間（`RenderClock`，截圖比對用，見 `scripts/snapshots.sh`）。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
 @MainActor
 enum DebugTools {
@@ -116,7 +117,7 @@ enum DebugTools {
     private static var snapshot: UsageSnapshot { UsageStore.shared.snapshot ?? sample() }
 
     /// 還沒讀到 usage.json 時截圖用的範例資料
-    private static func sample(now: Date = .now) -> UsageSnapshot {
+    private static func sample(now: Date = RenderClock.now) -> UsageSnapshot {
         UsageSnapshot(updatedAt: now.addingTimeInterval(-120), providers: [
             "claude": ProviderUsage(plan: "Max", windows: [
                 UsageWindow(id: "five_hour", label: "5 小時", usedPct: 62, resetsAt: now.addingTimeInterval(6000)),
@@ -156,7 +157,7 @@ enum DebugTools {
         PanelCard(id: PanelSection.stats.rawValue, accessibilityTitle: PanelSection.stats.title, collapsed: .constant(false)) {
             StatsCardHeader()
         } content: {
-            StatsCardContent(data: data, status: status, scope: scope, range: range, now: .now, selectScope: { _ in }, selectRange: { _ in })
+            StatsCardContent(data: data, status: status, scope: scope, range: range, now: RenderClock.now, selectScope: { _ in }, selectRange: { _ in })
         }
         .frame(width: 328)
         .padding(16)
@@ -173,7 +174,7 @@ enum DebugTools {
         // 保留 7 天：較早的每日資料已刪除，熱力圖與長條不畫成「沒有使用」
         var short = data
         short.retentionDays = 7
-        let cutoff = short.firstAvailableDay(now: .now).map { TokenCalendar.key($0, calendar: .current) } ?? ""
+        let cutoff = short.firstAvailableDay(now: RenderClock.now).map { TokenCalendar.key($0, calendar: .current) } ?? ""
         short.days.removeAll { $0.day < cutoff }
         for scheme in [ColorScheme.light, .dark] {
             let n = scheme.name

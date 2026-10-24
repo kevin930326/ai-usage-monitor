@@ -399,5 +399,70 @@ class LintCollectorTests(unittest.TestCase):
         self.assertEqual(len(self.log.read_text().splitlines()), 2)
 
 
+def write_png(path: Path, width: int, height: int, changed: int = 0) -> None:
+    """純色 RGBA PNG；`changed` 個像素（從左上角起）改成紅色。"""
+    import struct
+    import zlib
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            row += bytes([255, 0, 0, 255]) if y * width + x < changed else bytes([40, 120, 200, 255])
+        rows.append(bytes(row))
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(b"".join(rows)))
+                     + chunk(b"IEND", b""))
+
+
+@unittest.skipUnless(sys.platform == "darwin" and shutil.which("swiftc"), "compare-snapshots.swift 用 CoreGraphics（macOS）")
+class CompareSnapshotsTests(unittest.TestCase):
+    """compare-snapshots.swift：容許少量像素不同；尺寸不同、沒有產生、不同的像素太多時失敗並輸出差異圖。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="snapshots test "))
+        cls.tool = cls.tmp / "compare"
+        subprocess.run(["swiftc", "-O", str(ROOT / "scripts" / "compare-snapshots.swift"), "-o", str(cls.tool)],
+                       check=True, capture_output=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def setUp(self):
+        self.case = Path(tempfile.mkdtemp(dir=self.tmp))
+        self.base, self.new, self.diff = self.case / "base", self.case / "new", self.case / "diff"
+        self.base.mkdir()
+        self.new.mkdir()
+        write_png(self.base / "a.png", 100, 100)
+
+    def compare(self) -> subprocess.CompletedProcess:
+        return subprocess.run([str(self.tool), str(self.base), str(self.new), str(self.diff)], capture_output=True, text=True)
+
+    def test_small_difference_is_tolerated(self):
+        write_png(self.new / "a.png", 100, 100, changed=10)  # 0.1%
+        result = self.compare()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse((self.diff / "a-diff.png").exists())
+
+    def test_large_difference_fails_with_diff_image(self):
+        write_png(self.new / "a.png", 100, 100, changed=500)  # 5%
+        result = self.compare()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FAIL a.png", result.stdout)
+        self.assertTrue((self.diff / "a-diff.png").exists())
+
+    def test_size_change_and_missing_image_fail(self):
+        write_png(self.base / "b.png", 10, 10)
+        write_png(self.new / "a.png", 100, 101)
+        result = self.compare()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("尺寸", result.stdout)
+        self.assertIn("沒有產生", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,11 +12,14 @@
 - none：沒有 history.sqlite3（收集器還沒更新）
 - normal 以外的服務狀態都正常；服務狀態的名稱都是編的，標「示範」
 資料庫用收集器自己的 history 模組建立，schema 與實際相同。
+環境變數 AUM_RENDER_NOW=<ISO 8601>（例如 2026-10-21T04:00:00Z）時以那個時間為「現在」，
+截圖比對（scripts/snapshots.sh）每次產生一模一樣的資料。
 """
 from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +31,13 @@ from usage_collector import history  # noqa: E402
 STEP = 300
 
 
+def current_time() -> datetime:
+    fixed = os.environ.get("AUM_RENDER_NOW")
+    if fixed:
+        return datetime.fromisoformat(fixed.replace("Z", "+00:00"))
+    return datetime.now(timezone.utc)
+
+
 def iso(ts: float) -> str:
     return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -37,7 +47,7 @@ def awake(ts: float) -> bool:
     hour = local.hour + local.minute / 60
     if 1 <= hour < 8.5:
         return False  # 每晚睡眠
-    days_ago = (datetime.now().astimezone().date() - local.date()).days
+    days_ago = (current_time().astimezone().date() - local.date()).days
     return not (days_ago == 3 and 13 <= hour < 17)  # 3 天前下午關機
 
 
@@ -148,7 +158,7 @@ def main() -> None:
     folder = Path(sys.argv[1])
     scenario = sys.argv[2] if len(sys.argv) > 2 else "normal"
     folder.mkdir(parents=True, exist_ok=True)
-    now = (int(datetime.now(timezone.utc).timestamp()) // STEP) * STEP
+    now = (int(current_time().timestamp()) // STEP) * STEP
     claude_5h_reset = now + 94 * 60
     codex_5h_reset = now + 199 * 60
     claude_week_reset = now + int(2.96 * 86400)
