@@ -78,11 +78,13 @@ import Testing
         }
     }
 
-    @Test(arguments: ["claude", "codex"])
+    /// Claude、Codex 用識別色；額度消耗的資料過期時用 `heatmapStale`
+    @Test(arguments: ["claude", "codex", "stale"])
     func providerHeatmapKeepsBrandColorAndIsReadable(key: String) {
         #expect(UsagePalette.heatmapOpacities.count == UsagePalette.heatmapLevels)
+        let color = key == "stale" ? UsagePalette.heatmapStale : UsagePalette.provider(key)
         for bg in Self.heatmapBackgrounds {
-            let tint = bg.name == "淺色" ? UsagePalette.provider(key).light : UsagePalette.provider(key).dark
+            let tint = bg.name == "淺色" ? color.light : color.dark
             let ramp = UsagePalette.heatmapOpacities.map { tint.blended(over: bg.card, opacity: $0) }
             #expect(ramp.last == tint)
             checkRamp(ramp, card: bg.card, empty: bg.empty, "\(key) \(bg.name)")

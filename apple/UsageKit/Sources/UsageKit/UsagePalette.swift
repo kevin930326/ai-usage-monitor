@@ -77,6 +77,10 @@ public enum UsagePalette {
     /// 服務熱力圖第 1～5 階：服務識別色（或過期的灰色）以這些不透明度疊在卡片上
     public static let heatmapOpacities: [Double] = [0.3, 0.47, 0.64, 0.82, 1]
 
+    /// 資料過期時的服務熱力圖（取代識別色）。深色同系統灰色；淺色比系統灰色（#8E8E93）深，
+    /// 否則第 1 階和「沒有使用」分不出來
+    public static let heatmapStale = AdaptiveColor(light: 0x636366, dark: 0x98989D)
+
     /// 熱力圖「沒有使用」的格子：primary（深色為白、淺色為黑）以這個不透明度疊在卡片上
     public static let heatmapEmptyOpacity = 0.07
 
