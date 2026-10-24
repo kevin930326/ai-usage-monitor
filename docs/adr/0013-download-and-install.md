@@ -3,7 +3,7 @@
 - 狀態：**提議中**（2026-10-24；牽涉發布、背景執行與安全，等使用者確認後改為「已採用」）
 - 日期：2026-10-24
 - 相關需求：FR-4、FR-20、FR-50、FR-53、FR-55、FR-57（本 ADR 新增）、NFR-1、NFR-3、NFR-6、NFR-9
-- 相關：[ADR-0001](0001-cloudflare-worker-relay.md)（中繼）、[ADR-0006](0006-claude-usage-via-cli.md)、[ADR-0007](0007-codex-usage-via-app-server.md)（收集器怎麼拿用量）、[ADR-0008](0008-mac-panel-layout.md) 第 8 節（App 不連網）、[ADR-0011](0011-multi-device-usage.md)（第二層）、[ADR-0012](0012-pairing.md)（配對，第 5 部分）
+- 相關：[ADR-0001](0001-cloudflare-worker-relay.md)（中繼）、[ADR-0006](0006-claude-usage-via-cli.md)、[ADR-0007](0007-codex-usage-via-app-server.md)（收集器怎麼拿用量）、[ADR-0008](0008-mac-panel-layout.md) 第 8 節（App 不連網）、[ADR-0011](0011-multi-device-usage.md)（第二層）、ADR-0012（配對，撰寫中：一次性短碼、到期、嘗試次數與密鑰保存方式在那裡決定）
 
 ## 背景
 
