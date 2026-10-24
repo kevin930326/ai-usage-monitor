@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from . import system
 from .log import log
 from .models import parse_iso
 from .paths import APP_SUPPORT_DIR
@@ -214,7 +215,11 @@ def _private_files() -> Iterator[None]:
 
 
 def _tighten_permissions(path: Path) -> None:
-    """既有的資料庫與 -wal／-shm 改成 0600；改不了就丟出 HistoryError，這次不寫入歷史。"""
+    """既有的資料庫與 -wal／-shm 改成 0600；改不了就丟出 HistoryError，這次不寫入歷史。
+    Windows 沒有 POSIX 權限（chmod 只能切換唯讀，stat 一律回報 0666）：資料夾在 %LOCALAPPDATA%，
+    預設的 ACL 只有使用者本人、SYSTEM 與 Administrators 能存取，不另外檢查。"""
+    if system.IS_WINDOWS:
+        return
     for suffix in ("", "-wal", "-shm"):
         p = Path(f"{path}{suffix}")
         try:
@@ -248,7 +253,7 @@ def _epoch(value: str | None) -> int | None:
 
 def local_day(ts: int) -> str:
     """Unix 秒換算成本機時區的日期 YYYY-MM-DD（Token 統計的 day 欄位）。"""
-    return datetime.fromtimestamp(ts).date().isoformat()
+    return system.local_datetime(ts).date().isoformat()
 
 
 def meta(conn: sqlite3.Connection, key: str) -> str | None:
@@ -355,6 +360,34 @@ def record(snapshot: dict, path: Path | None = None, now: datetime | None = None
             conn.close()
     _tighten_permissions(path)
     return count
+
+
+def tidy(path: Path | None = None, now: datetime | None = None) -> None:
+    """只做每天一次的清理（`--tokens-only`，Windows 排程的預設）：`record` 只在收集額度時執行。"""
+    path = path or HISTORY_PATH
+    now = now or datetime.now(timezone.utc)
+    if not path.exists():
+        return  # Token 統計沒能建立資料庫：沒有東西要清
+    with _private_files():
+        _tighten_permissions(path)
+        conn = connect(path)
+        try:
+            maybe_cleanup(conn, int(now.timestamp()), now.astimezone().date())
+        finally:
+            conn.close()
+    _tighten_permissions(path)
+
+
+def tidy_safely(path: Path | None = None) -> bool:
+    """`tidy` 的外層：不丟出任何例外，日誌只記錄類別。"""
+    try:
+        tidy(path)
+        return True
+    except HistoryError as e:
+        log(f"略過歷史清理：{e}")
+    except Exception as e:
+        log(f"略過歷史清理：{type(e).__name__}")
+    return False
 
 
 def record_safely(snapshot: dict, path: Path | None = None) -> bool:

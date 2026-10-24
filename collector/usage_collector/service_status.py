@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -98,7 +99,7 @@ def fetch(provider: str) -> dict:
 
 def _read(path: Path) -> dict | None:
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else None
     except (OSError, ValueError):
         return None
@@ -108,7 +109,8 @@ def _write(data: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".service-status-", suffix=".json")
     try:
-        os.fchmod(fd, 0o600)
+        if sys.platform != "win32":  # Windows 的 Python 3.12 沒有 fchmod；%LOCALAPPDATA% 本來就只有使用者本人能讀
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)

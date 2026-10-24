@@ -2,6 +2,7 @@ import io
 import json
 import os
 import stat
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr
@@ -93,7 +94,8 @@ class UpdateTest(unittest.TestCase):
         self.assertEqual(data["providers"]["claude"]["indicator"], "none")
         self.assertEqual(data["providers"]["codex"]["error"], "網路錯誤")
         self.assertIsNone(data["providers"]["codex"]["indicator"])
-        self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
+        if sys.platform != "win32":  # Windows 沒有 POSIX 權限位元（%LOCALAPPDATA% 的 ACL 只有使用者本人）
+            self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
         self.assertEqual([c[1] for c in self.calls], [{}, {}])  # 不帶任何標頭（密鑰、cookie）
         self.assertEqual([c[0] for c in self.calls], ["https://status.claude.com/api/v2/summary.json",
                                                       "https://status.openai.com/api/v2/summary.json"])

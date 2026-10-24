@@ -10,6 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+if sys.platform == "win32":
+    raise unittest.SkipTest("iPhone 重裝排程只在 macOS")
+
 HELPER = Path(__file__).resolve().parents[2] / "scripts" / "reinstall_ios_helper.py"
 TZ = "Asia/Taipei"
 DAY = 86400

@@ -1,5 +1,7 @@
 # collector — Mac 端用量收集器
 
+> Windows PC 也能用同一份程式統計 Token：見 [docs/windows.md](../docs/windows.md)（`windows/install-task.ps1`）。平台差異集中在 `usage_collector/system.py`。
+
 執行 Claude Code 的 `/usage` 取得 Claude 用量、執行 Codex CLI 的 `codex app-server` 取得 Codex 用量（只用其中一個也可以），不讀取任何服務的 token，並輸出[統一格式的 JSON](../docs/02-architecture.md#3-資料格式)。只使用 Python 標準函式庫，支援 Python 3.10 以上。
 
 ## 前置條件
