@@ -196,6 +196,8 @@ python3 -m unittest -v
 ../scripts/lint-collector.sh   # ruff＋mypy（設定在 pyproject.toml，版本固定在 requirements-lint.txt）
 ```
 
+在 `collector` 資料夾執行。`tests/__init__.py` 會把資料夾與紀錄資料夾指到暫存位置；**不要用 `python3 -m unittest discover -s tests`**，那樣不會載入它（`test_isolation` 會失敗提醒）。
+
 `scripts/verify-all.sh` 與 CI 都會跑這兩項。收集器本身只用標準函式庫，ruff 與 mypy 只裝在 `build/lint-venv`（開發用）。
 
 ## 設計重點
