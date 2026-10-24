@@ -44,6 +44,13 @@ struct PairingPayloadTests {
         #expect(PairingPayload(url: "https://relay.example.dev", readToken: "密鑰密鑰密鑰密鑰密鑰密鑰") == nil)
         #expect(PairingPayload(url: "https://relay.example.dev", readToken: String(repeating: "a", count: 257)) == nil)
     }
+
+    /// Codex C-02：網址會存進 UserDefaults，確認畫面只顯示主機名稱
+    @Test(arguments: ["https://alice:secret@relay.example.dev", "https://alice@relay.example.dev",
+                      "https://relay.example.dev/?token=x", "https://relay.example.dev/#x"])
+    func rejectsURLsCarryingCredentialsOrExtras(url: String) {
+        #expect(PairingPayload(url: url, readToken: token) == nil)
+    }
 }
 
 struct PairingCodeTests {
@@ -109,6 +116,12 @@ extension RelayClientTests {
         }
         await #expect(throws: PairingError.invalidCode) {
             _ = try await RelayClient.claimPairing(urlString: "relay.example.dev", code: "123", session: session)
+        }
+        await #expect(throws: RelayError.invalidURL) {
+            _ = try await RelayClient.claimPairing(urlString: "alice:secret@relay.example.dev", code: "7K3M-Q9TD", session: session)
+        }
+        await #expect(throws: RelayError.invalidURL) {
+            _ = try await RelayClient.claimPairing(urlString: "relay.example.dev/?x=1", code: "7K3M-Q9TD", session: session)
         }
     }
 }

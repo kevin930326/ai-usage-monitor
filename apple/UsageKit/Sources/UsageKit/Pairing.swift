@@ -18,9 +18,17 @@ public struct PairingPayload: Equatable, Sendable {
 
     public init?(url: String, readToken: String) {
         guard url.hasPrefix("https://"), let relay = try? RelayClient(urlString: url, readToken: readToken),
-              Self.isValidToken(readToken) else { return nil }
+              Self.isAcceptableRelayURL(relay.baseURL), Self.isValidToken(readToken) else { return nil }
         self.url = relay.baseURL
         self.readToken = readToken
+    }
+
+    /// 配對得到的網址會存進 UserDefaults，確認畫面只顯示主機名稱：
+    /// 帳號、密碼、query、fragment 都不接受（可能夾帶密鑰，使用者也看不到）
+    public static func isAcceptableRelayURL(_ url: URL) -> Bool {
+        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return false }
+        return c.scheme == "https" && c.user == nil && c.password == nil && c.query == nil && c.fragment == nil
+            && !(c.host ?? "").isEmpty
     }
 
     /// 掃描到的字串；格式不符就回傳 nil（呼叫端不顯示內容）
@@ -102,6 +110,7 @@ extension RelayClient {
     public static func claimPairing(urlString: String, code: String, session: URLSession = .shared) async throws -> RelayClient {
         guard let normalized = PairingCode.normalize(code) else { throw PairingError.invalidCode }
         let base = try RelayClient(urlString: urlString, readToken: "", session: session)
+        guard PairingPayload.isAcceptableRelayURL(base.baseURL) else { throw RelayError.invalidURL }
         var request = URLRequest(url: base.baseURL.appending(path: "pair/claim"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
