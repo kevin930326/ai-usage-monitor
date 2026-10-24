@@ -11,6 +11,7 @@
 - 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
 
 ### Added
+- Windows 收集器（FR-48）：同一份 Python 程式，平台差異集中在 `usage_collector/system.py`；`collector/windows/install-task.ps1`／`uninstall-task.ps1` 以工作排程器每 5 分鐘統計 Token（預設不收集額度、不上傳；`-WithQuota` 只寫本機）；`--tokens-only`、`--log-file` 選項；CI 加 Windows runner；說明見 `docs/windows.md`
 - 截圖比對：`scripts/snapshots.sh`（verify-all、CI）以固定時間與假資料產生 Mac 面板、完整統計、設定、選單列圖示與 iPhone 小工具、Live Activity、動態島，和 `apple/Snapshots/` 的基準比對；`scripts/update-snapshots.sh` 更新基準
 - 對話紀錄格式改變的偵測（ADR-0009 第 9 節）：一次掃描中無法解析的行 ≥ 20%（至少 100 行），或新讀 4 MB 以上卻沒有任何 Token，統計卡片顯示「紀錄格式可能已改變，統計可能不完整」
 - 「匯出 Token CSV」（設定 › 歷史資料，FR-37）：這台電腦的每日 Token，四種 Token 與推理分開、日期為本機日期；原來的按鈕改名「匯出額度 CSV」

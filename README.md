@@ -60,6 +60,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [開發流程](docs/03-development-workflow.md) | 里程碑、分支、commit、PR 規範 |
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
+| [Windows 收集器](docs/windows.md) | Windows PC 的 Token 統計：安裝、移除、手動確認 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
@@ -92,6 +93,10 @@ collector/scripts/install-launchd.sh
 ```
 
 安裝腳本會偵測這台 Mac 登入過哪些服務，只收集那些服務，並印出結果，例如「Claude 用量：啟用」「Codex 用量：未啟用（沒有登入過 Codex CLI）」。沒用的服務不會出現在 App 上，也不會被當成錯誤。之後登入了另一個服務，重新執行 `install-launchd.sh` 即可加入。移除：`collector/scripts/uninstall-launchd.sh`（會詢問是否一併刪除額度歷史，預設保留）。細節見 [collector/README.md](collector/README.md)。
+
+### Windows PC（選用）
+
+Windows PC 也可以用同一份收集器統計這台電腦的 Token（預設不收集額度、不上傳）：見 [docs/windows.md](docs/windows.md)。
 
 ### 2. Mac 選單列 App
 
