@@ -100,9 +100,14 @@ public struct QuotaHistory: Equatable, Sendable {
         return result.filter { $0.duration > 0 }
     }
 
-    /// 相鄰兩筆之間是否重置：`resets_at` 改變超過容許誤差，或已用 % 下降（ADR-0009 第 4 節）。
+    /// 相鄰兩筆之間是否重置（ADR-0009 第 4 節）：`resets_at` 改變超過容許誤差（或一筆有、一筆沒有），
+    /// 或已用 % 下降到舊值的一半以下（含一半）。其他的下降是服務小幅下修：不算重置，這一段的消耗記 0。
     public static func isReset(from a: QuotaSample, to b: QuotaSample) -> Bool {
-        if b.usedPct < a.usedPct { return true }
+        if resetsAtChanged(from: a, to: b) { return true }
+        return b.usedPct < a.usedPct && b.usedPct <= a.usedPct / 2
+    }
+
+    static func resetsAtChanged(from a: QuotaSample, to b: QuotaSample) -> Bool {
         switch (a.resetsAt, b.resetsAt) {
         case let (x?, y?): return abs(y.timeIntervalSince(x)) > resetTolerance
         case (nil, nil): return false
