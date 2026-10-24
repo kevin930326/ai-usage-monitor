@@ -1,6 +1,6 @@
 #!/bin/bash
 # 建置發布用的 Mac App（FR-53、ADR-0013 第 1～3 節）：Release＋內建 Python 與收集器、ad-hoc 簽署，
-# 產出 zip、dmg、寫好版本與 SHA-256 的 install.sh，以及 SHA256SUMS。
+# 產出 zip、dmg、寫好版本與 SHA-256 的 install.sh、Windows 收集器的 zip 與 install.ps1，以及 SHA256SUMS。
 #
 #   scripts/build-release.sh [--version <版本>] [--out <資料夾>]
 #   scripts/build-release.sh --test-home <資料夾> [--out <資料夾>]
@@ -81,7 +81,7 @@ GOT_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$A
 mkdir -p "$OUT"
 ZIP=$NAME-$VERSION.zip
 DMG=$NAME-$VERSION.dmg
-rm -f "$OUT/$ZIP" "$OUT/$DMG" "$OUT/install.sh" "$OUT/SHA256SUMS"
+rm -f "$OUT/$ZIP" "$OUT/$DMG" "$OUT/install.sh" "$OUT/SHA256SUMS" "$OUT"/AIUsageMonitor-collector-*.zip "$OUT/install.ps1"
 # ditto 保留符號連結與權限（內嵌的 Python 有 python3 → python3.13）
 ditto -c -k --keepParent "$APP" "$OUT/$ZIP"
 
@@ -103,8 +103,11 @@ for old, new in (('VERSION="__VERSION__"', f'VERSION="{version}"'), ('ZIP_SHA256
 open(out, "w").write(text)
 PY
 chmod 755 "$OUT/install.sh"
-(cd "$OUT" && shasum -a 256 "$ZIP" "$DMG" install.sh >SHA256SUMS)
+# Windows 收集器（FR-48）：AIUsageMonitor-collector-<版本>.zip 與 install.ps1
+WIN_ZIP=AIUsageMonitor-collector-$VERSION.zip
+python3 "$ROOT/scripts/package-windows.py" --version "$VERSION" --out "$OUT" >/dev/null
+(cd "$OUT" && shasum -a 256 "$ZIP" "$DMG" install.sh "$WIN_ZIP" install.ps1 >SHA256SUMS)
 
 echo "產出（${OUT}）："
-(cd "$OUT" && for f in "$ZIP" "$DMG" install.sh; do printf '  %-28s %6s\n' "$f" "$(du -h "$f" | awk '{print $1}')"; done)
+(cd "$OUT" && for f in "$ZIP" "$DMG" install.sh "$WIN_ZIP" install.ps1; do printf '  %-28s %6s\n' "$f" "$(du -h "$f" | awk '{print $1}')"; done)
 echo "SHA-256（zip）：$ZIP_SHA"

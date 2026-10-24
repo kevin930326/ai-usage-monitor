@@ -14,6 +14,23 @@ Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，�
 
 ## 安裝
 
+### 一行安裝（建議）
+
+開啟 PowerShell（不需要系統管理員），貼上：
+
+```powershell
+irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1 | iex
+```
+
+- 找 Python 3.10 以上（`py -3`、PATH、`%LOCALAPPDATA%\Programs\Python`）；沒有時詢問是否用 **winget** 安裝 Python 3.13（只裝給目前的使用者，winget 會顯示它自己的條款）。
+- 從同一個 GitHub Release 下載 `AIUsageMonitor-collector-<版本>.zip`，比對寫在 `install.ps1` 裡的 **SHA-256**（Release 的 `SHA256SUMS` 也有）；不符就停止、不安裝。
+- 解壓到 `%LOCALAPPDATA%\AIUsageMonitor\app`（舊的那份移到 `app.old`），再以下面的 `install-task.ps1` 建立排程。
+- 想先看內容再執行：下載 `install.ps1` 與 `SHA256SUMS`，用 `Get-FileHash install.ps1` 比對後再執行 `powershell -ExecutionPolicy Bypass -File install.ps1`。
+- 加參數（`-WithQuota`、`-Uninstall`）時改用：`& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -WithQuota`
+- `install.ps1` 的訊息是英文：Windows PowerShell 5.1 以 Latin-1 解讀 `irm` 下載的文字，中文會變亂碼。
+
+### 從 repo 安裝
+
 1. 取得這個 repo（`git clone` 或下載 ZIP 解壓縮），位置之後不要移動（排程會記住路徑）。
 2. 開啟 PowerShell（不需要系統管理員），執行：
 
@@ -41,6 +58,14 @@ Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，�
 預設 `%USERPROFILE%\.claude` 與 `%USERPROFILE%\.codex`。改過位置時，環境變數 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`，或 `%LOCALAPPDATA%\AIUsageMonitor\config.json` 的 `claude_config_dir`、`codex_home` 優先（同 ADR-0009 第 3 節）。
 
 ## 移除
+
+一行安裝的：
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall
+```
+
+從 repo 安裝的：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\uninstall-task.ps1

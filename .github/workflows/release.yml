@@ -16,6 +16,8 @@ on:
       - scripts/bundle-collector.sh
       - scripts/fetch-python-runtime.sh
       - scripts/install.sh
+      - scripts/install.ps1
+      - scripts/package-windows.py
       - apple/MacMenuBar/LaunchAgent/**
 
 permissions:
@@ -63,6 +65,7 @@ jobs:
           shasum -a 256 -c SHA256SUMS
           grep -q "^VERSION=\"$v\"$" install.sh
           grep -q "^ZIP_SHA256=\"$(shasum -a 256 AIUsageMenuBar-$v.zip | awk '{print $1}')\"$" install.sh
+          grep -q "'$(shasum -a 256 AIUsageMonitor-collector-$v.zip | awk '{print $1}')'" install.ps1
           # 從 zip 安裝到暫存資料夾（不打開 App）
           tmp=$(mktemp -d)
           AUM_INSTALL_DIR="$tmp" AUM_ZIP="AIUsageMenuBar-$v.zip" AUM_TRASH_DIR="$tmp/trash" bash install.sh

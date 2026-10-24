@@ -133,6 +133,39 @@ jobs:
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
           if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota should run with --write-local' }
           .\windows\uninstall-task.ps1
+      # One-line installer (scripts/install.ps1): package the release zip, then install into a temporary
+      # LOCALAPPDATA from the local zip (no download), check the SHA-256 refusal, the iex path and uninstall
+      - name: install.ps1 from the release zip
+        shell: powershell
+        working-directory: .
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'aum-release'
+          python scripts\package-windows.py --version 0.0.1 --out $out
+          if ($LASTEXITCODE -ne 0) { throw 'package-windows.py failed' }
+          $zip = Join-Path $out 'AIUsageMonitor-collector-0.0.1.zip'
+          $sha = (Get-FileHash -Algorithm SHA256 $zip).Hash
+          $installer = Join-Path $out 'install.ps1'
+          if (-not (Select-String -Path $installer -SimpleMatch "'0.0.1'" -Quiet)) { throw 'version not written' }
+          if (-not (Select-String -Path $installer -SimpleMatch "'$($sha.ToLower())'" -Quiet)) { throw 'sha not written' }
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'aum-localappdata'
+          # wrong SHA-256: nothing installed
+          $failed = $false
+          try { & $installer -Zip $zip -Sha256 ('0' * 64) -NoTask } catch { $failed = $true; Write-Host "refused: $_" }
+          if (-not $failed) { throw 'SHA mismatch was not refused' }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'installed despite SHA mismatch' }
+          # real install with the task, then a reinstall (old copy moves to app.old)
+          & $installer -Zip $zip -Sha256 $sha
+          $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
+          if ($task.Actions[0].WorkingDirectory -notlike "$env:LOCALAPPDATA\AIUsageMonitor\app\collector") { throw "working directory: $($task.Actions[0].WorkingDirectory)" }
+          & $installer -Zip $zip -Sha256 $sha -NoTask
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app.old'))) { throw 'app.old missing' }
+          # the repo copy has no version: through iex it must stop with a message, not close the session
+          $msg = ''
+          try { Get-Content scripts\install.ps1 -Raw | Invoke-Expression } catch { $msg = "$_" }
+          if ($msg -notlike '*has no version*') { throw "unexpected iex result: $msg" }
+          & $installer -Uninstall
+          if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'app was not removed' }
 
   scripts:
     name: scripts (shell 腳本)
