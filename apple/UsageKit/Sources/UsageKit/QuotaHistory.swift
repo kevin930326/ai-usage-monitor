@@ -143,7 +143,9 @@ public extension QuotaHistory {
 
     /// 近期速度（每秒消耗的百分點）：同一輪、回看範圍內至少 4 筆，且跨度達 `recentMinimumSpan`；
     /// 不足時為 nil（退回本額度開始至今的平均速度）。「用得太快」「約 N 分鐘後用完」「可撐到星期幾」都用這個規則。
-    /// 回看範圍內有「沒有紀錄」的時段也照算：速度是兩端的差除以時間，睡眠期間沒有使用本來就該拉低速度。
+    /// 速度是相鄰兩筆正差值的總和除以時間（與「額度消耗」的算法一致）：小幅下修那一段記 0，
+    /// 不會抵銷前後的用量（52% 下修到 30% 再用回 40%，算的是用掉的 10 點，不是 0）。
+    /// 回看範圍內有「沒有紀錄」的時段也照算：睡眠期間沒有使用本來就該拉低速度。
     func recentRate(provider: String, windowID: String, now: Date) -> Double? {
         guard let lookback = Self.recentLookback(windowID: windowID) else { return nil }
         let cycle = Self.currentCycle(samples(provider: provider, windowID: windowID))
@@ -151,7 +153,8 @@ public extension QuotaHistory {
         guard recent.count >= Self.recentMinimumSamples, let first = recent.first, let last = recent.last else { return nil }
         let span = last.ts.timeIntervalSince(first.ts)
         guard span >= Self.recentMinimumSpan(windowID: windowID) else { return nil }
-        return max(last.usedPct - first.usedPct, 0) / span
+        let consumed = zip(recent, recent.dropFirst()).reduce(0) { $0 + max($1.1.usedPct - $1.0.usedPct, 0) }
+        return consumed / span
     }
 }
 

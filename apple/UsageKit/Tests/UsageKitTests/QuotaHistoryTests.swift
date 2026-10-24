@@ -130,6 +130,20 @@ import Testing
         #expect(abs(rate - 12.0 / (50 * minute)) < 1e-9)
     }
 
+    @Test func recentRateSumsPositiveStepsAcrossDownwardCorrections() {
+        // 最近 60 分鐘：40 → 52 → 下修 30（不到一半，不算重置）→ 40，跨 50 分鐘。
+        // 兩端相減是 0（以前的算法，「用得太快」就不會出現）；正差值總和是 12 + 10 = 22 點
+        let now = at(hour)
+        let h = QuotaHistory(samples: [sample(10 * minute, 40), sample(20 * minute, 52), sample(40 * minute, 30), sample(hour, 40)])
+        #expect(QuotaHistory.currentCycle(h.samples(provider: "claude", windowID: "five_hour")).count == 4)
+        let rate = h.recentRate(provider: "claude", windowID: "five_hour", now: now)!
+        #expect(abs(rate - 22.0 / (50 * minute)) < 1e-9)
+        // 與額度消耗一致：同一段的消耗也是 22
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: QuotaHistory(samples: h.samples, runs: runs(0, hour)),
+                                 now: now, days: 1, calendar: utc)
+        #expect(c.hours[0].consumed == 22)
+    }
+
     @Test func recentRateIgnoresSamplesBeforeReset() {
         let now = at(hour)
         let h = QuotaHistory(samples: [sample(5 * minute, 90), sample(10 * minute, 95), sample(15 * minute, 1, resets: 6 * hour),
