@@ -68,7 +68,7 @@ trap 'exit 143' TERM
 : > "$RUNS"
 "$PROBE" register || { echo "註冊失敗" >&2; exit 1; }
 registered=1
-sleep 25
+sleep 25 & wait $!  # 背景 sleep＋wait：收到訊號時馬上處理（前景 sleep 會讓 trap 等到睡完）
 runs=$(wc -l < "$RUNS" | tr -d ' ')
 echo "agent 執行次數：$runs"
 launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | grep -E "state|program|runs" | head -5 || echo "launchctl 找不到 $LABEL"
