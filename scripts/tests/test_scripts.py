@@ -532,8 +532,12 @@ class SetTier2Tests(unittest.TestCase):
     def test_no_read_key_and_disable(self):
         import json
         self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        self.assertEqual(self.run_script().returncode, 0)
+        self.log.unlink()
+        # C-05：從完整同步切換成只上傳時，移除之前存的讀取密鑰（收集器才不會繼續下載）
         self.assertEqual(self.run_script("--no-read-key").returncode, 0)
-        self.assertEqual(len(self.log.read_text().splitlines()), 1)
+        self.assertEqual(self.log.read_text().splitlines(), ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
+                                                             "delete-generic-password -s AIUsageMonitor-relay-read -a default"])
         self.assertEqual(self.run_script("--disable").returncode, 0)
         self.assertIs(json.loads(self.config.read_text())["token_sync"], False)
 

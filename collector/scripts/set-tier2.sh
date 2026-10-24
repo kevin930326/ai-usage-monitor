@@ -2,7 +2,7 @@
 # 第二層（多裝置 Token 合併，ADR-0011 第 2 節、docs/tier2-setup.md）：在這台 Mac 開啟或關閉上傳。
 #
 #   collector/scripts/set-tier2.sh               存入這台 Mac 的寫入密鑰與中繼的讀取密鑰，開啟上傳
-#   collector/scripts/set-tier2.sh --no-read-key 只存寫入密鑰（只上傳，面板不顯示其他電腦）
+#   collector/scripts/set-tier2.sh --no-read-key 只存寫入密鑰（只上傳；移除之前存的讀取密鑰，面板不顯示其他電腦）
 #   collector/scripts/set-tier2.sh --disable     關閉上傳與下載（密鑰留在 Keychain；刪除本機的其他電腦資料）
 #
 # 先用 scripts/relay-device.sh add <名稱> 為這台 Mac 產生寫入密鑰；中繼網址用 set-relay.sh 設定過的 relay_url。
@@ -44,9 +44,15 @@ security add-generic-password -U -s "AIUsageMonitor-device-key" -a "default" -w
 if [ "$READ_KEY" = 1 ]; then
     echo "請貼上中繼的讀取密鑰（READ_TOKEN，和 iPhone App 用的相同）："
     security add-generic-password -U -s "AIUsageMonitor-relay-read" -a "default" -w
+else
+    # 只上傳：之前存過的讀取密鑰也要移除，收集器才不會繼續下載（沒有這個項目時忽略）
+    security delete-generic-password -s "AIUsageMonitor-relay-read" -a "default" >/dev/null 2>&1 || true
 fi
 
 python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" token_sync true
 # 清除「密鑰失效」等狀態，下一輪立即上傳
 (cd "$COLLECTOR" && python3 -m usage_collector.token_sync reset)
+if [ "$READ_KEY" = 0 ]; then
+    (cd "$COLLECTOR" && python3 -m usage_collector.token_sync forget)  # 面板回到「這台 Mac」
+fi
 echo "已開啟第二層。收集器下一輪（5 分鐘內）上傳；確認：(cd collector && python3 -m usage_collector.token_sync status)"
