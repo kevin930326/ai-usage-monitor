@@ -63,7 +63,13 @@ struct CollectorSettingsSection: View {
     }
 
     private var detail: String? {
-        switch collector.state {
+        if collector.state == .legacy, let blocker = collector.migrationBlocker {
+            return switch blocker {
+            case .applicationsFolder: "可以改用 App 內建的收集器，但要先把 App 放進「應用程式」資料夾再打開。舊的收集器照常執行。"
+            case .quarantine: "可以改用 App 內建的收集器。從瀏覽器下載的 App 帶有隔離標記，先按下按鈕移除 App 自己資料夾內的隔離標記，再改用。"
+            }
+        }
+        return switch collector.state {
         case .devBuild: "這個版本（開發版）沒有內建收集器。"
         case .legacy: "可以改用 App 內建的收集器：之後不需要 Python 與 repo，資料與中繼設定都沿用。改用後舊的排程設定會移到垃圾桶，要回到舊的收集器時停用內建的、再執行一次 install-launchd.sh。"
         case .needsApplicationsFolder: "從 .dmg 或「下載」直接打開時，macOS 會把 App 放在暫時的位置，背景收集器之後會失效。把 App 拖到「應用程式」後再打開。"
@@ -77,7 +83,12 @@ struct CollectorSettingsSection: View {
     private var action: (title: String, run: () async -> Void)? {
         switch collector.state {
         case .devBuild, .needsApplicationsFolder: nil
-        case .legacy: ("改用內建收集器", { await collector.migrateFromLegacy() })
+        case .legacy:
+            switch collector.migrationBlocker {
+            case .applicationsFolder: nil
+            case .quarantine: ("允許內建收集器執行", { await collector.allowQuarantinedRuntime() })
+            case nil: ("改用內建收集器", { await collector.migrateFromLegacy() })
+            }
         case .quarantined: ("允許內建收集器執行", { await collector.allowQuarantinedRuntime() })
         case .notRegistered: ("啟用", { await collector.register() })
         case .requiresApproval: ("打開「登入項目」設定", { collector.openLoginItems() })
