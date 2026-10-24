@@ -61,6 +61,15 @@ def entry_stat(entry: os.DirEntry) -> os.stat_result:
     return entry.stat(follow_symlinks=False)
 
 
+def file_identity(st: os.stat_result) -> tuple[int, int]:
+    """(st_dev, st_ino) 換成 SQLite 存得下的有號 64 位元整數。Windows 的 st_dev 是磁碟區序號，
+    可能 ≥ 2⁶³（寫進 scan_state 時 OverflowError，該檔永遠略過）；以二補數折成負數，比對時兩邊用同一個換算。"""
+    def signed(n: int) -> int:
+        n &= (1 << 64) - 1
+        return n - (1 << 64) if n >= 1 << 63 else n
+    return signed(st.st_dev), signed(st.st_ino)
+
+
 def lower_priority() -> None:
     """降低這個程序的優先順序（首次掃描可能讀數百 MB）：macOS 用 nice，Windows 用 BELOW_NORMAL_PRIORITY_CLASS。"""
     if sys.platform == "win32":

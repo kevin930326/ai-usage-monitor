@@ -753,6 +753,22 @@ class ScanTest(TokenStatsTestCase):
             result = self.scan()
         self.assertEqual(result.processed, 0)
 
+    def test_volume_serial_above_signed_64_bits_is_counted(self):
+        # Windows 的 st_dev 可能 ≥ 2⁶³：要能存進 scan_state，第二次掃描也認得是同一個檔案
+        def big(st):
+            t = list(st[:10])
+            t[2] = 11962255239693178705
+            return os.stat_result(t)
+        entry_stat, fstat = system.entry_stat, token_stats.os.fstat
+        with mock.patch.object(system, "entry_stat", lambda e: big(entry_stat(e))), \
+                mock.patch.object(token_stats.os, "fstat", lambda fd: big(fstat(fd))):
+            self.write(self.claude_file(), claude_assistant("a", T0, inp=3, out=4))
+            self.scan()
+            self.write(self.claude_file(), claude_assistant("b", T0 + 1, inp=3, out=4))
+            self.scan()
+        self.assertEqual(self.totals("claude")[:4], (6, 0, 0, 8))
+        self.assertNotIn("OverflowError", self.stderr.getvalue())
+
     def test_locked_database_gives_up_once(self):
         for i in range(5):
             self.write(self.claude_file(f"{SESSION[:-1]}{i}"), claude_assistant(f"a{i}", T0, inp=1, out=1))

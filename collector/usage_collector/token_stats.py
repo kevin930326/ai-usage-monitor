@@ -220,7 +220,7 @@ def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
                     # token_count 來源沒有跨檔的 ID 可以去重，兩份都算會重複計入：只算先列到的那份（sessions 優先）
                     continue
                 key = f"{key}#{st.st_ino}"  # Claude 以訊息 ID 跨檔去重，兩份都讀
-            files[key] = LogFile(provider, key, entry.path, st.st_dev, st.st_ino, st.st_size, int(st.st_mtime))
+            files[key] = LogFile(provider, key, entry.path, *system.file_identity(st), st.st_size, int(st.st_mtime))
     # 舊的先處理：首次掃描時第一次計入的日期、任務的先後都與實際順序一致
     return sorted(files.values(), key=lambda f: (f.mtime, f.key))
 
@@ -614,7 +614,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         return st.offset
     with os.fdopen(fd, "rb") as fh:
         opened = os.fstat(fh.fileno())
-        if (opened.st_dev, opened.st_ino) != (f.device, f.inode):
+        if system.file_identity(opened) != (f.device, f.inode):
             return st.offset
         size = opened.st_size
         rewritten = row is not None and (

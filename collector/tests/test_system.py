@@ -123,6 +123,16 @@ class EntryStatTest(unittest.TestCase):
             self.assertEqual((st.st_dev, st.st_ino), (opened.st_dev, opened.st_ino))
             self.assertNotEqual(st.st_ino, 0)
 
+    def test_file_identity_fits_sqlite_integers(self):
+        # Windows 的 st_dev 是磁碟區序號，可能 ≥ 2⁶³（CI 曾遇到 11962255239693178705）
+        big = 11962255239693178705
+        st = os.stat_result((0, 281474976711475, big, 1, 0, 0, 2, 0, 0, 0))
+        dev, ino = system.file_identity(st)
+        self.assertEqual((dev, ino), (big - (1 << 64), 281474976711475))
+        self.assertTrue(-(1 << 63) <= dev < 1 << 63)
+        small = os.stat_result((0, 7, 16777220, 1, 0, 0, 2, 0, 0, 0))
+        self.assertEqual(system.file_identity(small), (16777220, 7))
+
 
 class TokensOnlyTest(unittest.TestCase):
     """--tokens-only（Windows 排程的預設）：不執行 claude／codex、不寫 usage.json，只有 Token 統計。"""
