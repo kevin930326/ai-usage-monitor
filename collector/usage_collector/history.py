@@ -23,7 +23,7 @@ from .paths import APP_SUPPORT_DIR
 HISTORY_PATH = APP_SUPPORT_DIR / "history.sqlite3"
 
 # App 宣告支援的版本範圍要跟著改（apple/MacMenuBar 的 HistoryStore）
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_RETENTION_DAYS = 365  # 0 = 永久
 DOWNSAMPLE_AFTER_DAYS = 35
 HOURLY_TOKENS_DAYS = 90  # hourly_tokens 只留 90 天（daily_tokens 已有同樣的加總）
@@ -159,12 +159,38 @@ def _repair_v2(conn: sqlite3.Connection) -> None:
             FROM daily_tokens WHERE device_id = ? GROUP BY day, provider""", (meta(conn, "device_id") or "",))
 
 
+# 第二層（ADR-0011 第 2 節，schema 3）：
+# - upload_state：這台電腦每一列上次成功上傳時的數值雜湊與時間（只有本機 device_id 的列會上傳）
+# - devices：從中繼下載的裝置清單（面板的裝置切換與最後上傳時間）；is_self＝這台電腦在中繼上的 device_id
+#   （中繼的 device_id 由密鑰決定，和本機 meta.device_id 不同）
+_V3_TABLES = (
+    """CREATE TABLE IF NOT EXISTS upload_state (
+         day         TEXT    NOT NULL,
+         provider    TEXT    NOT NULL,
+         model       TEXT    NOT NULL,
+         hash        TEXT    NOT NULL,
+         uploaded_at INTEGER NOT NULL,
+         PRIMARY KEY (day, provider, model))""",
+    """CREATE TABLE IF NOT EXISTS devices (
+         device_id      TEXT    PRIMARY KEY,
+         name           TEXT    NOT NULL,
+         last_upload_at INTEGER,
+         revoked        INTEGER NOT NULL DEFAULT 0,
+         is_self        INTEGER NOT NULL DEFAULT 0)""",
+)
+
+
+def _v3(conn: sqlite3.Connection) -> None:
+    for statement in _V3_TABLES:
+        conn.execute(statement)
+
+
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
     return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
 
 
 # MIGRATIONS[i] 把版本 i 升到 i + 1；之後的版本往後加
-MIGRATIONS = [_v1, _v2]
+MIGRATIONS = [_v1, _v2, _v3]
 
 
 def schema_version(conn: sqlite3.Connection) -> int:
@@ -188,7 +214,7 @@ def migrate(conn: sqlite3.Connection) -> None:
             MIGRATIONS[version](conn)
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)",
                          (str(version + 1),))
-    if current == SCHEMA_VERSION == 2:
+    if current >= 2:
         _repair_v2(conn)
 
 
@@ -300,6 +326,7 @@ def cleanup(conn: sqlite3.Connection, now: int) -> None:
             conn.execute("DELETE FROM quota_samples WHERE ts < ?", (oldest,))
             conn.execute("DELETE FROM collector_runs WHERE ts < ?", (oldest,))
             conn.execute("DELETE FROM daily_tokens WHERE day < ?", (local_day(oldest),))
+            conn.execute("DELETE FROM upload_state WHERE day < ?", (local_day(oldest),))
         hourly = min(days, HOURLY_TOKENS_DAYS) if days > 0 else HOURLY_TOKENS_DAYS
         conn.execute("DELETE FROM hourly_tokens WHERE day < ?", (local_day(now - hourly * 86400),))
         conn.execute("DELETE FROM scan_state WHERE last_seen < ?", (now - SCAN_STATE_DAYS * 86400,))
