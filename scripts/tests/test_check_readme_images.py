@@ -121,6 +121,23 @@ class CheckReadmeImagesTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("fetch-depth: 0", r.stdout)
 
+    def test_git_failure_is_not_reported_as_up_to_date(self):
+        # 不是 git 資料夾：所有 git 查詢都失敗
+        plain = Path(tempfile.mkdtemp(prefix="aum-readme-nogit-"))
+        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(plain)]))
+        for rel in ("README.md", "docs/images/SOURCES.tsv", "docs/images/panel.png", "apple/Snapshots/mac/panel-light.png"):
+            (plain / rel).parent.mkdir(parents=True, exist_ok=True)
+            (plain / rel).write_bytes((self.repo / rel).read_bytes())
+        env = {k: v for k, v in os.environ.items() if k != "GITHUB_ACTIONS"}
+        env.update({"README_IMAGES_ROOT": str(plain), "GIT_CEILING_DIRECTORIES": str(plain.parent)})
+        r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("無法查詢提交歷史", r.stdout)
+        self.assertNotIn("齊全", r.stdout)
+        self.assertNotIn(str(plain), r.stdout)
+        r = subprocess.run([sys.executable, str(SCRIPT), "--strict"], capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 1)
+
     def test_repository_is_consistent(self):
         r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True,
                            env={k: v for k, v in os.environ.items() if k not in ("README_IMAGES_ROOT", "GITHUB_ACTIONS")})

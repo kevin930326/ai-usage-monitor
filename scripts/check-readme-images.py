@@ -7,7 +7,8 @@
 - 失敗（結束碼 1）：README 引用的圖片不存在、沒有列在 docs/images/SOURCES.tsv，或表中的圖片、基準不存在。
 - 提醒（結束碼 0，--strict 時 1）：圖片最後一次提交早於對應基準的最後一次提交，或基準有未提交的修改而圖片沒有。
   看到提醒時執行 scripts/update-readme-images.sh，檢查圖片後一起提交。
-- 時間以 git 的提交時間比較；有未提交修改的檔案算「現在」。淺層 clone（CI 的預設）沒有歷史，會提示改用完整歷史。
+- 時間以 git 的提交時間比較；有未提交修改的檔案算「現在」。淺層 clone（CI 的預設）沒有歷史，會提示改用完整歷史；
+  git 查詢失敗時也只提示「沒有比較新舊」，不說通過（--strict 時失敗）。
 """
 from __future__ import annotations
 
@@ -22,8 +23,18 @@ SOURCES = "docs/images/SOURCES.tsv"
 NOW = float("inf")
 
 
+class GitError(Exception):
+    """git 查詢失敗（不是 git 資料夾、git 不能用）；訊息不含 stderr，避免印出路徑"""
+
+
 def git(root: Path, *args: str) -> str:
-    return subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False).stdout.strip()
+    try:
+        result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True, check=False)
+    except OSError as e:
+        raise GitError(f"git {args[0]}") from e
+    if result.returncode != 0:
+        raise GitError(f"git {args[0]}（結束碼 {result.returncode}）")
+    return result.stdout.strip()
 
 
 def read_sources(root: Path) -> dict[str, str]:
@@ -71,14 +82,17 @@ def check(root: Path) -> tuple[list[str], list[str]]:
             warnings.append(f"docs/images/{image} 列在 {SOURCES}，但 README 沒有引用")
     if errors:
         return errors, warnings
-    if git(root, "rev-parse", "--is-shallow-repository") == "true":
-        warnings.append("淺層 clone 沒有提交歷史，無法比較截圖新舊（CI 的 checkout 要設 fetch-depth: 0）")
-        return errors, warnings
-    for image, baseline in mapping.items():
-        if baseline == "-" or image not in referenced:
-            continue
-        if changed_at(root, baseline) > changed_at(root, f"docs/images/{image}"):
-            warnings.append(f"docs/images/{image} 比截圖基準 {baseline} 舊：執行 scripts/update-readme-images.sh 更新")
+    try:
+        if git(root, "rev-parse", "--is-shallow-repository") == "true":
+            warnings.append("淺層 clone 沒有提交歷史，無法比較截圖新舊（CI 的 checkout 要設 fetch-depth: 0）")
+            return errors, warnings
+        for image, baseline in mapping.items():
+            if baseline == "-" or image not in referenced:
+                continue
+            if changed_at(root, baseline) > changed_at(root, f"docs/images/{image}"):
+                warnings.append(f"docs/images/{image} 比截圖基準 {baseline} 舊：執行 scripts/update-readme-images.sh 更新")
+    except GitError as e:
+        warnings.append(f"無法查詢提交歷史（{e}），沒有比較截圖新舊")
     return errors, warnings
 
 
