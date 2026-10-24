@@ -60,6 +60,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [開發流程](docs/03-development-workflow.md) | 里程碑、分支、commit、PR 規範 |
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
+| [解除安裝](docs/uninstall.md) | 各部分怎麼移除、哪些資料會留下 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
@@ -81,48 +82,106 @@ SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 
 
 ## 安裝
 
-只用 Claude 或只用 Codex 都可以，不必兩個都有。需要一台常開（或常醒）的 Mac；只想在 Mac 上看，可以略過中繼與 iPhone。
+分三層，需要哪一層裝到哪一層就好。只用 Claude 或只用 Codex 都可以。三層都**不需要付費 Apple Developer 帳號**，也不需要把資料交給別人：中繼用你自己的 Cloudflare 帳號（免費方案）。
 
-### 1. 收集器（Mac）
+| 層 | 看得到 | 需要 | 時間 |
+|---|---|---|---|
+| [0. 只有 Mac](#0-只有-mac) | Mac 選單列 | Mac（Apple 晶片）、已登入的 Claude Code 或 Codex CLI | 約 3 分鐘 |
+| [1. 加上 iPhone](#在-iphone-上看) | iPhone 鎖定畫面、小工具、Apple Watch | 第 0 層、Cloudflare 帳號（免費）、Xcode、免費 Apple ID | 約 20 分鐘 |
+| [2. 加上 PC](#2-加上-pc) | 這台 PC 的 Token 統計 | Windows 10／11 | 約 5 分鐘 |
 
-前置：Python 3.10 以上，並在 Mac 登入要監看的服務（至少一個）：Claude 在終端機執行 `claude` 並 `/login`；Codex 執行 `codex login`。
+先登入要監看的服務（至少一個）：Claude 在終端機執行 `claude` 並 `/login`；Codex 執行 `codex login`（用 ChatGPT 帳號登入；API key 登入看不到額度）。
 
-```bash
-collector/scripts/install-launchd.sh
-```
+### 0. 只有 Mac
 
-安裝腳本會偵測這台 Mac 登入過哪些服務，只收集那些服務，並印出結果，例如「Claude 用量：啟用」「Codex 用量：未啟用（沒有登入過 Codex CLI）」。沒用的服務不會出現在 App 上，也不會被當成錯誤。之後登入了另一個服務，重新執行 `install-launchd.sh` 即可加入。移除：`collector/scripts/uninstall-launchd.sh`（會詢問是否一併刪除額度歷史，預設保留）。細節見 [collector/README.md](collector/README.md)。
+**下載安裝**（不需要終端機、不需要自己裝 Python）：從 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 下載 `AIUsageMenuBar-<版本>.dmg`，把「AI 用量」拖到「應用程式」，第一次打開時到「系統設定 › 隱私權與安全性」按「強制打開」（App 用 ad-hoc 簽署，沒有 Apple 公證，見 [ADR-0013](docs/adr/0013-download-and-install.md)）。
 
-### 2. Mac 選單列 App
-
-需要 Xcode（有裝 XcodeGen 時會先重新產生專案）。
-
-```bash
-scripts/install-mac-app.sh
-```
-
-以 Release 建置、安裝到「應用程式」並打開；之後要更新也是同一個指令。設定 › 一般 可開「登入時自動打開」。細節見 [apple/MacMenuBar/README.md](apple/MacMenuBar/README.md)。
-
-### 3. 中繼 API（給 iPhone 與手錶）
-
-需要 Cloudflare 帳號（免費方案即可）。依 [relay/README.md](relay/README.md#部署) 部署 Worker 並產生兩把不同的密鑰（寫入、讀取），然後讓收集器開始上傳：
+或用一行指令（會比對 SHA-256、裝到「應用程式」並打開，不會遇到 Gatekeeper 的「強制打開」）。指令指向固定版本，把 `X.Y.Z` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的版本號：
 
 ```bash
-collector/scripts/set-relay.sh https://ai-usage-relay.<你的帳號>.workers.dev
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash
 ```
 
-寫入密鑰存在 Mac 的 Keychain，讀取密鑰之後填進 iPhone App。
+想先看過再執行：`curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh`，看完 `install.sh` 再 `bash install.sh`。install.sh 裡寫死了該版本 zip 的 SHA-256，下載後比對、不符就停止；它與 zip 來自同一個 Release，保護的是下載與快取途中的完整性，**不能**防止 Release 本身被替換（[ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)）。
 
-### 4. iPhone 與 Apple Watch
+第一次打開會出現**設定精靈**，每一步顯示 ✅ 或要處理的事；需要指令時附「複製」按鈕。App 內建收集器（Python 已內嵌），會在背景每 5 分鐘收集一次；之後可以從「設定 › 一般 › 重新執行設定精靈」再打開。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-wizard-dark.png">
+    <img src="docs/images/mac-wizard-light.png" width="360" alt="設定精靈：App 位置、背景收集器、Claude Code、Codex、通知、登入時開啟、外觀、在 iPhone 上看，每步顯示完成或需要處理">
+  </picture>
+</p>
+
+> 狀態：還沒有發布第一個版本（Releases 頁沒有檔案），上面的下載與一行指令要等第一次發布後才能用；在那之前請用下面的「從原始碼安裝」。
+
+**已經用 `collector/scripts/install-launchd.sh` 的人**：新版 App 偵測到舊的收集器時**不會**再註冊一個，只在設定精靈與「設定 › 背景收集器」顯示「可以改用 App 內建的收集器」；按下按鈕才遷移（先確認內建的能跑，才停用舊的；舊的 plist 移到垃圾桶）。不按就照舊運作。
+
+**從原始碼安裝**（開發者）：需要 Xcode 與 Python 3.10 以上。
 
 ```bash
-brew install xcodegen
-cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
+collector/scripts/install-launchd.sh   # 收集器（launchd）；細節見 collector/README.md
+scripts/install-mac-app.sh             # 選單列 App（Release 建置，裝到「應用程式」）
 ```
 
-在 Xcode 的 Signing & Capabilities 選自己的 Team（免費 Apple ID 即可）並安裝到 iPhone，打開 App 在設定填入中繼網址與讀取密鑰。鎖定畫面卡片要整天顯示，照 [apple/iOSApp/README.md](apple/iOSApp/README.md#捷徑讓卡片整天顯示) 設定捷徑自動化；免費 Apple ID 的 App 7 天後失效，可用[每週自動重新安裝](apple/iOSApp/README.md#每週自動重新安裝免費-apple-id)。
+### 在 iPhone 上看
 
-手錶 App 在 `apple/WatchApp`（[README](apple/WatchApp/README.md)），以同樣方式建置安裝；打開手錶 App 時會向 iPhone 要中繼設定。
+第 1 層。iPhone 不直接連 Mac，資料經過你自己的 Cloudflare Worker（中繼）；Mac 上傳、iPhone 讀取，兩把密鑰分開（[ADR-0001](docs/adr/0001-cloudflare-worker-relay.md)）。
+
+第 1 層的腳本在原始碼裡（用 DMG 安裝的也需要這一步）。先取得原始碼並進入資料夾，之後的指令都在這個資料夾執行；Python 3 用 Xcode 附的即可：
+
+```bash
+git clone https://github.com/kevin930326/ai-usage-monitor.git
+cd ai-usage-monitor
+```
+
+1. **部署中繼**（需要 Node.js 23.6 以上、免費的 Cloudflare 帳號；腳本會在 `relay/` 以 `npm ci` 安裝鎖定版本的 wrangler）：
+
+   ```bash
+   scripts/setup-relay.sh --dry-run   # 先看會做什麼
+   scripts/setup-relay.sh             # 登入 Cloudflare → 建 KV → 部署 → 產生並設定兩把密鑰 → 寫收集器設定
+   ```
+
+   已經設定過中繼時會停下來、不覆蓋。手動步驟見 [relay/README.md](relay/README.md#部署)。
+
+2. **安裝 iPhone App**（需要 Xcode、XcodeGen 與免費 Apple ID；先在 Xcode → Settings → Accounts 登入，用線連一次 iPhone 並按「信任」、打開「開發者模式」）：
+
+   ```bash
+   scripts/setup-iphone.sh --auto-reinstall   # 建置並安裝；免費 Apple ID 的簽署 7 天後失效，每 6 天自動重裝
+   ```
+
+3. **配對**：Mac 終端機顯示 QR 碼，iPhone 的設定按「掃描 QR 碼」，確認主機名稱就完成（QR 碼只含網址與讀取密鑰，按 Enter 後清除；[ADR-0012](docs/adr/0012-iphone-pairing.md)）。
+
+   ```bash
+   scripts/setup-iphone.sh --pair-only qr
+   ```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-settings-pairing-dark.png">
+    <img src="docs/images/iphone-settings-pairing-light.png" width="260" alt="iPhone 設定：中繼網址與讀取密鑰，下方「從 Mac 配對」有「掃描 QR 碼」與「輸入短碼」">
+  </picture>
+</p>
+
+鎖定畫面卡片要整天顯示，照 [apple/iOSApp/README.md](apple/iOSApp/README.md#捷徑讓卡片整天顯示) 設定捷徑自動化。手錶 App 在 `apple/WatchApp`（[README](apple/WatchApp/README.md)），以同樣方式建置安裝；打開手錶 App 時會向 iPhone 要中繼設定。細節與手動方式見 [apple/iOSApp/README.md](apple/iOSApp/README.md)。
+
+### 2. 加上 PC
+
+Windows 收集器統計這台 PC 上 Claude Code 與 Codex CLI 的 Token（預設不收集額度、不上傳）。開 PowerShell（不需要系統管理員）：
+
+```powershell
+irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
+```
+
+`X.Y.Z` 同樣換成 Releases 上的版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
+
+沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md)（在 #71 的分支上，合併後移到 main）。
+
+> 狀態：Windows 收集器（[#71](https://github.com/kevin930326/ai-usage-monitor/pull/71)）與「在 Mac 面板合併多台電腦的 Token」（第二層，[#73](https://github.com/kevin930326/ai-usage-monitor/pull/73)）還沒合併；合併並發布之前上面的指令還不能用。
+
+### 解除安裝
+
+見 [docs/uninstall.md](docs/uninstall.md)：Mac App、內建或 launchd 收集器、iPhone、中繼、PC，各自怎麼移除、哪些資料會留下。
 
 ## 隱私與安全
 
