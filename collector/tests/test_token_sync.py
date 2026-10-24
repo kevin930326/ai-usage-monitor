@@ -395,6 +395,19 @@ class MergeTest(TokenSyncTestCase):
         self.assertEqual(json.loads(self.mac.meta("relay_device_ids")), sorted([old_id, self.mac.relay_id]))
         self.assertEqual(self.mac.total_by_device(), {self.mac.device_id: 105})  # 舊 id 的列也是自己的：略過
 
+    def test_download_keeps_only_days_within_the_local_retention(self):
+        """C-03：保留 7 天的 Mac 不會因為下載而存回 30 天前的資料"""
+        self.pc.set_tokens(0, 40)
+        self.pc.set_tokens(-30, 7)
+        self.pc.run(NOW)
+        self.mac.run(NOW)
+        self.assertEqual(self.mac.total_by_device(), {self.pc.relay_id: 47})  # 預設保留 365 天
+        self.mac.query("UPDATE meta SET value = '7' WHERE key = 'retention_days'")
+        self.mac.query("DELETE FROM meta WHERE key = 'sync_last_success'")
+        self.mac.run(NOW + 300)
+        self.assertEqual(self.mac.total_by_device(), {self.pc.relay_id: 40})
+        self.assertEqual(self.mac.query("SELECT MIN(day) FROM daily_tokens"), [(history.local_day(NOW),)])
+
     def test_forget_removes_other_devices_but_keeps_local_stats(self):
         self.mac.set_tokens(0, 100)
         self.pc.set_tokens(0, 40)

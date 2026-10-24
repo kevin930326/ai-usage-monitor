@@ -215,8 +215,13 @@ def _remote_row(r: object, skip: set[str], since: str) -> tuple | None:
 
 
 def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int:
-    """下載其他裝置的每日加總，整批取代本機的其他裝置列與裝置清單；回傳寫入的列數。"""
+    """下載其他裝置的每日加總，整批取代本機的其他裝置列與裝置清單；回傳寫入的列數。
+    只保存本機保留期間內的日期（FR-37、ADR-0009 第 5 節）：已過期的不會因為下載而回來。"""
     since = history.local_day(now - SYNC_DAYS * 86400)
+    days = history.retention_days(conn)
+    oldest = history.local_day(now - days * 86400) if days > 0 else None
+    if oldest is not None and oldest > since:
+        since = oldest
     response = request_json(f"{url}/tokens/daily?from={since}", {"Authorization": f"Bearer {read_key}"})
     if not isinstance(response, dict) or not isinstance(response.get("rows"), list) \
             or not isinstance(response.get("devices"), list):
@@ -231,6 +236,8 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
                             1 if d.get("revoked") is True else 0, 1 if d["device_id"] in own else 0))
     with history._transaction(conn):
         conn.execute("DELETE FROM daily_tokens WHERE device_id != ? AND day >= ?", (local_id, since))
+        if oldest is not None:
+            conn.execute("DELETE FROM daily_tokens WHERE device_id != ? AND day < ?", (local_id, oldest))
         conn.executemany(f"""INSERT OR REPLACE INTO daily_tokens
             (device_id, day, provider, model, {', '.join(FIELDS)}, task_count, updated_at)
             VALUES (?, ?, ?, ?, {', '.join('?' * len(FIELDS))}, 0, ?)""", [(*r, now) for r in rows])
