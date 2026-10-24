@@ -3,7 +3,7 @@
 #
 #   collector/scripts/set-tier2.sh               存入這台 Mac 的寫入密鑰與中繼的讀取密鑰，開啟上傳
 #   collector/scripts/set-tier2.sh --no-read-key 只存寫入密鑰（只上傳，面板不顯示其他電腦）
-#   collector/scripts/set-tier2.sh --disable     關閉上傳與下載（密鑰留在 Keychain；本機資料不動）
+#   collector/scripts/set-tier2.sh --disable     關閉上傳與下載（密鑰留在 Keychain；刪除本機的其他電腦資料）
 #
 # 先用 scripts/relay-device.sh add <名稱> 為這台 Mac 產生寫入密鑰；中繼網址用 set-relay.sh 設定過的 relay_url。
 # 密鑰以 security 的提示輸入（不經過指令列、不留在 shell 歷史紀錄），只存在 Keychain。
@@ -23,6 +23,8 @@ CONFIG="$CONFIG_DIR/config.json"
 
 if [ "$READ_KEY" = -1 ]; then
     python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" token_sync false
+    # 面板回到「這台 Mac」：刪除本機的其他電腦資料（中繼上的資料不動）
+    (cd "$COLLECTOR" && python3 -m usage_collector.token_sync forget)
     echo "已關閉第二層：不再上傳與下載（Keychain 的密鑰保留；要移除：security delete-generic-password -s AIUsageMonitor-device-key）"
     exit 0
 fi
