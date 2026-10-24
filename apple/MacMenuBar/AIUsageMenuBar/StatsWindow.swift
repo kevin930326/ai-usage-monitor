@@ -34,8 +34,14 @@ struct StatsWindowView: View {
                 content(shown)
             } else if let shown, !shown.firstScanDone {
                 message(shown.firstScanProgress.map { "正在整理過去的紀錄（\($0)%）" } ?? "正在整理過去的紀錄")
-            } else if shown != nil {
-                message("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+            } else if let shown {
+                VStack(spacing: 8) {
+                    Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    if shown.formatSuspect { FormatSuspectNotice() }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loading {
                 message("正在讀取…")
             } else {

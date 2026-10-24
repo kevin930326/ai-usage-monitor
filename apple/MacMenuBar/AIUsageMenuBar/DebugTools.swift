@@ -187,6 +187,12 @@ enum DebugTools {
             suspect.formatSuspect = true
             suspect.skippedLines = 42
             write(statsCard(suspect), scheme: scheme, to: dir.appendingPathComponent("stats-format-suspect-\(n).png"))
+            // 所有紀錄都認不得：沒有任何 Token，也要看得到提示
+            var suspectEmpty = none
+            suspectEmpty.formatSuspect = true
+            write(statsCard(suspectEmpty), scheme: scheme, to: dir.appendingPathComponent("stats-format-suspect-empty-\(n).png"))
+            write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: suspectEmpty, fixedMotion: .settled, scrolls: false)
+                .frame(width: 860, height: 520), scheme: scheme, to: dir.appendingPathComponent("stats-window-format-suspect-empty-\(n).png"))
             write(statsCard(data, status: .olderSchema(1)), scheme: scheme, to: dir.appendingPathComponent("stats-older-schema-\(n).png"))
             if let full = HistoryStore.shared.loadFullTokenStats() {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),

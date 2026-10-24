@@ -111,10 +111,14 @@ struct StatsCardContent: View {
                 StatsSkeleton(message: message)
                     .transition(.opacity)
             } else if !data.hasData {
-                Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // 所有紀錄都認不得時也是「沒有資料」，要說明可能是格式改了
+                    if data.formatSuspect { FormatSuspectNotice() }
+                }
             } else {
                 StatsBody(data: data, scope: effectiveScope, range: range, now: now, selectScope: selectScope, selectRange: selectRange)
                     .transition(.opacity)
@@ -213,12 +217,7 @@ private struct StatsBody: View {
                     .id(scope)
                     .transition(.opacity)
             }
-            if data.formatSuspect {
-                Label(TokenStatsData.formatSuspectNotice, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(UsageColors.notice)
-                    .help("最近一次整理對話紀錄時，有很多行認不得（Claude Code 或 Codex CLI 更新後可能改了紀錄格式）。更新收集器後會自動重新判斷。")
-            }
+            if data.formatSuspect { FormatSuspectNotice() }
             if data.skippedLines > 0 {
                 Text("部分紀錄無法解析，已略過 \(data.skippedLines) 行")
                     .font(.caption2)
@@ -227,6 +226,17 @@ private struct StatsBody: View {
         }
         .animation(animates ? PanelTiming.crossfade : nil, value: scope)
         .animation(animates ? PanelTiming.crossfade : nil, value: range)
+    }
+}
+
+/// 「紀錄格式可能已改變」的提示（ADR-0009 第 9 節）
+struct FormatSuspectNotice: View {
+    var body: some View {
+        Label(TokenStatsData.formatSuspectNotice, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(UsageColors.notice)
+            .fixedSize(horizontal: false, vertical: true)
+            .help("最近一次整理對話紀錄時，有很多行認不得（Claude Code 或 Codex CLI 更新後可能改了紀錄格式）。更新收集器後會自動重新判斷。")
     }
 }
 
