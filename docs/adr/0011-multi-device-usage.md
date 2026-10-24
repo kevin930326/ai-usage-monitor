@@ -97,7 +97,7 @@ KV 的替代做法（每台裝置一個鍵 `daily:<device_id>`，值為最近 40
 ### 6. 實作補充（v2.0）
 
 - **裝置管理**：`/devices` 以另一把 `ADMIN_TOKEN`（secret）驗證，和 `READ_TOKEN`／`WRITE_TOKEN` 不同（相同或未設定時回 503）。除了 `add`／`list`／`revoke`，另有 `rotate`（換新密鑰、`device_id` 與資料不變），避免同一台電腦重新註冊造成重複計算。撤銷時密鑰雜湊改為不可能相符的值。
-- **密鑰失效的判斷**：連續 **兩次** 401／403 才停止上傳（`REVOKE_AFTER = 2`），一次可能是中繼暫時設定錯誤；本機資料不刪除，重新執行設定腳本（`token_sync reset`）後恢復。
+- **密鑰失效的判斷**：連續 **兩次** 401 才停止上傳（`REVOKE_AFTER = 2`），一次可能是中繼暫時設定錯誤；中繼自己不回 403，403 只會來自 Cloudflare 邊緣（WAF、Bot Fight Mode），照一般失敗退避重試，不當成密鑰失效；本機資料不刪除，重新執行設定腳本（`token_sync reset`）後恢復。
 - **自己在中繼上的 `device_id`**：由中繼依密鑰決定，收集器從上傳的回應取得並記在 `meta.relay_device_id`，所有用過的 id 記在 `meta.relay_device_ids`；下載時略過全部。還不知道自己的 id 時不下載。換成另一台裝置的密鑰時清除 `upload_state`，全部重新上傳到新的 id。
 - **上傳欄位**：不含任務次數（`task_count` 只用在本機的 CSV）；下載的列 `task_count` 為 0。
 - **下載**：從 399 天前（本機日期）起，整批取代本機的其他裝置列與 `devices` 表；只有 Mac 存了讀取密鑰時才下載（Windows 只上傳）。
