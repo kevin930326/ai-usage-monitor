@@ -103,7 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.tokens_only:
         # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）。
         # 這是唯一的工作，失敗時回傳非 0，工作排程器的「上次執行結果」才看得出來
-        return 0 if token_stats.run_safely() else 1
+        ok = token_stats.run_safely()
+        history.tidy_safely()  # 保留期間的清理（收集額度時由 history.record 執行）
+        return 0 if ok else 1
 
     if args.agent == "app":
         redirect_stderr_to(app_agent_log_path())

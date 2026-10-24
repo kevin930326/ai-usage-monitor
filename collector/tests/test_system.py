@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 from zoneinfo import ZoneInfoNotFoundError, available_timezones
@@ -189,6 +190,38 @@ class TokensOnlyTest(unittest.TestCase):
                 total = conn.execute("SELECT SUM(input_tokens + output_tokens) FROM daily_tokens").fetchone()[0]
             conn.close()
             self.assertEqual(total, 14)
+
+    def test_tokens_only_applies_retention_once_a_day(self):
+        """--tokens-only 也要依保留期間清理（收集額度時由 history.record 執行；Windows 排程不收集額度）"""
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "history.sqlite3"
+            conn = main_module.history.connect(db)
+            device = main_module.history.meta(conn, "device_id")
+            now = datetime.now(timezone.utc)
+            with conn:
+                conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('retention_days', '30')")
+                for back in (50, 1):
+                    day = (now - timedelta(days=back)).astimezone().date().isoformat()
+                    conn.execute("INSERT INTO daily_tokens (device_id, day, provider, model, input_tokens, updated_at)"
+                                 " VALUES (?, ?, 'claude', 'claude-opus-5-5', ?, 0)", (device, day, back))
+            conn.close()
+            with mock.patch.object(main_module.token_stats, "run_safely", return_value=True), \
+                    mock.patch.object(main_module.history, "HISTORY_PATH", db):
+                self.assertEqual(main_module.main(["--tokens-only", "--quiet"]), 0)
+            with sqlite3.connect(db) as conn:
+                kept = [r[0] for r in conn.execute("SELECT input_tokens FROM daily_tokens")]
+                cleaned = conn.execute("SELECT value FROM meta WHERE key = 'last_cleanup_day'").fetchone()
+            conn.close()
+            self.assertEqual(kept, [1])
+            self.assertIsNotNone(cleaned)
+
+    def test_tokens_only_without_a_database_does_not_create_one(self):
+        with tempfile.TemporaryDirectory() as d:
+            db = Path(d) / "history.sqlite3"
+            with mock.patch.object(main_module.token_stats, "run_safely", return_value=False), \
+                    mock.patch.object(main_module.history, "HISTORY_PATH", db):
+                self.assertEqual(main_module.main(["--tokens-only", "--quiet"]), 1)
+            self.assertFalse(db.exists())
 
     def test_failure_returns_non_zero(self):
         with mock.patch.object(main_module.token_stats, "run_safely", return_value=False):

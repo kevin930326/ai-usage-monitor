@@ -362,6 +362,34 @@ def record(snapshot: dict, path: Path | None = None, now: datetime | None = None
     return count
 
 
+def tidy(path: Path | None = None, now: datetime | None = None) -> None:
+    """只做每天一次的清理（`--tokens-only`，Windows 排程的預設）：`record` 只在收集額度時執行。"""
+    path = path or HISTORY_PATH
+    now = now or datetime.now(timezone.utc)
+    if not path.exists():
+        return  # Token 統計沒能建立資料庫：沒有東西要清
+    with _private_files():
+        _tighten_permissions(path)
+        conn = connect(path)
+        try:
+            maybe_cleanup(conn, int(now.timestamp()), now.astimezone().date())
+        finally:
+            conn.close()
+    _tighten_permissions(path)
+
+
+def tidy_safely(path: Path | None = None) -> bool:
+    """`tidy` 的外層：不丟出任何例外，日誌只記錄類別。"""
+    try:
+        tidy(path)
+        return True
+    except HistoryError as e:
+        log(f"略過歷史清理：{e}")
+    except Exception as e:
+        log(f"略過歷史清理：{type(e).__name__}")
+    return False
+
+
 def record_safely(snapshot: dict, path: Path | None = None) -> bool:
     """`record` 的外層：不丟出任何例外。回傳是否寫入成功。"""
     try:
