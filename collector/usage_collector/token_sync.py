@@ -103,7 +103,8 @@ def _failed(conn: sqlite3.Connection, kind: str, now: int, message: str) -> None
 
 def _describe(e: Exception) -> str:
     if isinstance(e, HTTPStatusError):
-        return f"HTTP {e.status}"
+        # 401／403 以外帶上中繼的原因（http._reason：固定的驗證訊息，不含資料），看得出哪個欄位被拒
+        return f"HTTP {e.status}" if e.status in (401, 403) else str(e)
     if isinstance(e, ProviderError):
         return "網路錯誤或回應格式不對"
     return type(e).__name__
@@ -119,16 +120,24 @@ def _valid_key(provider: str, model: str) -> bool:
     return provider in token_stats.PROVIDERS and (model == "other" or token_stats.normalize_model(model) == model)
 
 
-def pending_rows(conn: sqlite3.Connection, since: str) -> list[tuple[tuple[str, str, str], tuple[int, ...], str]]:
-    """本機 device_id、`since` 以後、和上次成功上傳時不同的列：[(（day, provider, model）, 數值, 雜湊)]"""
+def _until(now: int) -> str:
+    """中繼收的最晚日期：明天（UTC）。本機時鐘曾經設錯時紀錄裡會有未來的日期，那些列不送（整批會被拒絕）。"""
+    return time.strftime("%Y-%m-%d", time.gmtime(now + 86400))
+
+
+def pending_rows(conn: sqlite3.Connection, since: str,
+                 until: str = "9999-12-31") -> list[tuple[tuple[str, str, str], tuple[int, ...], str]]:
+    """本機 device_id、`since`～`until`、和上次成功上傳時不同的列：[(（day, provider, model）, 數值, 雜湊)]。
+    中繼會拒絕的列（日期超出範圍、數值超過上限）不列入：一列被拒整批都會被拒，其他的列就永遠傳不上去。"""
     device_id = history.meta(conn, "device_id") or ""
     uploaded = {(d, p, m): h for d, p, m, h in conn.execute("SELECT day, provider, model, hash FROM upload_state")}
     result = []
     for row in conn.execute(f"SELECT day, provider, model, {', '.join(FIELDS)} FROM daily_tokens"
-                            " WHERE device_id = ? AND day >= ? ORDER BY day, provider, model", (device_id, since)):
+                            " WHERE device_id = ? AND day >= ? AND day <= ? ORDER BY day, provider, model",
+                            (device_id, since, until)):
         key, values = (row[0], row[1], row[2]), tuple(int(v) for v in row[3:])
         digest = _row_hash(row)
-        if uploaded.get(key) != digest and _valid_key(key[1], key[2]):
+        if uploaded.get(key) != digest and _valid_key(key[1], key[2]) and all(0 <= v <= MAX_VALUE for v in values):
             result.append((key, values, digest))
     return result
 
@@ -153,8 +162,8 @@ def _adopt_device_id(conn: sqlite3.Connection, relay_id: str) -> bool:
 
 def upload(conn: sqlite3.Connection, url: str, key: str, now: int) -> bool:
     """上傳有變動的列；回傳是否還有沒傳完的列（下一輪接著傳）。失敗時丟出例外，已成功的批次保留進度。"""
-    since = history.local_day(now - SYNC_DAYS * 86400)
-    pending = pending_rows(conn, since)
+    since, until = history.local_day(now - SYNC_DAYS * 86400), _until(now)
+    pending = pending_rows(conn, since, until)
     if not pending and history.meta(conn, "relay_device_id"):
         return False
     started = time.monotonic()
@@ -168,7 +177,7 @@ def upload(conn: sqlite3.Connection, url: str, key: str, now: int) -> bool:
         with history._transaction(conn):
             changed = _adopt_device_id(conn, relay_id)
             _mark_uploaded(conn, batch, now)
-        pending = pending_rows(conn, since) if changed else pending[len(batch):]
+        pending = pending_rows(conn, since, until) if changed else pending[len(batch):]
         if not pending:
             return False
         if time.monotonic() - started > TIME_BUDGET:
@@ -367,7 +376,8 @@ def status(path: Path | None = None) -> dict:
         keys = ("upload_status", "upload_last_success", "upload_failures", "upload_more", "relay_device_id",
                 "sync_status", "sync_last_success")
         result: dict = {k: history.meta(conn, k) for k in keys}
-        result["pending_rows"] = len(pending_rows(conn, history.local_day(int(time.time()) - SYNC_DAYS * 86400)))
+        now = int(time.time())
+        result["pending_rows"] = len(pending_rows(conn, history.local_day(now - SYNC_DAYS * 86400), _until(now)))
         result["devices"] = conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
         return result
     finally:
