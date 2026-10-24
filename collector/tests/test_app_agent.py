@@ -143,6 +143,31 @@ class SetupDetectionTests(unittest.TestCase):
         setup.run(self.config, {**self.env, "CODEX_HOME": str(self.tmp / "codex")}, candidates=self.none)
         self.assertEqual(json.loads(self.config.read_text())["codex_home"], str(self.tmp / "codex"))
 
+    def test_detection_uses_saved_paths_and_dirs(self):
+        # Codex 在候選位置以外、登入資料在自訂資料夾；App 的環境沒有 CODEX_HOME
+        seen = self.tmp / "seen"
+        custom = write_exec(self.tmp / "elsewhere" / "codex", f"""
+            echo "$CODEX_HOME" > "{seen}"
+            echo "Logged in using ChatGPT"
+        """)
+        self.fake_claude(0)
+        self.config.parent.mkdir(parents=True)
+        self.config.write_text(json.dumps({"codex_path": str(custom), "codex_home": "/custom/codex",
+                                           "enabled_providers": ["claude", "codex"]}))
+        result = setup.run(self.config, self.env, candidates=self.none)
+        self.assertEqual(result["codex"]["state"], "enabled")
+        self.assertEqual(seen.read_text().strip(), "/custom/codex")
+        config = json.loads(self.config.read_text())
+        self.assertEqual(config["enabled_providers"], ["claude", "codex"])
+        self.assertEqual(config["codex_path"], str(custom))
+
+    def test_saved_path_that_no_longer_exists_falls_back_to_search(self):
+        self.config.parent.mkdir(parents=True)
+        self.config.write_text(json.dumps({"claude_path": str(self.tmp / "gone" / "claude")}))
+        claude = self.fake_claude(0)
+        setup.run(self.config, self.env, candidates=self.none)
+        self.assertEqual(json.loads(self.config.read_text())["claude_path"], str(claude))
+
     def test_unknown_keeps_enabled_providers(self):
         self.config.parent.mkdir(parents=True)
         self.config.write_text(json.dumps({"enabled_providers": ["claude", "codex"]}))

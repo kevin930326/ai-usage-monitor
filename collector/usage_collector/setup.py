@@ -46,8 +46,12 @@ def expand_home(path: str, environ: Mapping[str, str]) -> str:
     return path
 
 
-def find_executable(name: str, candidates: Iterable[str], environ: Mapping[str, str] = os.environ) -> str | None:
-    """PATH 優先，再依序找候選位置（`~` 展開、`*` 取版本最新的那個）。回傳絕對路徑或 None。"""
+def find_executable(name: str, candidates: Iterable[str], environ: Mapping[str, str] = os.environ,
+                    preferred: object = None) -> str | None:
+    """`preferred`（config.json 裡原本的路徑）還能執行就用它，再找 PATH，最後依序找候選位置
+    （`~` 展開、`*` 取版本最新的那個）。回傳絕對路徑或 None。"""
+    if isinstance(preferred, str) and preferred and os.path.isfile(preferred) and os.access(preferred, os.X_OK):
+        return os.path.abspath(preferred)
     found = shutil.which(name, path=environ.get("PATH"))
     if found:
         return os.path.abspath(found)
@@ -120,14 +124,20 @@ def plan(states: Mapping[str, str]) -> list[str] | None:
     return enabled or None
 
 
-def write_config(path: Path, updates: Mapping[str, object]) -> None:
-    """合併寫入（保留 relay_url 等其他欄位），先寫暫存檔再改名；檔案不是 JSON 物件時不寫。"""
+def read_config(path: Path) -> dict:
+    """沒有檔案時是空的；不是 JSON 物件時丟出 ValueError（不覆寫使用者的檔案）"""
     try:
         config = json.loads(path.read_text())
     except FileNotFoundError:
-        config = {}
+        return {}
     if not isinstance(config, dict):
         raise ValueError(f"{path.name} 不是 JSON 物件，沒有寫入")
+    return config
+
+
+def write_config(path: Path, updates: Mapping[str, object]) -> None:
+    """合併寫入（保留 relay_url 等其他欄位），先寫暫存檔再改名；檔案不是 JSON 物件時不寫。"""
+    config = read_config(path)
     config.update(updates)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".json")
@@ -140,9 +150,16 @@ def run(config_path: Path, environ: Mapping[str, str] = os.environ, dry_run: boo
         candidates: Mapping[str, Iterable[str]] | None = None) -> dict:
     """`candidates`：測試用，取代預設的候選位置（{"claude": […], "codex": […]}）"""
     candidates = candidates or {"claude": CLAUDE_CANDIDATES, "codex": CODEX_CANDIDATES}
-    claude = find_executable("claude", candidates["claude"], environ)
-    codex = find_executable("codex", candidates["codex"], environ)
-    states = {"claude": detect_claude(claude, environ), "codex": detect_codex(codex, environ)}
+    # 以現有設定為準偵測：原本可用的路徑與自訂資料夾（install-launchd.sh 寫的）在 App 的環境裡也照樣使用，
+    # 不會因為 App 沒有 shell 的環境變數就把原本啟用的服務判斷成沒安裝
+    config = read_config(config_path)
+    detect_env = dict(environ)
+    for key, env in (("claude_config_dir", "CLAUDE_CONFIG_DIR"), ("codex_home", "CODEX_HOME")):
+        if not detect_env.get(env) and isinstance(config.get(key), str) and config[key]:
+            detect_env[env] = config[key]
+    claude = find_executable("claude", candidates["claude"], detect_env, config.get("claude_path"))
+    codex = find_executable("codex", candidates["codex"], detect_env, config.get("codex_path"))
+    states = {"claude": detect_claude(claude, detect_env), "codex": detect_codex(codex, detect_env)}
     enabled = plan(states)
     updates: dict[str, object] = {}
     # App 從登入項目啟動時沒有這兩個環境變數：沒有時保留 config.json 原本的值（遷移前 install-launchd.sh 寫的）
