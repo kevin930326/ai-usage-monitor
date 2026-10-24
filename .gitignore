@@ -18,6 +18,7 @@ venv/
 # Node / Cloudflare Worker
 node_modules/
 .wrangler/
+relay/wrangler.local.toml
 .dev.vars
 
 # Swift Package Manager
