@@ -16,9 +16,9 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfoNotFoundError
 
-from .. import paths
+from .. import paths, system
 from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 # --safe-mode 略過 hooks、外掛、MCP 與自訂指令；--no-session-persistence 不在 `claude --resume` 留下紀錄
@@ -79,7 +79,8 @@ def parse_reset(text: str, now: datetime) -> datetime:
         raise ProviderError(FORMAT_CHANGED)
     try:
         # Claude Code 以系統時區顯示並附上時區名稱；沒有附上時同樣用本機時區
-        tz = ZoneInfo(m["tz"]) if m["tz"] else now.astimezone().tzinfo
+        local = now.astimezone().tzinfo
+        tz = system.zone(m["tz"], local) if m["tz"] else local
     except (ZoneInfoNotFoundError, ValueError):
         raise ProviderError(FORMAT_CHANGED) from None
     if not 1 <= int(m["hour"]) <= 12:

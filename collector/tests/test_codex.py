@@ -197,6 +197,7 @@ class PercentValidationTest(unittest.TestCase):
         self.assertEqual([w.used_pct for w in codex.parse(result).windows], [0.0, 104.0])
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 codex 是 shebang 腳本；Windows 的讀法以 test_windows_reader_thread 模擬")
 class CodexFetchTest(unittest.TestCase):
     def assert_no_leftover(self, fake: FakeCodex):
         pids = fake.pids()
@@ -275,6 +276,24 @@ class CodexFetchTest(unittest.TestCase):
                 self.assertLess(time.monotonic() - started, 5)
                 self.assert_no_leftover(fake)
 
+    def test_windows_reader_thread(self):
+        """Windows 的讀法（背景執行緒＋佇列、結束時 kill_tree）：在這個平台以 mock 模擬，正常、逾時與不理 EOF 都要能收尾。"""
+        def kill(proc):
+            proc.kill()
+        with mock.patch.object(codex.system, "IS_WINDOWS", True), \
+                mock.patch.object(codex.system, "isolated_popen_kwargs", return_value={"start_new_session": True}), \
+                mock.patch.object(codex.system, "kill_tree", side_effect=kill) as kill_tree:
+            with FakeCodex() as fake:
+                self.assertEqual(codex.fetch().plan, "Team")
+            self.assert_no_leftover(fake)
+            with FakeCodex(mode="hang") as fake, mock.patch.object(codex, "TIMEOUT", 0.5), \
+                    self.assertRaisesRegex(ProviderError, "逾時"):
+                codex.fetch()
+            self.assert_no_leftover(fake)
+            with FakeCodex(mode="ignore-eof") as fake, mock.patch.object(codex, "CLOSE_TIMEOUT", 0.3):
+                self.assertEqual(len(codex.fetch().windows), 2)
+            self.assertTrue(kill_tree.called)
+
     def test_interrupt_still_closes_app_server(self):
         # 收集器被中斷（Ctrl-C；launchd 的 SIGTERM 在 __main__ 轉成 SystemExit）時同樣關閉
         with FakeCodex(mode="hang") as fake, \
@@ -347,6 +366,7 @@ class CodexFetchTest(unittest.TestCase):
             self.assertNotIn(needle, source)
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 codex 是 shebang 腳本")
 class ResolveCodexPathTest(unittest.TestCase):
     def test_config_then_path_then_fallback(self):
         with tempfile.TemporaryDirectory() as d:

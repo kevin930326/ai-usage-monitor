@@ -2,6 +2,7 @@ import io
 import json
 import os
 import stat
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -189,6 +190,7 @@ class FakeClaude:
         self.dir.cleanup()
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 claude 是 bash 腳本")
 class ClaudeFetchTest(unittest.TestCase):
     def test_fetch_runs_claude_and_reads_plan(self):
         with FakeClaude(script="[ \"$NO_COLOR\" = 1 ] || exit 96; [ -z \"$FORCE_COLOR\" ] || exit 95") as fake, \
@@ -269,6 +271,7 @@ class ClaudeFetchTest(unittest.TestCase):
         self.assertNotIn("@", str(ctx.exception))
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 claude 是 shell 腳本")
 class ResolveClaudePathTest(unittest.TestCase):
     def test_reads_config_and_falls_back_to_path(self):
         with tempfile.TemporaryDirectory() as d:

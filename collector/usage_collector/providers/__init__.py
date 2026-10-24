@@ -20,7 +20,7 @@ def enabled_providers(config_path: Path | None = None) -> list[str]:
     未啟用的服務不查詢、不輸出、不寫日誌：沒有使用某個服務不是錯誤。"""
     path = config_path or paths.CONFIG_PATH
     try:
-        config = json.loads(path.read_text())
+        config = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return list(PROVIDERS)
     names = config.get("enabled_providers") if isinstance(config, dict) else None
