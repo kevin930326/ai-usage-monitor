@@ -257,6 +257,7 @@ final class CollectorService {
     /// 1. 檢查位置與隔離屬性、以內建的 Python 跑一次 setup（跑不起來就不遷移）
     /// 2. 先註冊內建的並確認 launchd 已啟用（舊 plist 還在時，內建的每次執行都會直接結束，不會重複收集）
     /// 3. 舊 plist 移到垃圾桶（可放回），最後才停止舊的 launchd 工作，並請內建的立即執行一次
+    ///    舊的工作停不下來時放回 plist、撤回內建的：內建的收集器只看 plist 在不在，不能讓兩個同時跑（Fable F-02）
     func migrateFromLegacy() async {
         guard hasRuntime, allowedToRegister else { return }
         busy = true
@@ -286,14 +287,18 @@ final class CollectorService {
             return
         }
         let plist = Self.legacyPlistURL
+        var trashed: URL?
         if FileManager.default.fileExists(atPath: plist.path) {
             do {
                 if Self.testingLaunchAgents {
                     let trash = Self.launchAgentsDir.deletingLastPathComponent().appendingPathComponent("Trash")
                     try FileManager.default.createDirectory(at: trash, withIntermediateDirectories: true)
-                    try FileManager.default.moveItem(at: plist, to: trash.appendingPathComponent(plist.lastPathComponent))
+                    trashed = trash.appendingPathComponent(plist.lastPathComponent)
+                    try FileManager.default.moveItem(at: plist, to: trashed!)
                 } else {
-                    try FileManager.default.trashItem(at: plist, resultingItemURL: nil)
+                    var resulting: NSURL?
+                    try FileManager.default.trashItem(at: plist, resultingItemURL: &resulting)
+                    trashed = resulting as URL?
                 }
             } catch {
                 try? await service.unregister()
@@ -303,7 +308,24 @@ final class CollectorService {
             }
         }
         if !Self.testingLaunchAgents {
-            _ = await Self.launchctl(["bootout", "gui/\(getuid())/\(Self.legacyLabel)"])
+            let target = "gui/\(getuid())/\(Self.legacyLabel)"
+            _ = await Self.launchctl(["bootout", target])
+            // print 回 0＝還在 launchd 裡；nil＝無法確認，同樣當成還在。bootout 可能還在結束程序，最多等 3 秒
+            var stillLoaded = await Self.launchctl(["print", target])
+            for _ in 0..<3 where stillLoaded == 0 || stillLoaded == nil {
+                try? await Task.sleep(for: .seconds(1))
+                stillLoaded = await Self.launchctl(["print", target])
+            }
+            if stillLoaded == 0 || stillLoaded == nil {
+                if let trashed { try? FileManager.default.moveItem(at: trashed, to: plist) }
+                try? await service.unregister()
+                // 確保舊的仍在執行（已載入時 bootstrap 會失敗，不影響）
+                _ = await Self.launchctl(["bootstrap", "gui/\(getuid())", plist.path])
+                errorText = "無法停止舊的收集器，沒有遷移；\(kept)"
+                UsageStore.log("builtin collector: legacy job still loaded after bootout, migration reverted")
+                await refresh()
+                return
+            }
         }
         errorText = nil
         UsageStore.log("builtin collector: migrated from install-launchd.sh")
