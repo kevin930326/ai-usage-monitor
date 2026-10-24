@@ -402,21 +402,26 @@ class Counters:
 
 
 # 格式可能已改變的門檻（ADR-0009 第 9 節，保守：寧可晚報，不要誤報）：
-# 一次掃描至少 100 行候選、其中 ≥ 20% 無法解析；或讀了 ≥ 4 MB 新內容卻沒有任何一行計入 Token。
-# 證據不足（候選行太少、新內容太少）時沿用上一次的判斷
+# 一次掃描至少 100 行候選、其中 ≥ 20% 無法解析；或讀了 ≥ 4 MB 新內容（不含丟棄的過長行）卻沒有任何一行計入 Token。
+# 清除的證據較少就夠：候選 ≥ 20 行、有計入 Token、無法解析 < 20%。都不足時沿用上一次的判斷
 FORMAT_MIN_CANDIDATES = 100
+FORMAT_CLEAR_CANDIDATES = 20
 FORMAT_BAD_RATIO = 0.2
 FORMAT_MIN_BYTES = 4 * 1024 * 1024
 
 
 def format_suspect(c: Counters) -> bool | None:
     """這次掃描是否像是紀錄格式改變了；證據不足時為 None（不改變上次的判斷）。"""
-    verdicts = []
-    if c.candidate_lines >= FORMAT_MIN_CANDIDATES:
-        verdicts.append(c.bad_lines >= c.candidate_lines * FORMAT_BAD_RATIO)
-    if c.bytes_read >= FORMAT_MIN_BYTES:
-        verdicts.append(c.token_lines == 0)
-    return any(verdicts) if verdicts else None
+    mostly_bad = c.bad_lines >= c.candidate_lines * FORMAT_BAD_RATIO
+    if c.candidate_lines >= FORMAT_MIN_CANDIDATES and mostly_bad:
+        return True
+    if c.bytes_read >= FORMAT_MIN_BYTES and c.token_lines == 0:
+        return True
+    if c.candidate_lines >= FORMAT_MIN_CANDIDATES or c.bytes_read >= FORMAT_MIN_BYTES:
+        return False
+    if c.candidate_lines >= FORMAT_CLEAR_CANDIDATES and c.token_lines > 0 and not mostly_bad:
+        return False
+    return None
 
 
 def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Counters) -> None:
@@ -629,8 +634,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                 chunk = fh.readline(SKIP_CHUNK_BYTES)
                 if not chunk:
                     break
-                budget.bytes_left -= len(chunk)
-                counters.bytes_read += len(chunk)  # 已讀過、位置已前進，算進格式偵測的讀取量
+                budget.bytes_left -= len(chunk)  # 不算進格式偵測的讀取量：貼上的圖片（base64）就會超過上限
                 st.offset = fh.tell()
                 if chunk.endswith(b"\n"):
                     st.skipping = False
@@ -644,7 +648,6 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                     break  # 最後一行還沒寫完：下次再讀
                 # 超過 4 MB：開始丟棄這一行，只計次數
                 budget.bytes_left -= len(line)
-                counters.bytes_read += len(line)
                 st.offset = fh.tell()
                 st.skipping = True
                 continue

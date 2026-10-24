@@ -835,16 +835,27 @@ class FormatChangeTest(TokenStatsTestCase):
             self.scan()
         self.assertEqual(self.meta("token_format_suspect"), "1")
 
-    def test_skipped_long_lines_count_as_read(self):
-        # 一行超過上限被丟棄：讀過的位元組也算，沒有任何 Token 時要能觸發
-        self.write(self.codex_file(), json.dumps({"kind": "reply", "pad": "z" * (300 * 1024)}))
+    def test_skipped_long_lines_do_not_count_as_read(self):
+        # 貼上的圖片（base64 的 user 行）超過上限被丟棄、回覆還沒寫進檔案：不是格式改變
+        self.write(self.claude_file(), json.dumps({"type": "user", "message": {"content": "z" * (300 * 1024)}}))
         with mock.patch.object(token_stats, "MAX_LINE_BYTES", 64 * 1024), \
                 mock.patch.object(token_stats, "SKIP_CHUNK_BYTES", 16 * 1024), \
                 mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 256 * 1024):
             self.scan()
+        self.assertIsNone(self.meta("token_format_suspect"))
+
+    def test_a_modest_amount_of_normal_logs_clears_the_warning(self):
+        bad = [json.dumps({"type": "assistant", "timestamp": iso(T0 + i), "usage": {"input_tokens": 1}})
+               for i in range(100)]
+        self.write(self.claude_file(), *bad)
+        self.scan()
         self.assertEqual(self.meta("token_format_suspect"), "1")
-        scan = json.loads(self.meta("token_format_scan"))
-        self.assertGreaterEqual(scan["bytes"], 300 * 1024)
+        lines = []
+        for i in range(10):  # 10 個正常的回合（20 行候選）
+            lines += [claude_user(T0 + 900 + i * 60), claude_assistant(f"k{i}", T0 + 905 + i * 60, inp=1, out=1)]
+        self.write(self.claude_file(), *lines)
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "0")
 
     def test_unfinished_last_line_is_not_counted(self):
         # 還沒寫完的最後一行下次會重讀，這次不算讀取量
@@ -867,6 +878,10 @@ class FormatChangeTest(TokenStatsTestCase):
         self.assertFalse(token_stats.format_suspect(c(candidate_lines=100, bad_lines=19, token_lines=81)))
         self.assertTrue(token_stats.format_suspect(c(bytes_read=4 * 1024 * 1024, token_lines=0)))
         self.assertFalse(token_stats.format_suspect(c(bytes_read=4 * 1024 * 1024, token_lines=1)))
+        self.assertFalse(token_stats.format_suspect(c(candidate_lines=20, bad_lines=3, token_lines=8)))
+        self.assertIsNone(token_stats.format_suspect(c(candidate_lines=20, bad_lines=4, token_lines=8)))
+        self.assertIsNone(token_stats.format_suspect(c(candidate_lines=19, token_lines=19)))
+        self.assertIsNone(token_stats.format_suspect(c(candidate_lines=30, token_lines=0)))
 
 
 if __name__ == "__main__":
