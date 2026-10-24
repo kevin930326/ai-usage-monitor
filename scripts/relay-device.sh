@@ -91,7 +91,7 @@ if [ -n "$BODY" ]; then
     CURL_ARGS+=(-H "Content-Type: application/json" --data-binary "$BODY")
 fi
 STATUS=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl "${CURL_ARGS[@]}") || {
-    echo "連不上中繼（$URL）" >&2
+    echo "連不上中繼（${URL}）" >&2
     exit 1
 }
 
