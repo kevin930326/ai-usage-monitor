@@ -257,7 +257,7 @@ final class CollectorService {
     /// 1. 檢查位置與隔離屬性、以內建的 Python 跑一次 setup（跑不起來就不遷移）
     /// 2. 先註冊內建的並確認 launchd 已啟用（舊 plist 還在時，內建的每次執行都會直接結束，不會重複收集）
     /// 3. 舊 plist 移到垃圾桶（可放回），最後才停止舊的 launchd 工作，並請內建的立即執行一次
-    ///    舊的工作停不下來時放回 plist、撤回內建的：內建的收集器只看 plist 在不在，不能讓兩個同時跑（Fable F-02）
+    ///    舊的工作停不下來時放回 plist、撤回內建的；放不回去就保留內建的，它在舊的工作還在時不執行（Fable F-02）
     func migrateFromLegacy() async {
         guard hasRuntime, allowedToRegister else { return }
         busy = true
@@ -317,12 +317,19 @@ final class CollectorService {
                 stillLoaded = await Self.launchctl(["print", target])
             }
             if stillLoaded == 0 || stillLoaded == nil {
-                if let trashed { try? FileManager.default.moveItem(at: trashed, to: plist) }
-                try? await service.unregister()
-                // 確保舊的仍在執行（已載入時 bootstrap 會失敗，不影響）
-                _ = await Self.launchctl(["bootstrap", "gui/\(getuid())", plist.path])
-                errorText = "無法停止舊的收集器，沒有遷移；\(kept)"
-                UsageStore.log("builtin collector: legacy job still loaded after bootout, migration reverted")
+                var restored = false
+                if let trashed { restored = (try? FileManager.default.moveItem(at: trashed, to: plist)) != nil }
+                if restored {
+                    // 放回去了：撤回內建的，舊的照常（已載入時 bootstrap 會失敗，不影響）
+                    try? await service.unregister()
+                    _ = await Self.launchctl(["bootstrap", "gui/\(getuid())", plist.path])
+                    errorText = "無法停止舊的收集器，沒有遷移；\(kept)"
+                    UsageStore.log("builtin collector: legacy job still loaded after bootout, migration reverted")
+                } else {
+                    // 放不回去：舊的登出後就不會再載入，所以保留內建的；舊的工作還在時內建的每次都直接結束，不會重複收集
+                    errorText = "舊的收集器還在執行，登出再登入後改由內建的收集器接手（不會同時執行）。"
+                    UsageStore.log("builtin collector: legacy job still loaded after bootout, plist not restored; builtin takes over after logout")
+                }
                 await refresh()
                 return
             }
