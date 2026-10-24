@@ -16,7 +16,7 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 | 方法 | 路徑 | 驗證 | 回應 |
 |---|---|---|---|
 | `POST` | `/tokens/daily` | `Authorization: Bearer <裝置密鑰 aumd_…>` | `200 {"device_id", "accepted"}`；以（裝置、日期、服務、模型）覆蓋寫入；格式錯誤 `400`／`422`，超過 256 KB `413` |
-| `GET` | `/tokens/daily?from=YYYY-MM-DD` | `Authorization: Bearer <READ_TOKEN>` | `200 {"devices": […], "rows": […]}`：所有裝置從 `from` 起的每日加總與裝置清單 |
+| `GET` | `/tokens/daily?from=YYYY-MM-DD` | `Authorization: Bearer <READ_TOKEN>` | `200 {"devices": […], "rows": […]}`：所有裝置從 `from` 起的每日加總與裝置清單；超過 50,000 列時只回最新的日子並加 `"truncated": true` |
 | `GET` | `/devices` | `Authorization: Bearer <ADMIN_TOKEN>` | 裝置清單（不含密鑰與雜湊） |
 | `POST` | `/devices` | `Authorization: Bearer <ADMIN_TOKEN>` | `201 {"device_id", "name", "key"}`：密鑰只回傳這一次 |
 | `POST` | `/devices/<id>/rotate` | `Authorization: Bearer <ADMIN_TOKEN>` | 新密鑰（`device_id` 與資料不變）；已撤銷 `409` |

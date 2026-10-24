@@ -223,11 +223,14 @@ async function handleDownload(request: Request, db: D1Database, env: TokensEnv, 
   if (!isDay(from)) return error(422, "from 必須是 YYYY-MM-DD");
   const since = from < utcDay(now, -OLDEST_DAYS) ? utcDay(now, -OLDEST_DAYS) : from;
   const devices = await db.prepare("SELECT device_id, name, created_at, revoked_at, last_upload_at FROM devices ORDER BY created_at").all<DeviceRow>();
+  // 超過上限時留下最新的日子（捨棄最舊的），並標 truncated：收集器就不會刪掉沒有回傳的那幾天
   const rows = await db
-    .prepare(`SELECT device_id, day, provider, model, ${TOKEN_FIELDS.join(", ")} FROM daily_tokens WHERE day >= ? ORDER BY day LIMIT ?`)
-    .bind(since, MAX_DOWNLOAD_ROWS)
+    .prepare(`SELECT device_id, day, provider, model, ${TOKEN_FIELDS.join(", ")} FROM daily_tokens WHERE day >= ? ORDER BY day DESC, device_id, provider, model LIMIT ?`)
+    .bind(since, MAX_DOWNLOAD_ROWS + 1)
     .all<Fields>();
-  return json({ devices: devices.results.map(deviceJSON), rows: rows.results });
+  const truncated = rows.results.length > MAX_DOWNLOAD_ROWS;
+  const kept = rows.results.slice(0, MAX_DOWNLOAD_ROWS).reverse();
+  return json({ devices: devices.results.map(deviceJSON), rows: kept, ...(truncated ? { truncated: true } : {}) });
 }
 
 function newKey(): string {
