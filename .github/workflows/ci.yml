@@ -32,6 +32,21 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest -v
 
+  collector-lint:
+    name: collector (ruff + mypy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: collector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-lint.txt
+      - run: ruff check .
+      - run: mypy
+
   scripts:
     name: scripts (shell 腳本)
     # install-mac-app.sh 的完整流程只在 macOS 跑（ditto、defaults），這裡跑其餘的檢查

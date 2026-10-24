@@ -193,7 +193,10 @@ launchd 排程在 Mac 睡眠時不會執行，手機上的資料會停在最後�
 
 ```bash
 python3 -m unittest -v
+../scripts/lint-collector.sh   # ruff＋mypy（設定在 pyproject.toml，版本固定在 requirements-lint.txt）
 ```
+
+`scripts/verify-all.sh` 與 CI 都會跑這兩項。收集器本身只用標準函式庫，ruff 與 mypy 只裝在 `build/lint-venv`（開發用）。
 
 ## 設計重點
 

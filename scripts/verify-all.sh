@@ -47,6 +47,7 @@ no_debug_strings() {  # no_debug_strings <bundle 路徑>
 
 TMPHOME=$(mktemp -d)
 run collector-tests  bash -c "cd collector && AI_USAGE_MONITOR_HOME='$TMPHOME' python3 -m unittest -v"
+run collector-lint   scripts/lint-collector.sh
 run script-tests     python3 -m unittest discover -s scripts/tests -v
 run relay-tests      bash -c "cd relay && ([ -d node_modules ] || npm ci --no-audit --no-fund) && npm test"
 run usagekit-macos   bash -c "cd apple/UsageKit && swift test"
