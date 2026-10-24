@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking // Linux 上 URLRequest 在這個模組
+#endif
 import Testing
 @testable import UsageKit
 
@@ -72,6 +75,10 @@ struct PairingCodeTests {
 /// 與 RelayClientTests 共用 StubProtocol，必須在同一個依序執行的 suite 裡
 extension RelayClientTests {
     private func body(of request: URLRequest) -> [String: String] {
+        // Apple 平台交給 URLProtocol 時 body 變成串流；Linux 的 FoundationNetworking 保留 httpBody
+        if let data = request.httpBody {
+            return (try? JSONSerialization.jsonObject(with: data) as? [String: String]) ?? [:]
+        }
         guard let stream = request.httpBodyStream else { return [:] }
         stream.open(); defer { stream.close() }
         var data = Data()
