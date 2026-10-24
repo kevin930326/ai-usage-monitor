@@ -76,7 +76,9 @@ class AppServer:
             if system.IS_WINDOWS:
                 # Windows 的 select 不支援管線：由背景執行緒讀 stdout，主執行緒等待佇列
                 self.chunks: queue.Queue[bytes] = queue.Queue()
-                threading.Thread(target=self._pump, daemon=True).start()
+                self.pumped = 0
+                self.reader = threading.Thread(target=self._pump, daemon=True)
+                self.reader.start()
             else:
                 self.selector = selectors.DefaultSelector()
                 self.selector.register(self._stdout, selectors.EVENT_READ)
@@ -127,10 +129,15 @@ class AppServer:
         return cast("IO[bytes]", self.proc.stdout)
 
     def _pump(self) -> None:
-        """Windows：持續讀 stdout 放進佇列；讀到結尾（或管線關閉）時放空位元組。"""
+        """Windows：持續讀 stdout 放進佇列；讀到結尾（或管線關閉）時放空位元組。
+        超過 MAX_OUTPUT 就不再讀（主執行緒累計同樣的位元組，還在等回應時會以 FORMAT_CHANGED 結束），
+        佇列不會無限長大；app-server 之後寫滿管線就會停住，由 close() 結束。"""
         try:
             while chunk := os.read(self._stdout.fileno(), 65536):
                 self.chunks.put(chunk)
+                self.pumped += len(chunk)
+                if self.pumped > MAX_OUTPUT:
+                    return
         except OSError:
             pass
         self.chunks.put(b"")
@@ -183,6 +190,7 @@ class AppServer:
                 except subprocess.TimeoutExpired:
                     system.kill_tree(self.proc)
                     self.proc.wait(CLOSE_TIMEOUT)
+                self.reader.join(CLOSE_TIMEOUT)  # 程序結束後管線關閉，讀取執行緒隨即結束
                 return
             self._terminate_group()
         finally:
