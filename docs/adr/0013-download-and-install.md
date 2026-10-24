@@ -194,6 +194,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 - 第三方 action 固定到 commit SHA（供應鏈）。
 - 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳任何東西。
 - 第一次發布：使用者決定直接打 tag 產生草稿 Release、看過再發布，不先跑 `workflow_dispatch`。
+- 注意：推 tag 時 `mac` job 一樣會把 `build/release/out/` 上傳成 workflow artifact（保留 14 天），`draft-release` job 再從那裡取檔。所以草稿只讓 Release 頁面不公開，**檔案在按發布前就能被任何登入 GitHub 的人下載**。第一次發布前要決定：接受這段提前公開，或改成建立草稿後刪除 artifact、把建置與建立草稿合成一個 job（Codex C-01，記在 BACKLOG）。
 
 ## 後果
 
@@ -207,6 +208,6 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 1. 採用這份 ADR。
 2. 發布的 `.dmg`／`.zip` **只放 arm64** 的 Python，不打包 x86_64。
 3. `.dmg` 安裝時「允許內建收集器執行」（移除 App 內的隔離屬性）**維持由使用者按**，首次打開時不自動移除。
-4. 第一次發布直接打 `v*` tag 產生**草稿** Release，看過再按發布；**不執行** `workflow_dispatch`（理由見第 7 節）。
+4. 第一次發布直接打 `v*` tag 產生**草稿** Release，看過再按發布；**不執行** `workflow_dispatch`（理由見第 7 節；tag 建置的 artifact 仍會提前公開，見第 7 節的「注意」）。
 5. Windows 的 `install.ps1` 訊息維持英文（Windows PowerShell 5.1 以 Latin-1 解碼 `irm` 下載的內容）。
 6. `scripts/setup-relay.sh` 不建立 D1：第二層的 D1 照 `docs/tier2-setup.md` 另外建立。
