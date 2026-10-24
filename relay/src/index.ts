@@ -1,13 +1,16 @@
 /**
  * 中繼 API：Mac 收集器上傳最新一筆用量，iPhone 讀取（FR-6、ADR-0001）。
  *
- *   POST /usage  Authorization: Bearer <WRITE_TOKEN>
- *   GET  /usage  Authorization: Bearer <READ_TOKEN>
+ *   POST /usage       Authorization: Bearer <WRITE_TOKEN>
+ *   GET  /usage       Authorization: Bearer <READ_TOKEN>
+ *   POST /pair        Authorization: Bearer <WRITE_TOKEN>   產生一次性短碼（ADR-0012）
+ *   POST /pair/claim  不需要密鑰，{"code": "..."}            以短碼兌換讀取密鑰
  */
 
 export interface KV {
   get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<void>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
 }
 
 export interface Env {
@@ -160,6 +163,95 @@ async function handleGet(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// MARK: iPhone 配對（ADR-0012「短碼」）
+
+// Crockford base32（不含 I、L、O、U）；256 是 32 的倍數，取低 5 位元沒有偏差
+const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const PAIRING = { length: 8, ttlSeconds: 600, maxFailures: 5, maxClaimBytes: 1024 };
+const PAIR_KEY = "pair";
+// KV 的 expirationTtl 最少 60 秒；到期以 expires_at 為準，TTL 只是讓舊資料自動消失
+const KV_MIN_TTL = 60;
+
+type PairRecord = { hash: string; expires_at: number; failures: number };
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** 與 iPhone 的 PairingCode.normalize 相同：忽略大小寫、空白與連字號，O→0、I／L→1 */
+export function normalizeCode(input: string): string | null {
+  const mapped = input.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  if (mapped.length !== PAIRING.length || [...mapped].some((c) => !CODE_ALPHABET.includes(c))) return null;
+  return mapped;
+}
+
+function newCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(PAIRING.length));
+  return [...bytes].map((b) => CODE_ALPHABET[b & 31]).join("");
+}
+
+async function savePair(env: Env, record: PairRecord, now: number): Promise<void> {
+  const ttl = Math.max(KV_MIN_TTL, Math.ceil((record.expires_at - now) / 1000));
+  await env.USAGE_KV.put(PAIR_KEY, JSON.stringify(record), { expirationTtl: ttl });
+}
+
+/** Mac 以寫入密鑰要一組短碼；同一時間只有一組，再要一組就取代舊的。只存雜湊。 */
+async function handlePair(request: Request, env: Env): Promise<Response> {
+  if (!(await authorized(request, env.WRITE_TOKEN))) return error(401, "unauthorized");
+  const now = Date.now();
+  const code = newCode();
+  const record: PairRecord = { hash: await sha256Hex(code), expires_at: now + PAIRING.ttlSeconds * 1000, failures: 0 };
+  await savePair(env, record, now);
+  return json({ code, expires_at: new Date(record.expires_at).toISOString().replace(/\.\d{3}Z$/, "Z") });
+}
+
+/**
+ * iPhone 以短碼兌換讀取密鑰。錯誤、到期、沒有短碼、格式不對都回 403（不區分，避免探測）；
+ * 錯 5 次就刪除，成功立即刪除（一次性）。
+ */
+async function handleClaim(request: Request, env: Env): Promise<Response> {
+  const denied = () => error(403, "配對失敗");
+  const body = await request.text();
+  if (new TextEncoder().encode(body).length > PAIRING.maxClaimBytes) return error(413, "內容過大");
+  let code: string | null = null;
+  try {
+    const data: unknown = JSON.parse(body);
+    if (isObject(data) && typeof data.code === "string") code = normalizeCode(data.code);
+  } catch {
+    // 與錯誤的短碼相同處理
+  }
+
+  const stored = await env.USAGE_KV.get(PAIR_KEY);
+  if (stored === null) return denied();
+  let record: PairRecord;
+  try {
+    record = JSON.parse(stored) as PairRecord;
+  } catch {
+    await env.USAGE_KV.delete(PAIR_KEY);
+    return denied();
+  }
+  const now = Date.now();
+  if (!(record.expires_at > now)) {
+    await env.USAGE_KV.delete(PAIR_KEY);
+    return denied();
+  }
+  if (code !== null && (await safeEqual(await sha256Hex(code), record.hash))) {
+    await env.USAGE_KV.delete(PAIR_KEY);
+    return json({ read_token: env.READ_TOKEN });
+  }
+  const failures = (record.failures ?? 0) + 1;
+  if (failures >= PAIRING.maxFailures) await env.USAGE_KV.delete(PAIR_KEY);
+  else await savePair(env, { ...record, failures }, now);
+  return denied();
+}
+
+const ROUTES: Record<string, Partial<Record<string, (request: Request, env: Env) => Promise<Response>>>> = {
+  "/usage": { GET: handleGet, POST: handlePost },
+  "/pair": { POST: handlePair },
+  "/pair/claim": { POST: handleClaim },
+};
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // 兩把密鑰都要設定且不同，否則拒絕服務，避免讀取密鑰也能寫入
@@ -168,15 +260,10 @@ export default {
     }
 
     const { pathname } = new URL(request.url);
-    if (pathname !== "/usage") return error(404, "not found");
-
-    switch (request.method) {
-      case "GET":
-        return handleGet(request, env);
-      case "POST":
-        return handlePost(request, env);
-      default:
-        return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
-    }
+    const route = Object.hasOwn(ROUTES, pathname) ? ROUTES[pathname] : undefined;
+    if (!route) return error(404, "not found");
+    const handler = Object.hasOwn(route, request.method) ? route[request.method] : undefined;
+    if (!handler) return new Response(null, { status: 405, headers: { Allow: Object.keys(route).join(", ") } });
+    return handler(request, env);
   },
 };

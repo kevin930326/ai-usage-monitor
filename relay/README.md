@@ -8,12 +8,16 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 |---|---|---|---|
 | `POST` | `/usage` | `Authorization: Bearer <WRITE_TOKEN>` | `204`；格式錯誤 `400`／`422`，超過 16 KB `413` |
 | `GET` | `/usage` | `Authorization: Bearer <READ_TOKEN>` | `200` 最新一筆 JSON；尚無資料 `404` |
+| `POST` | `/pair` | `Authorization: Bearer <WRITE_TOKEN>` | `200` `{"code", "expires_at"}`：iPhone 配對用的一次性短碼（[ADR-0012](../docs/adr/0012-iphone-pairing.md)） |
+| `POST` | `/pair/claim` | 不需要；內容 `{"code": "XXXX-XXXX"}` | `200` `{"read_token"}`；錯誤、到期、沒有短碼一律 `403` |
 
 - 驗證失敗一律回 `401`；兩把密鑰未設定或相同時回 `500`，拒絕服務。
 - 只接受 `schema_version` 為支援版本的內容；KV 只保存最新一筆。
 - 依 schema 驗證每個欄位（`providers` 必須是物件、`used_pct` 是有限且不為負的數字、日期為 ISO 8601、字串長度與服務／額度數量有上限），不合格回 `422`。
 - 以白名單重建後才保存：只留 `schema_version`、`updated_at`、各服務的 `plan`／`error`／`windows`，以及額度的 `id`／`label`／`used_pct`／`resets_at`／`hidden`，其他欄位移除。**收集器新增欄位時要先更新 `src/index.ts`（`sanitizeSnapshot`）並重新部署**，否則新欄位會被丟掉。
 - 密鑰比對先雜湊再逐 byte 比較，避免時序攻擊。
+- 短碼（`scripts/setup-iphone.sh --pair code` 會呼叫 `/pair`）：8 個 Crockford base32 字元（約 40 位元），10 分鐘到期、兌換成功立即刪除、錯 5 次作廢；KV 只存 SHA-256 雜湊，同一時間只有一組。`/pair/claim` 只回讀取密鑰，寫入密鑰永遠不經過這裡。
+  - 已知限制：KV 最終一致且讀改寫不是原子操作，同時大量猜測時實際嘗試次數可能略多於 5 次、刪除最多約 60 秒才傳到所有節點；40 位元的短碼即使被猜上千次，命中機率仍約十億分之一，而且攻擊者得在這 10 分鐘內知道有人正在配對。
 
 ## 部署
 
