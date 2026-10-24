@@ -242,6 +242,21 @@ class AppAgentTests(unittest.TestCase):
             (Path(d) / f"{cli.LEGACY_LABEL}.plist").write_text("")
             self.assertTrue(cli.legacy_agent_installed(env, job_loaded=lambda: False))
 
+    @unittest.skipUnless(sys.platform == "darwin", "launchctl 只有 macOS 有")
+    def test_legacy_job_loaded_reads_launchctl_print(self):
+        done = lambda code: subprocess.CompletedProcess([], code)  # noqa: E731
+        with mock.patch.object(cli.subprocess, "run", return_value=done(0)) as run:
+            self.assertTrue(cli.legacy_job_loaded())
+        self.assertEqual(run.call_args.args[0][:2], ["/bin/launchctl", "print"])
+        self.assertTrue(run.call_args.args[0][2].endswith(f"/{cli.LEGACY_LABEL}"))
+        with mock.patch.object(cli.subprocess, "run", return_value=done(113)):
+            self.assertFalse(cli.legacy_job_loaded())  # 找不到這個工作
+        # 無法確認時當成還在：寧可這一輪不收集，也不要兩個同時跑
+        with mock.patch.object(cli.subprocess, "run", side_effect=subprocess.TimeoutExpired("launchctl", 10)):
+            self.assertTrue(cli.legacy_job_loaded())
+        with mock.patch.object(cli.subprocess, "run", side_effect=OSError):
+            self.assertTrue(cli.legacy_job_loaded())
+
     def test_real_log_path_without_custom_home(self):
         path = cli.app_agent_log_path({"HOME": "/Users/x"})
         self.assertEqual(path.parts[-4:], ("Library", "Logs", "AIUsageMonitor", "collector.log"))
