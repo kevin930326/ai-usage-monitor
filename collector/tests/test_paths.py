@@ -1,9 +1,10 @@
 import unittest
 from pathlib import Path
 
+from usage_collector import system
 from usage_collector.paths import TestHomeNotSet, is_testing, resolve_home
 
-DEFAULT = Path.home() / "Library" / "Application Support" / "AIUsageMonitor"
+DEFAULT = system.default_home({})  # macOS：~/Library/Application Support/AIUsageMonitor（見 test_system）
 
 
 class ResolveHomeTest(unittest.TestCase):

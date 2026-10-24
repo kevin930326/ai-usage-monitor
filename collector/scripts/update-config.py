@@ -14,7 +14,7 @@ from pathlib import Path
 
 def update(path: Path, key: str, value: object) -> None:
     try:
-        config = json.loads(path.read_text())
+        config = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         config = {}
     except json.JSONDecodeError as e:
@@ -24,7 +24,7 @@ def update(path: Path, key: str, value: object) -> None:
     config[key] = value
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".config-", suffix=".json")
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         f.write(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
     os.replace(tmp, path)
 

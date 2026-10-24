@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import history
+from . import history, system
 from .log import log
 from .paths import CONFIG_PATH
 
@@ -92,7 +92,7 @@ def _day_hour(ts: int) -> tuple[str, int]:
 def log_dirs(config_path: Path | None = None, environ: Mapping[str, str] = os.environ) -> dict[str, Path]:
     """config.json 的 claude_config_dir／codex_home → 環境變數 → 預設的 ~/.claude、~/.codex。"""
     try:
-        config = json.loads((config_path or CONFIG_PATH).read_text())
+        config = json.loads((config_path or CONFIG_PATH).read_text(encoding="utf-8"))
         if not isinstance(config, dict):
             config = {}
     except (OSError, ValueError):
@@ -212,7 +212,7 @@ def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
             if key is None:
                 continue
             try:
-                st = entry.stat(follow_symlinks=False)
+                st = system.entry_stat(entry)
             except OSError:
                 continue
             if key in files:  # 同名的檔案出現在兩個地方（複製而不是搬移）
@@ -609,7 +609,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     st = _load_state(row)
     # 先確認檔案打得開、而且是列舉到的那一個，才動統計：開不了或被換掉時這次什麼都不改（下次再處理）
     try:
-        fd = os.open(f.path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(f.path, system.OPEN_READ_FLAGS)
     except OSError:
         return st.offset
     with os.fdopen(fd, "rb") as fh:
@@ -796,7 +796,7 @@ def run_safely(path: Path | None = None) -> bool:
     """`run` 的外層：不丟出任何例外（Token 統計失敗不影響收集器的結束碼）。"""
     try:
         try:
-            os.nice(10)  # 首次掃描可能讀數百 MB：降低優先順序
+            system.lower_priority()  # 首次掃描可能讀數百 MB：降低優先順序
         except OSError:
             pass
         run(path)

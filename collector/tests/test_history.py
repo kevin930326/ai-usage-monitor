@@ -1,6 +1,7 @@
 import io
 import os
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
@@ -150,11 +151,13 @@ class SchemaTest(HistoryTestCase):
             tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         self.assertEqual(tables, set())
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_files_are_private(self):
         history.record(snapshot(T0), self.path)
         for p in Path(self.dir.name).iterdir():
             self.assertEqual(p.stat().st_mode & 0o777, 0o600, p.name)
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_existing_loose_permissions_are_tightened(self):
         history.record(snapshot(T0), self.path)
         os.chmod(self.path, 0o644)
@@ -162,6 +165,7 @@ class SchemaTest(HistoryTestCase):
         self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
 
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_permissions_are_fixed_before_writing(self):
         history.record(snapshot(T0), self.path)
         os.chmod(self.path, 0o644)
@@ -174,6 +178,7 @@ class SchemaTest(HistoryTestCase):
             history.record(snapshot(T0 + 300), self.path)
         self.assertEqual(seen, [0o600])
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_unfixable_permissions_skip_the_write(self):
         history.record(snapshot(T0), self.path)
         os.chmod(self.path, 0o644)
@@ -363,6 +368,7 @@ class FailureIsolationTest(HistoryTestCase):
         self.assertIn("OperationalError", err)
         self.assertLess(elapsed, 3)
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_unwritable_folder(self):
         ro = Path(self.dir.name) / "ro"
         ro.mkdir()

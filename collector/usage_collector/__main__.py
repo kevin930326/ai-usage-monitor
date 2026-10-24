@@ -1,4 +1,4 @@
-"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app]"""
+"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app] [--tokens-only] [--log-file 檔案]"""
 from __future__ import annotations
 
 import argparse
@@ -93,7 +93,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="不在 stdout 輸出 JSON")
     parser.add_argument("--agent", choices=["app"], help="由 App 內建的 LaunchAgent 執行（ADR-0013）：自己寫日誌，"
                         "install-launchd.sh 的收集器存在時不執行")
+    parser.add_argument("--tokens-only", action="store_true",
+                        help="只統計本機 Token，不收集額度（Windows 排程的預設，ADR-0011 第 2 節）")
+    parser.add_argument("--log-file", help="日誌附加到這個檔案（Windows 的 pythonw 沒有 stderr）")
     args = parser.parse_args(argv)
+    if args.log_file:
+        sys.stderr = open(args.log_file, "a", encoding="utf-8", buffering=1)  # 用到程序結束
+
+    if args.tokens_only:
+        # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）
+        token_stats.run_safely()
+        return 0
 
     if args.agent == "app":
         redirect_stderr_to(app_agent_log_path())
