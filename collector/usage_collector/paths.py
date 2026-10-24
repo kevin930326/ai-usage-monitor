@@ -42,6 +42,27 @@ LOCAL_SNAPSHOT_PATH = APP_SUPPORT_DIR / "usage.json"
 CONFIG_PATH = APP_SUPPORT_DIR / "config.json"
 
 
+# config.json 的欄位 → 對應的環境變數（ADR-0009 第 3 節）
+CONFIG_DIR_ENV = (("claude_config_dir", "CLAUDE_CONFIG_DIR"), ("codex_home", "CODEX_HOME"))
+
+
+def cli_environ(config_path: Path | None = None, environ: Mapping[str, str] = os.environ) -> dict[str, str]:
+    """執行額度 CLI 用的環境變數：config.json 有 claude_config_dir／codex_home 時以它為準（與 token_stats.log_dirs
+    相同），工作排程器、launchd 不會繼承安裝視窗的環境變數，額度與 Token 統計才會看同一個帳號。
+    config.json 沒有設定時不加這兩個變數，維持原本的行為。"""
+    env = dict(environ)
+    try:
+        config = json.loads((config_path or CONFIG_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = None
+    if isinstance(config, dict):
+        for key, name in CONFIG_DIR_ENV:
+            value = config.get(key)
+            if isinstance(value, str) and value:
+                env[name] = str(Path(value).expanduser())
+    return env
+
+
 def resolve_executable(config_key: str, name: str, fallbacks: Iterable[str] | None = None,
                        config_path: Path | None = None) -> str | None:
     """安裝腳本把偵測到的完整路徑寫進 config.json 的 `config_key`（launchd 的 PATH 只有系統目錄）；

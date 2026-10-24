@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
@@ -50,7 +49,7 @@ def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory(prefix="aum-claude-") as cwd:
         try:
             # NO_COLOR：輸出不帶色碼，解析才不會把被色碼包住的額度行當成一般文字略過
-            env = {**os.environ, "NO_COLOR": "1"}
+            env = {**paths.cli_environ(), "NO_COLOR": "1"}
             env.pop("FORCE_COLOR", None)
             return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
                                   capture_output=True, text=True, timeout=TIMEOUT)

@@ -205,6 +205,18 @@ class ClaudeFetchTest(unittest.TestCase):
         self.assertNotEqual(Path(cwd).resolve(), Path.cwd().resolve())
         self.assertIn("aum-claude-", cwd)
 
+    def test_config_dir_from_config_reaches_the_cli(self):
+        # 工作排程器／launchd 不繼承安裝視窗的 CLAUDE_CONFIG_DIR：以 config.json 為準（Codex C-02）
+        with FakeClaude(script="[ \"$CLAUDE_CONFIG_DIR\" = /custom/claude ] || exit 94") as fake, \
+             mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/other"}):
+            config = json.loads(fake.config.read_text())
+            fake.config.write_text(json.dumps({**config, "claude_config_dir": "/custom/claude"}))
+            self.assertEqual(claude.fetch().plan, "Max")
+        # 沒有設定時不加這個變數
+        with FakeClaude(script="[ -z \"${CLAUDE_CONFIG_DIR+x}\" ] || exit 93"), mock.patch.dict(os.environ):
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+            self.assertEqual(claude.fetch().plan, "Max")
+
     def test_personal_data_stays_out_of_snapshot(self):
         with FakeClaude():
             snapshot = cli.collect(["claude"])

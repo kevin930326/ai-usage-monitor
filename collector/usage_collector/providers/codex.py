@@ -63,7 +63,8 @@ class AppServer:
         self.cwd = tempfile.TemporaryDirectory(prefix="aum-codex-")
         # npm 安裝的 codex 是 `#!/usr/bin/env node` 腳本，launchd 的 PATH 只有系統目錄：
         # 把 codex 所在的資料夾（Homebrew 的 node 也在這）放到最前面
-        env = {**os.environ, "PATH": os.pathsep.join(filter(None, (os.path.dirname(path), os.environ.get("PATH"))))}
+        base = paths.cli_environ()  # config.json 的 codex_home 也要傳下去（Codex C-02）
+        env = {**base, "PATH": os.pathsep.join(filter(None, (os.path.dirname(path), base.get("PATH"))))}
         try:
             # 自己的 process group：逾時時連同 app-server 可能啟動的子程序一起結束
             self.proc = subprocess.Popen([path, *APP_SERVER_ARGS], cwd=self.cwd.name, env=env,
