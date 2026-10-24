@@ -24,7 +24,7 @@ RENDER_NOW=2026-10-21T04:00:00Z
 export TZ=Asia/Taipei
 LANG_ARGS=(-AppleLanguages "(zh-Hant-TW)" -AppleLocale zh_TW)
 MAC_SET=(panel-light panel-dark stats-window-light stats-window-dark settings-light settings-dark
-         menubar-icons-light menubar-icons-dark)
+         menubar-icons-light menubar-icons-dark wizard-light wizard-dark)
 IOS_SET=(widget-small-light widget-small-dark widget-medium-light widget-medium-dark widget-large-light widget-large-dark
          live-activity-light live-activity-dark island-normal)
 IOS_BUNDLE=io.github.kevin930326.AIUsageMonitor

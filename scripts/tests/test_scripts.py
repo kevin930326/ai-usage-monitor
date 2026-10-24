@@ -481,7 +481,7 @@ class SnapshotsScriptTests(unittest.TestCase):
     """snapshots.sh（SNAPSHOT_FROM 以現成的圖代替產生）：環境不同只放寬畫面差異；缺圖、壞圖一律失敗；
     各平台各自判斷環境；更新時少一張圖就失敗且不動原本的基準。"""
     MAC = ["panel-light", "panel-dark", "stats-window-light", "stats-window-dark", "settings-light", "settings-dark",
-           "menubar-icons-light", "menubar-icons-dark"]
+           "menubar-icons-light", "menubar-icons-dark", "wizard-light", "wizard-dark"]
     IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
            "widget-large-dark", "live-activity-light", "live-activity-dark", "island-normal"]
 
