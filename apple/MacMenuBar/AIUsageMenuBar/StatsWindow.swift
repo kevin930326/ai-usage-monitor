@@ -138,6 +138,7 @@ struct StatsWindowView: View {
     private func footnote(_ data: TokenStatsData) -> String {
         let retention = data.retentionDays == 0 ? "永久保留" : "保留 \(data.retentionDays) 天"
         var text = "Token 不含快取讀取（滑鼠移到數字上可看明細）。每日資料\(retention)，個人紀錄與累計不受保留期間影響。"
+        if data.formatSuspect { text += TokenStatsData.formatSuspectNotice + "。" }
         if data.skippedLines > 0 { text += "部分紀錄無法解析，已略過 \(data.skippedLines) 行。" }
         return text
     }

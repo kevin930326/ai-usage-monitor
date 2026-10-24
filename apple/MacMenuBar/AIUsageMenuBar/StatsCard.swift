@@ -213,6 +213,12 @@ private struct StatsBody: View {
                     .id(scope)
                     .transition(.opacity)
             }
+            if data.formatSuspect {
+                Label(TokenStatsData.formatSuspectNotice, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(UsageColors.notice)
+                    .help("最近一次整理對話紀錄時，有很多行認不得（Claude Code 或 Codex CLI 更新後可能改了紀錄格式）。更新收集器後會自動重新判斷。")
+            }
             if data.skippedLines > 0 {
                 Text("部分紀錄無法解析，已略過 \(data.skippedLines) 行")
                     .font(.caption2)

@@ -482,7 +482,8 @@ extension HistoryStore {
             days: days, hours: hours, records: records, recordDays: recordDays,
             firstScanDone: meta(db, "first_scan_done") == "1",
             firstScanProgress: meta(db, "first_scan_progress").flatMap(Int.init).map { min(max($0, 0), 100) },
-            skippedLines: skipped, retentionDays: retention, dataFrom: meta(db, "token_days_from"))
+            skippedLines: skipped, retentionDays: retention, dataFrom: meta(db, "token_days_from"),
+            formatSuspect: meta(db, "token_format_suspect") == "1")
     }
 
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。

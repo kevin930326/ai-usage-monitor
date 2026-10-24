@@ -391,11 +391,38 @@ class Counters:
     bad_lines: int = 0
     long_lines: int = 0
     failed_files: int = 0
+    # 紀錄格式改變的偵測（ADR-0009 第 9 節）：讀了多少位元組、多少行通過位元組篩選、多少行計入了 Token
+    bytes_read: int = 0
+    candidate_lines: int = 0
+    token_lines: int = 0
+
+    def add(self, other: Counters) -> None:
+        for name in ("bad_lines", "long_lines", "bytes_read", "candidate_lines", "token_lines"):
+            setattr(self, name, getattr(self, name) + getattr(other, name))
+
+
+# 格式可能已改變的門檻（ADR-0009 第 9 節，保守：寧可晚報，不要誤報）：
+# 一次掃描至少 100 行候選、其中 ≥ 20% 無法解析；或讀了 ≥ 4 MB 新內容卻沒有任何一行計入 Token。
+# 證據不足（候選行太少、新內容太少）時沿用上一次的判斷
+FORMAT_MIN_CANDIDATES = 100
+FORMAT_BAD_RATIO = 0.2
+FORMAT_MIN_BYTES = 4 * 1024 * 1024
+
+
+def format_suspect(c: Counters) -> bool | None:
+    """這次掃描是否像是紀錄格式改變了；證據不足時為 None（不改變上次的判斷）。"""
+    verdicts = []
+    if c.candidate_lines >= FORMAT_MIN_CANDIDATES:
+        verdicts.append(c.bad_lines >= c.candidate_lines * FORMAT_BAD_RATIO)
+    if c.bytes_read >= FORMAT_MIN_BYTES:
+        verdicts.append(c.token_lines == 0)
+    return any(verdicts) if verdicts else None
 
 
 def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Counters) -> None:
     if not ((b'"assistant"' in line and b'"usage"' in line) or b'"user"' in line):
         return
+    counters.candidate_lines += 1
     try:
         obj = json.loads(line)
     except ValueError:
@@ -421,6 +448,7 @@ def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Cou
         if ts is None or vec is None or not isinstance(msg_id, str) or not msg_id or len(msg_id) > 200:
             counters.bad_lines += 1
             return
+        counters.token_lines += 1
         _count_id(conn, totals, "claude", msg_id, ts, model, vec)
         prompt = st.state.get("prompt")
         if not sidechain and isinstance(prompt, int):
@@ -457,6 +485,7 @@ def _codex_vec(raw: list[int]) -> tuple[int, int, int, int, int]:
 def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Counters, file_key: str) -> None:
     if not any(n in line for n in _CODEX_NEEDLES):
         return
+    counters.candidate_lines += 1
     try:
         obj = json.loads(line)
     except ValueError:
@@ -481,6 +510,7 @@ def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Coun
             counters.bad_lines += 1
             return
         st.source = "record"
+        counters.token_lines += 1
         # record 是完成後的最終數值：同一 ID 只計一次，不補差額
         _count_id(conn, totals, "codex", response_id, ts, st.state.get("model", "other"), _codex_vec(usage),
                   file_key=file_key, deltas=False)
@@ -498,6 +528,7 @@ def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Coun
             counters.bad_lines += 1
             return
         st.source = "token_count"
+        counters.token_lines += 1
         last = st.last_total
         st.last_total = raw
         if last is not None and len(last) == 5:
@@ -616,6 +647,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                 st.skipping = True
                 continue
             budget.bytes_left -= len(line)
+            counters.bytes_read += len(line)
             if f.provider == "claude":
                 _claude_line(conn, totals, st, line, counters)
             else:
@@ -698,8 +730,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                     break
                 except _SwitchToRecord:
                     continue
-            result.counters.bad_lines += counters.bad_lines
-            result.counters.long_lines += counters.long_lines
+            result.counters.add(counters)
             done_bytes += min(offset, f.size)
             result.processed += 1
             changed = True
@@ -722,6 +753,14 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
             if value:
                 old = int(history.meta(conn, key) or 0)
                 conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, str(old + value)))
+        suspect = format_suspect(c)
+        if suspect is not None:
+            # App 讀這個鍵顯示「紀錄格式可能已改變」；證據不足的掃描不改變上次的判斷
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('token_format_suspect', ?)",
+                         ("1" if suspect else "0",))
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('token_format_scan', ?)",
+                         (json.dumps({"bytes": c.bytes_read, "candidates": c.candidate_lines, "bad": c.bad_lines,
+                                      "token_lines": c.token_lines, "at": now}),))
         if history.meta(conn, "first_scan_done") != "1":
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_progress', ?)",
                          (str(result.progress),))

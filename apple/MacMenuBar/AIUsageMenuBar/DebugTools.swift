@@ -183,6 +183,10 @@ enum DebugTools {
             write(statsCard(short, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-retention7-\(n).png"))
             write(statsCard(fresh), scheme: scheme, to: dir.appendingPathComponent("stats-skeleton-\(n).png"))
             write(statsCard(none), scheme: scheme, to: dir.appendingPathComponent("stats-empty-\(n).png"))
+            var suspect = data
+            suspect.formatSuspect = true
+            suspect.skippedLines = 42
+            write(statsCard(suspect), scheme: scheme, to: dir.appendingPathComponent("stats-format-suspect-\(n).png"))
             write(statsCard(data, status: .olderSchema(1)), scheme: scheme, to: dir.appendingPathComponent("stats-older-schema-\(n).png"))
             if let full = HistoryStore.shared.loadFullTokenStats() {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
