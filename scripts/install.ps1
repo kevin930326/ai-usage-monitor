@@ -180,7 +180,12 @@ function Install-AIUsageCollector {
 
     if ($NoTask) { return }
     $installTask = Join-Path $AppDir 'collector\windows\install-task.ps1'
-    if ($WithQuota) { & $installTask -Python $Python -WithQuota } else { & $installTask -Python $Python }
+    # A child PowerShell with a process-only Bypass: under the default Restricted policy `irm | iex` itself runs,
+    # but calling a .ps1 from disk is blocked. The user's own policy setting is not changed.
+    $taskArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installTask, '-Python', $Python)
+    if ($WithQuota) { $taskArgs += '-WithQuota' }
+    & (Get-Process -Id $PID).Path @taskArgs
+    if ($LASTEXITCODE -ne 0) { throw "Could not register the scheduled task (install-task.ps1 exit $LASTEXITCODE). The files are in $AppDir." }
     Write-Host ''
     Write-Host 'Done. The collector runs every 5 minutes while you are signed in. Remove it with:'
     Write-Host '  & ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall'

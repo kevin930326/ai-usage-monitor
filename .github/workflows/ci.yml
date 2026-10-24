@@ -163,6 +163,14 @@ jobs:
           $msg = ''
           try { Get-Content scripts\install.ps1 -Raw | Invoke-Expression } catch { $msg = "$_" }
           if ($msg -notlike '*has no version*') { throw "unexpected iex result: $msg" }
+          # a fresh window under the Restricted policy (the Windows default): the in-memory installer still registers
+          # the task, and the persistent policy is unchanged
+          & $installer -Uninstall
+          $before = (Get-ExecutionPolicy -List | Out-String)
+          powershell.exe -NoProfile -ExecutionPolicy Restricted -Command "& ([scriptblock]::Create((Get-Content -Raw '$installer'))) -Zip '$zip' -Sha256 '$sha'"
+          if ($LASTEXITCODE -ne 0) { throw "install under Restricted failed: $LASTEXITCODE" }
+          if (-not (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue)) { throw 'no task under Restricted' }
+          if ((Get-ExecutionPolicy -List | Out-String) -ne $before) { throw 'execution policy changed' }
           & $installer -Uninstall
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
           if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'app was not removed' }
