@@ -134,10 +134,10 @@ Debug 版本支援下列環境變數。用 `open` 啟動時環境變數不會傳
 |---|---|
 | `AI_USAGE_MONITOR_HOME` | 改讀這個資料夾的 `usage.json` 與 `history.sqlite3`；設定時「更新」按鈕不觸發真的收集器 |
 | `AUM_DEMO_PANEL=1` | 另開一般視窗顯示面板（選單列面板無法以程式打開，截圖用）；改用每次清空的獨立設定，不動到正式設定 |
-| `AUM_RENDER_DIR` | 以 ImageRenderer 輸出 PNG（淺色、深色）：面板 `panel-*.png`、選單列圖示 `menubar-icons-*.png`、設定 `settings-*.png` |
+| `AUM_RENDER_DIR` | 以 ImageRenderer 輸出 PNG（淺色、深色）：面板 `panel-*.png`、選單列圖示 `menubar-icons-*.png`、設定 `settings-*.png`（另有只含「外觀」一段的 `settings-appearance-*.png`，README 用） |
 | `AUM_RENDER_FRAMES=1` | 搭配 `AUM_RENDER_DIR`：每個動畫以 30 fps 輸出 PNG 序列並組成 GIF（`anim-*.gif`） |
 | `AUM_RENDER_NAME` | 面板 PNG 的檔名前綴（預設 `panel`；其他名稱只輸出面板） |
-| `AUM_RENDER_ANIMS` | 只輸出這些動畫（逗號分隔，例如 `trend,skeleton`） |
+| `AUM_RENDER_ANIMS` | 只輸出這些動畫（逗號分隔，例如 `trend,skeleton`）；`stats-tour` 是 README 用的統計切換（全部 → Claude → Codex → 全部，每個畫面停 1.5 秒，`scripts/update-readme-images.sh`） |
 | `AUM_RENDER_EXIT=1` | 輸出完就結束 |
 | `AUM_DEMO_PERF=1` | 搭配 `AUM_DEMO_PANEL=1`：依固定時間表開關面板與觸發動畫，給 `scripts/measure-panel-perf.sh` 量測 CPU 與記憶體 |
 

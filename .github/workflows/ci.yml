@@ -53,11 +53,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # check-readme-images.py 以提交時間比較截圖與基準的新舊
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m unittest discover -s scripts/tests -v
       - run: python scripts/check-debug-env.py
+      - name: README 的截圖（比基準舊時只顯示警告）
+        run: python scripts/check-readme-images.py
 
   usagekit:
     name: UsageKit (Swift)
