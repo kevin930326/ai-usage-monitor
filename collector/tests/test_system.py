@@ -43,7 +43,8 @@ class ExecutableFallbackTest(unittest.TestCase):
 
     def test_resolve_executable_tries_the_platform_fallbacks(self):
         with tempfile.TemporaryDirectory() as d:
-            exe = Path(d) / "claude"
+            # Windows 以副檔名判斷能不能直接執行（system.is_launchable）
+            exe = Path(d) / ("claude.exe" if sys.platform == "win32" else "claude")
             exe.write_text("")
             exe.chmod(0o755)
             config = Path(d) / "config.json"
