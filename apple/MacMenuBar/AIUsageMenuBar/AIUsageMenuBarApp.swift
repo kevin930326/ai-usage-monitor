@@ -6,6 +6,12 @@ struct AIUsageMenuBarApp: App {
     @State private var store = UsageStore.shared
     @State private var settings = PanelSettings.shared
     @State private var history = HistoryStore.shared
+    @State private var collector = CollectorService.shared
+
+    init() {
+        // scripts/install.sh --uninstall：解除內建收集器的註冊後立即結束，不顯示選單列
+        CollectorService.handleCommandLine()
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -32,6 +38,7 @@ struct AIUsageMenuBarApp: App {
         Settings {
             SettingsView()
                 .followsAppearanceSetting()
+                .environment(collector)
                 .environment(store)
                 .environment(settings)
                 .environment(history)
@@ -46,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // 第一次打開 App 的權限詢問有結果之前不判斷事件
             QuotaNotifier.shared.start()
             UsageStore.shared.start()
+            // App 內建的收集器（ADR-0013）：首次打開自動註冊、搬家後重新註冊；偵測到舊安裝時不註冊
+            Task { await CollectorService.shared.start() }
             AppActions.installRightClickMenu()
             GlobalHotKey.shared.apply(PanelSettings.shared.hotKey)
             #if DEBUG

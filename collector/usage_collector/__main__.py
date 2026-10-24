@@ -1,13 +1,16 @@
-"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet]"""
+"""用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app]"""
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import sys
+from collections.abc import Mapping
 from datetime import datetime, timezone
+from pathlib import Path
 
-from . import history, local_store, relay, service_status, token_stats
+from . import history, local_store, paths, relay, service_status, token_stats
 from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -31,18 +34,55 @@ def collect(enabled: list[str] | None = None) -> dict:
     }
 
 
+# install-launchd.sh 安裝的收集器（ADR-0013 第 3 節）。App 內建的收集器在它存在時不執行，避免每 5 分鐘跑兩次、重複上傳
+LEGACY_LABEL = "io.github.kevin930326.ai-usage-monitor"
+
+
+def launch_agents_dir(environ: Mapping[str, str] = os.environ) -> Path:
+    # AUM_LAUNCH_AGENTS_DIR：安裝測試用，指到暫存資料夾（在這台 Mac 上測試時不看真的 ~/Library/LaunchAgents）
+    custom = environ.get("AUM_LAUNCH_AGENTS_DIR")
+    return Path(custom) if custom else Path.home() / "Library" / "LaunchAgents"
+
+
+def legacy_agent_installed(environ: Mapping[str, str] = os.environ) -> bool:
+    return (launch_agents_dir(environ) / f"{LEGACY_LABEL}.plist").exists()
+
+
+def app_agent_log_path(environ: Mapping[str, str] = os.environ) -> Path:
+    """App 內建的收集器自己寫日誌（LaunchAgent 的 plist 在 App 內，不能寫 ~ 開頭的路徑）：
+    與舊安裝同一個檔案；`AI_USAGE_MONITOR_HOME` 有值（測試）時寫在那個資料夾裡"""
+    if environ.get("AI_USAGE_MONITOR_HOME"):
+        return paths.APP_SUPPORT_DIR / "logs" / "collector.log"
+    return Path.home() / "Library" / "Logs" / "AIUsageMonitor" / "collector.log"
+
+
+def redirect_stderr_to(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    os.dup2(fd, sys.stderr.fileno())
+    os.close(fd)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="收集 Claude 與 Codex 的用量")
     parser.add_argument("--compact", action="store_true", help="輸出單行 JSON")
     parser.add_argument("--write-local", action="store_true", help="寫入本機 usage.json")
     parser.add_argument("--upload", action="store_true", help="上傳到中繼 API（未設定時略過）")
     parser.add_argument("--quiet", action="store_true", help="不在 stdout 輸出 JSON")
+    parser.add_argument("--agent", choices=["app"], help="由 App 內建的 LaunchAgent 執行（ADR-0013）：自己寫日誌，"
+                        "install-launchd.sh 的收集器存在時不執行")
     args = parser.parse_args(argv)
+
+    if args.agent == "app":
+        redirect_stderr_to(app_agent_log_path())
+        if legacy_agent_installed():
+            log("偵測到 install-launchd.sh 安裝的收集器，App 內建的收集器不執行（到 App 的設定按「改用內建收集器」遷移）")
+            return 0
 
     snapshot = collect()
     if not snapshot["providers"]:
-        log("config.json 的 enabled_providers 沒有啟用任何服務，"
-            "登入 Claude Code 或 Codex CLI 後重新執行 scripts/install-launchd.sh")
+        fix = "重新打開 App（會重新偵測）" if args.agent == "app" else "重新執行 scripts/install-launchd.sh"
+        log(f"config.json 的 enabled_providers 沒有啟用任何服務，登入 Claude Code 或 Codex CLI 後{fix}")
     ok = any(p["error"] is None for p in snapshot["providers"].values())
     for name, p in snapshot["providers"].items():
         if p["error"]:

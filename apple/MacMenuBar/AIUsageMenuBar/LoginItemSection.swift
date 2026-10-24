@@ -50,7 +50,7 @@ struct LoginItemSection: View {
 
     private var note: String? {
         if let errorText { return errorText }
-        if !installed { return "先用 scripts/install-mac-app.sh 安裝到「應用程式」資料夾再開啟。" }
+        if !installed { return "先把 App 放進「應用程式」資料夾再開啟。" }
         if status == .requiresApproval { return "需要在「系統設定 › 一般 › 登入項目」允許「AI 用量」。" }
         return nil
     }

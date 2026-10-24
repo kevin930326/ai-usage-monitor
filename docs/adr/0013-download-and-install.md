@@ -192,7 +192,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 
 - 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`）。
 - 第三方 action 固定到 commit SHA（供應鏈）。
-- 今晚只寫 workflow 並以 `workflow_dispatch` 驗證 artifact，不打 tag、不建立 Release。
+- 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳任何東西。
 
 ## 後果
 

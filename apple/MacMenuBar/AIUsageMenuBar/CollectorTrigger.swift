@@ -23,8 +23,6 @@ final class CollectorTrigger {
         case skipped
     }
 
-    /// 與 `collector/scripts/install-launchd.sh` 的 LABEL 相同
-    nonisolated static let label = "io.github.kevin930326.ai-usage-monitor"
     /// `launchctl` 找不到服務時的結束碼（`Could not find service`）
     private static let serviceNotFound: Int32 = 113
     private static let throttleKey = "collector.kicks"
@@ -55,7 +53,8 @@ final class CollectorTrigger {
         throttle.record(at: now)
         if let data = try? JSONEncoder().encode(throttle) { defaults.set(data, forKey: Self.throttleKey) }
 
-        let status = await Self.kickstart()
+        // 內建的收集器在執行就踢它，否則踢 install-launchd.sh 的（CollectorService.kickLabel）
+        let status = await Self.kickstart(label: CollectorService.shared.kickLabel)
         UsageStore.log("kickstart collector exit=\(status.map(String.init) ?? "nil")")
         switch status {
         case 0: return .started
@@ -65,7 +64,7 @@ final class CollectorTrigger {
     }
 
     /// 在背景執行 `launchctl kickstart gui/<uid>/<label>`，回傳結束碼（無法啟動時為 nil）。
-    private nonisolated static func kickstart() async -> Int32? {
+    private nonisolated static func kickstart(label: String) async -> Int32? {
         await withCheckedContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
@@ -108,7 +107,7 @@ enum RefreshHint: Equatable {
         case .collecting: "收集器更新中，完成後自動顯示"
         case .tooSoon: "1 分鐘內已請收集器更新過，完成後自動顯示"
         case .dailyLimitReached: "24 小時內手動更新已達 100 次，改為每 5 分鐘自動更新"
-        case .notInstalled: "收集器未安裝，請執行 collector/scripts/install-launchd.sh"
+        case .notInstalled: "背景收集器沒有在執行，到設定 › 背景收集器查看"
         case .failed: "無法啟動收集器；收集器每 5 分鐘仍會自動更新"
         case .unchanged: "資料沒有變化；收集器每 5 分鐘更新一次"
         }

@@ -268,6 +268,7 @@ enum DebugTools {
     private static func renderSettings(to dir: URL) {
         for scheme in [ColorScheme.light, .dark] {
             let view = SettingsView(scrolls: false)
+                .environment(CollectorService.shared)
                 .environment(UsageStore.shared)
                 .environment(PanelSettings.shared)
                 .environment(HistoryStore.shared)
@@ -280,6 +281,19 @@ enum DebugTools {
                 .padding(16)
                 .background(Color(nsColor: .windowBackgroundColor))
             write(denied, scheme: scheme, to: dir.appendingPathComponent("settings-notify-denied-\(scheme.name).png"))
+            // 背景收集器的每種狀態（FR-53）
+            let states: [CollectorService.State] = [.enabled, .legacy, .needsApplicationsFolder, .quarantined,
+                                                    .notRegistered, .requiresApproval, .devBuild]
+            let collector = VStack(alignment: .leading, spacing: 20) {
+                ForEach(states, id: \.self) { state in
+                    CollectorSettingsSection(interactive: false).environment(CollectorService.preview(state))
+                    Divider()
+                }
+            }
+            .frame(width: 420, alignment: .leading)
+            .padding(16)
+            .background(Color(nsColor: .windowBackgroundColor))
+            write(collector, scheme: scheme, to: dir.appendingPathComponent("settings-collector-states-\(scheme.name).png"))
         }
     }
 

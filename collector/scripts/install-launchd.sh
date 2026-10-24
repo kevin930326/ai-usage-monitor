@@ -12,6 +12,11 @@ CONFIG_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMo
 
 mkdir -p "$LOG_DIR" "$(dirname "$TARGET")" "$CONFIG_DIR"
 
+# App 內建的收集器（ADR-0013 第 3 節）已註冊時提示：兩個不會重複執行（內建的看到這個排程就略過），但通常只需要一個
+if launchctl print "gui/$(id -u)/io.github.kevin930326.AIUsageMenuBar.collector" >/dev/null 2>&1; then
+    echo "提示：App 內建的收集器已啟用。安裝這個排程後內建的會自動停止收集；要繼續用內建的，到 App 的設定 › 背景收集器，不用執行這個腳本"
+fi
+
 # launchd 的 PATH 只有系統目錄，先在這裡找到 claude 的完整路徑寫進 config.json，
 # 收集器執行它的 `claude -p /usage` 取得 Claude 用量（ADR-0006）
 CLAUDE=""

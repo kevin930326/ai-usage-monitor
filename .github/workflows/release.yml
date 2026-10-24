@@ -1,0 +1,105 @@
+# 發布流程（ADR-0013 第 7 節）：
+# - 推 v* tag：建置 Mac 的 .zip、.dmg、install.sh、SHA256SUMS，產生建置來源證明，建立「草稿」Release（要人到 GitHub 按發布）
+# - workflow_dispatch：同樣的建置，只上傳成 workflow artifact，不建立 Release、不產生證明
+# - pull_request（只在發布相關檔案改動時）：只確認建置與檢查會過，不上傳任何東西
+# 第三方 action 一律固定到 commit SHA；預設只有讀取權限，建立草稿的 job 才有寫入權限。
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/build-release.sh
+      - scripts/bundle-collector.sh
+      - scripts/fetch-python-runtime.sh
+      - scripts/install.sh
+      - apple/MacMenuBar/LaunchAgent/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    name: Mac App（zip、dmg、install.sh）
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 選擇 Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - run: brew install xcodegen
+      - name: 版本
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=${GITHUB_REF_NAME#v}
+          else
+            version=$(sed -n 's/^ *MARKETING_VERSION: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' apple/MacMenuBar/project.yml | head -1)
+          fi
+          # tag 名稱直接進 shell 之前先檢查格式（build-release.sh 也會再檢查一次）
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "版本格式不對：$version" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: 建置
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build-release.sh --version "$VERSION" --out build/release/out
+      - name: 檢查產出
+        working-directory: build/release/out
+        env:
+          v: ${{ steps.version.outputs.version }}
+        run: |
+          shasum -a 256 -c SHA256SUMS
+          grep -q "^VERSION=\"$v\"$" install.sh
+          grep -q "^ZIP_SHA256=\"$(shasum -a 256 AIUsageMenuBar-$v.zip | awk '{print $1}')\"$" install.sh
+          # 從 zip 安裝到暫存資料夾（不打開 App）
+          tmp=$(mktemp -d)
+          AUM_INSTALL_DIR="$tmp" AUM_ZIP="AIUsageMenuBar-$v.zip" AUM_TRASH_DIR="$tmp/trash" bash install.sh
+          test -x "$tmp/AIUsageMenuBar.app/Contents/Resources/python/bin/python3.13"
+          test -f "$tmp/AIUsageMenuBar.app/Contents/Library/LaunchAgents/io.github.kevin930326.AIUsageMenuBar.collector.plist"
+      - name: 上傳 artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mac-${{ steps.version.outputs.version }}
+          path: build/release/out/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-release:
+    name: 建立草稿 Release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: mac
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: mac-*
+          path: out
+          merge-multiple: true
+      - name: 建置來源證明
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: out/*
+      - name: 建立草稿
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "AI 用量 $TAG" --notes "草稿：確認檔案與 SHA256SUMS 後再按發布。安裝方式見 README。"
