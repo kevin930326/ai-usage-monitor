@@ -68,6 +68,7 @@ class MainTest(unittest.TestCase):
         with mock.patch.dict(cli.PROVIDERS, OK_PROVIDERS, clear=True), \
              mock.patch.object(cli, "enabled_providers", return_value=["a"]), \
              mock.patch.object(cli.token_stats, "run_safely"), \
+             mock.patch.object(cli.history, "record_safely"), \
              redirect_stdout(out), redirect_stderr(err):
             code = cli.main(list(args))
         return code, out.getvalue(), err.getvalue()
