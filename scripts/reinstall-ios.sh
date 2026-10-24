@@ -40,7 +40,8 @@ NOTIFY_AFTER_HOURS=24
 TITLE="AI 用量"
 BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
 
-mkdir -p "$LOG_DIR" "$CONFIG_DIR"
+mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$DERIVED"
+touch "$DERIVED/.metadata_never_index"  # 不讓 Spotlight 索引建置產物
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >>"$LOG"; echo "$*"; }
 notify() {  # 用參數傳文字，避免引號被當成 AppleScript
     osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title (item 2 of argv)' \
@@ -74,6 +75,12 @@ fi
 # 同時只跑一個（手動與 launchd 可能重疊）。鎖是資料夾，裡面記 PID。
 # kill -9、當機或斷電時 EXIT trap 不會執行，鎖會留下來：持有的程序已不存在、
 # 舊版腳本留下沒有 PID 的鎖，或超過最長執行時間（PID 可能已被重用）時視為殘留，接手後繼續。
+# 評估過改用 flock（night4）：macOS 沒有 flock 指令；以 Python fcntl.flock 鎖住 shell 的檔案描述元雖然在程序結束時
+# 由核心釋放，但 xcodebuild、devicectl 等子程序會繼承描述元，其中常駐的服務會讓鎖一直不放。維持資料夾＋PID。
+# 已知限制（前兩點偏保守，最多晚一個檢查時段；第三點才可能同時安裝兩次）：
+# - 殘留鎖的 PID 在 120 分鐘內被無關的程序重用時，這段期間會誤判為「正在執行」而略過；
+# - 鎖剛建立、還沒寫入 PID 的 1 分鐘內，另一個執行也會略過；
+# - 真的執行超過 120 分鐘（建置或安裝卡住）時會被接手，兩個重新安裝可能同時進行。
 LOCK="$CONFIG_DIR/.reinstall.lock"
 LOCK_MAX_MINUTES=120  # 建置數分鐘、安裝最多 5 分鐘，遠低於此
 lock_is_stale() {  # lock_is_stale <鎖內的 PID，可能為空>

@@ -31,6 +31,7 @@ done
 # 同一時間只允許一個安裝（mkdir 是原子操作）；結束時才釋放
 LOCK=$ROOT/build/install.lock
 mkdir -p "$ROOT/build"
+touch "$ROOT/build/.metadata_never_index"  # 不讓 Spotlight 索引建置產物
 if ! mkdir "$LOCK" 2>/dev/null; then
   echo "另一個安裝正在進行（${LOCK}）；確定沒有在執行的話刪除這個資料夾再試" >&2
   exit 1
