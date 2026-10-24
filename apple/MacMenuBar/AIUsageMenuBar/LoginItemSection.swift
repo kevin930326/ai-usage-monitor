@@ -5,7 +5,7 @@ import SwiftUI
 /// 只在 App 安裝在「應用程式」資料夾時可以開啟：從 Xcode 的建置資料夾登記的話，
 /// 登入項目會指向之後會被清掉或覆蓋的位置。Debug 版的截圖與量測不會改到這個設定。
 struct LoginItemSection: View {
-    @State private var status = SMAppService.mainApp.status
+    @State private var status = Self.currentStatus()
     @State private var errorText: String?
 
     private var installed: Bool {
@@ -34,8 +34,16 @@ struct LoginItemSection: View {
         }
         // 使用者可能在系統設定裡改過
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            status = SMAppService.mainApp.status
+            status = Self.currentStatus()
         }
+    }
+
+    /// 截圖與量測（`AUM_DEMO_PANEL`、`AUM_RENDER_DIR`）一律「沒有登記」：不讀這台 Mac 正式安裝那份 App 的登記狀態，
+    /// 換一台 Mac 截圖才會一樣
+    private static func currentStatus() -> SMAppService.Status {
+        let env = ProcessInfo.processInfo.environment
+        if env["AUM_DEMO_PANEL"] == "1" || env["AUM_RENDER_DIR"] != nil { return .notRegistered }
+        return SMAppService.mainApp.status
     }
 
     private var note: String? {
@@ -58,6 +66,6 @@ struct LoginItemSection: View {
             errorText = enabled ? "無法加入登入項目，可到「系統設定 › 一般 › 登入項目」手動加入。" : "無法移除登入項目，可到「系統設定 › 一般 › 登入項目」手動移除。"
             UsageStore.log("login item \(enabled ? "register" : "unregister") failed: \(type(of: error))")
         }
-        status = SMAppService.mainApp.status
+        status = Self.currentStatus()
     }
 }
