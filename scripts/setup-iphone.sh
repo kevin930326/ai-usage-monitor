@@ -137,13 +137,19 @@ if [ "$PAIR" = qr ]; then
     unset WRITE
     QR=$(printf '%s\n%s\n' "$RELAY_URL" "$READ" | swift "$REPO/scripts/render-qr.swift") || fail "無法產生 QR 碼" 5
     unset READ
+    # 顯示之後不論正常結束、Ctrl-C 或被終止都清除畫面與捲動緩衝（Codex C-03）
+    clear_qr() { printf '\033[3J\033[H\033[2J'; }
+    trap 'clear_qr; rm -f "${DEVICES_JSON:-}"' EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM HUP
     echo
     echo "$QR"
     echo
     echo "在 iPhone 打開 AI 用量 → 設定 →「掃描 QR 碼」。QR 碼含讀取密鑰，不要截圖或拍照分享。"
     read -r -p "配對完成後按 Enter 清除畫面…" _ </dev/tty || true
     unset QR
-    printf '\033[3J\033[H\033[2J'  # 清除畫面與捲動緩衝
+    clear_qr
+    trap 'rm -f "${DEVICES_JSON:-}"' EXIT
     ok "已清除畫面"
     exit 0
 fi

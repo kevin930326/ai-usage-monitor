@@ -156,6 +156,37 @@ class SetupIphoneTests(unittest.TestCase):
         self.assertEqual(decoded.returncode, 0, decoded.stderr)
         self.assertEqual(decoded.stdout.strip(), "aiusage-pair:v1:" + _b64url({"read": READ, "url": "https://relay.example.dev"}))
 
+    def test_qr_is_cleared_when_interrupted(self):
+        # Codex C-03：顯示 QR 碼後按 Ctrl-C 或被終止，也要清除畫面與捲動緩衝（以偽終端機等在「按 Enter」）
+        import os, pty, select, signal, time
+        self.config(relay_url="https://relay.example.dev")
+        env = {"HOME": str(self.home), "PATH": f"{self.bin}:/usr/bin:/bin", "LANG": "zh_TW.UTF-8", "FAKE_READ": READ}
+        for sig, code in ((signal.SIGINT, 130), (signal.SIGTERM, 143)):
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.execve("/bin/bash", ["/bin/bash", str(SCRIPT), "--pair-only", "qr"], env)
+            out, deadline = b"", time.time() + 180
+            while "按 Enter".encode() not in out and time.time() < deadline:
+                if select.select([fd], [], [], 1)[0]:
+                    try:
+                        out += os.read(fd, 65536)
+                    except OSError:
+                        break
+            self.assertIn("▀".encode(), out)
+            os.kill(pid, sig)
+            while True:
+                try:
+                    chunk = os.read(fd, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                out += chunk
+            _, status = os.waitpid(pid, 0)
+            os.close(fd)
+            self.assertEqual(os.waitstatus_to_exitcode(status), code)
+            self.assertIn(b"\033[3J", out.split("按 Enter".encode(), 1)[1])
+
     def test_qr_asks_for_the_read_token_once_and_refuses_the_write_token(self):
         self.config(relay_url="https://relay.example.dev")
         r = self.run_script("--pair-only", "qr")
