@@ -26,6 +26,6 @@
 
 ## README 截圖
 
-- README 的圖片在 `docs/images/`，來源與對應的截圖基準列在 `docs/images/SOURCES.tsv`；由 `scripts/update-readme-images.sh` 以固定時間與示範資料產生（Mac 與動態島用 ImageRenderer；iPhone 的主畫面、設定與手錶用模擬器截圖，因為 iOS 的 ImageRenderer 畫不出 ProgressView）。主要畫面放淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示。
+- README 的圖片在 `docs/images/`，來源與對應的截圖基準列在 `docs/images/SOURCES.tsv`；由 `scripts/update-readme-images.sh` 以固定時間與示範資料產生（Mac 與動態島用 ImageRenderer；iPhone 的主畫面、設定與手錶用模擬器截圖，因為 iOS 的 ImageRenderer 畫不出 ProgressView）。主要畫面放淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示。SOURCES.tsv 第 5 欄是後製（`crop=` 裁切、`frame=` 圓角與細邊框，`scripts/readme-image-post.swift`）；README 裡同一排的圖以 `width` 算成等高（不用 `height`，窄螢幕時換行而不是壓扁）。
 - `scripts/check-readme-images.py`（verify-all 與 CI）：README 引用的圖不存在或沒列在 SOURCES.tsv 時失敗；圖片比對應的基準舊（基準後來又提交過）時提醒。
 - 用 `scripts/update-snapshots.sh` 更新了基準、看到提醒，或畫面有意改變時，執行 `scripts/update-readme-images.sh`，逐張檢查 `git diff` 中的圖再和基準一起提交；新增 README 圖片時先加進 SOURCES.tsv。

@@ -6,30 +6,36 @@
 
 > 目前發布的版本是 [0.5.0](CHANGELOG.md#050---2026-10-21)（只有原始碼）。之後的 Mac 面板與 Token 統計（v1.5～v1.8）、iPhone 小工具，以及外觀設定、一鍵安裝、設定精靈與 iPhone 配對（v1.9）已在 `main`，**尚未發版**，見 [CHANGELOG](CHANGELOG.md) 的 Unreleased 與[里程碑](docs/03-development-workflow.md#1-里程碑)。下表標「未發版」的功能要從原始碼安裝。
 
+<!-- 同一排的圖以寬度算成等高（SOURCES.tsv 的尺寸 × 寬度）；用 width 不用 height，窄螢幕時換行而不是壓扁 -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-panel-top-dark.png">
+    <img src="docs/images/mac-panel-top-light.png" width="291" alt="Mac 選單列面板的上半部：剩餘最少的額度、建議接下來用、各服務各額度的進度條與預期標記">
+  </picture>
+  &nbsp;&nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-app-dark.png">
+    <img src="docs/images/iphone-app-light.png" width="221" alt="iPhone App：剩餘最少的額度、各服務各額度的進度條與重置倒數">
+  </picture>
+</p>
+
+<p align="center">
+  <img src="docs/images/iphone-island.png" width="486" alt="動態島展開：剩餘最少的額度大字、兩個服務各額度的進度條與更新按鈕">
+  &nbsp;&nbsp;
+  <img src="docs/images/watch-app.png" width="159" alt="Apple Watch App：剩餘最少的額度與各額度進度條">
+</p>
+
+<details>
+<summary>看完整的 Mac 面板（接下來的重置、本週額度走勢、額度消耗、Token 統計、服務狀態）</summary>
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-panel-dark.png">
     <img src="docs/images/mac-panel-light.png" width="300" alt="Mac 選單列面板：剩餘最少的額度、建議接下來用、各額度進度條、接下來的重置、本週額度走勢、額度消耗、這台 Mac 的 Token 統計與服務狀態">
   </picture>
-  &nbsp;
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-switch-dark.gif">
-    <img src="docs/images/mac-stats-switch-light.gif" width="300" alt="統計卡片依序切換全部、Claude、Codex：全部的熱力圖是藍色色階，Claude、Codex 用各自的識別色；Token 數以萬、億顯示">
-  </picture>
 </p>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-app-dark.png">
-    <img src="docs/images/iphone-app-light.png" width="240" alt="iPhone App：剩餘最少的額度、各服務各額度的進度條與重置倒數">
-  </picture>
-  &nbsp;
-  <img src="docs/images/watch-app.png" width="200" alt="Apple Watch App：剩餘最少的額度與各額度進度條">
-</p>
-
-<p align="center">
-  <img src="docs/images/iphone-island.png" width="440" alt="動態島展開：剩餘最少的額度大字、兩個服務各額度的進度條與更新按鈕">
-</p>
+</details>
 
 截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
 
@@ -42,10 +48,17 @@
 | Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；通知（剩不到 20%、用得太快、額度重置；「剩不到 20%」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
 | 收集器 | 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼。由 App 內建的背景收集器（未發版）或 `install-launchd.sh` 裝的 launchd 工作執行，兩者不會同時跑 |
 
+Token 統計：面板的統計卡片可切換全部、Claude、Codex（左）；「完整統計」視窗看一整年、各模型與一天中的時段（右）。
+
 <p align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-switch-dark.gif">
+    <img src="docs/images/mac-stats-switch-light.gif" width="265" alt="統計卡片依序切換全部、Claude、Codex：全部的熱力圖是藍色色階，Claude、Codex 用各自的識別色；Token 數以萬、億顯示">
+  </picture>
+  &nbsp;&nbsp;
+  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-window-dark.png">
-    <img src="docs/images/mac-stats-window-light.png" width="720" alt="完整統計視窗：一年活動熱力圖（全部為藍色色階）、最近 30 天長條、各模型與一天中的時段">
+    <img src="docs/images/mac-stats-window-light.png" width="432" alt="完整統計視窗：一年活動熱力圖（全部為藍色色階）、最近 30 天長條、各模型與一天中的時段">
   </picture>
 </p>
 
@@ -54,7 +67,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-settings-appearance-dark.png">
-    <img src="docs/images/mac-settings-appearance-light.png" width="460" alt="Mac 設定的「外觀」：跟隨系統、淺色、深色">
+    <img src="docs/images/mac-settings-appearance-light.png" width="440" alt="Mac 設定的「外觀」：跟隨系統、淺色、深色">
   </picture>
 </p>
 
@@ -130,7 +143,7 @@ curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-wizard-dark.png">
-    <img src="docs/images/mac-wizard-light.png" width="360" alt="設定精靈：App 位置、背景收集器、Claude Code、Codex、通知、登入時開啟、外觀、在 iPhone 上看，每步顯示完成或需要處理">
+    <img src="docs/images/mac-wizard-light.png" width="300" alt="設定精靈：App 位置、背景收集器、Claude Code、Codex、通知、登入時開啟、外觀、在 iPhone 上看，每步顯示完成或需要處理">
   </picture>
 </p>
 
@@ -180,7 +193,7 @@ cd ai-usage-monitor
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-settings-pairing-dark.png">
-    <img src="docs/images/iphone-settings-pairing-light.png" width="260" alt="iPhone 設定：中繼網址與讀取密鑰，下方「從 Mac 配對」有「掃描 QR 碼」與「輸入短碼」">
+    <img src="docs/images/iphone-settings-pairing-light.png" width="221" alt="iPhone 設定：中繼網址與讀取密鑰，下方「從 Mac 配對」有「掃描 QR 碼」與「輸入短碼」">
   </picture>
 </p>
 

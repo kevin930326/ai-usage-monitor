@@ -97,6 +97,18 @@ class CheckReadmeImagesTests(unittest.TestCase):
         r = self.run_check("--strict")
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_post_processing_column_is_accepted(self):
+        self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\tapple/Snapshots/mac/panel-light.png\t-\tcrop=0:1186 frame=24\n")
+        self.commit("post column", when=2_000_000)
+        r = self.run_check("--strict")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_wrong_column_count_fails(self):
+        self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\n")
+        r = self.run_check()
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("要 4 或 5 欄", r.stderr)
+
     def test_unreferenced_source_warns(self):
         self.write("docs/images/other.png", "x")
         self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\tapple/Snapshots/mac/panel-light.png\t-\n"

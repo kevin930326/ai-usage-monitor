@@ -44,8 +44,8 @@ def read_sources(root: Path) -> dict[str, str]:
         if not line.strip() or line.startswith("#"):
             continue
         fields = line.split("\t")
-        if len(fields) != 4:
-            raise ValueError(f"{SOURCES} 的格式不對（要 4 欄，以 tab 分隔）：{line}")
+        if len(fields) not in (4, 5):  # 第 5 欄「後製」可省略
+            raise ValueError(f"{SOURCES} 的格式不對（要 4 或 5 欄，以 tab 分隔）：{line}")
         mapping[fields[0]] = fields[2]
     return mapping
 
