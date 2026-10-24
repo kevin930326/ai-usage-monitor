@@ -76,7 +76,7 @@ _TASK_COLUMNS = """
          longest_task_seconds INTEGER NOT NULL DEFAULT 0,
          updated_at           INTEGER NOT NULL"""
 
-# Token 統計（ADR-0009 第 2 節）。與 ADR 的差異（都只有數字與 ID）：
+# Token 統計（ADR-0009 第 2 節；以下幾項是 v1.7 實作時加入、已寫進 ADR 正文，都只有數字與 ID）：
 # - scan_state.state：跨次掃描要接著用的狀態（Claude 進行中任務的開始時間與第一則回覆 ID、Codex 目前的模型）
 # - seen_ids.file_key：Codex 的回應 ID 由哪個檔案計入；該檔重算時一併移除，才能重新計入
 # - seen_tasks：已計入的任務與當時的秒數。任務跨兩次掃描時補差額；重掃、--resume 副本不重複計算
