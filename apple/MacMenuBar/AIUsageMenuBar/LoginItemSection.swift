@@ -38,11 +38,13 @@ struct LoginItemSection: View {
         }
     }
 
-    /// 截圖與量測（`AUM_DEMO_PANEL`、`AUM_RENDER_DIR`）一律「沒有登記」：不讀這台 Mac 正式安裝那份 App 的登記狀態，
+    /// Debug 的截圖與量測（`AUM_DEMO_PANEL`、`AUM_RENDER_DIR`）一律「沒有登記」：不讀這台 Mac 正式安裝那份 App 的登記狀態，
     /// 換一台 Mac 截圖才會一樣
     private static func currentStatus() -> SMAppService.Status {
+        #if DEBUG
         let env = ProcessInfo.processInfo.environment
         if env["AUM_DEMO_PANEL"] == "1" || env["AUM_RENDER_DIR"] != nil { return .notRegistered }
+        #endif
         return SMAppService.mainApp.status
     }
 
