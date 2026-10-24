@@ -118,9 +118,19 @@ render_ios() {
   docs=$(xcrun simctl get_app_container "$udid" "$IOS_BUNDLE" data)/Documents
   mkdir -p "$docs"
   rm -f "$docs"/*.png "$docs/island-sizes.json"
-  SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
-    xcrun simctl launch --terminate-running-process "$udid" "$IOS_BUNDLE" "${LANG_ARGS[@]}" >/dev/null
-  for _ in $(seq 300); do [ -f "$docs/island-sizes.json" ] && break; sleep 1; done
+  # 剛開機後的第一次啟動常常不出畫面、不輸出（見 scripts/snapshots.sh 的 render_ios）：45 秒內一張 PNG 都沒有就重新啟動一次
+  local attempt second
+  for attempt in 1 2; do
+    SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
+      xcrun simctl launch --terminate-running-process "$udid" "$IOS_BUNDLE" "${LANG_ARGS[@]}" >/dev/null
+    for second in $(seq 300); do
+      [ -f "$docs/island-sizes.json" ] && break
+      if [ "$attempt" = 1 ] && [ "$second" -ge 45 ] && ! compgen -G "$docs/*.png" >/dev/null; then break; fi
+      sleep 1
+    done
+    [ -f "$docs/island-sizes.json" ] && break
+    [ "$attempt" = 1 ] && echo "iOS 截圖：第一次啟動沒有完成（剛開機時畫面常常沒出現），重新啟動一次"
+  done
   [ -f "$docs/island-sizes.json" ] || { echo "iOS 截圖逾時"; exit 2; }
   mkdir -p "$WORK/ios"
   cp "$docs"/*.png "$WORK/ios/"
