@@ -159,10 +159,6 @@ jobs:
           if ($task.Actions[0].WorkingDirectory -notlike "$env:LOCALAPPDATA\AIUsageMonitor\app\collector") { throw "working directory: $($task.Actions[0].WorkingDirectory)" }
           & $installer -Zip $zip -Sha256 $sha -NoTask
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app.old'))) { throw 'app.old missing' }
-          # the repo copy has no version: through iex it must stop with a message, not close the session
-          $msg = ''
-          try { Get-Content scripts\install.ps1 -Raw | Invoke-Expression } catch { $msg = "$_" }
-          if ($msg -notlike '*has no version*') { throw "unexpected iex result: $msg" }
           # a fresh window under the Restricted policy (the Windows default): the in-memory installer still registers
           # the task, and the persistent policy is unchanged
           & $installer -Uninstall
@@ -171,6 +167,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "install under Restricted failed: $LASTEXITCODE" }
           if (-not (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue)) { throw 'no task under Restricted' }
           if ((Get-ExecutionPolicy -List | Out-String) -ne $before) { throw 'execution policy changed' }
+          # the repo copy has no version: through iex it must stop with a message, not close the session.
+          # Last on purpose: iex runs its param() block in this scope and clears $zip and the other parameters
+          $msg = ''
+          try { Get-Content scripts\install.ps1 -Raw | Invoke-Expression } catch { $msg = "$_" }
+          if ($msg -notlike '*has no version*') { throw "unexpected iex result: $msg" }
           & $installer -Uninstall
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
           if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'app was not removed' }
