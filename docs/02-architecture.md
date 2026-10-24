@@ -4,7 +4,7 @@
 
 ```
 ┌──────────── Mac ────────────┐      ┌──── Cloudflare Worker ────┐      ┌──────────── iPhone ─────────────┐
-│ launchd（每 5 分鐘）         │      │ POST /usage  (寫入密鑰)    │      │ 捷徑自動化 07:00/15:00/23:00     │
+│ launchd（每 5 分鐘）＊       │      │ POST /usage  (寫入密鑰)    │      │ 捷徑自動化 07:00/15:00/23:00     │
 │   └ collector               │─────▶│ GET  /usage  (讀取密鑰)    │◀─────│   └ RestartUsageActivityIntent  │
 │      ├ Claude provider      │ 只送 │ KV 存最新一筆 usage.json   │      │                                 │
 │      └ Codex provider       │ 數字 └───────────────────────────┘      │ Live Activity「更新」按鈕         │
@@ -15,6 +15,8 @@
 └─────────────────────────────┘
 ```
 
+＊ 排程是 App 內建收集器的 LaunchAgent（發布版，ADR-0013），或 `install-launchd.sh` 裝的 LaunchAgent（從原始碼安裝）；兩者不會同時執行。
+
 ## 2. 元件
 
 ### 2.1 Mac 收集器 (`collector/`)
@@ -23,23 +25,25 @@
 - Claude：執行未修改的 Claude Code `claude -p /usage --safe-mode --no-session-persistence --output-format json`（暫存資料夾、stdin 關閉、30 秒逾時；本機指令，不呼叫模型、不消耗額度），解析印出的額度與重置時間；方案名稱取自 `claude auth status --json` 的 `subscriptionType`。**收集器不讀取 Claude 的 token**、不直接呼叫 Anthropic 的端點，token 由 Claude Code 自己續期。輸出格式認不得時回報錯誤，不猜測。claude 的完整路徑由安裝腳本寫進 `config.json`。理由與風險見 [ADR-0006](adr/0006-claude-usage-via-cli.md)（取代 ADR-0005 的委派續期）。
 - Codex：執行未修改的 Codex CLI `codex app-server --listen stdio://`（Codex 給桌面 App 與編輯器外掛用的本機 JSON-RPC 介面），只送 `initialize` 與 `account/rateLimits/read`：不開對話、不消耗額度，約 0.7 秒；暫存資料夾、30 秒逾時，結束時關閉 stdin，必要時結束整個 process group，不留下背景程序。**收集器不讀取 `~/.codex/auth.json`、不持有 token**、不直接呼叫 chatgpt.com，token 由 Codex CLI 自己續期。回應中的帳號 ID 等資料不保留；格式認不得時回報錯誤，不猜測。codex 的完整路徑由安裝腳本寫進 `config.json`。理由與風險見 [ADR-0007](adr/0007-codex-usage-via-app-server.md)。
 - 只收集啟用的服務：`config.json` 的 `enabled_providers`（例如 `["claude"]`）由安裝腳本依 Mac 上的登入資訊偵測後寫入（`claude auth status` 回報已登入 → claude；`codex login status` 回報用 ChatGPT 登入 → codex；找不到指令且沒有設定資料夾 → 沒用過；任一服務判斷不出來時不更動設定）。未啟用的服務不查詢、不輸出、不寫日誌；已啟用但沒有登入才是錯誤（該服務的 `error`）。沒有設定檔或沒有這個欄位時全部啟用，舊安裝不受影響。
-- 由 launchd 每 5 分鐘觸發。
+- 由 launchd 每 5 分鐘觸發：發布版由 App 以 `SMAppService` 註冊 App 內的 LaunchAgent（`--agent app`），從原始碼安裝時由 `install-launchd.sh` 註冊；內建收集器偵測到舊的 launchd 工作時不收集（ADR-0013）。
 - 除了上傳中繼 API，也寫入本機 `~/Library/Application Support/AIUsageMonitor/usage.json`（先寫暫存檔再改名，避免讀到寫一半的檔案），供 Mac 選單列 App 讀取（FR-20）。
 
 ### 2.2 中繼 API (`relay/`)
 - Cloudflare Worker + KV。
 - `POST /usage`：需 `Authorization: Bearer <WRITE_TOKEN>`。
 - `GET /usage`：需 `Authorization: Bearer <READ_TOKEN>`。
+- `POST /pair`（寫入密鑰）、`POST /pair/claim`（一次性短碼換讀取密鑰）：iPhone 配對的輔助方式（[ADR-0012](adr/0012-iphone-pairing.md)）。
 - 理由見 [ADR-0001](adr/0001-cloudflare-worker-relay.md)。
 
 ### 2.3 iOS App (`apple/iOSApp/`)
 | 部分 | 作用 |
 |---|---|
-| `UsageService` | 呼叫 `GET /usage`，讀取密鑰存於 Keychain |
-| `UsageAttributes` | Live Activity 資料結構，App 與 Widget 共用 |
+| `UsageSource`、UsageKit `RelayClient` | 呼叫 `GET /usage`，讀取密鑰存於 Keychain（App、Intent 與小工具共用） |
+| `UsageActivityAttributes` | Live Activity 資料結構，App 與 Widget 共用 |
 | Widget Extension | 繪製鎖定畫面／動態島卡片；主畫面與鎖定畫面小工具 `UsageHomeWidget`（FR-31、FR-32）也在這個擴充，自己呼叫中繼 |
 | `RefreshUsageIntent` | 「更新」按鈕：抓資料後 `activity.update()` |
 | `RestartUsageActivityIntent` | 捷徑用：抓資料、開新卡片，成功後才結束舊卡片 |
+| 設定 | 中繼網址與讀取密鑰（手動貼上、掃描 Mac 上的配對 QR 碼，或輸入中繼發的短碼，[ADR-0012](adr/0012-iphone-pairing.md)）、已用／剩餘、外觀（FR-52） |
 
 兩個 Intent 皆為 `LiveActivityIntent`，在背景執行不開 App；Live Activity 的資料透過 ActivityKit state 傳給 Widget。主畫面與鎖定畫面小工具不經過 ActivityKit：網址、顯示模式與最後一份資料放在 App Group，讀取密鑰放在 App 與擴充共用的 Keychain 項目（見 [`apple/iOSApp/README.md`](../apple/iOSApp/README.md#主畫面與鎖定畫面小工具)）。
 

@@ -156,6 +156,8 @@ cd ai-usage-monitor
    scripts/setup-iphone.sh --pair-only qr
    ```
 
+   相機不方便時改用一次性短碼：`scripts/setup-iphone.sh --pair-only code`，在 iPhone 按「輸入短碼」（10 分鐘內有效，只能用一次；中繼要是 2026-10-24 之後部署的版本才有這個端點）。
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-settings-pairing-dark.png">

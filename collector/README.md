@@ -170,10 +170,17 @@ scripts/set-relay.sh https://ai-usage-relay.<你的帳號>.workers.dev
 
 ## 自動排程（launchd）
 
+有兩種方式，同一時間只會有一個在收集：
+
+- **App 內建的收集器**（發布版的 Mac App，[ADR-0013](../docs/adr/0013-download-and-install.md)）：App 內嵌 Python 與這個收集器，以 `SMAppService` 註冊 App 內的 LaunchAgent，執行 `python3.13 -I -m usage_collector --write-local --upload --quiet --agent app`（與 launchd 版相同的收集）；第一次註冊前以 `python -m usage_collector.setup` 偵測 claude／codex 並合併寫入 `config.json`。偵測到下面 `install-launchd.sh` 的 plist 或 launchd 工作時，內建的這一輪不收集。
+- **`install-launchd.sh`**（從原始碼安裝）：
+
 ```bash
 scripts/install-launchd.sh     # 安裝：登入時與每 5 分鐘執行一次
 scripts/uninstall-launchd.sh   # 移除
 ```
+
+想從 `install-launchd.sh` 改用 App 內建的：在 App 的「設定 › 背景收集器」按「改用內建收集器」（先確認內建的能跑、舊的確實停止，才把舊的 plist 移到垃圾桶）。
 
 安裝腳本會把 [plist 範本](launchd/) 填入目前的 Python 與資料夾路徑後放到 `~/Library/LaunchAgents/`，並把偵測到的服務（`enabled_providers`）與 claude 的完整路徑寫進 `config.json`。移動 repo 資料夾、更換 Python 或 claude 的安裝位置後要重新執行安裝。
 
@@ -211,4 +218,4 @@ python3 -m unittest -v
 - **不自行刷新 token**：避免與 Codex CLI 互搶。
 - **provider 互相隔離**：單一服務失敗只會讓該服務的 `error` 有值。
 - **原子寫入**：本機快照先寫暫存檔再改名，讀取端不會讀到寫一半的檔案。
-- **新增服務**：在 `usage_collector/providers/` 新增模組並實作 `fetch() -> ProviderUsage`，再到 `providers/__init__.py` 註冊，並在 `scripts/detect-providers.sh` 加上偵測。
+- **新增服務**：在 `usage_collector/providers/` 新增模組並實作 `fetch() -> ProviderUsage`，再到 `usage_collector/providers/__init__.py` 註冊，並在 `scripts/detect-providers.sh`（`install-launchd.sh` 用）與 `usage_collector/setup.py`（App 內建收集器用）加上偵測。

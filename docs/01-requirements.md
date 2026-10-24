@@ -139,7 +139,7 @@ FR-19（額度通知）由 Mac 選單列 App 發出 macOS 通知（ADR-0009 回�
 | FR-54 | Mac 首次設定精靈：只引導自動化不了的步驟（強制打開、登入項目允許背景執行、Claude Code／Codex 的安裝與登入狀態、通知、登入時自動打開、外觀、要不要接 iPhone），每步顯示狀態，缺什麼顯示指令與「複製」；已設定好的人不再出現，設定可重新執行 | Should | v1.9 |
 | FR-55 | iPhone 安裝與配對：`scripts/setup-iphone.sh` 以使用者自己的 Apple ID 建置並安裝（可選每週自動重裝）；配對以一次性短碼／QR 取代手動貼密鑰（保留手動貼上），配對的做法見 [ADR-0012](adr/0012-iphone-pairing.md)（已採用：主要用終端機 QR 碼＋App 內掃描，輔助用中繼發的一次性短碼） | Should | v1.9 |
 | FR-56 | 一鍵部署中繼：`scripts/setup-relay.sh` 建立 KV、產生並設定密鑰、部署、寫收集器設定；可重跑（已設定過就停止）、`--dry-run`；偵測到既有部署時停止、不覆蓋（D1 目前用不到，沒有建立；見 [relay/README.md](../relay/README.md#一次完成fr-56)） | Should | v1.9 |
-| FR-57 | Windows 一行安裝：`install.ps1`（`irm … \| iex`）檢查並引導安裝 Python、安裝收集器與工作排程；可選加入第二層，以 `scripts/relay-device.sh` 產生的裝置密鑰設定（以短碼加入之後再做） | Could | v2.0 |
+| FR-57 | Windows 一行安裝：`install.ps1`（`irm … \| iex`）檢查並引導安裝 Python、安裝收集器與工作排程；可選加入第二層，以 `scripts/relay-device.sh`（#73）產生的裝置密鑰設定（以短碼加入之後再做） | Could | v2.0 |
 
 ### 3.7 里程碑（Mac 面板、統計與安裝）
 
