@@ -5,12 +5,22 @@
 ## [Unreleased]
 
 ### Changed
+- 熱力圖（#74）：「全部」改為藍色 5 階色階（淺色淺藍→深藍、深色暗藍→亮藍），面板的活動熱力圖、完整統計視窗與額度消耗共用同一個色階；Claude、Codex 維持各自的識別色，依階數疊透明度。分級從 4 階改成 5 階，對比由 `UsagePaletteTests` 檢查
+- 文件（#88）：README 的安裝改成三層（0. 只有 Mac、1. 加上 iPhone、2. 加上 PC），一行安裝指向固定版本並說明 SHA-256 的保護範圍；新增 `docs/uninstall.md`（各部分怎麼移除、會留下什麼）
+- ADR-0012（iPhone 配對）與 ADR-0013（下載與安裝）改為「已採用」，記錄使用者的決定（#90）：發布檔只放 arm64；「允許內建收集器執行」維持由使用者按；第一次發布用 tag 產生草稿 Release；FR-57 以 `relay-device.sh` 的裝置密鑰加入第二層（以短碼加入之後再做）
 - 額度重置的判斷（ADR-0009 第 4 節）：`used_pct` 下降時，要 `resets_at` 也改變或新值 ≤ 舊值一半才算重置；其他下降視為服務小幅下修，不算重置、該段消耗記 0
 - 近期速度（「用得太快」、「約 N 分鐘後用完」、「可撐到星期幾」）改為回看範圍內相鄰兩筆正差值的總和 ÷ 時間，與額度消耗一致：回看範圍內有一次大幅下修時不再變成 0
 - Token 數字改用「萬／億」三位有效數字（1,470萬、3.85億；不到一萬顯示整數），滑鼠移上去顯示完整數字
 - 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
 
 ### Added
+- 外觀設定（v1.9，FR-51、FR-52，#81）：Mac 設定「外觀」可選跟隨系統（預設）、淺色、深色，套用到面板、設定、完整統計與設定精靈的視窗，選單列圖示仍跟隨選單列；iPhone 設定「外觀」只套用到 App 本身，Live Activity、小工具與手錶跟隨系統。切換有 0.3 秒過渡，減少動態效果時直接換
+- Mac 一鍵安裝與內建收集器（v1.9，FR-53，ADR-0013，#83）：發布版 App 內嵌 Python（python-build-standalone 3.13 arm64，固定 SHA-256）與收集器，以 `SMAppService.agent` 註冊背景收集器；`scripts/build-release.sh` 產生 .zip、.dmg、寫好版本與 SHA-256 的一行安裝 `install.sh`（驗證 SHA-256、bundle ID、簽章；重跑即更新；`--uninstall`）；`.github/workflows/release.yml` 在 `v*` tag 只建立草稿 Release（附建置來源證明）。偵測到 `install-launchd.sh` 的舊收集器時**不註冊**，只提示，使用者按「改用內建收集器」才遷移；設定新增「背景收集器」
+- 首次設定精靈（v1.9，FR-54，#84）：第一次打開、還沒有用量資料時顯示 8 個步驟（App 位置、背景收集器、Claude Code、Codex、通知、登入時開啟、外觀、在 iPhone 上看），每步顯示完成或要處理的事，需要指令時附「複製」；可從「設定 › 一般 › 重新執行設定精靈」再打開
+- iPhone 配對與 `scripts/setup-iphone.sh`（v1.9，FR-55，ADR-0012，#85、#86）：Mac 終端機顯示 QR 碼（只含中繼網址與讀取密鑰，任何結束方式都清除畫面），iPhone 設定「從 Mac 配對 › 掃描 QR 碼」並確認主機名稱；輔助用中繼發的一次性短碼（`POST /pair`、`POST /pair/claim`：8 個字元、10 分鐘、錯 5 次作廢、只存雜湊，中繼要重新部署才有）。`setup-iphone.sh` 檢查 Xcode 與裝置、建置安裝、可選每 6 天自動重裝；`--dry-run`
+- `scripts/setup-relay.sh`（v1.9，FR-56，#87）：登入 Cloudflare、建 KV、部署、產生並設定兩把密鑰、寫收集器設定；已有部署或設定就停止、不覆蓋；`--dry-run`；密鑰只經過標準輸入、wrangler 不寫磁碟日誌
+- 建置與量測資料夾放 `.metadata_never_index`，不讓 Spotlight 索引（#72）；效能量測加上統計視窗第二次開關的 RSS 門檻，第一次打開多出的記憶體是系統一次性載入的程式碼與字型、不會累積（#80）
+- `scripts/check-debug-env.py`（#79）：`"AUM_…"` 示範用環境變數只能出現在 `#if DEBUG` 裡（Swift 把短字串直接編進指令，Release 的 `strings` 檢查看不到），加進 verify-all 與 CI
 - 截圖比對：`scripts/snapshots.sh`（verify-all、CI）以固定時間與假資料產生 Mac 面板、完整統計、設定、選單列圖示與 iPhone 小工具、Live Activity、動態島，和 `apple/Snapshots/` 的基準比對；`scripts/update-snapshots.sh` 更新基準
 - 對話紀錄格式改變的偵測（ADR-0009 第 9 節）：一次掃描中無法解析的行 ≥ 20%（至少 100 行），或新讀 4 MB 以上卻沒有任何 Token，統計卡片顯示「紀錄格式可能已改變，統計可能不完整」
 - 「匯出 Token CSV」（設定 › 歷史資料，FR-37）：這台電腦的每日 Token，四種 Token 與推理分開、日期為本機日期；原來的按鈕改名「匯出額度 CSV」
@@ -47,6 +57,9 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- 改用 App 內建的收集器時，確認舊的 launchd 工作真的停止（最多等 3 秒）才算遷移完成；停不下來時放回舊的、撤回內建的。內建收集器除了舊的 plist，也問 `launchctl` 舊的工作在不在，無法確認時這一輪不收集，兩個收集器不會同時執行（Fable F-02，#89）
+- 測試環境沒有指定 `AI_USAGE_MONITOR_HOME` 時，收集器、UsageKit 與 Mac App 的截圖／量測直接拒絕，不使用預設資料夾（#76、#78）
+- night4 審查（#75）：貼圖造成的超長行不再觸發「紀錄格式可能已改變」；截圖比對另加「任一 32×32 格子超過 20% 不同就失敗」；萬／億改用整數四捨五入（99,950 顯示「10萬」）
 - 總檢查（night3 第 8 部分，修正 commit 的 Codex 審查與 Fable 對抗式審查）：
   - Token 統計：跨過保留期間邊界的那一週不再當成完整的一週；縮短保留期間後再延長，已刪除的日子仍標「超過保留期間」而不是 0（App 記在 `meta.token_days_from`）；同一個 Codex rollout 被複製到 `archived_sessions` 時只算一次；完整統計視窗的「各模型」把兩家的 `other` 分開、各用自己的顏色
   - 額度：每週額度沒有近期速度時，經過 10% 以前不預測「可撐到星期幾」（與「用得太快」同一規則）；資料過期時時間軸不再把早已過去的重置標成「剛重置」

@@ -257,9 +257,9 @@ struct SetupWizardView: View {
             DetailText("套用到面板、設定、完整統計與這個視窗。選單列圖示跟隨選單列本身的深淺色。")
         case .iphone:
             if inputs.relayConfigured {
-                DetailText("中繼已設定，iPhone App 配對後就會顯示用量。安裝與配對見 README 的「在 iPhone 上看」。")
+                DetailText("中繼已設定，iPhone App 配對後就會顯示用量。安裝與配對見 README 的「1. 加上 iPhone」。")
             } else {
-                DetailText("需要你自己的中繼（Cloudflare 免費方案）與 iPhone App。不接也可以，Mac 上照常顯示。步驟見 README 的「在 iPhone 上看」。")
+                DetailText("需要你自己的中繼（Cloudflare 免費方案）與 iPhone App。不接也可以，Mac 上照常顯示。步驟見 README 的「1. 加上 iPhone」。")
             }
             Button("打開說明") { NSWorkspace.shared.open(Self.iPhoneGuide) }
                 .buttonStyle(PanelPillButtonStyle())
@@ -267,7 +267,7 @@ struct SetupWizardView: View {
     }
 
     /// 說明在 GitHub 上（用瀏覽器打開，App 本身不連網）
-    static let iPhoneGuide = URL(string: "https://github.com/kevin930326/ai-usage-monitor#在-iphone-上看")!
+    static let iPhoneGuide = URL(string: "https://github.com/kevin930326/ai-usage-monitor#1-加上-iphone")!
 }
 
 /// 一步：狀態圖示＋編號標題＋內容
