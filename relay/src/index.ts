@@ -1,13 +1,16 @@
 /**
  * 中繼 API：Mac 收集器上傳最新一筆用量，iPhone 讀取（FR-6、ADR-0001）。
  *
- *   POST /usage  Authorization: Bearer <WRITE_TOKEN>
- *   GET  /usage  Authorization: Bearer <READ_TOKEN>
+ *   POST /usage       Authorization: Bearer <WRITE_TOKEN>
+ *   GET  /usage       Authorization: Bearer <READ_TOKEN>
+ *   POST /pair        Authorization: Bearer <WRITE_TOKEN>   產生一次性短碼（ADR-0012）
+ *   POST /pair/claim  不需要密鑰，{"code": "..."}            以短碼兌換讀取密鑰
  */
 
 export interface KV {
   get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<void>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+  delete(key: string): Promise<void>;
 }
 
 export interface Env {
@@ -160,6 +163,145 @@ async function handleGet(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// MARK: iPhone 配對（ADR-0012「短碼」）
+
+// Crockford base32（不含 I、L、O、U）；256 是 32 的倍數，取低 5 位元沒有偏差
+const CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const PAIRING = { length: 8, ttlSeconds: 600, maxFailures: 5, maxClaimBytes: 1024 };
+const PAIR_KEY = "pair";
+// KV 的 expirationTtl 最少 60 秒；到期以 expires_at 為準，TTL 只是讓舊資料自動消失
+const KV_MIN_TTL = 60;
+
+type PairRecord = { hash: string; expires_at: number };
+
+// 失敗次數存在每組短碼自己的鍵：錯誤的請求從不寫回 PAIR_KEY，晚到的寫入不會讓已兌換或已取代的短碼復活（Codex C-01）
+const failKey = (hash: string) => `pair-fail:${hash.slice(0, 16)}`;
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** 與 iPhone 的 PairingCode.normalize 相同：忽略大小寫、空白與連字號，O→0、I／L→1 */
+export function normalizeCode(input: string): string | null {
+  const mapped = input.toUpperCase().replace(/[\s-]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
+  if (mapped.length !== PAIRING.length || [...mapped].some((c) => !CODE_ALPHABET.includes(c))) return null;
+  return mapped;
+}
+
+function newCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(PAIRING.length));
+  return [...bytes].map((b) => CODE_ALPHABET[b & 31]).join("");
+}
+
+function pairTtl(record: PairRecord, now: number): number {
+  return Math.max(KV_MIN_TTL, Math.ceil((record.expires_at - now) / 1000));
+}
+
+/**
+ * KV 沒有條件刪除：刪之前再讀一次，只刪仍是同一組的短碼，縮小誤刪 Mac 剛發的新碼的機會。
+ * 再讀與刪除之間仍有空窗（Codex C-02）；新碼被刪時 Mac 重新產生一組即可。
+ */
+async function deletePairIfCurrent(env: Env, hash: string): Promise<void> {
+  const stored = await env.USAGE_KV.get(PAIR_KEY);
+  if (stored === null) return;
+  try {
+    if ((JSON.parse(stored) as PairRecord).hash !== hash) return;
+  } catch {
+    // 壞掉的紀錄直接刪
+  }
+  await env.USAGE_KV.delete(PAIR_KEY);
+}
+
+/** Mac 以寫入密鑰要一組短碼；同一時間只有一組，再要一組就取代舊的。只存雜湊。 */
+async function handlePair(request: Request, env: Env): Promise<Response> {
+  if (!(await authorized(request, env.WRITE_TOKEN))) return error(401, "unauthorized");
+  const now = Date.now();
+  const code = newCode();
+  const record: PairRecord = { hash: await sha256Hex(code), expires_at: now + PAIRING.ttlSeconds * 1000 };
+  await env.USAGE_KV.put(PAIR_KEY, JSON.stringify(record), { expirationTtl: pairTtl(record, now) });
+  return json({ code, expires_at: new Date(record.expires_at).toISOString().replace(/\.\d{3}Z$/, "Z") });
+}
+
+/** 邊讀邊算原始位元組，超過上限就停止讀取並回 null（不先把整份內容讀進記憶體；Codex C-02） */
+export async function readLimited(request: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  if (request.body === null) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/**
+ * iPhone 以短碼兌換讀取密鑰。錯誤、到期、沒有短碼、格式不對都回 403（不區分，避免探測）；
+ * 錯 5 次就刪除，成功立即刪除。KV 沒有原子操作：同時送出的正確請求可能都兌換成功（README「已知限制」，Codex C-01）。
+ */
+async function handleClaim(request: Request, env: Env): Promise<Response> {
+  const denied = () => error(403, "配對失敗");
+  const body = await readLimited(request, PAIRING.maxClaimBytes);
+  if (body === null) return error(413, "內容過大");
+  let code: string | null = null;
+  try {
+    const data: unknown = JSON.parse(body);
+    if (isObject(data) && typeof data.code === "string") code = normalizeCode(data.code);
+  } catch {
+    // 與錯誤的短碼相同處理
+  }
+
+  // 格式不對的不讀 KV、不算錯誤次數：不能用垃圾請求消耗 KV 用量或作廢進行中的配對（Fable F-01）
+  if (code === null) return denied();
+  const stored = await env.USAGE_KV.get(PAIR_KEY);
+  if (stored === null) return denied();
+  let record: PairRecord;
+  try {
+    record = JSON.parse(stored) as PairRecord;
+  } catch {
+    await env.USAGE_KV.delete(PAIR_KEY);
+    return denied();
+  }
+  const now = Date.now();
+  if (!(record.expires_at > now)) {
+    await deletePairIfCurrent(env, record.hash);
+    return denied();
+  }
+  const failures = Number(await env.USAGE_KV.get(failKey(record.hash))) || 0;
+  if (failures >= PAIRING.maxFailures) {
+    await deletePairIfCurrent(env, record.hash);
+    return denied();
+  }
+  if (await safeEqual(await sha256Hex(code), record.hash)) {
+    await deletePairIfCurrent(env, record.hash);
+    return json({ read_token: env.READ_TOKEN });
+  }
+  if (failures + 1 >= PAIRING.maxFailures) await deletePairIfCurrent(env, record.hash);
+  await env.USAGE_KV.put(failKey(record.hash), String(failures + 1), { expirationTtl: pairTtl(record, now) });
+  return denied();
+}
+
+const ROUTES: Record<string, Partial<Record<string, (request: Request, env: Env) => Promise<Response>>>> = {
+  "/usage": { GET: handleGet, POST: handlePost },
+  "/pair": { POST: handlePair },
+  "/pair/claim": { POST: handleClaim },
+};
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // 兩把密鑰都要設定且不同，否則拒絕服務，避免讀取密鑰也能寫入
@@ -168,15 +310,10 @@ export default {
     }
 
     const { pathname } = new URL(request.url);
-    if (pathname !== "/usage") return error(404, "not found");
-
-    switch (request.method) {
-      case "GET":
-        return handleGet(request, env);
-      case "POST":
-        return handlePost(request, env);
-      default:
-        return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
-    }
+    const route = Object.hasOwn(ROUTES, pathname) ? ROUTES[pathname] : undefined;
+    if (!route) return error(404, "not found");
+    const handler = Object.hasOwn(route, request.method) ? route[request.method] : undefined;
+    if (!handler) return new Response(null, { status: 405, headers: { Allow: Object.keys(route).join(", ") } });
+    return handler(request, env);
   },
 };

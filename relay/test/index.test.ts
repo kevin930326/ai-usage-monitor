@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
-import worker, { MAX_BODY_BYTES, type Env } from "../src/index.ts";
+import worker, { MAX_BODY_BYTES, PAIRING, normalizeCode, readLimited, type Env } from "../src/index.ts";
 
 class MemoryKV {
   store = new Map<string, string>();
+  ttl = new Map<string, number | undefined>();
   async get(key: string) {
     return this.store.get(key) ?? null;
   }
-  async put(key: string, value: string) {
+  async put(key: string, value: string, options?: { expirationTtl?: number }) {
     this.store.set(key, value);
+    this.ttl.set(key, options?.expirationTtl);
+  }
+  async delete(key: string) {
+    this.store.delete(key);
   }
 }
 
@@ -171,5 +176,174 @@ describe("路由與設定", () => {
   it("缺少密鑰設定時拒絕服務", async () => {
     env.READ_TOKEN = "";
     assert.equal((await call("GET", "")).status, 500);
+  });
+});
+
+describe("iPhone 配對（ADR-0012）", () => {
+  const pair = () => call("POST", "write-secret", "", "/pair");
+  const claim = (code: unknown) => call("POST", undefined, JSON.stringify({ code }), "/pair/claim");
+
+  it("寫入密鑰產生短碼，iPhone 以短碼換到讀取密鑰（只能用一次）", async () => {
+    const res = await pair();
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("Cache-Control"), "no-store");
+    const { code, expires_at } = await res.json();
+    assert.match(code, /^[0-9A-HJKMNP-TV-Z]{8}$/);
+    assert.match(expires_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    const ttl = Date.parse(expires_at) - Date.now();
+    assert.ok(ttl > 590_000 && ttl <= 600_000);
+    // 只存雜湊，KV 裡看不到短碼本身
+    assert.ok(!kv.store.get("pair")!.includes(code));
+    assert.equal(kv.ttl.get("pair"), PAIRING.ttlSeconds);
+
+    // 使用者輸入時的大小寫與連字號都可以
+    const ok = await claim(`${code.slice(0, 4).toLowerCase()}-${code.slice(4)}`);
+    assert.equal(ok.status, 200);
+    assert.deepEqual(await ok.json(), { read_token: "read-secret" });
+    assert.equal((await claim(code)).status, 403);
+    assert.equal(kv.store.has("pair"), false);
+  });
+
+  it("讀取密鑰或沒有密鑰不能產生短碼", async () => {
+    assert.equal((await call("POST", "read-secret", "", "/pair")).status, 401);
+    assert.equal((await call("POST", undefined, "", "/pair")).status, 401);
+    assert.equal(kv.store.size, 0);
+  });
+
+  it("再產生一組就取代舊的", async () => {
+    const first = (await (await pair()).json()).code;
+    const second = (await (await pair()).json()).code;
+    if (first !== second) assert.equal((await claim(first)).status, 403);
+    assert.equal((await claim(second)).status, 200);
+  });
+
+  it("錯誤、到期、沒有短碼、格式不對都回 403", async () => {
+    assert.equal((await claim("7K3MQ9TD")).status, 403); // 還沒產生
+    const { code } = await (await pair()).json();
+    const record = JSON.parse(kv.store.get("pair")!);
+    kv.store.set("pair", JSON.stringify({ ...record, expires_at: Date.now() - 1 }));
+    assert.equal((await claim(code)).status, 403);
+    assert.equal(kv.store.has("pair"), false);
+    assert.equal((await call("POST", undefined, "{not json", "/pair/claim")).status, 403);
+    assert.equal((await claim(12345678)).status, 403);
+    assert.equal((await claim("short")).status, 403);
+    const big = await call("POST", undefined, JSON.stringify({ code: "x".repeat(2000) }), "/pair/claim");
+    assert.equal(big.status, 413);
+  });
+
+  it("錯 5 次就作廢，正確的短碼也不能再用", async () => {
+    const { code } = await (await pair()).json();
+    const wrong = code[0] === "0" ? `1${code.slice(1)}` : `0${code.slice(1)}`;
+    for (let i = 1; i < PAIRING.maxFailures; i++) {
+      assert.equal((await claim(wrong)).status, 403);
+      const { hash } = JSON.parse(kv.store.get("pair")!);
+      assert.equal(kv.store.get(`pair-fail:${hash.slice(0, 16)}`), String(i));
+    }
+    assert.equal((await claim(wrong)).status, 403);
+    assert.equal(kv.store.has("pair"), false);
+    assert.equal((await claim(code)).status, 403);
+  });
+
+  it("晚到的失敗寫入不會讓已兌換的短碼復活，也不影響新發的短碼（並行）", async () => {
+    // 讓錯誤請求停在它的第一個寫入，先完成其他請求再放行
+    const pauseNextPut = () => {
+      const realPut = kv.put.bind(kv);
+      let release!: () => void;
+      let reached!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const arrived = new Promise<void>((r) => (reached = r));
+      kv.put = async (key, value, options) => {
+        kv.put = realPut;
+        reached();
+        await gate;
+        return realPut(key, value, options);
+      };
+      return { arrived, release };
+    };
+    const wrongOf = (code: string) => (code[0] === "0" ? `1${code.slice(1)}` : `0${code.slice(1)}`);
+
+    const { code } = await (await pair()).json();
+    let gate = pauseNextPut();
+    const late = claim(wrongOf(code));
+    await gate.arrived;
+    assert.equal((await claim(code)).status, 200);
+    gate.release();
+    assert.equal((await late).status, 403);
+    assert.equal(kv.store.has("pair"), false);
+    assert.equal((await claim(code)).status, 403);
+
+    const { code: old } = await (await pair()).json();
+    gate = pauseNextPut();
+    const stale = claim(wrongOf(old));
+    await gate.arrived;
+    const { code: fresh } = await (await pair()).json();
+    gate.release();
+    assert.equal((await stale).status, 403);
+    if (old !== fresh) assert.equal((await claim(old)).status, 403);
+    assert.equal((await claim(fresh)).status, 200);
+  });
+
+  it("兌換內容超過上限時邊讀邊停，不讀完整份（沒有 Content-Length 的串流）", async () => {
+    let pulled = 0;
+    const chunk = new TextEncoder().encode("x".repeat(256));
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += chunk.byteLength;
+        if (pulled > 20 * 1024) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const req = new Request("https://relay.test/pair/claim", { method: "POST", body: stream, duplex: "half" } as RequestInit);
+    assert.equal(req.headers.get("Content-Length"), null);
+    assert.equal((await worker.fetch(req, env)).status, 413);
+    assert.ok(pulled <= PAIRING.maxClaimBytes + 2 * chunk.byteLength, `讀了 ${pulled} bytes`);
+
+    // 宣告的長度超過上限：不讀內容
+    const declared = new Request("https://relay.test/pair/claim", {
+      method: "POST",
+      body: "{}",
+      headers: { "Content-Length": String(PAIRING.maxClaimBytes + 1) },
+    });
+    assert.equal(await readLimited(declared, PAIRING.maxClaimBytes), null);
+
+    // 多位元組字元以位元組計算；恰好在上限是合法的
+    const zh = "中".repeat(PAIRING.maxClaimBytes / 4); // 3 bytes × 256 = 768
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: zh }), PAIRING.maxClaimBytes), zh);
+    const exact = "a".repeat(PAIRING.maxClaimBytes);
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: exact }), PAIRING.maxClaimBytes), exact);
+    const over = "中".repeat(342); // 1026 bytes
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: over }), PAIRING.maxClaimBytes), null);
+  });
+
+  it("格式不對的請求不讀寫 KV、不算錯誤次數（Fable F-01）", async () => {
+    const { code } = await (await pair()).json();
+    let reads = 0;
+    let writes = 0;
+    const get = kv.get.bind(kv);
+    const put = kv.put.bind(kv);
+    kv.get = async (key) => (reads++, get(key));
+    kv.put = async (key, value, options) => (writes++, put(key, value, options));
+    for (let i = 0; i < PAIRING.maxFailures + 2; i++) {
+      assert.equal((await claim("short")).status, 403);
+      assert.equal((await call("POST", undefined, "{not json", "/pair/claim")).status, 403);
+    }
+    assert.equal(reads, 0);
+    assert.equal(writes, 0);
+    assert.equal((await claim(code)).status, 200);
+  });
+
+  it("短碼的正規化與 iPhone 相同", () => {
+    assert.equal(normalizeCode("7k3m-q9td"), "7K3MQ9TD");
+    assert.equal(normalizeCode(" oil0 1234 "), "01101234");
+    assert.equal(normalizeCode("7K3M-Q9TU"), null);
+    assert.equal(normalizeCode("7K3M-Q9T"), null);
+  });
+
+  it("配對端點只接受 POST", async () => {
+    const res = await call("GET", "write-secret", undefined, "/pair");
+    assert.equal(res.status, 405);
+    assert.equal(res.headers.get("Allow"), "POST");
+    assert.equal((await call("GET", undefined, undefined, "/pair/claim")).status, 405);
+    assert.equal((await call("GET", undefined, undefined, "/pair/other")).status, 404);
   });
 });
