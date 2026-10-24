@@ -49,7 +49,7 @@ collector/scripts/uninstall-launchd.sh
 ```bash
 cd relay
 npx wrangler delete --config wrangler.local.toml      # scripts/setup-relay.sh 部署的；手動部署的用 npx wrangler delete
-npx wrangler kv namespace list                         # 找到 USAGE_KV 的 id
+npx wrangler kv namespace list                         # 找到 ai-usage-relay-usage（setup-relay.sh 建的；手動建的叫 USAGE_KV）的 id
 npx wrangler kv namespace delete --namespace-id <id>
 ```
 
