@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import type { D1Database, D1PreparedStatement, D1Result } from "../src/tokens.ts";
+import type { D1Database, D1PreparedStatement, D1Result, D1RunResult } from "../src/tokens.ts";
 
 const MIGRATIONS = new URL("../migrations/", import.meta.url);
 
@@ -34,8 +34,10 @@ class Statement implements D1PreparedStatement {
     return this.runSync();
   }
 
-  runSync(): unknown {
-    return this.db.prepare(this.sql).run(...this.values);
+  /** D1 一樣把寫入的列數放在 meta.changes */
+  runSync(): D1RunResult {
+    const result = this.db.prepare(this.sql).run(...this.values);
+    return { meta: { changes: Number(result.changes) } };
   }
 }
 
@@ -55,7 +57,7 @@ export class FakeD1 implements D1Database {
     return new Statement(this.db, sql);
   }
 
-  async batch(statements: D1PreparedStatement[]): Promise<unknown[]> {
+  async batch(statements: D1PreparedStatement[]): Promise<D1RunResult[]> {
     this.batches++;
     this.db.exec("BEGIN");
     try {
