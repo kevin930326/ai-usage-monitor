@@ -61,7 +61,10 @@ if ($WithQuota) {
     # 安裝時找到的 CLI 寫進 config.json（排程執行時的 PATH 可能不同）；找不到的服務不啟用
     $enabled = @()
     foreach ($name in @('claude', 'codex')) {
-        $cmd = Get-Command $name -ErrorAction SilentlyContinue
+        # 只取能直接啟動的 .exe／.cmd／.bat：npm 另外產生的 .ps1 要經過 PowerShell，收集器無法直接執行
+        $cmd = Get-Command $name -CommandType Application -All -ErrorAction SilentlyContinue |
+            Where-Object { @('.exe', '.cmd', '.bat') -contains [IO.Path]::GetExtension($_.Source).ToLower() } |
+            Select-Object -First 1
         if ($cmd) {
             Update-Config @($Config, "$($name)_path", $cmd.Source)
             $enabled += $name

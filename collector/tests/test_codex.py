@@ -281,6 +281,7 @@ class CodexFetchTest(unittest.TestCase):
         def kill(proc):
             proc.kill()
         with mock.patch.object(codex.system, "IS_WINDOWS", True), \
+                mock.patch.object(codex.system, "is_launchable", lambda p: os.access(p, os.X_OK)), \
                 mock.patch.object(codex.system, "isolated_popen_kwargs", return_value={"start_new_session": True}), \
                 mock.patch.object(codex.system, "kill_tree", side_effect=kill) as kill_tree:
             with FakeCodex() as fake:
