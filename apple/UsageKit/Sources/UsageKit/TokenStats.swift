@@ -509,3 +509,27 @@ public enum TokenFormat {
         return s
     }
 }
+
+// MARK: - 匯出 CSV（FR-37、ADR-0009 第 5 節）
+
+public enum TokenCSV {
+    public static let header = "day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,"
+        + "reasoning_tokens,task_count,task_seconds,longest_task_seconds\n"
+
+    /// 每日 Token（`daily_tokens`）：欄位同資料表，四種 Token 與推理明細分開、不預先加總；
+    /// `day` 是收集器寫入時的本機日期（YYYY-MM-DD）。依日期、服務、模型排序。
+    public static func make(rows: [TokenDayRow]) -> String {
+        let sorted = rows.sorted { ($0.day, $0.provider, $0.model) < ($1.day, $1.provider, $1.model) }
+        var out = header
+        for r in sorted {
+            let c = r.counts
+            let fields: [String] = [
+                QuotaHistoryCSV.field(r.day), QuotaHistoryCSV.field(r.provider), QuotaHistoryCSV.field(r.model),
+                "\(c.input)", "\(c.cacheWrite)", "\(c.cacheRead)", "\(c.output)", "\(c.reasoning)",
+                "\(r.taskCount)", "\(r.taskSeconds)", "\(r.longestTaskSeconds)",
+            ]
+            out += fields.joined(separator: ",") + "\n"
+        }
+        return out
+    }
+}

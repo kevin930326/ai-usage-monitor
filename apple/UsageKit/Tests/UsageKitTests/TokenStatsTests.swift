@@ -186,6 +186,24 @@ import Testing
         #expect(TokenFormat.duration(7200) == "2 小時")
     }
 
+    @Test func tokenCSVKeepsFourTokenKindsSeparate() {
+        let rows = [
+            TokenDayRow(day: "2026-10-24", provider: "codex", model: "gpt-5.5",
+                        counts: TokenCounts(input: 10, cacheWrite: 0, cacheRead: 900, output: 40, reasoning: 12),
+                        taskCount: 2, taskSeconds: 300, longestTaskSeconds: 200),
+            TokenDayRow(day: "2026-10-23", provider: "claude", model: "claude-opus-5-5",
+                        counts: TokenCounts(input: 1, cacheWrite: 2, cacheRead: 3, output: 4), taskCount: 1, taskSeconds: 60, longestTaskSeconds: 60),
+            TokenDayRow(day: "2026-10-24", provider: "claude", model: "other", counts: TokenCounts(input: 5)),
+        ]
+        let lines = TokenCSV.make(rows: rows).split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines[0] == "day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds")
+        #expect(lines[1] == "2026-10-23,claude,claude-opus-5-5,1,2,3,4,0,1,60,60")
+        #expect(lines[2] == "2026-10-24,claude,other,5,0,0,0,0,0,0,0")
+        #expect(lines[3] == "2026-10-24,codex,gpt-5.5,10,0,900,40,12,2,300,200")
+        #expect(lines.count == 5 && lines[4].isEmpty)
+        #expect(TokenCSV.make(rows: []) == TokenCSV.header)
+    }
+
     @Test func otherCalendarsUseGregorianDayKeys() {
         // 使用者選民國曆或佛曆：資料庫的日期鍵仍是西元
         for id in [Calendar.Identifier.republicOfChina, .buddhist, .japanese] {

@@ -157,7 +157,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - **任務時間**：Codex 用 `task_complete.duration_ms`（沒有時用 `completed_at − started_at`）。Claude：同一檔、非 sidechain，從一個「真人提示」（`type == "user"`、不是 `tool_result`、不是 `isMeta`）到下一個真人提示之前最後一筆 assistant 行的時間差；超過 6 小時視為中斷，以 6 小時計；sidechain（子代理）只計 Token、不另算任務。任務歸到**開始**那天。
 - **連續使用天數**：當天任一服務的 Token > 0 即算使用。
 - **「本週」與「上週」**：本機時間星期一 00:00 起算的日曆週（Token 統計）；額度相關的「本週走勢」則對齊各額度自己的重置時間。
-- **額度消耗**（ADR-0011 第一層）：同一額度相鄰兩筆 `used_pct` 的正差值；`resets_at` 改變或 `used_pct` 下降時視為重置，該段以新值計。兩次收集之間沒有 `collector_runs` 紀錄超過 15 分鐘的時段標記為「沒有紀錄」。限制：Claude 的 `used_pct` 是整數（ADR-0006），每小時的消耗多數為 0 或 1 個百分點，熱力圖解析度較粗。
+- **額度消耗**（ADR-0011 第一層）：同一額度相鄰兩筆 `used_pct` 的正差值；`resets_at` 改變（超過 10 分鐘，或一筆有、一筆沒有），或 `used_pct` 下降到舊值的一半以下（含一半）時視為重置，該段以新值計。其他的下降是服務小幅下修（例如 Claude 的整數 % 四捨五入改變），不算重置、該段的消耗記 0、近期速度不從那裡重新起算（使用者 2026-10-24 決定，night3 的 F-02 選項 (b)；小幅下修後又用回原值以上時，回升的部分照算，可能略為高估）。兩次收集之間沒有 `collector_runs` 紀錄超過 15 分鐘的時段標記為「沒有紀錄」。限制：Claude 的 `used_pct` 是整數（ADR-0006），每小時的消耗多數為 0 或 1 個百分點，熱力圖解析度較粗。
 - **近期速度**（「用得太快」、「約 N 分鐘後用完」與「可撐到星期幾」）：5 小時額度用最近 60 分鐘的樣本，至少 4 筆且跨度 ≥ 30 分鐘；每週額度用最近 24 小時的樣本，至少 4 筆且跨度 ≥ 12 小時（v1.6 修訂：剛開始收集時幾十分鐘的密集使用不能代表一整週）；不足時退回「本額度開始至今的平均速度」（ADR-0008 第 4 節）。
 
 ### 5. 保留、匯出與清除（FR-37）
@@ -168,7 +168,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
-| 匯出 CSV | 設定中按「匯出 CSV」→ 系統儲存對話框，由使用者選位置；匯出 `daily_tokens` 與每小時的額度歷史，欄位同資料表，不含 `scan_state`、`seen_ids`、`file_tokens`、`meta` |
+| 匯出 CSV | 設定中按「匯出額度 CSV」或「匯出 Token CSV」→ 系統儲存對話框，由使用者選位置。額度：每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`）；Token：這台電腦的 `daily_tokens`（`day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds`，四種 Token 分開，`day` 是本機日期）。不含 `device_id`、`scan_state`、`seen_ids`、`file_tokens`、`meta` |
 | 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`，執行 `VACUUM`；**保留** `scan_state`、`seen_ids` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表一起清除，從現有對話紀錄重建 |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
@@ -238,7 +238,6 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - `records` 另有各服務的版本（鍵加上 `:claude`／`:codex`），給面板的「全部／Claude／Codex」切換使用。個人紀錄同樣大時記最早的那天。
 - 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
 - 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
-- 「匯出 CSV」（第 5 節）目前只匯出每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`），尚未匯出 `daily_tokens`；是否補上待使用者決定。
 - `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
 
 ## 決定（使用者於 2026-10-23 決定）

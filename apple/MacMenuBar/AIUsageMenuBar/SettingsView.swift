@@ -359,9 +359,15 @@ private struct HistorySettingsSection: View {
             }
 
             HStack(spacing: 8) {
-                Button("匯出 CSV…", action: export)
+                Button("匯出額度 CSV…") { export(.quota) }
                     .buttonStyle(PanelPillButtonStyle())
                     .disabled(!(info?.status.canRead ?? false))
+                Button("匯出 Token CSV…") { export(.tokens) }
+                    .buttonStyle(PanelPillButtonStyle())
+                    .disabled(!(info?.status.canRead ?? false))
+                    .help("每日 Token：日期（本機時間）、服務、模型，四種 Token 與推理分開，以及任務數與任務秒數")
+            }
+            HStack(spacing: 8) {
                 Button("清除歷史…") { confirmClear = true }
                     .buttonStyle(PanelPillButtonStyle())
                     .disabled(!writable)
@@ -463,17 +469,24 @@ private struct HistorySettingsSection: View {
         }
     }
 
-    private func export() {
+    private enum Export {
+        case quota, tokens
+    }
+
+    private func export(_ kind: Export) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.nameFieldStringValue = "ai-usage-history-\(Date.now.formatted(.iso8601.year().month().day())).csv"
+        let date = Date.now.formatted(.iso8601.year().month().day())
+        panel.nameFieldStringValue = kind == .quota ? "ai-usage-history-\(date).csv" : "ai-usage-tokens-\(date).csv"
         panel.canCreateDirectories = true
         NSApplication.shared.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let csv = try store.exportCSV()
+            let csv = try kind == .quota ? store.exportCSV() : store.exportTokenCSV()
             try Data(csv.utf8).write(to: url, options: .atomic)
             message = "已匯出到 \(url.lastPathComponent)"
+        } catch HistoryStore.WriteError.missing where kind == .tokens {
+            message = "還沒有 Token 統計可以匯出"
         } catch {
             message = "匯出失敗"
         }
