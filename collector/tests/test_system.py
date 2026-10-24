@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from zoneinfo import ZoneInfoNotFoundError
+from zoneinfo import ZoneInfoNotFoundError, available_timezones
 
 from usage_collector import __main__ as main_module
 from usage_collector import paths, system
@@ -72,6 +72,7 @@ class ExecutableFallbackTest(unittest.TestCase):
 
 
 class ZoneTest(unittest.TestCase):
+    @unittest.skipUnless(available_timezones(), "沒有時區資料庫（Windows 未安裝 tzdata）")
     def test_known_zone(self):
         self.assertEqual(str(system.zone("UTC", None)), "UTC")
 
