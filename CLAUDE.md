@@ -22,5 +22,5 @@
 
 - `scripts/verify-all.sh` 會跑 `scripts/snapshots.sh`：以固定時間、時區與假資料用 ImageRenderer 產生 Mac 面板、完整統計、設定、選單列圖示，以及 iPhone 小工具、鎖定畫面 Live Activity、動態島（淺色、深色），和 `apple/Snapshots/` 的基準比對，容許小誤差。
 - 畫面**有意**改變時執行 `scripts/update-snapshots.sh` 更新基準，逐張檢查 `git diff` 中的圖再提交，PR 內文說明哪些截圖改了、為什麼。沒打算改畫面卻不符時，看 `build/snapshots/diff/` 的差異圖找原因，不要直接更新基準。
-- 基準綁定產生它的環境（`apple/Snapshots/ENVIRONMENT`：macOS、Xcode、模擬器）；環境不同時比對只印警告、不算失敗（CI 的 macOS runner 通常屬於這種）。升級 macOS 或 Xcode 後先在 main 上更新基準。
+- 基準綁定產生它的環境（`apple/Snapshots/<平台>/ENVIRONMENT`：Mac 記 macOS 與 Xcode，iPhone 記 Xcode 與模擬器）；某平台環境不同時，該平台的畫面差異只印警告、不算失敗（CI 的 macOS runner 通常屬於這種），缺圖或讀不到圖仍算失敗。升級 macOS 或 Xcode 後先在 main 上更新基準。
 

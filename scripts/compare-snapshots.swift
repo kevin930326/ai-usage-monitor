@@ -6,7 +6,7 @@
 // 每個像素四個通道中差最多的那個超過 PIXEL_TOLERANCE（0～255）算「不同」；
 // 不同的像素超過總數的 RATIO_TOLERANCE 或尺寸不同時，該張失敗並在差異圖資料夾輸出
 // <名稱>-diff.png（不同的像素標紅，其他淡化）。基準有、新截圖沒有的也算失敗。
-// 結束碼：0＝全部相符，1＝有不符，2＝參數或讀檔錯誤。
+// 結束碼：0＝全部相符，1＝只有畫面不符（像素或尺寸），2＝參數錯誤或沒有基準，3＝缺圖或讀不到圖。
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -71,15 +71,18 @@ guard !names.isEmpty else {
 }
 try? FileManager.default.createDirectory(at: diffDir, withIntermediateDirectories: true)
 var failed = 0
+var broken = 0
 for name in names {
     guard let base = load(baseDir.appendingPathComponent(name)) else {
         print("FAIL \(name)：無法讀取基準")
         failed += 1
+        broken += 1
         continue
     }
     guard let new = load(newDir.appendingPathComponent(name)) else {
-        print("FAIL \(name)：沒有產生這張截圖")
+        print("FAIL \(name)：沒有產生這張截圖，或讀不到")
         failed += 1
+        broken += 1
         continue
     }
     guard base.width == new.width, base.height == new.height else {
@@ -102,4 +105,4 @@ for name in names {
     }
 }
 print("compare-snapshots: \(names.count - failed)/\(names.count) 相符")
-exit(failed == 0 ? 0 : 1)
+exit(broken > 0 ? 3 : failed == 0 ? 0 : 1)

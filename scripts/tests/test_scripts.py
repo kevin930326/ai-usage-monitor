@@ -459,9 +459,107 @@ class CompareSnapshotsTests(unittest.TestCase):
         write_png(self.base / "b.png", 10, 10)
         write_png(self.new / "a.png", 100, 101)
         result = self.compare()
-        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.returncode, 3)  # 缺圖：和畫面不符（1）分開
         self.assertIn("尺寸", result.stdout)
         self.assertIn("沒有產生", result.stdout)
+
+
+@unittest.skipUnless(sys.platform == "darwin" and shutil.which("swiftc") and shutil.which("xcodebuild"),
+                     "snapshots.sh 用到 sw_vers、xcodebuild 與 CoreGraphics（macOS）")
+class SnapshotsScriptTests(unittest.TestCase):
+    """snapshots.sh（SNAPSHOT_FROM 以現成的圖代替產生）：環境不同只放寬畫面差異；缺圖、壞圖一律失敗；
+    各平台各自判斷環境；更新時少一張圖就失敗且不動原本的基準。"""
+    MAC = ["panel-light", "panel-dark", "stats-window-light", "stats-window-dark", "settings-light", "settings-dark",
+           "menubar-icons-light", "menubar-icons-dark"]
+    IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
+           "widget-large-dark", "live-activity-light", "live-activity-dark", "island-normal"]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="snapshots script "))
+        cls.tool = cls.tmp / "compare"
+        subprocess.run(["swiftc", "-O", str(ROOT / "scripts" / "compare-snapshots.swift"), "-o", str(cls.tool)],
+                       check=True, capture_output=True)
+        macos = subprocess.run(["sw_vers", "-productVersion"], capture_output=True, text=True).stdout.strip()
+        xcode = subprocess.run(["xcodebuild", "-version"], capture_output=True, text=True).stdout.split()[1]
+        cls.mac_env = f"macos={'.'.join(macos.split('.')[:2])}\nxcode={xcode}\n"
+        cls.ios_env = f"xcode={xcode}\nsimulator=test\n"
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def setUp(self):
+        self.repo = Path(tempfile.mkdtemp(dir=self.tmp))
+        (self.repo / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts" / "snapshots.sh", self.repo / "scripts")
+        shutil.copy(ROOT / "scripts" / "compare-snapshots.swift", self.repo / "scripts")
+        (self.repo / "build" / "snapshots").mkdir(parents=True)
+        shutil.copy(self.tool, self.repo / "build" / "snapshots" / "compare-snapshots")  # 比原始碼新：不重新編譯
+        self.base = self.repo / "apple" / "Snapshots"
+        self.new = self.repo / "rendered"
+        for platform, names, env in (("mac", self.MAC, self.mac_env), ("ios", self.IOS, self.ios_env)):
+            for folder in (self.base / platform, self.new / platform):
+                folder.mkdir(parents=True)
+                for name in names:
+                    write_png(folder / f"{name}.png", 20, 20)
+            (self.base / platform / "ENVIRONMENT").write_text(env)
+
+    def run_snapshots(self, *args) -> subprocess.CompletedProcess:
+        env = {**os.environ, **UTF8_ENV, "SNAPSHOT_FROM": str(self.new), "SNAPSHOT_SIM_DESC": "test"}
+        env.pop("GITHUB_ACTIONS", None)
+        return subprocess.run(["/bin/bash", str(self.repo / "scripts" / "snapshots.sh"), *args], cwd=self.repo,
+                              env=env, capture_output=True, text=True)
+
+    def test_identical_images_pass(self):
+        result = self.run_snapshots()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_visual_difference_fails_in_the_same_environment(self):
+        write_png(self.new / "mac" / "panel-light.png", 20, 20, changed=40)
+        self.assertEqual(self.run_snapshots().returncode, 1)
+
+    def test_visual_difference_only_warns_when_environment_differs(self):
+        write_png(self.new / "mac" / "panel-light.png", 20, 20, changed=40)
+        (self.base / "mac" / "ENVIRONMENT").write_text("macos=1.0\nxcode=1.0\n")
+        result = self.run_snapshots()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("環境和基準不同", result.stdout)
+
+    def test_missing_or_broken_images_fail_even_when_environment_differs(self):
+        for platform in ("mac", "ios"):
+            (self.base / platform / "ENVIRONMENT").write_text("macos=1.0\nxcode=1.0\nsimulator=old\n")
+        (self.new / "mac" / "panel-light.png").unlink()
+        self.assertNotEqual(self.run_snapshots().returncode, 0)
+        write_png(self.new / "mac" / "panel-light.png", 20, 20)
+        (self.new / "ios" / "widget-small-light.png").write_bytes(b"not a png")
+        self.assertNotEqual(self.run_snapshots().returncode, 0)
+
+    def test_environment_is_judged_per_platform(self):
+        # 只有 iPhone 的模擬器不同：Mac 的畫面差異仍算失敗
+        (self.base / "ios" / "ENVIRONMENT").write_text(self.ios_env.replace("simulator=test", "simulator=old"))
+        write_png(self.new / "mac" / "panel-light.png", 20, 20, changed=40)
+        self.assertEqual(self.run_snapshots().returncode, 1)
+
+    def test_update_with_a_missing_image_keeps_the_old_baseline(self):
+        (self.base / "mac" / "ENVIRONMENT").write_text("macos=1.0\nxcode=1.0\n")
+        write_png(self.new / "mac" / "panel-dark.png", 20, 20, changed=40)
+        (self.new / "mac" / "panel-light.png").unlink()
+        before = (self.base / "mac" / "panel-dark.png").read_bytes()
+        self.assertNotEqual(self.run_snapshots("--update").returncode, 0)
+        self.assertEqual((self.base / "mac" / "panel-dark.png").read_bytes(), before)
+        self.assertEqual((self.base / "mac" / "ENVIRONMENT").read_text(), "macos=1.0\nxcode=1.0\n")
+
+    def test_update_replaces_only_the_rendered_platform(self):
+        (self.base / "ios" / "ENVIRONMENT").write_text("xcode=1.0\nsimulator=old\n")
+        write_png(self.new / "mac" / "panel-dark.png", 20, 20, changed=40)
+        env = {**os.environ, **UTF8_ENV, "SNAPSHOT_FROM": str(self.new), "SNAPSHOT_PLATFORMS": "mac"}
+        result = subprocess.run(["/bin/bash", str(self.repo / "scripts" / "snapshots.sh"), "--update"], cwd=self.repo,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.base / "mac" / "panel-dark.png").read_bytes(), (self.new / "mac" / "panel-dark.png").read_bytes())
+        self.assertEqual((self.base / "mac" / "ENVIRONMENT").read_text(), self.mac_env)
+        self.assertEqual((self.base / "ios" / "ENVIRONMENT").read_text(), "xcode=1.0\nsimulator=old\n")
 
 
 if __name__ == "__main__":
