@@ -170,7 +170,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 5. **檢查重點**：在實際尺寸（不是放大圖）下確認八芒星八個角都看得到、雲朵中間的 `>_` 可辨認；主題色模擬中鏤空處透出背景；深色與淺色都清楚。
 6. 截圖放在 `docs/screenshots/`，PR 描述附上前後對照。截圖前確認畫面上沒有中繼網址或密鑰。
 7. 示範模式、截圖工具與 `AUM_*` 環境變數都要包在 `#if DEBUG` 裡。
-8. **截圖比對**：`scripts/snapshots.sh`（verify-all 會跑）以固定時間（`AUM_RENDER_NOW` → `RenderClock`）、時區與假資料產生 Mac 面板、完整統計、設定、選單列圖示與 iPhone 小工具、鎖定畫面 Live Activity、動態島，和 `apple/Snapshots/` 比對；畫面有意改變時 `scripts/update-snapshots.sh`。畫面上的「現在」一律用 `RenderClock.now`（不要寫 `Date.now`），自動更新的相對時間用 `Text.relative(to:)`（不要直接寫 `Text(date, style: .relative)`），否則截圖每次都不同。iOS 的 `ProgressView` 在 ImageRenderer 中畫成黃色佔位符，比對只涵蓋其餘版面與文字。
+8. **截圖比對**：`scripts/snapshots.sh`（verify-all 會跑）以固定時間（`AUM_RENDER_NOW` → `RenderClock`）、時區與假資料產生 Mac 面板、完整統計、設定、選單列圖示、設定精靈與 iPhone 小工具、鎖定畫面 Live Activity、動態島，和 `apple/Snapshots/` 比對；畫面有意改變時 `scripts/update-snapshots.sh`。畫面上的「現在」一律用 `RenderClock.now`（不要寫 `Date.now`），自動更新的相對時間用 `Text.relative(to:)`（不要直接寫 `Text(date, style: .relative)`），否則截圖每次都不同。iOS 的 `ProgressView` 在 ImageRenderer 中畫成黃色佔位符，比對只涵蓋其餘版面與文字。
 
 ## 9. Mac 選單列圖示與面板（ADR-0008、ADR-0010）
 
