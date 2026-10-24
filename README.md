@@ -210,9 +210,9 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 
 `X.Y.Z` 同樣換成 Releases 上的版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
 
-沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md)（在 #71 的分支上，合併後移到 main）。
+沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](docs/windows.md)。
 
-> 狀態：Windows 收集器（[#71](https://github.com/kevin930326/ai-usage-monitor/pull/71)）與「在 Mac 面板合併多台電腦的 Token」（第二層，[#73](https://github.com/kevin930326/ai-usage-monitor/pull/73)）還沒合併；合併並發布之前上面的指令還不能用。
+> 狀態：一行指令要等第一次發布後才能用，在那之前照 [docs/windows.md](docs/windows.md) 從原始碼安裝。「在 Mac 面板合併多台電腦的 Token」（第二層，[#73](https://github.com/kevin930326/ai-usage-monitor/pull/73)）還沒合併。
 
 ### 解除安裝
 
