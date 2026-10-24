@@ -9,7 +9,7 @@ Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，�
 ## 需要
 
 - Windows 10 或 11
-- Python 3.10 以上：從 [python.org](https://www.python.org/downloads/windows/) 安裝，勾選「py launcher」。Microsoft Store 版的 Python 沒有固定的 `pythonw.exe` 路徑，不建議。
+- Python 3.10 以上：從 [python.org](https://www.python.org/downloads/windows/) 安裝，勾選「py launcher」；安裝完成的畫面按「Disable path length limit」（見「限制」的長路徑）。Microsoft Store 版的 Python 沒有固定的 `pythonw.exe` 路徑，不建議。
 - Claude Code 或 Codex CLI 在這台電腦上用過（有對話紀錄）
 
 ## 安裝
@@ -67,4 +67,5 @@ powershell -ExecutionPolicy Bypass -File windows\uninstall-task.ps1
 
 - 只在使用者登入時執行（不存密碼）；登出或關機時不統計，下次登入後補上新紀錄（讀取位置記在資料庫）。
 - 排程的 Python 路徑固定為安裝時找到的那一個；升級 Python（路徑改變）後重新執行 `install-task.ps1`。
+- 長路徑：Claude Code 的紀錄路徑包含專案資料夾的完整路徑（`%USERPROFILE%\.claude\projects\<整個專案路徑>\…`），深層的專案很容易超過 260 個字元。沒有開啟 Windows 的長路徑支援（python.org 安裝程式最後的「Disable path length limit」，或群組原則「啟用 Win32 長路徑」）時，這些紀錄檔讀不到、**不會記錄在日誌**，Token 會少算。
 - 對話紀錄的符號連結：Windows 版也不跟隨（列舉時略過連結）；Windows 沒有 `O_NOFOLLOW`，開檔時改以「開啟後的檔案和列舉到的是同一個（磁碟區序號＋檔案索引）」確認。
