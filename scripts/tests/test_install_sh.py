@@ -157,6 +157,24 @@ class InstallShTests(unittest.TestCase):
         self.assertFalse(logs.exists())
         self.assertEqual(len(list(self.trash.iterdir())), 2)
 
+    def test_purge_keeps_same_named_data_and_logs_apart(self):
+        # 正式的資料與日誌資料夾都叫 AIUsageMonitor，同一秒移走也要是兩個獨立項目
+        data = self.home / "Library" / "Application Support" / "AIUsageMonitor"
+        logs = self.home / "Library" / "Logs" / "AIUsageMonitor"
+        for d, f in ((data, "usage.json"), (logs, "collector.log")):
+            d.mkdir(parents=True)
+            (d / f).write_text("x")
+        env = {"AI_USAGE_MONITOR_HOME": ""}
+        result = self.run_script("--uninstall", "--purge", "--yes", extra_env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        items = sorted(self.trash.iterdir())
+        self.assertEqual(len(items), 2)
+        self.assertEqual(sorted(sorted(p.name for p in i.iterdir()) for i in items), [["collector.log"], ["usage.json"]])
+        # 同一秒再移一次同名的也不會放進前一個裡面
+        data.mkdir()
+        self.run_script("--uninstall", "--purge", "--yes", extra_env=env)
+        self.assertEqual(len(list(self.trash.iterdir())), 3)
+
     def test_purge_refuses_while_legacy_collector_uses_the_data(self):
         (self.agents / "io.github.kevin930326.ai-usage-monitor.plist").write_text("<plist/>")
         result = self.run_script("--uninstall", "--purge", "--yes")

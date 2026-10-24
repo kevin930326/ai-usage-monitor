@@ -55,11 +55,17 @@ fail() { printf '%s\n' "$1" >&2; exit "${2:-1}"; }
 
 [ "$(uname -s)" = Darwin ] || fail "這個安裝腳本只支援 macOS；Windows 請用 install.ps1" 2
 
-trash() {  # 移到垃圾桶（可以放回），名稱加上時間避免撞名
-  local src=$1 base
+# 移到垃圾桶（可以放回）：<名稱>-<時間>[-n].<副檔名>，已有同名就加編號（資料與日誌的資料夾都叫 AIUsageMonitor）
+trash() {
+  local src=$1 name=${2:-} base ext stem dest n=1
   base=$(basename "$src")
+  ext=
+  [ "${base##*.}" != "$base" ] && ext=.${base##*.}
+  stem=${name:-${base%.*}}-$(date +%Y%m%d-%H%M%S)
   mkdir -p "$TRASH_DIR"
-  mv "$src" "$TRASH_DIR/${base%.*}-$(date +%Y%m%d-%H%M%S)$([ "${base##*.}" != "$base" ] && echo ".${base##*.}")"
+  dest=$TRASH_DIR/$stem$ext
+  while [ -e "$dest" ]; do n=$((n + 1)); dest=$TRASH_DIR/$stem-$n$ext; done
+  mv "$src" "$dest"
 }
 
 quit_app() {
@@ -101,9 +107,8 @@ if [ "$MODE" = uninstall ]; then
       read -r answer </dev/tty || answer=
       case "$answer" in y|Y|yes) ;; *) say "沒有移走資料"; exit 0 ;; esac
     fi
-    for dir in "$DATA_DIR" "$LOG_DIR"; do
-      if [ -d "$dir" ]; then trash "$dir"; say "已移到垃圾桶：$dir"; fi
-    done
+    if [ -d "$DATA_DIR" ]; then trash "$DATA_DIR" AIUsageMonitor-資料; say "已移到垃圾桶：$DATA_DIR"; fi
+    if [ -d "$LOG_DIR" ]; then trash "$LOG_DIR" AIUsageMonitor-日誌; say "已移到垃圾桶：$LOG_DIR"; fi
     say "中繼的密鑰仍在 Keychain；不再使用中繼時可以刪除："
     say "  security delete-generic-password -s AIUsageMonitor-relay-write -a default"
     say "  security delete-generic-password -s AIUsageMonitor-relay-read"
