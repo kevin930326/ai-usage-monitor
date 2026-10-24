@@ -60,11 +60,22 @@ class SetupRelayTests(unittest.TestCase):
                 *) exit 1 ;;
             esac
         ''')
+        # 假的 Keychain：-i 的 add 指令存成 kc/<service>（FAKE_KC_FAIL 指定的 service 存不進去，但仍回傳 0，同真的 security -i）
+        (t / "kc").mkdir()
         write_exec(self.bin / "security", f'''
-            echo "security $*" >>"{log}"
+            echo "security $1" >>"{log}"
+            svc=""; prev=""; for a in "$@"; do [ "$prev" = -s ] && svc=$a; prev=$a; done
             case "$1" in
-                find-generic-password) [ -n "${{FAKE_KEYCHAIN:-}}" ] ;;
-                -i) cat >"{t}/keychain-commands" ;;
+                find-generic-password)
+                    [ -n "${{FAKE_KEYCHAIN:-}}" ] && exit 0
+                    [ -f "{t}/kc/$svc" ] || exit 44
+                    [ "${{@: -1}}" = -w ] && cat "{t}/kc/$svc"; exit 0 ;;
+                -i)
+                    while read -r cmd _ _ s _ _ _ v; do
+                        echo "$cmd -s $s -a default -w $v" >>"{t}/keychain-commands"
+                        [ "$s" = "${{FAKE_KC_FAIL:-}}" ] || printf '%s' "$v" >"{t}/kc/$s"
+                    done
+                    exit 0 ;;
                 *) exit 1 ;;
             esac
         ''')
@@ -131,6 +142,17 @@ class SetupRelayTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         lines = set((self.tmp / "wrangler-env").read_text().splitlines())
         self.assertEqual(lines, {"env WRANGLER_WRITE_LOGS=false WRANGLER_LOG_SANITIZE=true"})
+
+    def test_keychain_failures_are_detected_and_config_is_written_last(self):
+        # Codex C-02：security -i 失敗仍回傳 0；任何一把沒存進去都不寫 relay_url、不說完成
+        for failing in ("AIUsageMonitor-relay-write", "AIUsageMonitor-relay-read"):
+            for p in (self.relay / "wrangler.local.toml", *(self.tmp / "kc").iterdir()):
+                p.unlink(missing_ok=True)
+            r = self.run_script(env={"FAKE_LOGGED_IN": "1", "FAKE_KC_FAIL": failing})
+            self.assertEqual(r.returncode, 5, failing)
+            self.assertNotIn("完成", r.stdout)
+            self.assertIn("set-relay.sh", r.stderr)
+            self.assertFalse((self.home / "config.json").exists())
 
     def test_stops_on_existing_settings_without_changes(self):
         (self.home / "config.json").write_text(json.dumps({"relay_url": "https://old.example.workers.dev"}))

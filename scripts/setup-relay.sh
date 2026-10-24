@@ -158,13 +158,23 @@ case "$STATUS" in
 esac
 
 # ---------- 6. 本機設定 ----------
-mkdir -p "$CONFIG_DIR"
-python3 "$REPO/collector/scripts/update-config.py" "$CONFIG" relay_url "$URL" || fail "無法寫入 config.json" 5
+# 兩把密鑰逐筆存進 Keychain 並讀回比對（security -i 遇到失敗的指令仍回傳 0；Codex C-02），
+# 都成功後才寫 config.json 的 relay_url：收集器看到網址時密鑰一定在
 # security -i 從標準輸入讀指令，密鑰不出現在程序參數（base64url 不含空白與引號）
-printf 'add-generic-password -U -s %s -a default -w %s\nadd-generic-password -U -s %s -a default -w %s\n' \
-    "$WRITE_SERVICE" "$WRITE" "$READ_SERVICE" "$READ" | security -i >/dev/null 2>&1 || fail "無法存入 Keychain" 5
+keychain_store() {  # keychain_store <service> <value>
+    printf 'add-generic-password -U -s %s -a default -w %s\n' "$1" "$2" | security -i >/dev/null 2>&1
+    [ "$(security find-generic-password -s "$1" -a default -w 2>/dev/null)" = "$2" ]
+}
+KEYCHAIN_HINT="中繼已部署好；照 relay/README.md「手動」的步驟執行 collector/scripts/set-relay.sh ${URL}，
+貼上寫入密鑰（可用 npx wrangler secret put WRITE_TOKEN --config wrangler.local.toml 換一把新的）"
+keychain_store "$WRITE_SERVICE" "$WRITE" || fail "無法把寫入密鑰存進 Keychain。${KEYCHAIN_HINT}" 5
+keychain_store "$READ_SERVICE" "$READ" \
+    || fail "無法把讀取密鑰存進 Keychain（寫入密鑰已存好，config.json 沒有變動）。${KEYCHAIN_HINT}" 5
 unset WRITE READ
-ok "已寫入 config.json 與 Keychain"
+mkdir -p "$CONFIG_DIR"
+python3 "$REPO/collector/scripts/update-config.py" "$CONFIG" relay_url "$URL" \
+    || fail "無法寫入 config.json：執行 collector/scripts/set-relay.sh ${URL}（密鑰已在 Keychain，按 Ctrl-C 略過重新貼上）" 5
+ok "已寫入 Keychain 與 config.json"
 
 cat <<EOF
 
