@@ -399,6 +399,155 @@ class LintCollectorTests(unittest.TestCase):
         self.assertEqual(len(self.log.read_text().splitlines()), 2)
 
 
+class RelayDeviceTests(unittest.TestCase):
+    """relay-device.sh：以假的 curl 檢查送出的請求；管理密鑰只經過標準輸入，不出現在參數裡。"""
+
+    DEVICE = "0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="relay device "))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir()
+        self.log = self.tmp / "curl.log"
+        write_exec(self.bin / "curl", f"""
+            #!{sys.executable}
+            import json, os, sys
+            args = sys.argv[1:]
+            with open({str(self.log)!r}, "a") as f:
+                f.write(json.dumps({{"args": args, "stdin": sys.stdin.read()}}) + "\\n")
+            open(args[args.index("-o") + 1], "w").write(os.environ["FAKE_BODY"])
+            print(os.environ.get("FAKE_STATUS", "200"), end="")
+        """)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+
+    def run_script(self, *args, body="{}", status="200", token="admin-secret", url="https://relay.example.dev"):
+        env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "FAKE_BODY": body,
+               "FAKE_STATUS": status, "AI_USAGE_MONITOR_HOME": str(self.home), "AUM_ADMIN_TOKEN": token}
+        env.pop("AUM_RELAY_URL", None)
+        if url:
+            env["AUM_RELAY_URL"] = url
+        return subprocess.run(["/bin/bash", str(ROOT / "scripts" / "relay-device.sh"), *args], env=env,
+                              capture_output=True, text=True, stdin=subprocess.DEVNULL)
+
+    def calls(self):
+        if not self.log.exists():
+            return []
+        import json
+        return [json.loads(line) for line in self.log.read_text().splitlines()]
+
+    def test_add_sends_the_name_and_keeps_the_admin_key_off_the_command_line(self):
+        body = '{"device_id": "%s", "name": "工作 PC", "key": "aumd_example"}' % self.DEVICE
+        result = self.run_script("add", "工作 PC", body=body, status="201")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("aumd_example", result.stdout)
+        (call,) = self.calls()
+        self.assertIn("https://relay.example.dev/devices", call["args"])
+        self.assertIn('{"name": "工作 PC"}', call["args"])
+        self.assertNotIn("admin-secret", " ".join(call["args"]))
+        self.assertEqual(call["stdin"], "Authorization: Bearer admin-secret\n")
+
+    def test_list_and_revoke_with_data(self):
+        body = '{"devices": [{"device_id": "%s", "name": "Mac", "revoked": false, "last_upload_at": null}]}' % self.DEVICE
+        result = self.run_script("list", body=body)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Mac  使用中  最後上傳：尚未上傳", result.stdout)
+        result = self.run_script("revoke", self.DEVICE, "--delete-data",
+                                 body='{"device_id": "%s", "revoked": true, "deleted_data": true}' % self.DEVICE)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("資料已刪除", result.stdout)
+        call = self.calls()[-1]
+        self.assertIn(f"https://relay.example.dev/devices/{self.DEVICE}/revoke", call["args"])
+        self.assertIn('{"delete_data": true}', call["args"])
+
+    def test_rejected_input_does_not_call_the_relay(self):
+        for args, kwargs in ((("revoke", "not-a-device"), {}), (("rotate", self.DEVICE, "extra"), {}),
+                             (("list",), {"url": "http://relay.example.dev"}), (("list",), {"url": ""}),
+                             (("delete", self.DEVICE), {})):
+            result = self.run_script(*args, **kwargs)
+            self.assertEqual(result.returncode, 2, (args, result.stderr))
+        self.assertEqual(self.calls(), [])
+
+    def test_only_exact_local_hosts_may_use_http(self):
+        """C-02：http://localhost@… 的主機其實是 @ 後面那個，不能把管理密鑰以明文送出"""
+        for url in ("http://localhost@relay.example.test", "http://127.0.0.1.example.test", "http://localhost.example.test",
+                    "https://user@relay.example.dev", "http://[::1]@relay.example.test"):
+            result = self.run_script("list", url=url)
+            self.assertEqual(result.returncode, 2, (url, result.stderr))
+        self.assertEqual(self.calls(), [])
+        for url in ("http://localhost:8787", "http://127.0.0.1:8787/", "http://[::1]:8787", "https://relay.example.dev/"):
+            result = self.run_script("list", body='{"devices": []}', url=url)
+            self.assertEqual(result.returncode, 0, (url, result.stderr))
+        self.assertEqual(len(self.calls()), 4)
+
+    def test_url_from_config_json(self):
+        (self.home / "config.json").write_text('{"relay_url": "https://from-config.example.dev/"}')
+        result = self.run_script("list", body='{"devices": []}', url="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("https://from-config.example.dev/devices", self.calls()[0]["args"])
+
+    def test_http_error_fails_without_printing_a_key(self):
+        result = self.run_script("rotate", self.DEVICE, body='{"error": "unauthorized"}', status="401")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("HTTP 401", result.stderr)
+        self.assertNotIn("寫入密鑰", result.stdout)
+
+
+class SetTier2Tests(unittest.TestCase):
+    """collector/scripts/set-tier2.sh：密鑰只經過假的 security 的提示（不在參數裡），config 與上傳狀態在暫存資料夾。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="set tier2 "))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir()
+        self.log = self.tmp / "security.log"
+        write_exec(self.bin / "security", f"""
+            #!/bin/bash
+            echo "$*" >> "{self.log}"
+        """)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        self.config = self.home / "config.json"
+
+    def run_script(self, *args):
+        env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "AI_USAGE_MONITOR_HOME": str(self.home)}
+        return subprocess.run(["/bin/bash", str(ROOT / "collector" / "scripts" / "set-tier2.sh"), *args], env=env,
+                              capture_output=True, text=True, stdin=subprocess.DEVNULL)
+
+    def test_stores_both_keys_and_enables_upload(self):
+        import json
+        self.config.write_text('{"relay_url": "https://relay.example.dev", "claude_path": "/bin/claude"}')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(calls, ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
+                                 "add-generic-password -U -s AIUsageMonitor-relay-read -a default -w"])
+        config = json.loads(self.config.read_text())
+        self.assertIs(config["token_sync"], True)
+        self.assertEqual(config["claude_path"], "/bin/claude")
+        self.assertTrue((self.home / "history.sqlite3").exists())  # reset 在暫存資料夾
+
+    def test_no_read_key_and_disable(self):
+        import json
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        self.assertEqual(self.run_script().returncode, 0)
+        self.log.unlink()
+        # C-05：從完整同步切換成只上傳時，移除之前存的讀取密鑰（收集器才不會繼續下載）
+        self.assertEqual(self.run_script("--no-read-key").returncode, 0)
+        self.assertEqual(self.log.read_text().splitlines(), ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
+                                                             "delete-generic-password -s AIUsageMonitor-relay-read -a default"])
+        self.assertEqual(self.run_script("--disable").returncode, 0)
+        self.assertIs(json.loads(self.config.read_text())["token_sync"], False)
+
+    def test_requires_an_https_relay_url(self):
+        self.config.write_text('{"relay_url": "http://relay.example.dev"}')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse(self.log.exists())
+
+
 def write_png(path: Path, width: int, height: int, changed: int = 0, block: tuple[int, int, int] | None = None) -> None:
     """純色 RGBA PNG；`changed` 個像素（從左上角起）改成紅色；`block`＝(x, y, 邊長) 的正方形改成紅色。"""
     import struct

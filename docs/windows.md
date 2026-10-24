@@ -3,7 +3,7 @@
 Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，只用標準函式庫），以「工作排程器」每 5 分鐘統計這台電腦上 Claude Code 與 Codex CLI 的 Token。平台差異集中在 `collector/usage_collector/system.py`。
 
 - **預設只統計 Token、不收集額度、不上傳任何東西**。額度 % 是整個帳號的數字，Mac 已經在收集（ADR-0011 第 2 節）。
-- 統計結果在 `%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3`。要在 Mac 的面板看到這台 PC 的數字，需要第二層（多裝置合併，FR-49；另見第二層的部署說明）。
+- 統計結果在 `%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3`。要在 Mac 的面板看到這台 PC 的數字，需要第二層（多裝置合併，FR-49）：安裝排程後執行 `windows\set-tier2.ps1`，見 [docs/tier2-setup.md](tier2-setup.md)。
 - 不讀 `auth.json`、`.credentials.json`、瀏覽器 cookie；對話紀錄只透過白名單欄位讀取（和 Mac 相同，README「隱私與安全」）。
 
 ## 需要

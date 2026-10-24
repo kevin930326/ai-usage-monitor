@@ -127,7 +127,7 @@ struct PanelView: View {
         case "stats-scroll": scrollTarget = .stats
         case "stats-scope":
             // 依序切換全部／Claude／Codex
-            let scopes = TokenScopeChips.scopes(historyStore.tokens)
+            let scopes = TokenScopeChips.scopes(historyStore.tokens.scoped(statsDevice))
             if let i = scopes.firstIndex(of: settings.statsScope), !scopes.isEmpty {
                 selectStatsScope(scopes[(i + 1) % scopes.count])
             }
@@ -208,10 +208,11 @@ struct PanelView: View {
             }
         case .stats:
             PanelCard(id: section.rawValue, accessibilityTitle: section.title, collapsed: collapsed) {
-                StatsCardHeader()
+                StatsCardHeader(devices: historyStore.tokens.devices, scope: statsDevice, now: store.now)
             } content: {
-                StatsCardContent(data: historyStore.tokens, status: historyStore.status, scope: settings.statsScope,
-                                 range: settings.statsRange, now: store.now, selectScope: selectStatsScope, selectRange: selectStatsRange)
+                StatsCardContent(data: historyStore.tokens, status: historyStore.status, device: statsDevice, scope: settings.statsScope,
+                                 range: settings.statsRange, now: store.now, selectDevice: selectStatsDevice,
+                                 selectScope: selectStatsScope, selectRange: selectStatsRange)
             }
         case .status:
             // 都正常時一行低調顯示；有服務異常或額度用完時才是卡片（FR-45）
@@ -262,6 +263,18 @@ struct PanelView: View {
         }
     }
 
+    /// 第二層的裝置範圍（沒有其他電腦時一律這台 Mac）
+    private var statsDevice: TokenDeviceScope {
+        historyStore.tokens.devices.resolve(settings.statsDevice)
+    }
+
+    /// 切換所有電腦／這台 Mac／其他電腦：與切換服務一樣交叉淡入、圖表重新長出
+    private func selectStatsDevice(_ device: TokenDeviceScope) {
+        guard device != statsDevice else { return }
+        settings.statsDevice = device
+        replayStatsCharts()
+    }
+
     /// 切換全部／Claude／Codex：交叉淡入，長條與熱力圖重新長出、數字滾動（ADR-0010 第三階段）
     private func selectStatsScope(_ scope: TokenScope) {
         guard scope != settings.statsScope else { return }
@@ -288,7 +301,8 @@ struct PanelView: View {
     /// 連續天數創新紀錄：🔥 彈一下，每個新紀錄只播一次（記在設定裡）。統計卡片隱藏或收合時不算
     private func celebrateStreakIfNeeded() {
         guard settings.visibleSections.contains(.stats), !settings.collapsed.contains(PanelSection.stats.rawValue) else { return }
-        let summary = TokenSummary(data: historyStore.tokens, scope: .all, now: store.now)
+        // 連續天數的紀錄只有這台 Mac 有（record_days）
+        let summary = TokenSummary(data: historyStore.tokens.scoped(.thisMac), scope: .all, now: store.now)
         guard summary.streakIsRecord, summary.currentStreak > 1, summary.currentStreak > settings.celebratedStreak else { return }
         settings.celebratedStreak = summary.currentStreak
         guard animates else { return }

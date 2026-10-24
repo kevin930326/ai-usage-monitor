@@ -187,19 +187,33 @@ class TokenStatsTestCase(unittest.TestCase):
 
 
 class SchemaTest(TokenStatsTestCase):
-    def test_migrates_v1_to_v2_and_keeps_data(self):
+    def test_migrates_v1_to_latest_and_keeps_data(self):
         with mock.patch.object(history, "SCHEMA_VERSION", 1), mock.patch.object(history, "MIGRATIONS", [history._v1]):
             conn = history.connect(self.path)
             conn.execute("INSERT INTO collector_runs (ts, ok) VALUES (?, 1)", (T0,))
             device = history.meta(conn, "device_id")
             conn.close()
         conn = history.connect(self.path)
-        self.assertEqual(history.schema_version(conn), 2)
+        self.assertEqual(history.schema_version(conn), 3)
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         self.assertTrue({"daily_tokens", "hourly_tokens", "records", "scan_state", "seen_ids", "file_tokens",
-                         "seen_tasks", "quota_samples", "collector_runs", "meta"} <= tables)
+                         "seen_tasks", "quota_samples", "collector_runs", "meta", "upload_state", "devices"} <= tables)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM collector_runs").fetchone()[0], 1)
         self.assertEqual(history.meta(conn, "device_id"), device)
+        conn.close()
+
+    def test_migrates_v2_to_v3_and_keeps_tokens(self):
+        """第二層（schema 3）只加 upload_state 與 devices，既有的 Token 資料不動。"""
+        with mock.patch.object(history, "SCHEMA_VERSION", 2), \
+                mock.patch.object(history, "MIGRATIONS", [history._v1, history._v2]):
+            conn = history.connect(self.path)
+            conn.execute("INSERT INTO daily_tokens (device_id, day, provider, model, input_tokens, updated_at)"
+                         " VALUES ('d', '2026-10-01', 'claude', 'claude-opus-5-5', 5, 0)")
+            conn.close()
+        conn = history.connect(self.path)
+        self.assertEqual(history.schema_version(conn), 3)
+        self.assertEqual(conn.execute("SELECT SUM(input_tokens) FROM daily_tokens").fetchone()[0], 5)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM upload_state").fetchone()[0], 0)
         conn.close()
 
     def test_failed_v2_migration_keeps_v1(self):

@@ -61,6 +61,7 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [Windows 收集器](docs/windows.md) | Windows PC 的 Token 統計：安裝、移除、手動確認 |
+| [第二層：多台電腦的 Token 合併](docs/tier2-setup.md) | 選用：D1、裝置密鑰、Mac 與 PC 的設定、換新與撤銷 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
@@ -96,7 +97,7 @@ collector/scripts/install-launchd.sh
 
 ### Windows PC（選用）
 
-Windows PC 也可以用同一份收集器統計這台電腦的 Token（預設不收集額度、不上傳）：見 [docs/windows.md](docs/windows.md)。
+Windows PC 也可以用同一份收集器統計這台電腦的 Token（預設不收集額度、不上傳）：見 [docs/windows.md](docs/windows.md)。要在 Mac 的面板看到所有電腦的合計，另外設定第二層：見 [docs/tier2-setup.md](docs/tier2-setup.md)。
 
 ### 2. Mac 選單列 App
 
@@ -135,6 +136,7 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 
 - 收集器**不讀取任何服務的 token**，token 只由各自的 CLI 在 Mac 上使用（NFR-1）。
 - **離開這台 Mac 的使用者資料只有上傳到你自己中繼的用量快照**（方案名稱與各額度的百分比、重置時間）。額度歷史、Token 統計、對話紀錄的任何內容、服務狀態都只留在本機。
+- 例外是選用的**第二層**（[docs/tier2-setup.md](docs/tier2-setup.md)，預設關閉）：設定後每台電腦把 Token 的**每日加總**上傳到你自己的中繼——只有日期、服務、模型名稱、輸入／快取寫入／快取讀取／輸出／推理 Token、任務秒數合計與最長任務；不含每小時資料、任務次數、專案名稱、路徑、檔名、對話內容、session ID 或訊息 ID。
 - 中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
 
 ### 讀取的檔案與欄位
@@ -145,6 +147,7 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱 | 帳號 ID 等其餘欄位 |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
 | 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
+| 收集器（第二層） | Keychain `AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`；Windows 認證管理員 `AIUsageMonitor/device-key` | 這台電腦的寫入密鑰（上傳每日加總）、讀取密鑰（只有 Mac，下載其他電腦的加總） | — |
 | 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
 | 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 | 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字） | 事件內文、連結 |
@@ -162,6 +165,8 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（與上傳的內容相同） |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」與每次收集是否成功；Token 統計：每天／每小時 × 服務 × 模型的四種 Token 數（Codex 另有推理明細）、任務數與任務時間、個人紀錄、各紀錄檔讀到哪裡（以 UUID 識別）、已計入的訊息與任務 ID；隨機裝置 ID、裝置名稱固定為「這台 Mac」、保留期間。**不存**方案名稱、錯誤訊息、帳號資訊、對話內容、路徑或專案名稱。預設保留 1 年，35 天前的額度歷史降為每小時一筆 |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/service-status.json`（`0600`） | 兩家狀態頁的精簡結果（見上表） |
+| 收集器（第二層） | `history.sqlite3` 的 `upload_state`、`devices` 與 `daily_tokens` 的其他 `device_id` 列 | 每列上次上傳的數值雜湊與時間；中繼的裝置清單（名稱、最後上傳時間）；其他電腦的每日加總（只在 Mac 有讀取密鑰時）。`set-tier2.sh --disable` 刪除其他電腦的資料 |
+| `set-tier2.sh`／`set-tier2.ps1` | Keychain／Windows 認證管理員、`config.json` | 第二層的密鑰；`token_sync`、中繼網址（不含密鑰） |
 | 收集器的安裝腳本 | `config.json`、`~/Library/LaunchAgents/io.github.kevin930326.ai-usage-monitor.plist` | 設定；launchd 排程 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
 | 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容） |
@@ -172,6 +177,7 @@ cd apple/iOSApp && xcodegen generate && open AIUsageMonitor.xcodeproj
 | Mac 選單列 App | 系統的登入項目（`SMAppService`） | 只在你打開「登入時自動打開」後；關掉開關即移除 |
 | Mac 選單列 App | 標準錯誤輸出（stderr，不寫入檔案） | 讀取的資料夾路徑、資料時間、送出的通知種類與服務／額度 id、觸發收集器的結束碼；不含用量數字或帳號資訊 |
 | 中繼（Cloudflare） | Worker KV `latest`；secrets `READ_TOKEN`、`WRITE_TOKEN` | 最新一筆快照；兩把密鑰 |
+| 中繼（第二層） | D1 `devices`、`daily_tokens`；secret `ADMIN_TOKEN` | 裝置名稱、寫入密鑰的 SHA-256、建立／撤銷／最後上傳時間；各電腦的每日加總（以裝置、日期、服務、模型覆蓋寫入）；裝置管理密鑰 |
 | iPhone | Keychain（`AfterFirstUnlockThisDeviceOnly`，不同步到 iCloud） | 中繼**讀取**密鑰；App 與小工具以 Keychain 群組共用同一個項目 |
 | iPhone | App Group `group.io.github.kevin930326.AIUsageMonitor`：UserDefaults（`relayURL`、`displayMode`）與 `usage.json` | 中繼網址、顯示已用／剩餘；最後一份快照（小工具抓不到中繼時顯示） |
 | iPhone | Live Activity 與小工具 | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
@@ -186,6 +192,9 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Claude Code（由收集器執行） | Anthropic | Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱 | launchd 每 5 分鐘 |
 | Codex CLI（由收集器執行） | OpenAI | Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json` | 取得 Codex 額度與方案名稱 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
+| Mac、Windows 收集器（第二層） | 你的 Worker `POST /tokens/daily` | 這台電腦的寫入密鑰 | 有變動的每日加總（每批最多 400 列）；沒有變動時不送（第一次送一批空的，取得自己在中繼上的 device_id） | 每小時＋日期改變後的第一輪，只在設定第二層後 |
+| Mac 收集器（第二層） | 你的 Worker `GET /tokens/daily` | 讀取密鑰 | 取得其他電腦的每日加總與裝置清單 | 每小時，只在 Mac 存了讀取密鑰時 |
+| `scripts/relay-device.sh` | 你的 Worker `/devices` | 管理密鑰（提示輸入，不存檔） | 新增、列出、換新、撤銷裝置 | 只在你執行時 |
 | Mac 收集器 | `status.claude.com`、`status.openai.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
@@ -201,7 +210,7 @@ Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都�
 
 - 手錶的設定只在手錶 App 開啟、且 iPhone 在附近時同步。在 iPhone 改了網址或密鑰後，要打開一次手錶 App 才會套用。
 - Mac 選單列 App 不開沙盒（需要讀取 `~/Library/Application Support`），以 Sign to Run Locally 簽署、未開 Hardened Runtime。它不連網，也不讀任何 token 或對話紀錄。
-- Token 統計只算這台 Mac 的 Claude Code 與 Codex CLI；網頁、手機 App、其他電腦與雲端 session 不在內（面板標「這台 Mac」）。
+- Token 統計只算這台 Mac 的 Claude Code 與 Codex CLI；網頁、手機 App、其他電腦與雲端 session 不在內（面板標「這台 Mac」）。設定第二層後可切換「所有電腦（N 台）」，仍不含網頁、手機 App 與雲端 session。
 - Spotlight：資料夾 `~/Library/Application Support/AIUsageMonitor`（`usage.json`、`history.sqlite3`）只有數字，但不需要被搜尋。建置資料夾（`build/`、`~/Library/Caches/AIUsageMonitor/DerivedData`）由各腳本放 `.metadata_never_index`，新版 macOS 不一定採用這個檔案；要確實排除，在「系統設定 → Spotlight → 搜尋隱私權」（或「Spotlight 隱私權」）加入 repo 的 `build/` 與上面兩個資料夾。
 
 ## 免責聲明

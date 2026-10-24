@@ -57,7 +57,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .resets: "未來 8 小時的重置時間軸，與照目前速度每週額度可撐到星期幾"
         case .trend: "目前這一輪的剩餘 % 曲線與照時間的預期，沒有紀錄的時段畫斜線"
         case .consumption: "每小時消耗的額度 %（熱力圖與每日合計），包含所有裝置"
-        case .stats: "這台 Mac 的 Token：本週、單日最高、最長任務、連續天數、Token 活動與活動熱力圖"
+        case .stats: "這台 Mac（有第二層時含其他電腦）的 Token：本週、單日最高、最長任務、連續天數、Token 活動與活動熱力圖"
         case .status: "Anthropic 與 OpenAI 公開狀態頁的結果，分辨服務異常與額度用完；正常時只有一行"
         }
     }
@@ -99,6 +99,7 @@ final class PanelSettings {
         static let consumptionWindow = "panel.consumptionWindow"
         static let statsScope = "panel.statsScope"
         static let statsRange = "panel.statsRange"
+        static let statsDevice = "panel.statsDevice"
         static let celebratedStreak = "panel.celebratedStreak"
         static let notifyLow = "notify.low"
         static let notifyTooFast = "notify.tooFast"
@@ -146,6 +147,12 @@ final class PanelSettings {
 
     var statsRange: TokenActivityRange {
         didSet { defaults.set(statsRange.rawValue, forKey: Key.statsRange) }
+    }
+
+    /// 第二層的裝置範圍（所有電腦／這台 Mac／某台電腦）；nil＝預設（有其他電腦時「所有電腦」）。
+    /// 面板與完整統計視窗共用；選的電腦不在清單中時由 `TokenDevices.resolve` 退回預設
+    var statsDevice: TokenDeviceScope? {
+        didSet { defaults.set(statsDevice?.rawValue, forKey: Key.statsDevice) }
     }
 
     /// 已經播過 🔥 的連續天數紀錄（每個新紀錄只播一次）
@@ -199,6 +206,7 @@ final class PanelSettings {
         consumptionWindow = defaults.string(forKey: Key.consumptionWindow)
         statsScope = defaults.string(forKey: Key.statsScope).flatMap(TokenScope.init) ?? .all
         statsRange = defaults.string(forKey: Key.statsRange).flatMap(TokenActivityRange.init) ?? .days30
+        statsDevice = defaults.string(forKey: Key.statsDevice).flatMap(TokenDeviceScope.init)
         celebratedStreak = defaults.integer(forKey: Key.celebratedStreak)
         notifyLow = defaults.object(forKey: Key.notifyLow) as? Bool ?? true
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
