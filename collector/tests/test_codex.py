@@ -63,6 +63,10 @@ for line in sys.stdin:
             reply({{"id": msg["id"], "error": {{"code": -32603, "message": "boom for person@example.com"}}}})
         else:
             reply({{"id": msg["id"], "result": RESULT}})
+        if MODE == "flood-after":
+            # 回應之後不理 EOF、持續輸出：讀取端不能無限制收下去
+            while True:
+                sys.stdout.write("x" * 65536); sys.stdout.flush()
 if MODE in ("ignore-eof", "ignore-term"):
     time.sleep(60)
 '''
@@ -294,6 +298,19 @@ class CodexFetchTest(unittest.TestCase):
             with FakeCodex(mode="ignore-eof") as fake, mock.patch.object(codex, "CLOSE_TIMEOUT", 0.3):
                 self.assertEqual(len(codex.fetch().windows), 2)
             self.assertTrue(kill_tree.called)
+
+            # 回應之後持續大量輸出（C-06）：讀取執行緒讀到上限就停，關閉後不留下程序或執行緒
+            servers = []
+            original = codex.AppServer
+            def remember(*args, **kwargs):
+                servers.append(original(*args, **kwargs))
+                return servers[-1]
+            with FakeCodex(mode="flood-after") as fake, mock.patch.object(codex, "MAX_OUTPUT", 256 * 1024), \
+                    mock.patch.object(codex, "CLOSE_TIMEOUT", 0.5), mock.patch.object(codex, "AppServer", remember):
+                self.assertEqual(len(codex.fetch().windows), 2)
+            self.assert_no_leftover(fake)
+            self.assertLessEqual(servers[0].pumped, 256 * 1024 + 65536)
+            self.assertFalse(servers[0].reader.is_alive())
 
     def test_interrupt_still_closes_app_server(self):
         # 收集器被中斷（Ctrl-C；launchd 的 SIGTERM 在 __main__ 轉成 SystemExit）時同樣關閉
