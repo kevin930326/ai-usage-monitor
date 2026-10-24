@@ -630,6 +630,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                 if not chunk:
                     break
                 budget.bytes_left -= len(chunk)
+                counters.bytes_read += len(chunk)  # 已讀過、位置已前進，算進格式偵測的讀取量
                 st.offset = fh.tell()
                 if chunk.endswith(b"\n"):
                     st.skipping = False
@@ -643,6 +644,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                     break  # 最後一行還沒寫完：下次再讀
                 # 超過 4 MB：開始丟棄這一行，只計次數
                 budget.bytes_left -= len(line)
+                counters.bytes_read += len(line)
                 st.offset = fh.tell()
                 st.skipping = True
                 continue

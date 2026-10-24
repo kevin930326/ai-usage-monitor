@@ -835,6 +835,26 @@ class FormatChangeTest(TokenStatsTestCase):
             self.scan()
         self.assertEqual(self.meta("token_format_suspect"), "1")
 
+    def test_skipped_long_lines_count_as_read(self):
+        # 一行超過上限被丟棄：讀過的位元組也算，沒有任何 Token 時要能觸發
+        self.write(self.codex_file(), json.dumps({"kind": "reply", "pad": "z" * (300 * 1024)}))
+        with mock.patch.object(token_stats, "MAX_LINE_BYTES", 64 * 1024), \
+                mock.patch.object(token_stats, "SKIP_CHUNK_BYTES", 16 * 1024), \
+                mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 256 * 1024):
+            self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "1")
+        scan = json.loads(self.meta("token_format_scan"))
+        self.assertGreaterEqual(scan["bytes"], 300 * 1024)
+
+    def test_unfinished_last_line_is_not_counted(self):
+        # 還沒寫完的最後一行下次會重讀，這次不算讀取量
+        path = self.codex_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{"kind": "reply", "pad": "' + b"z" * (300 * 1024))
+        with mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 256 * 1024):
+            self.scan()
+        self.assertIsNone(self.meta("token_format_suspect"))
+
     def test_small_scans_do_not_decide(self):
         self.write(self.claude_file(), claude_assistant("m1", T0, inp=1, out=1))
         self.scan()
