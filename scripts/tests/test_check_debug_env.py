@@ -90,6 +90,31 @@ class CheckDebugEnvTests(unittest.TestCase):
         self.assertNotIn("A.swift:9 ", r.stdout)
         self.assertNotIn("A.swift:12 ", r.stdout)
 
+    def test_directives_inside_comments_and_strings_do_not_count(self):
+        # Codex C-02：區塊註解（含巢狀）與多行字串裡的 #if 不是條件編譯指令
+        r = self.run_on({"apple/Mac/A.swift": '''
+            /*
+            #if DEBUG
+            */
+            let a = env["AUM_DEMO"]
+            /* 外層 /* 內層
+            #if DEBUG
+            */ 還在註解裡 */
+            let b = env["AUM_RENDER"]
+            let text = """
+            #if DEBUG
+            """
+            let c = env["AUM_DEMO_PANEL"]
+            /* "AUM_DEMO" 註解裡的不算 */
+            #if DEBUG
+            let d = env["AUM_DEMO"]  /* 行尾註解 */
+            #endif
+            '''})
+        self.assertEqual(r.returncode, 1)
+        for line in ("A.swift:5 AUM_DEMO", "A.swift:9 AUM_RENDER", "A.swift:13 AUM_DEMO_PANEL"):
+            self.assertIn(line, r.stdout)
+        self.assertEqual(r.stdout.count("A.swift:"), 3, r.stdout)
+
     def test_tests_folders_are_skipped(self):
         r = self.run_on({"apple/UsageKit/Tests/T/A.swift": 'let a = ["AUM_DEMO": "1"]\n'})
         self.assertEqual(r.returncode, 0, r.stdout)
