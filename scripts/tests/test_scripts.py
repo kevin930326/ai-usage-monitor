@@ -469,6 +469,18 @@ class RelayDeviceTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2, (args, result.stderr))
         self.assertEqual(self.calls(), [])
 
+    def test_only_exact_local_hosts_may_use_http(self):
+        """C-02：http://localhost@… 的主機其實是 @ 後面那個，不能把管理密鑰以明文送出"""
+        for url in ("http://localhost@relay.example.test", "http://127.0.0.1.example.test", "http://localhost.example.test",
+                    "https://user@relay.example.dev", "http://[::1]@relay.example.test"):
+            result = self.run_script("list", url=url)
+            self.assertEqual(result.returncode, 2, (url, result.stderr))
+        self.assertEqual(self.calls(), [])
+        for url in ("http://localhost:8787", "http://127.0.0.1:8787/", "http://[::1]:8787", "https://relay.example.dev/"):
+            result = self.run_script("list", body='{"devices": []}', url=url)
+            self.assertEqual(result.returncode, 0, (url, result.stderr))
+        self.assertEqual(len(self.calls()), 4)
+
     def test_url_from_config_json(self):
         (self.home / "config.json").write_text('{"relay_url": "https://from-config.example.dev/"}')
         result = self.run_script("list", body='{"devices": []}', url="")

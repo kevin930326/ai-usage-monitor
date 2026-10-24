@@ -37,12 +37,12 @@ except (OSError, ValueError):
     print("")' "$CONFIG")
 fi
 URL=${URL%/}
-case "$URL" in
-    https://*) ;;
-    http://localhost*|http://127.0.0.1*) ;;  # wrangler dev
-    "") echo "找不到中繼網址：加上 --url，或先執行 collector/scripts/set-relay.sh" >&2; exit 2 ;;
-    *) echo "中繼網址必須是 https://（避免管理密鑰以明文傳送）" >&2; exit 2 ;;
-esac
+# 主機部分不能有 userinfo（http://localhost@example.com 的主機其實是 example.com）；http 只允許確切的本機位址（wrangler dev）
+if [ -z "$URL" ]; then
+    echo "找不到中繼網址：加上 --url，或先執行 collector/scripts/set-relay.sh" >&2; exit 2
+elif ! [[ $URL =~ ^https://[^/@?#]+(/[^@]*)?$ || $URL =~ ^http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?(/[^@]*)?$ ]]; then
+    echo "中繼網址必須是 https://（避免管理密鑰以明文傳送）" >&2; exit 2
+fi
 
 DEVICE_ID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
 METHOD=
