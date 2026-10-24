@@ -276,6 +276,8 @@ final class HistoryStore {
                     + " 'token_bad_lines', 'token_long_lines', 'token_days_from')", []))
                 // 不重新掃描時，今天以前的每日 Token 不會再算回來
                 && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
+                // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時）
+                && Self.exec(db, "DELETE FROM meta WHERE key = 'sync_last_success'", [])
         }
     }
 
