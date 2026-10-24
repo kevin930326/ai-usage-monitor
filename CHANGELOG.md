@@ -4,7 +4,13 @@
 
 ## [Unreleased]
 
+### Changed
+- 額度重置的判斷（ADR-0009 第 4 節）：`used_pct` 下降時，要 `resets_at` 也改變或新值 ≤ 舊值一半才算重置；其他下降視為服務小幅下修，不算重置、該段消耗記 0
+- Token 數字改用「萬／億」三位有效數字（1,470萬、3.85億；不到一萬顯示整數），滑鼠移上去顯示完整數字
+- 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
+
 ### Added
+- 「匯出 Token CSV」（設定 › 歷史資料，FR-37）：這台電腦的每日 Token，四種 Token 與推理分開、日期為本機日期；原來的按鈕改名「匯出額度 CSV」
 - 服務狀態、通知、右鍵選單與快捷鍵（v1.8，FR-19、FR-45、FR-47，ADR-0008、ADR-0010 第四階段）。收集器在 `--write-local` 最後讀 Anthropic（status.claude.com）與 OpenAI（status.openai.com）的公開 Statuspage `summary.json`，只保留整體狀態、異常的元件名稱與未解決事件名稱（各最多 8 項、120 字），寫入本機 `service-status.json`（`0600`、不上傳、不帶任何密鑰或 cookie、至少間隔 4 分鐘）。Mac 面板新增「服務狀態」區塊：都正常時一行，異常或額度用完時變成卡片並分辨「服務異常，不是額度用完」與「額度已用完（服務正常）」，異常時橘點呼吸 3 次。設定新增「通知」（剩不到 20%、用得太快、額度重置，預設關，同一輪只通知一次，點通知打開面板並讓對應卡片亮一下）與「快捷鍵」（打開面板，預設不設定）；右鍵選單列圖示：立即更新、完整統計、設定、結束。`make-demo-history.py` 產生假的服務狀態，量測腳本加入橘點呼吸與卡片亮一下
 - Mac 面板第三階段：統計卡片與完整統計視窗（v1.7，FR-43、FR-44、FR-46，ADR-0008～0011）。卡片標「這台 Mac」（滑鼠移上去說明不含網頁、手機 App、其他電腦與雲端 session），可切換全部／Claude／Codex：本週 Token（與上週同期比較 ▲▼%）、單日最高、最長任務、連續天數（創新紀錄時 🔥）、Token 活動（30 天／12 週／累計）與約 5 個月的活動熱力圖；主數字＝input＋cache_write＋output，滑鼠移到「本週 Token」看四種 Token 與快取讀取。首次掃描完成前顯示骨架「正在整理過去的紀錄（N%）」。頁尾「完整統計視窗 →」打開可調整大小的視窗（最小 720×520）：一年熱力圖、30 天疊加長條、各模型、一天中的時段、個人紀錄；打開時才讀資料庫、關閉時釋放。第三階段動畫：服務切換交叉淡入、數字滾動、長條依序長出、熱力圖逐欄淡入、🔥 每個新紀錄彈一次；減少動態效果時直接顯示。`make-demo-history.py` 產生假的 Token 資料，量測腳本加入統計切換與統計視窗
 - 收集器 Token 統計（v1.7，FR-40～FR-44，ADR-0009）：讀這台 Mac 的 Claude Code 與 Codex CLI 對話紀錄（只列舉 ADR 列出的檔案、不跟隨符號連結、每行只取白名單欄位），把 `input`、`cache_write`、`cache_read`、`output`、`reasoning` 與任務時間分開累加到 `history.sqlite3`（schema 2：`daily_tokens`、`hourly_tokens`、`records`、`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）。Claude 以訊息 ID 去重並補串流差額；Codex 每檔一種來源、改寫或換來源時先扣再重算；首次掃描每次最多 64 MB 或 15 秒並記錄進度；一般執行約增加 8 ms。`install-launchd.sh` 把 `CLAUDE_CONFIG_DIR`／`CODEX_HOME` 寫進 `config.json`；Mac App 支援 schema 2，「清除歷史」把 Codex 帳本歸零、「清除並重新掃描」一併清除任務去重與首次掃描狀態

@@ -294,12 +294,24 @@ final class HistoryStore {
         return exec(db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('token_days_from', ?)", [.text(day)])
     }
 
-    /// 匯出 CSV 的內容：每小時的額度歷史（`QuotaHistoryCSV`）。
+    /// 匯出額度 CSV 的內容：每小時的額度歷史（`QuotaHistoryCSV`）。
     nonisolated func exportCSV() throws -> String {
         guard FileManager.default.fileExists(atPath: url.path) else { throw WriteError.missing }
         guard let csv = withConnection(write: false, { db in Self.samples(db, since: 0).map(QuotaHistoryCSV.make) }) ?? nil else {
             throw WriteError.failed
         }
+        return csv
+    }
+
+    /// 匯出 Token CSV 的內容：這台電腦的每日 Token（`TokenCSV`，不設日期下界）。沒有 Token 統計的資料表時丟出 `missing`。
+    nonisolated func exportTokenCSV() throws -> String {
+        guard FileManager.default.fileExists(atPath: url.path) else { throw WriteError.missing }
+        let result: String?? = withConnection(write: false) { db -> String? in
+            guard Self.existingTables(db, ["daily_tokens"]).count == 1 else { return nil }
+            return Self.tokenDays(db, device: Self.meta(db, "device_id") ?? "", since: "").map { TokenCSV.make(rows: $0) }
+        }
+        guard let opened = result else { throw WriteError.failed }
+        guard let csv = opened else { throw WriteError.missing }
         return csv
     }
 

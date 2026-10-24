@@ -62,6 +62,41 @@ import Testing
         #expect(QuotaHistory.isReset(from: sample(0, 10, resets: nil), to: sample(300, 12, resets: hour)))
     }
 
+    @Test func smallDropIsACorrectionNotAReset() {
+        // 服務小幅下修（Claude 的整數 % 四捨五入改變、Codex 重新計算）：resets_at 沒變、新值高於舊值一半
+        #expect(!QuotaHistory.isReset(from: sample(0, 33), to: sample(300, 32)))
+        #expect(!QuotaHistory.isReset(from: sample(0, 50, resets: hour), to: sample(300, 48, resets: hour + 60)))
+        #expect(!QuotaHistory.isReset(from: sample(0, 40), to: sample(300, 21)))
+        // 剛好一半或更低：重置（resets_at 沒跟著更新時）
+        #expect(QuotaHistory.isReset(from: sample(0, 40), to: sample(300, 20)))
+        #expect(QuotaHistory.isReset(from: sample(0, 1), to: sample(300, 0)))
+        // 小幅下降但 resets_at 也改變：兩者同時發生，算重置
+        #expect(QuotaHistory.isReset(from: sample(0, 50, resets: hour), to: sample(300, 48, resets: 6 * hour)))
+    }
+
+    @Test func correctionKeepsTheCycleAndCountsNothing() {
+        // 00:00 50% → 00:30 下修為 48% → 01:00 52%：下修那段記 0，之後的 4 點照算；目前這一輪不從下修處重新起算
+        let h = QuotaHistory(samples: [sample(0, 50), sample(30 * minute, 48), sample(hour, 52)], runs: runs(0, 2 * hour))
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(2 * hour), days: 1, calendar: utc)
+        #expect(c.hours[0].consumed == 4)
+        #expect(c.hours[1].consumed == 0)
+        #expect(QuotaHistory.currentCycle(h.samples(provider: "claude", windowID: "five_hour")).count == 3)
+    }
+
+    @Test func realisticResetAndCorrectionTogether() {
+        // 5 小時額度：87%（00:10 重置）→ 00:15 3%（resets_at 往後 5 小時）→ 00:20 下修為 2% → 00:50 6%
+        let resets = 5 * hour + 10 * minute
+        let h = QuotaHistory(samples: [sample(0, 87, resets: 10 * minute), sample(15 * minute, 3, resets: resets),
+                                       sample(20 * minute, 2, resets: resets), sample(50 * minute, 6, resets: resets)],
+                             runs: runs(0, hour))
+        let c = QuotaConsumption(provider: "claude", windowID: "five_hour", history: h, now: at(hour), days: 1, calendar: utc)
+        #expect(c.hours[0].consumed == 7)  // 新一輪的 3 點＋下修後的 4 點，下修本身不計
+        #expect(QuotaHistory.currentCycle(h.samples(provider: "claude", windowID: "five_hour")).map(\.usedPct) == [3, 2, 6])
+        // 每週額度：resets_at 沒有更新、% 從 60 掉到 3（≤ 一半）：仍是重置
+        #expect(QuotaHistory.isReset(from: sample(0, 60, resets: 7 * 86400, window: "weekly"),
+                                     to: sample(300, 3, resets: 7 * 86400, window: "weekly")))
+    }
+
     @Test func currentCycleStartsAtLastReset() {
         let s = [sample(0, 70), sample(300, 80), sample(600, 1, resets: 10 * hour), sample(900, 3, resets: 10 * hour)]
         #expect(QuotaHistory.currentCycle(s).map(\.usedPct) == [1, 3])

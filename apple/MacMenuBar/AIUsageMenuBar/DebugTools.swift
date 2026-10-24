@@ -253,6 +253,13 @@ enum DebugTools {
                 .environment(HistoryStore.shared)
                 .background(Color(nsColor: .windowBackgroundColor))
             write(view, scheme: scheme, to: dir.appendingPathComponent("settings-\(scheme.name).png"))
+            // 系統設定中關閉了通知時的提示
+            let denied = NotificationSettingsSection(interactive: false, previewDenied: true)
+                .environment(PanelSettings.shared)
+                .frame(width: 420, alignment: .leading)
+                .padding(16)
+                .background(Color(nsColor: .windowBackgroundColor))
+            write(denied, scheme: scheme, to: dir.appendingPathComponent("settings-notify-denied-\(scheme.name).png"))
         }
     }
 

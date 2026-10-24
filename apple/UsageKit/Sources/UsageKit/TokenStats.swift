@@ -458,15 +458,18 @@ public enum TokenBreakdown {
 // MARK: - 文字
 
 public enum TokenFormat {
-    /// 「980」「12.3K」「4.56M」「1.2B」
+    /// 「9,999」「1.23萬」「12.3萬」「1,470萬」「3.85億」：一萬以上用萬／億、三位有效數字，
+    /// 不到一萬顯示整數。面板、統計視窗與 VoiceOver 都用這個；滑鼠說明用 `full`。
     public static func short(_ value: Int64) -> String {
-        let v = Double(value)
-        switch abs(v) {
-        case ..<1000: return "\(value)"
-        case ..<1_000_000: return trimmed(v / 1000) + "K"
-        case ..<1_000_000_000: return trimmed(v / 1_000_000) + "M"
-        default: return trimmed(v / 1_000_000_000) + "B"
+        let v = abs(Double(value))
+        guard v >= 10_000 else { return full(value) }
+        var scaled = significant(v / 1e4)
+        var unit = "萬"
+        if scaled >= 10_000 {  // 包含四捨五入後進位到一億（9,999.5 萬 → 1 億）
+            scaled = significant(v / 1e8)
+            unit = "億"
         }
+        return (value < 0 ? "-" : "") + trimmed(scaled) + unit
     }
 
     /// 完整數字加千分位：「12,345,678」
@@ -488,13 +491,45 @@ public enum TokenFormat {
         return m == 0 ? "\(h) 小時" : "\(h) 小時 \(m) 分"
     }
 
+    /// 四捨五入到三位有效數字（`v` ≥ 1）
+    private static func significant(_ v: Double) -> Double {
+        let step = pow(10, floor(log10(v)) - 2)
+        return (v / step).rounded() * step
+    }
+
+    /// 三位有效數字的文字：「1.47」「12.3」「147」「1,470」；小數尾端的 0 去掉（「1.5」）
     private static func trimmed(_ v: Double) -> String {
-        let digits = abs(v) < 10 ? 2 : abs(v) < 100 ? 1 : 0
+        guard v < 1000 else { return full(Int64(v.rounded())) }
+        let digits = v < 10 ? 2 : v < 100 ? 1 : 0
         var s = String(format: "%.\(digits)f", v)
         if s.contains(".") {
             while s.hasSuffix("0") { s.removeLast() }
             if s.hasSuffix(".") { s.removeLast() }
         }
         return s
+    }
+}
+
+// MARK: - 匯出 CSV（FR-37、ADR-0009 第 5 節）
+
+public enum TokenCSV {
+    public static let header = "day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,"
+        + "reasoning_tokens,task_count,task_seconds,longest_task_seconds\n"
+
+    /// 每日 Token（`daily_tokens`）：欄位同資料表，四種 Token 與推理明細分開、不預先加總；
+    /// `day` 是收集器寫入時的本機日期（YYYY-MM-DD）。依日期、服務、模型排序。
+    public static func make(rows: [TokenDayRow]) -> String {
+        let sorted = rows.sorted { ($0.day, $0.provider, $0.model) < ($1.day, $1.provider, $1.model) }
+        var out = header
+        for r in sorted {
+            let c = r.counts
+            let fields: [String] = [
+                QuotaHistoryCSV.field(r.day), QuotaHistoryCSV.field(r.provider), QuotaHistoryCSV.field(r.model),
+                "\(c.input)", "\(c.cacheWrite)", "\(c.cacheRead)", "\(c.output)", "\(c.reasoning)",
+                "\(r.taskCount)", "\(r.taskSeconds)", "\(r.longestTaskSeconds)",
+            ]
+            out += fields.joined(separator: ",") + "\n"
+        }
+        return out
     }
 }

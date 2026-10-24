@@ -103,6 +103,7 @@ final class PanelSettings {
         static let notifyLow = "notify.low"
         static let notifyTooFast = "notify.tooFast"
         static let notifyReset = "notify.reset"
+        static let notifyAskedAtLaunch = "notify.askedAtLaunch"
         static let hotKey = "hotKey.panel"
     }
 
@@ -152,7 +153,7 @@ final class PanelSettings {
         didSet { defaults.set(celebratedStreak, forKey: Key.celebratedStreak) }
     }
 
-    /// 通知的三個開關（FR-19）。預設關：使用者打開時才向系統要求通知權限
+    /// 通知的三個開關（FR-19）。「剩不到 20%」預設開（第一次打開 App 時向系統要求權限），其他兩個預設關
     var notifyLow: Bool {
         didSet { defaults.set(notifyLow, forKey: Key.notifyLow) }
     }
@@ -175,6 +176,13 @@ final class PanelSettings {
 
     var notifiesAnything: Bool { notifyLow || notifyTooFast || notifyReset }
 
+    /// 啟動時是否該向系統要求通知權限：有任一個開關打開、而且還沒在啟動時問過（只問一次，之後由設定的開關處理）
+    func takeLaunchAuthorizationRequest() -> Bool {
+        guard notifiesAnything, !defaults.bool(forKey: Key.notifyAskedAtLaunch) else { return false }
+        defaults.set(true, forKey: Key.notifyAskedAtLaunch)
+        return true
+    }
+
     /// 打開面板的全域快捷鍵（FR-47）；預設不設定
     var hotKey: HotKeyShortcut? {
         didSet { defaults.set(hotKey?.encoded(), forKey: Key.hotKey) }
@@ -192,7 +200,7 @@ final class PanelSettings {
         statsScope = defaults.string(forKey: Key.statsScope).flatMap(TokenScope.init) ?? .all
         statsRange = defaults.string(forKey: Key.statsRange).flatMap(TokenActivityRange.init) ?? .days30
         celebratedStreak = defaults.integer(forKey: Key.celebratedStreak)
-        notifyLow = defaults.bool(forKey: Key.notifyLow)
+        notifyLow = defaults.object(forKey: Key.notifyLow) as? Bool ?? true
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
         notifyReset = defaults.bool(forKey: Key.notifyReset)
         hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)

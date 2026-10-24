@@ -162,17 +162,46 @@ import Testing
     }
 
     @Test func formatting() {
+        // 萬／億、三位有效數字；不到一萬顯示整數
+        #expect(TokenFormat.short(0) == "0")
         #expect(TokenFormat.short(980) == "980")
-        #expect(TokenFormat.short(12_345) == "12.3K")
-        #expect(TokenFormat.short(1_500) == "1.5K")
-        #expect(TokenFormat.short(4_560_000) == "4.56M")
-        #expect(TokenFormat.short(123_000_000) == "123M")
-        #expect(TokenFormat.short(1_200_000_000) == "1.2B")
+        #expect(TokenFormat.short(9_999) == "9,999")
+        #expect(TokenFormat.short(10_000) == "1萬")
+        #expect(TokenFormat.short(12_345) == "1.23萬")
+        #expect(TokenFormat.short(15_000) == "1.5萬")
+        #expect(TokenFormat.short(123_456) == "12.3萬")
+        #expect(TokenFormat.short(4_560_000) == "456萬")
+        #expect(TokenFormat.short(14_700_000) == "1,470萬")
+        #expect(TokenFormat.short(14_749_999) == "1,470萬")
+        #expect(TokenFormat.short(99_950_000) == "1億")  // 9,995 萬四捨五入進位到 1 億
+        #expect(TokenFormat.short(99_940_000) == "9,990萬")
+        #expect(TokenFormat.short(385_000_000) == "3.85億")
+        #expect(TokenFormat.short(1_234_567_890) == "12.3億")
+        #expect(TokenFormat.short(123_456_789_012) == "1,230億")
+        #expect(TokenFormat.short(-12_345) == "-1.23萬")
         #expect(TokenFormat.full(12_345_678) == "12,345,678")
         #expect(TokenFormat.duration(30) == "30 秒")
         #expect(TokenFormat.duration(45 * 60) == "45 分")
         #expect(TokenFormat.duration(3600 + 23 * 60) == "1 小時 23 分")
         #expect(TokenFormat.duration(7200) == "2 小時")
+    }
+
+    @Test func tokenCSVKeepsFourTokenKindsSeparate() {
+        let rows = [
+            TokenDayRow(day: "2026-10-24", provider: "codex", model: "gpt-5.5",
+                        counts: TokenCounts(input: 10, cacheWrite: 0, cacheRead: 900, output: 40, reasoning: 12),
+                        taskCount: 2, taskSeconds: 300, longestTaskSeconds: 200),
+            TokenDayRow(day: "2026-10-23", provider: "claude", model: "claude-opus-5-5",
+                        counts: TokenCounts(input: 1, cacheWrite: 2, cacheRead: 3, output: 4), taskCount: 1, taskSeconds: 60, longestTaskSeconds: 60),
+            TokenDayRow(day: "2026-10-24", provider: "claude", model: "other", counts: TokenCounts(input: 5)),
+        ]
+        let lines = TokenCSV.make(rows: rows).split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines[0] == "day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds")
+        #expect(lines[1] == "2026-10-23,claude,claude-opus-5-5,1,2,3,4,0,1,60,60")
+        #expect(lines[2] == "2026-10-24,claude,other,5,0,0,0,0,0,0,0")
+        #expect(lines[3] == "2026-10-24,codex,gpt-5.5,10,0,900,40,12,2,300,200")
+        #expect(lines.count == 5 && lines[4].isEmpty)
+        #expect(TokenCSV.make(rows: []) == TokenCSV.header)
     }
 
     @Test func otherCalendarsUseGregorianDayKeys() {

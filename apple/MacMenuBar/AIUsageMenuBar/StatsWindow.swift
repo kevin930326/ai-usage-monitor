@@ -157,16 +157,19 @@ private struct RecordsRow: View {
     var body: some View {
         HStack(spacing: 12) {
             tile("本週 Token", TokenFormat.short(summary.thisWeek.main),
-                 summary.changePct.map { "\($0 >= 0 ? "▲" : "▼")\(Int(abs($0).rounded()))% 與上週同期" })
-            tile("單日最高", summary.bestDay.map { TokenFormat.short($0.value) } ?? "–", summary.bestDay?.day.map(StatNumbersText.day))
+                 summary.changePct.map { "\($0 >= 0 ? "▲" : "▼")\(Int(abs($0).rounded()))% 與上週同期" },
+                 help: TokenFormat.full(summary.thisWeek.main))
+            tile("單日最高", summary.bestDay.map { TokenFormat.short($0.value) } ?? "–", summary.bestDay?.day.map(StatNumbersText.day),
+                 help: summary.bestDay.map { TokenFormat.full($0.value) })
             tile("最長任務", summary.longestTaskSeconds.map { TokenFormat.duration($0.value) } ?? "–",
                  summary.longestTaskSeconds?.day.map(StatNumbersText.day))
             tile("最長連續", summary.longestStreak.map { "\($0.value) 天" } ?? "–", "目前 \(summary.currentStreak) 天")
-            tile("累計 Token", summary.total.map { TokenFormat.short($0.value) } ?? "–", summary.total.map { TokenFormat.full($0.value) })
+            tile("累計 Token", summary.total.map { TokenFormat.short($0.value) } ?? "–", summary.total.map { TokenFormat.full($0.value) },
+                 help: summary.total.map { TokenFormat.full($0.value) })
         }
     }
 
-    private func tile(_ title: String, _ value: String, _ detail: String?) -> some View {
+    private func tile(_ title: String, _ value: String, _ detail: String?, help: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.title2.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
@@ -175,6 +178,7 @@ private struct RecordsRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .help(help.map { "\($0) Token" } ?? "")
         .accessibilityElement(children: .combine)
     }
 }
@@ -207,7 +211,7 @@ private struct ModelList: View {
                     .frame(height: 8)
                     Text(TokenFormat.short(item.counts.main)).font(.callout).monospacedDigit().frame(width: 56, alignment: .trailing)
                 }
-                .help("輸入 \(TokenFormat.full(item.counts.input))、快取寫入 \(TokenFormat.full(item.counts.cacheWrite))、輸出 \(TokenFormat.full(item.counts.output))、快取讀取 \(TokenFormat.full(item.counts.cacheRead))")
+                .help("合計 \(TokenFormat.full(item.counts.main))：輸入 \(TokenFormat.full(item.counts.input))、快取寫入 \(TokenFormat.full(item.counts.cacheWrite))、輸出 \(TokenFormat.full(item.counts.output))、快取讀取 \(TokenFormat.full(item.counts.cacheRead))")
                 .accessibilityElement(children: .combine)
             }
         }
