@@ -17,6 +17,8 @@
 # 執行後逐張檢查 git diff 中的圖再提交。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=scripts/ios-render-launch.sh
+source "$ROOT/scripts/ios-render-launch.sh"
 IMAGES=$ROOT/docs/images
 SOURCES=$IMAGES/SOURCES.tsv
 OUT=${README_IMAGES_OUT:-$ROOT/build/readme-images}
@@ -118,9 +120,9 @@ render_ios() {
   docs=$(xcrun simctl get_app_container "$udid" "$IOS_BUNDLE" data)/Documents
   mkdir -p "$docs"
   rm -f "$docs"/*.png "$docs/island-sizes.json"
+  # 剛開機後的第一次啟動常常不出畫面，launch_ios_render 會重新啟動一次（scripts/ios-render-launch.sh）
   SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
-    xcrun simctl launch --terminate-running-process "$udid" "$IOS_BUNDLE" "${LANG_ARGS[@]}" >/dev/null
-  for _ in $(seq 300); do [ -f "$docs/island-sizes.json" ] && break; sleep 1; done
+    launch_ios_render "$udid" "$IOS_BUNDLE" "$docs" "${LANG_ARGS[@]}" || true
   [ -f "$docs/island-sizes.json" ] || { echo "iOS 截圖逾時"; exit 2; }
   mkdir -p "$WORK/ios"
   cp "$docs"/*.png "$WORK/ios/"
