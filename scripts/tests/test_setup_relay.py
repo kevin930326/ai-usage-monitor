@@ -54,9 +54,13 @@ class SetupRelayTests(unittest.TestCase):
                 "deployments list")
                     [ -n "${{FAKE_EXISTS:-}}" ] && {{ echo "Created: 2026-10-01"; exit 0; }}
                     echo "${{FAKE_LIST_ERROR:-✘ [ERROR] This Worker does not exist on your account. [code: 10007]}}"; exit 1 ;;
-                "kv namespace") echo "✨ Success!"; echo '  "id": "{KV_ID}"' ;;
+                "kv namespace")
+                    case "$3" in
+                        list) echo "${{FAKE_KV_LIST:-[]}}" ;;
+                        create) [ -z "${{FAKE_SECRET_FAIL:-}}" ] || true; echo "✨ Success!"; echo '  "id": "{KV_ID}"' ;;
+                    esac ;;
                 "deploy --config") echo "Uploaded ai-usage-relay"; echo "  https://ai-usage-relay.tester.workers.dev" ;;
-                "secret put") cat >>"{t}/secrets"; echo >>"{t}/secrets" ;;
+                "secret put") [ -z "${{FAKE_SECRET_FAIL:-}}" ] || exit 1; cat >>"{t}/secrets"; echo >>"{t}/secrets" ;;
                 *) exit 1 ;;
             esac
         ''')
@@ -110,7 +114,7 @@ class SetupRelayTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         calls = self.calls()
         self.assertIn("wrangler login", calls)
-        self.assertIn("wrangler kv namespace create USAGE_KV", calls)
+        self.assertIn("wrangler kv namespace create ai-usage-relay-usage", calls)
         self.assertIn("wrangler deploy --config wrangler.local.toml (cwd=relay)", calls)
         toml = (self.relay / "wrangler.local.toml").read_text()
         self.assertIn(f'id = "{KV_ID}"', toml)
@@ -153,6 +157,19 @@ class SetupRelayTests(unittest.TestCase):
             self.assertNotIn("完成", r.stdout)
             self.assertIn("set-relay.sh", r.stderr)
             self.assertFalse((self.home / "config.json").exists())
+
+    def test_existing_kv_with_the_same_name_stops_and_failures_explain_cleanup(self):
+        # Codex C-03：上次中斷留下的 KV 不沿用、不動；之後失敗時列出可以照做的清理步驟
+        r = self.run_script(env={"FAKE_LOGGED_IN": "1", "FAKE_KV_LIST": '[{"id": "x", "title": "ai-usage-relay-usage"}]'})
+        self.assertEqual(r.returncode, 3)
+        self.assertIn("kv namespace delete", r.stderr)
+        self.assertNotIn("kv namespace create", self.calls())
+        # 無關的 USAGE_KV 不影響
+        r = self.run_script(env={"FAKE_LOGGED_IN": "1", "FAKE_KV_LIST": '[{"id": "y", "title": "USAGE_KV"}]',
+                                 "FAKE_SECRET_FAIL": "1"})
+        self.assertEqual(r.returncode, 4)
+        self.assertIn(f"npx wrangler kv namespace delete --namespace-id {KV_ID}", r.stderr)
+        self.assertIn("rm wrangler.local.toml", r.stderr)
 
     def test_stops_on_existing_settings_without_changes(self):
         (self.home / "config.json").write_text(json.dumps({"relay_url": "https://old.example.workers.dev"}))

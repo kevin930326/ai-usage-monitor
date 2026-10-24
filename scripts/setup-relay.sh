@@ -87,7 +87,7 @@ if [ "$DRY" = 1 ]; then
 （dry-run）接下來會：
   1. wrangler whoami；沒有登入時執行 wrangler login（打開瀏覽器）
   2. 確認 Cloudflare 上沒有名為 ${NAME} 的 Worker（有就停止）
-  3. wrangler kv namespace create USAGE_KV，把 id 寫進 relay/wrangler.local.toml
+  3. 確認沒有名為 ${NAME}-usage 的 KV（有就停止），建立它並把 id 寫進 relay/wrangler.local.toml
   4. wrangler deploy --config wrangler.local.toml --name ${NAME}
   5. 產生兩把不同的密鑰，經標準輸入執行 wrangler secret put WRITE_TOKEN／READ_TOKEN
   6. 以讀取密鑰確認 GET /usage 回 404（還沒有資料）
@@ -113,10 +113,24 @@ grep -Eqi 'does not exist|not found|10007' <<<"$LIST_OUT" \
 ok "沒有同名的 Worker（${NAME}）"
 
 # ---------- 4. KV 與部署 ----------
-KV_OUT=$(wrangler kv namespace create USAGE_KV 2>&1) || fail "建立 KV 失敗（可在 relay/ 執行 npx wrangler kv namespace list 確認）" 4
+# KV 的名稱跟著 Worker 名稱（binding 仍是 USAGE_KV）；已有同名的就停止，不沿用也不動它（Codex C-03）
+KV_TITLE="${NAME}-usage"
+KV_LIST=$(wrangler kv namespace list 2>/dev/null) || fail "無法列出 KV（網路或權限問題）" 4
+if grep -Fq "\"title\": \"${KV_TITLE}\"" <<<"$KV_LIST"; then
+    fail "Cloudflare 上已有名為 ${KV_TITLE} 的 KV，沒有做任何變更。是上次中斷留下的就在 relay/ 執行
+  npx wrangler kv namespace list    # 找到 ${KV_TITLE} 的 id
+  npx wrangler kv namespace delete --namespace-id <id>
+再重跑；或用 --name 換一個名稱" 3
+fi
+KV_OUT=$(wrangler kv namespace create "$KV_TITLE" 2>&1) || fail "建立 KV 失敗（可在 relay/ 執行 npx wrangler kv namespace list 確認）" 4
 KV_ID=$(grep -Eo '[0-9a-f]{32}' <<<"$KV_OUT" | head -1)
-[ -n "$KV_ID" ] || fail "看不懂 wrangler 的輸出，找不到 KV id" 4
-ok "已建立 KV（${KV_ID}）"
+[ -n "$KV_ID" ] || fail "看不懂 wrangler 的輸出，找不到 KV id（在 Cloudflare 主控台刪除 ${KV_TITLE} 後重跑）" 4
+ok "已建立 KV（${KV_TITLE}）"
+# 之後任何一步失敗：照這裡清掉這次建立的東西就能重跑
+CLEANUP="清掉這次建立的東西後即可重跑（在 relay/ 執行）：
+  npx wrangler delete --config wrangler.local.toml     # 已部署時
+  npx wrangler kv namespace delete --namespace-id ${KV_ID}
+  rm wrangler.local.toml"
 cat >"$LOCAL_TOML" <<EOF
 # scripts/setup-relay.sh 產生（不進版控）。部署：npx wrangler deploy --config wrangler.local.toml
 name = "${NAME}"
@@ -128,9 +142,9 @@ binding = "USAGE_KV"
 id = "${KV_ID}"
 EOF
 
-DEPLOY_OUT=$(wrangler deploy --config wrangler.local.toml 2>&1) || fail "部署失敗（可在 relay/ 執行 npx wrangler deploy --config wrangler.local.toml 看完整訊息）" 4
+DEPLOY_OUT=$(wrangler deploy --config wrangler.local.toml 2>&1) || fail "部署失敗（可在 relay/ 執行 npx wrangler deploy --config wrangler.local.toml 看完整訊息）。${CLEANUP}" 4
 URL=$(grep -Eo "https://${NAME}\.[A-Za-z0-9-]+\.workers\.dev" <<<"$DEPLOY_OUT" | head -1)
-[ -n "$URL" ] || fail "部署成功但找不到 workers.dev 網址（見 Cloudflare 主控台）" 4
+[ -n "$URL" ] || fail "部署成功但找不到 workers.dev 網址（見 Cloudflare 主控台）。${CLEANUP}" 4
 ok "已部署：${URL#https://}"
 
 # ---------- 5. 密鑰 ----------
@@ -138,9 +152,9 @@ token() { openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'; }
 WRITE=$(token); READ=$(token)
 [ ${#WRITE} -ge 40 ] && [ ${#READ} -ge 40 ] && [ "$WRITE" != "$READ" ] || fail "無法產生密鑰" 5
 printf '%s' "$WRITE" | wrangler secret put WRITE_TOKEN --config wrangler.local.toml >/dev/null 2>&1 \
-    || fail "設定 WRITE_TOKEN 失敗（重跑前先刪除 relay/wrangler.local.toml 與 Cloudflare 上的 ${NAME}）" 4
+    || fail "設定 WRITE_TOKEN 失敗。${CLEANUP}" 4
 printf '%s' "$READ" | wrangler secret put READ_TOKEN --config wrangler.local.toml >/dev/null 2>&1 \
-    || fail "設定 READ_TOKEN 失敗（重跑前先刪除 relay/wrangler.local.toml 與 Cloudflare 上的 ${NAME}）" 4
+    || fail "設定 READ_TOKEN 失敗。${CLEANUP}" 4
 ok "已設定兩把密鑰"
 
 # 新的 workers.dev 子網域憑證可能要等 1～數分鐘；最多等 3 分鐘
