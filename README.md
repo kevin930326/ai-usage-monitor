@@ -190,7 +190,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 
 上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
-Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
+Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串；Swift 把 15 個位元組以內的字串直接編進指令、`strings` 看不到，所以另外以 `scripts/check-debug-env.py` 檢查原始碼：`"AUM_…"` 只能出現在 `#if DEBUG` 裡，`AUM_TESTING` 例外）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
 
 ### 已知取捨
 
