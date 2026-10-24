@@ -8,6 +8,8 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${1:-$(mktemp -d)}
+mkdir -p "$OUT"
+OUT=$(cd "$OUT" && pwd)  # agent 由 launchd 執行，工作目錄不是這裡：一律用絕對路徑
 APP=$OUT/AUMProbe.app
 LABEL=io.github.kevin930326.AUMProbe.agent
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents" "$OUT/agent-output"
