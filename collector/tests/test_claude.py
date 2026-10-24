@@ -9,6 +9,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
+from zoneinfo import available_timezones
 
 from usage_collector import __main__ as cli
 from usage_collector.models import ProviderError
@@ -27,6 +28,7 @@ def window_dicts(usage) -> list[tuple]:
     return [(w["id"], w["label"], w["used_pct"], w["resets_at"], w["hidden"]) for w in usage.to_dict()["windows"]]
 
 
+@unittest.skipUnless(available_timezones(), "解析重置時間需要時區資料庫（Windows 要裝 tzdata，見 docs/windows.md）")
 class ClaudeParseTest(unittest.TestCase):
     """以錄下的真實輸出（已遮蔽）與依 Claude Code 格式化程式手寫的輸出解析。"""
 

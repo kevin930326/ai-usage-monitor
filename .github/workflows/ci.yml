@@ -64,6 +64,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Windows 的 Python 沒有時區資料庫：裝 tzdata 讓解析 Claude 重置時間的測試能跑（docs/windows.md 也建議安裝）；
+      # 沒有資料庫時的行為由 test_system 以 mock 測試
+      - run: python -m pip install --disable-pip-version-check tzdata
       - run: python -m unittest -v
         env:
           AI_USAGE_MONITOR_HOME: ${{ runner.temp }}\aum-test-home
