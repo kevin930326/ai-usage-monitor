@@ -133,7 +133,12 @@ struct SetupWizardView: View {
 
     @Environment(CollectorService.self) private var collector
 
-    private var inputs: SetupInputs { model.inputs }
+    /// 背景收集器的狀態直接看 CollectorService（在精靈裡按「啟用」等之後立即反映在標記與步數，不必重新檢查）
+    private var inputs: SetupInputs {
+        var inputs = model.inputs
+        inputs.collectorNeedsAction = collector.needsAction
+        return inputs
+    }
     private var collectorState: CollectorService.State { collector.state }
 
     var body: some View {
