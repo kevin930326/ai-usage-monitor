@@ -1,6 +1,6 @@
 # ADR-0012：iPhone 配對（QR 碼與一次性短碼）
 
-- 狀態：**提議中**（2026-10-24；牽涉密鑰的傳遞與中繼的新端點，等使用者確認後改為「已採用」）
+- 狀態：**已採用**（2026-10-24 提議，同日由使用者採用）
 - 日期：2026-10-24
 - 相關需求：FR-55、NFR-1、NFR-3、NFR-6
 - 相關：[ADR-0001](0001-cloudflare-worker-relay.md)（中繼與讀寫密鑰）、[ADR-0013](0013-download-and-install.md) 第 6 節（iPhone 的安裝方式）
@@ -78,7 +78,9 @@ JSON = {"url": "https://ai-usage-relay.<帳號>.workers.dev", "read": "<READ_TOK
 - 中繼多兩個不需要密鑰也能呼叫的端點（`/pair/claim`）；以一次性、10 分鐘、5 次與只存雜湊限制。
 - 新增：UsageKit `PairingPayload`、`PairingCode`、`RelayClient.claimPairing`；iPhone 設定的掃描與短碼畫面；`scripts/setup-iphone.sh`、`scripts/render-qr.swift`；中繼的 `/pair` 端點（另一個 PR）。
 
-## 需要使用者決定
+## 使用者的決定（2026-10-24）
 
-1. 合併並部署 `feat/relay-pairing`（短碼）與否；不部署時 iPhone 只用 QR 碼與手動貼上。
-2. 這份 ADR 改為「已採用」。
+1. 採用這份 ADR。
+2. `feat/relay-pairing`（短碼，#86）照合併條件合併；**部署由使用者自己做**。部署之前中繼沒有 `/pair`，iPhone 的「輸入短碼」顯示「中繼還不支援短碼，改用 QR 碼」。
+3. 接受短碼的並行殘留：KV 沒有條件更新，同時大量猜測時實際嘗試次數可能略多於 5 次（40 位元、10 分鐘到期，風險很低；見 relay/README.md）。要完全序列化得改用 Durable Objects，屆時另寫 ADR。
+4. PC 以短碼加入第二層之後再做（記在 BACKLOG）；目前第二層以 `scripts/relay-device.sh` 產生的裝置密鑰加入（FR-57）。
