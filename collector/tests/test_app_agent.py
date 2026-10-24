@@ -230,6 +230,18 @@ class AppAgentTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         self.assertEqual(oct((self.home / "logs" / "collector.log").stat().st_mode & 0o777), "0o600")
 
+    def test_legacy_job_still_in_launchd_counts_as_installed(self):
+        # plist 已移走但 launchd 還有舊的工作（遷移時 bootout 失敗）：內建的也不能執行（Fable F-02）
+        with tempfile.TemporaryDirectory() as d:
+            env = {"AUM_LAUNCH_AGENTS_DIR": d}
+            self.assertTrue(cli.legacy_agent_installed(env, job_loaded=lambda: True))
+            self.assertFalse(cli.legacy_agent_installed(env, job_loaded=lambda: False))
+            # 安裝測試（AUM_LAUNCH_AGENTS_DIR）沒指定 job_loaded 時只看那個資料夾，不問真的 launchd
+            with mock.patch.object(cli, "legacy_job_loaded", side_effect=AssertionError("不應該問 launchd")):
+                self.assertFalse(cli.legacy_agent_installed(env))
+            (Path(d) / f"{cli.LEGACY_LABEL}.plist").write_text("")
+            self.assertTrue(cli.legacy_agent_installed(env, job_loaded=lambda: False))
+
     def test_real_log_path_without_custom_home(self):
         path = cli.app_agent_log_path({"HOME": "/Users/x"})
         self.assertEqual(path.parts[-4:], ("Library", "Logs", "AIUsageMonitor", "collector.log"))

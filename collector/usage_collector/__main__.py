@@ -5,8 +5,9 @@ import argparse
 import json
 import os
 import signal
+import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,8 +45,29 @@ def launch_agents_dir(environ: Mapping[str, str] = os.environ) -> Path:
     return Path(custom) if custom else Path.home() / "Library" / "LaunchAgents"
 
 
-def legacy_agent_installed(environ: Mapping[str, str] = os.environ) -> bool:
-    return (launch_agents_dir(environ) / f"{LEGACY_LABEL}.plist").exists()
+def legacy_job_loaded() -> bool:
+    """launchd 裡還有 install-launchd.sh 的工作（plist 已移走但還沒停止、或還沒登出）。無法確認時當成還在"""
+    if sys.platform != "darwin":
+        return False
+    try:
+        proc = subprocess.run(["/bin/launchctl", "print", f"gui/{os.getuid()}/{LEGACY_LABEL}"],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    return proc.returncode == 0
+
+
+def legacy_agent_installed(environ: Mapping[str, str] = os.environ,
+                           job_loaded: Callable[[], bool] | None = None) -> bool:
+    """舊的收集器在：plist 還在，或 launchd 裡還有它的工作（與 App 的 CollectorService.legacyInstalled 相同，Fable F-02）。
+    AUM_LAUNCH_AGENTS_DIR（安裝測試）有值時只看那個資料夾，不問真的 launchd"""
+    if (launch_agents_dir(environ) / f"{LEGACY_LABEL}.plist").exists():
+        return True
+    if job_loaded is None:
+        if environ.get("AUM_LAUNCH_AGENTS_DIR"):
+            return False
+        job_loaded = legacy_job_loaded
+    return job_loaded()
 
 
 def app_agent_log_path(environ: Mapping[str, str] = os.environ) -> Path:
