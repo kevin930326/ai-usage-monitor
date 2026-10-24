@@ -12,6 +12,7 @@ struct StatsWindowView: View {
     let historyStore: HistoryStore
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var data: TokenStatsData?
     @State private var loading = false
     @State private var scope: TokenScope = .all
@@ -52,6 +53,8 @@ struct StatsWindowView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .environment(\.panelMotion, fixedMotion ?? motion)
         .environment(\.panelAnimates, animates)
+        // 換外觀（FR-51）時與面板相同的過渡
+        .animation(animates ? PanelTiming.colorScheme : nil, value: colorScheme)
         .background {
             if fixedData == nil {
                 WindowVisibilityReader { isVisible in

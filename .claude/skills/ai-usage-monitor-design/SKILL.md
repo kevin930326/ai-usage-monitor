@@ -28,6 +28,7 @@ description: AI Usage Monitor 的設計與識別規則：服務識別色、原�
   Claude、Codex 用識別色疊 30%／47%／64%／82%／100%；資料過期時改用 `UsageColors.heatmapStale`（淺色 `#636366`、深色 `#98989D`；淺色的系統灰色太淺，第 1 階會和「沒有使用」分不出來）。最淺一階對「沒有使用」≥ 1.25:1、相鄰兩階 ≥ 1.25:1、最多的一階對卡片底色（深色 `#272727`、淺色 `#F5F5F5`）≥ 3:1（`UsagePaletteTests`）。
 - **文字一律 primary／secondary**，不用顏色表示狀態；顏色只用在進度條、服務圖示、熱力圖與提示文字。文字對比度 ≥ 4.5:1，圖形 ≥ 3:1（`UsagePaletteTests` 會檢查）。
 - 黑底場合（動態島、手錶錶面）固定用深色值：`UsageColors.providerMark(_:)`。
+- **外觀設定**（FR-51、FR-52）：跟隨系統（預設）／淺色／深色，`AppearanceChoice`（UsageKit，鍵 `app.appearance`）。只改 App 自己的視窗：Mac 用各視窗的 `NSWindow.appearance`（`followsAppearanceSetting()`，面板、設定、完整統計、設定精靈），**不設 `NSApp.appearance`**，選單列圖示跟隨選單列本身；iPhone 用視窗的 `overrideUserInterfaceStyle`（`windowAppearance(_:)`），Live Activity、動態島、小工具與手錶跟隨系統，設定不放 App Group。新視窗要加 `followsAppearanceSetting()`。畫面裡的顏色仍一律用動態色（`UsageColors`），不要依設定自己挑淺色或深色值。
 - 不要在畫面裡寫死色碼，一律用 `UsageColors`（SwiftUI）或 `UsagePalette`（數值）。
 
 來源：`apple/UsageKit/Sources/UsageKit/UsagePalette.swift`、`apple/UsageKit/Sources/UsageKitUI/UsageColors.swift`。
@@ -188,7 +189,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 ### 面板
 
-- 單一長版、**卡片式**：寬 360pt；卡片圓角 12pt、半透明填色（primary 4.5%）加細邊框，不疊材質（面板視窗本身已是系統材質；`ImageRenderer` 畫不出材質）；深淺色跟隨系統。
+- 單一長版、**卡片式**：寬 360pt；卡片圓角 12pt、半透明填色（primary 4.5%）加細邊框，不疊材質（面板視窗本身已是系統材質；`ImageRenderer` 畫不出材質）；深淺色依設定「外觀」（預設跟隨系統，第 1 節）。
 - 按鈕、開關等控制項自己畫（`ButtonStyle`／`ToggleStyle`），不用 AppKit 實作的控制項，`ImageRenderer` 才能截圖。
 - 預設順序（ADR-0008 第 2 節）：主圓環 → 建議接下來用 → 額度 → 接下來的重置 → 本週額度走勢 → 額度消耗 →（之後的統計、服務狀態）。「建議接下來用」是一行提示（沒有收合箭頭），兩個服務都充足或其中一個也快用完時不顯示。重置時間軸：重置時間已過但還沒有新時間的額度畫在「現在」、標「剛重置」（此時不另寫「現在」）；沒有重置時間且已用 0% 的額度在時間軸下方列「Codex 5h：已重置，下次使用時開始計時」。頁首（標題、更新時間、更新、設定、結束）與頁尾不能關閉或移動。
 - 區塊以穩定的字串 `id` 識別，順序與開關存在 `UserDefaults`；新區塊依預設順序插入、預設開啟；不認得的 id 保留但不顯示。

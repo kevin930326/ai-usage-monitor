@@ -30,6 +30,10 @@ struct HomeView: View {
                 try? await Task.sleep(for: .seconds(1))
                 await model.restartLiveActivity()
             }
+            // AUM_DEMO_ACTION=settings：直接打開設定畫面（截圖用）
+            if model.demoScenario != nil, ProcessInfo.processInfo.environment["AUM_DEMO_ACTION"] == "settings" {
+                showSettings = true
+            }
             #endif
         }
         // 從背景回到前景時自動更新

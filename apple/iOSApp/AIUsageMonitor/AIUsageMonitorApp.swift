@@ -1,8 +1,11 @@
 import SwiftUI
+import UsageKit
 
 @main
 struct AIUsageMonitorApp: App {
     @State private var model = UsageModel()
+    /// 外觀（FR-52）：只存在 App 自己的 UserDefaults，小工具與 Live Activity 不讀
+    @AppStorage(AppearanceChoice.storageKey) private var appearance = AppearanceChoice.system.rawValue
 
     init() {
         WatchSettingsSync.shared.activate()
@@ -12,6 +15,7 @@ struct AIUsageMonitorApp: App {
         WindowGroup {
             HomeView()
                 .environment(model)
+                .windowAppearance(AppearanceChoice(stored: appearance))
                 .task {
                     #if DEBUG
                     IslandRender.runIfRequested()

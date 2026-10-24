@@ -3,12 +3,14 @@ import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
 
-/// 設定視窗（FR-35、FR-37、FR-19、FR-47，ADR-0008 第 5 節）：登入時自動打開、選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料、通知、快捷鍵。
+/// 設定視窗（FR-35、FR-37、FR-19、FR-47、FR-51，ADR-0008 第 5 節）：登入時自動打開、外觀、選單列圖示樣式與顯示的額度、面板區塊的開關與排序、歷史資料、通知、快捷鍵。
 /// 控制項自己畫（不用 AppKit 的 Toggle／Picker／List），ImageRenderer 才能截圖；鍵盤與 VoiceOver 仍可操作。
 struct SettingsView: View {
     @Environment(UsageStore.self) private var store
     @Environment(PanelSettings.self) private var settings
     @Environment(HistoryStore.self) private var history
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
@@ -26,6 +28,8 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             LoginItemSection()
             Divider()
+            appearanceSection
+            Divider()
             menuBarSection
             Divider()
             panelSection
@@ -37,6 +41,23 @@ struct SettingsView: View {
             HotKeySettingsSection(interactive: scrolls)
         }
         .padding(22)
+        // 換外觀時與面板相同的過渡；減少動態效果時直接換（FR-51）
+        .animation(scrolls && !reduceMotion ? PanelTiming.colorScheme : nil, value: colorScheme)
+    }
+
+    // MARK: - 外觀
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("外觀").font(.headline)
+            FlowChips(choices: AppearanceChoice.allCases.map { ($0, $0.title) }, selected: settings.appearance) {
+                settings.appearance = $0
+            }
+            Text("套用到面板、設定、完整統計與設定精靈。選單列圖示跟隨選單列本身的深淺色，不受這個設定影響。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: - 選單列圖示
@@ -181,10 +202,10 @@ private struct StyleTile: View {
 }
 
 /// 單選的膠囊按鈕，自動換行。
-private struct FlowChips: View {
-    let choices: [(MenuBarWindowChoice, String)]
-    let selected: MenuBarWindowChoice
-    let select: (MenuBarWindowChoice) -> Void
+private struct FlowChips<Choice: Hashable>: View {
+    let choices: [(Choice, String)]
+    let selected: Choice
+    let select: (Choice) -> Void
 
     var body: some View {
         FlowLayout(spacing: 6) {
