@@ -200,6 +200,35 @@ describe("POST /tokens/daily", () => {
     assert.equal(db.rows().length, 0);
   });
 
+  it("驗證之後、寫入之前被撤銷（刪除資料）或換新密鑰的上傳不寫回資料", async () => {
+    for (const action of ["revoke", "rotate"]) {
+      db = new FakeD1();
+      env.DB = db;
+      const device = await addDevice();
+      assert.equal((await upload(device.key, [row({ day: daysAgo(1) })])).status, 200);
+      // 內容晚一點才送到：Worker 已經查過密鑰、正在等內容
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const body = new ReadableStream({
+        async start(controller) {
+          await gate;
+          controller.enqueue(new TextEncoder().encode(JSON.stringify({ rows: [row()] })));
+          controller.close();
+        },
+      });
+      const init = { method: "POST", headers: { Authorization: `Bearer ${device.key}` }, body, duplex: "half" };
+      const pending = worker.fetch(new Request("https://relay.test/tokens/daily", init as RequestInit), env);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const admin = action === "revoke"
+        ? await call("POST", `/devices/${device.device_id}/revoke`, "admin-secret", { delete_data: true })
+        : await call("POST", `/devices/${device.device_id}/rotate`, "admin-secret");
+      assert.equal(admin.status, 200);
+      release();
+      assert.equal((await pending).status, 401, action);
+      assert.deepEqual(db.rows().map((r) => r.day), action === "revoke" ? [] : [daysAgo(1)], action);
+    }
+  });
+
   it("驗證每一列", async () => {
     const device = await addDevice();
     const bad = [

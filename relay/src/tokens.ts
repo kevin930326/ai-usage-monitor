@@ -24,10 +24,15 @@ export interface D1PreparedStatement {
   run(): Promise<unknown>;
 }
 
+/** `batch` 每個敘述的結果中用到的部分（寫入了幾列） */
+export interface D1RunResult {
+  meta?: { changes?: number };
+}
+
 /** Cloudflare D1 綁定中用到的部分（`batch` 在同一個交易中執行） */
 export interface D1Database {
   prepare(sql: string): D1PreparedStatement;
-  batch(statements: D1PreparedStatement[]): Promise<unknown[]>;
+  batch(statements: D1PreparedStatement[]): Promise<D1RunResult[]>;
 }
 
 export interface TokensEnv {
@@ -154,8 +159,13 @@ export function sanitizeRows(data: unknown, now: number): Result<TokenRow[]> {
   return { ok: true, value: rows };
 }
 
+// 寫入時再確認一次密鑰仍然有效（同一個交易內）：驗證之後、寫入之前被撤銷或換新的請求不會寫回資料（C-01）
+const KEY_STILL_VALID = "EXISTS (SELECT 1 FROM devices WHERE device_id = ? AND key_hash = ? AND revoked_at IS NULL)";
+
+const TOUCH = `UPDATE devices SET last_upload_at = ? WHERE device_id = ? AND key_hash = ? AND revoked_at IS NULL`;
+
 const UPSERT = `INSERT INTO daily_tokens (device_id, day, provider, model, ${TOKEN_FIELDS.join(", ")}, updated_at)
-  VALUES (?, ?, ?, ?, ${TOKEN_FIELDS.map(() => "?").join(", ")}, ?)
+  SELECT ?, ?, ?, ?, ${TOKEN_FIELDS.map(() => "?").join(", ")}, ? WHERE ${KEY_STILL_VALID}
   ON CONFLICT (device_id, day, provider, model) DO UPDATE SET
   ${TOKEN_FIELDS.map((f) => `${f} = excluded.${f}`).join(", ")}, updated_at = excluded.updated_at`;
 
@@ -163,9 +173,10 @@ async function handleUpload(request: Request, db: D1Database, now: number): Prom
   const token = bearer(request);
   // 裝置密鑰有固定前綴；其他密鑰（含 READ／WRITE／ADMIN）一律 401，不查資料庫
   if (token === null || !token.startsWith(KEY_PREFIX)) return error(401, "unauthorized");
+  const keyHash = await sha256Hex(token);
   const device = await db
     .prepare("SELECT device_id, revoked_at FROM devices WHERE key_hash = ?")
-    .bind(await sha256Hex(token))
+    .bind(keyHash)
     .first<{ device_id: string; revoked_at: number | null }>();
   if (!device || device.revoked_at !== null) return error(401, "unauthorized");
 
@@ -181,13 +192,15 @@ async function handleUpload(request: Request, db: D1Database, now: number): Prom
   if (!rows.ok) return error(422, rows.error);
 
   const seconds = Math.floor(now / 1000);
-  const statements = rows.value.map((r) =>
-    db.prepare(UPSERT).bind(device.device_id, r.day, r.provider, r.model, ...TOKEN_FIELDS.map((f) => r[f]), seconds),
-  );
-  // 空的一批也記錄上傳時間：收集器用它取得自己的 device_id
-  statements.push(db.prepare("UPDATE devices SET last_upload_at = ? WHERE device_id = ?").bind(seconds, device.device_id));
-  await db.batch(statements);
-  return json({ device_id: device.device_id, accepted: rows.value.length });
+  const id = device.device_id;
+  // 第一個敘述記錄上傳時間（空的一批也記錄：收集器用它取得自己的 device_id），同時判斷密鑰在交易中是否仍然有效
+  const statements = [db.prepare(TOUCH).bind(seconds, id, keyHash)];
+  for (const r of rows.value) {
+    statements.push(db.prepare(UPSERT).bind(id, r.day, r.provider, r.model, ...TOKEN_FIELDS.map((f) => r[f]), seconds, id, keyHash));
+  }
+  const results = await db.batch(statements);
+  if ((results[0]?.meta?.changes ?? 0) === 0) return error(401, "unauthorized");
+  return json({ device_id: id, accepted: rows.value.length });
 }
 
 type DeviceRow = { device_id: string; name: string; created_at: number; revoked_at: number | null; last_upload_at: number | null };
