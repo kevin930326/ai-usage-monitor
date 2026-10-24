@@ -166,7 +166,13 @@ function Install-AIUsageCollector {
             }
             if (-not $moved) { throw "Could not move the previous copy in $AppDir (still in use). Nothing was changed; try again in a minute." }
         }
-        Move-Item $Stage $AppDir
+        try {
+            Move-Item $Stage $AppDir -ErrorAction Stop
+        } catch {
+            # Put the previous copy back so the existing task keeps working
+            if ((Test-Path $OldDir) -and -not (Test-Path $AppDir)) { Move-Item $OldDir $AppDir }
+            throw "Could not install to ${AppDir}: $_"
+        }
         Write-Host "OK  Installed to $AppDir"
     } finally {
         if (Test-Path $Work) { Remove-Item -Recurse -Force $Work -ErrorAction SilentlyContinue }
