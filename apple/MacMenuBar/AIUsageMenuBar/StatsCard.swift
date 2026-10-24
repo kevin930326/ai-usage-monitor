@@ -246,7 +246,7 @@ private struct StatNumbers: View {
                         }
                     }
                 }
-                tile("單日最高", detail: summary.bestDay?.day.map(Self.dayText)) {
+                tile("單日最高", detail: summary.bestDay?.day.map(Self.dayText), help: summary.bestDay.map { "\(TokenFormat.full($0.value)) Token" }) {
                     Text(summary.bestDay.map { TokenFormat.short($0.value) } ?? "–").contentTransition(.numericText())
                 }
             }
@@ -273,6 +273,7 @@ private struct StatNumbers: View {
     private var weekHelp: String {
         let c = summary.thisWeek
         return """
+        合計 \(TokenFormat.full(c.main)) Token
         輸入 \(TokenFormat.full(c.input))
         快取寫入 \(TokenFormat.full(c.cacheWrite))
         輸出 \(TokenFormat.full(c.output))（含推理 \(TokenFormat.full(c.reasoning))）
