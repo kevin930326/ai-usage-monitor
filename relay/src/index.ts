@@ -249,7 +249,7 @@ export async function readLimited(request: Request, maxBytes: number): Promise<s
 
 /**
  * iPhone 以短碼兌換讀取密鑰。錯誤、到期、沒有短碼、格式不對都回 403（不區分，避免探測）；
- * 錯 5 次就刪除，成功立即刪除（一次性）。
+ * 錯 5 次就刪除，成功立即刪除。KV 沒有原子操作：同時送出的正確請求可能都兌換成功（README「已知限制」，Codex C-01）。
  */
 async function handleClaim(request: Request, env: Env): Promise<Response> {
   const denied = () => error(403, "配對失敗");
