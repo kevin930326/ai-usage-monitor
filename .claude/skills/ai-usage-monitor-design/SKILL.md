@@ -150,7 +150,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 改了畫面就要實際看過，不能只靠編譯通過。
 
-1. **一次跑完測試與建置**：`scripts/verify-all.sh`（含 Release 不含 Debug 字串的檢查）。
+1. **一次跑完測試與建置**：`scripts/verify-all.sh`（含 Release 不含 Debug 字串的檢查，以及示範用環境變數 `"AUM_…"` 只出現在 `#if DEBUG` 裡的原始碼檢查 `scripts/check-debug-env.py`）。
 2. **iPhone／動態島**：在 iPhone Pro 模擬器（有動態島）安裝 Debug 版，以示範模式啟動：
    ```bash
    SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor

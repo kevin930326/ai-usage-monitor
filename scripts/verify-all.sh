@@ -51,6 +51,8 @@ TMPHOME=$(mktemp -d)
 run collector-tests  bash -c "cd collector && AI_USAGE_MONITOR_HOME='$TMPHOME' python3 -m unittest -v"
 run collector-lint   scripts/lint-collector.sh
 run script-tests     python3 -m unittest discover -s scripts/tests -v
+# 示範用環境變數（"AUM_…"）只能在 #if DEBUG 裡：Swift 的短字串直接編進指令，下面 strings 的 Release 檢查看不到
+run debug-env-source python3 scripts/check-debug-env.py
 run relay-tests      bash -c "cd relay && ([ -d node_modules ] || npm ci --no-audit --no-fund) && npm test"
 run usagekit-macos   bash -c "cd apple/UsageKit && swift test"
 if [ "${SKIP_LINUX:-0}" != 1 ]; then
