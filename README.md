@@ -111,6 +111,8 @@ curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/latest/downl
   </picture>
 </p>
 
+> 狀態：還沒有發布第一個版本（Releases 頁沒有檔案），上面的下載與一行指令要等第一次發布後才能用；在那之前請用下面的「從原始碼安裝」。
+
 **已經用 `collector/scripts/install-launchd.sh` 的人**：新版 App 偵測到舊的收集器時**不會**再註冊一個，只在設定精靈與「設定 › 背景收集器」顯示「可以改用 App 內建的收集器」；按下按鈕才遷移（先確認內建的能跑，才停用舊的；舊的 plist 移到垃圾桶）。不按就照舊運作。
 
 **從原始碼安裝**（開發者）：需要 Xcode 與 Python 3.10 以上。
