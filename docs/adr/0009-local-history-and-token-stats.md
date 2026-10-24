@@ -67,7 +67,12 @@ CREATE TABLE hourly_tokens (...);
 
 -- 個人紀錄：不隨保留期間刪除（第 5 節）
 CREATE TABLE records (key TEXT PRIMARY KEY, value INTEGER NOT NULL, day TEXT);
--- key：total_tokens（累計）、best_day_tokens、longest_task_seconds、longest_streak_days
+-- key：total_tokens（累計）、best_day_tokens、longest_task_seconds、longest_streak_days，
+-- 另有各服務的版本（鍵加上 :claude／:codex，給面板的「全部／Claude／Codex」切換）。同樣大時記最早的那天
+
+-- 每天每個服務的主數字（第 4 節）：**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，
+-- 保留期間較短、或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它
+CREATE TABLE record_days (day TEXT NOT NULL, provider TEXT NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (day, provider));
 
 -- 掃描進度：每個紀錄檔讀到哪裡
 CREATE TABLE scan_state (
@@ -79,6 +84,8 @@ CREATE TABLE scan_state (
   offset     INTEGER NOT NULL,  -- 已處理到的位元組（只處理到最後一個完整的換行）
   source     TEXT,              -- Codex：record / token_count（第 4 節）
   last_total TEXT,              -- Codex 用 token_count 時，上一筆累計值（JSON 數字陣列）
+  state      TEXT,              -- 跨次掃描要接著用的狀態（JSON）：Claude 進行中任務的開始時間、第一則回覆的 ID 與模型；
+                                -- Codex 目前的模型（turn_context）
   last_seen  INTEGER NOT NULL   -- 超過 90 天沒看到這個檔案就刪除該列
 );
 
@@ -87,8 +94,13 @@ CREATE TABLE seen_ids (
   provider TEXT, id TEXT,
   day TEXT, hour INTEGER, model TEXT,   -- 第一次計入時的歸屬，之後的差額也記在這裡
   input_tokens INTEGER, cache_write_tokens INTEGER, cache_read_tokens INTEGER, output_tokens INTEGER, reasoning_tokens INTEGER,
+  file_key TEXT,                        -- Codex：由哪個檔案計入；該檔重算（第 4 節）時一併移除，才能重新計入
   PRIMARY KEY (provider, id)
 );
+
+-- 已計入的任務與當時的秒數（Claude 以任務第一則回覆的 ID、Codex 以 turn_id）。任務跨兩次掃描時補差額；
+-- 重掃、--resume 副本與 Codex 重算時任務不重複計算。與 seen_ids 一樣永久保留
+CREATE TABLE seen_tasks (provider TEXT, id TEXT, day TEXT, hour INTEGER, model TEXT, seconds INTEGER, PRIMARY KEY (provider, id));
 
 -- 每個 Codex 紀錄檔對加總的貢獻（只有數字），從頭重掃或換來源時先扣掉再重算（第 4、7 節）
 CREATE TABLE file_tokens (
@@ -98,8 +110,10 @@ CREATE TABLE file_tokens (
 );
 
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
--- schema_version、device_id、device_name、retention_days、first_scan_progress、upload_state（ADR-0011）、
--- last_cleanup_day（每天第一次執行的判斷）、downsampled_before（降採樣做到哪裡）
+-- schema_version、device_id、device_name、retention_days、first_scan_progress、first_scan_done、
+-- last_cleanup_day（每天第一次執行的判斷）、downsampled_before（降採樣做到哪裡）、
+-- token_bad_lines／token_long_lines（無法解析、過長而略過的行數，第 9 節）、
+-- token_days_from（App 寫入，第 5 節；收集器不讀寫）、upload_*（ADR-0011 第二層）
 ```
 
 - 額度歷史只存 `quota_samples` 列出的欄位：不存方案名稱、錯誤訊息、額度顯示名稱。
@@ -117,6 +131,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl` 與 `<codex>/archived_sessions/rollout-*.jsonl` |
 
 - `*.orphaned-*.jsonl`、`*.superseded-*.jsonl` 等同一 session 的舊副本也會讀，靠 `seen_ids` 去重（不另外判斷是否為副本）。
+- 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
 - **不讀**：`<session>/tool-results/` 與其他子資料夾、`~/.codex/auth.json`、`~/.claude/.credentials.json`、Keychain、`~/.codex/*.sqlite`、`config.toml`、`settings.json`、`history.jsonl`、`~/.claude.json`、`stats-cache.json` 與上表以外的任何檔案。收集器已有測試掃描原始碼確認不讀憑證，新模組要加入；另加測試確認檔案列舉只回傳上表的檔案。
 
 **逐行處理，只取白名單欄位**：
@@ -164,12 +179,13 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 | 項目 | 規則 |
 |---|---|
-| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`（個人紀錄）與 `seen_ids` |
+| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`（個人紀錄）與 `seen_ids`、`seen_tasks`。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
+| 延長保留期間 | 已刪除的日子不能畫成 0：App 寫入 `meta.token_days_from`（`YYYY-MM-DD`，實際還有每日 Token 的第一天），取舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）；只往後移。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界 |
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
 | 匯出 CSV | 設定中按「匯出額度 CSV」或「匯出 Token CSV」→ 系統儲存對話框，由使用者選位置。額度：每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`）；Token：這台電腦的 `daily_tokens`（`day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds`，四種 Token 分開，`day` 是本機日期）。不含 `device_id`、`scan_state`、`seen_ids`、`file_tokens`、`meta` |
-| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`，執行 `VACUUM`；**保留** `scan_state`、`seen_ids` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表一起清除，從現有對話紀錄重建 |
+| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建 |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
 估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 每年數十萬列；整個檔案預期 < 50 MB。
@@ -226,19 +242,6 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - 安裝腳本把 `claude_config_dir`／`codex_home` 寫入 `config.json`。
 - 選單列 App 新增唯讀的資料庫讀取層；設定視窗加入「歷史資料」分頁。
 - README 的隱私章節（NFR-6）列出新讀取的檔案、取用的欄位與 `history.sqlite3` 的位置。
-
-## 實作註記（v1.7，2026-10-24）
-
-第 2 節的資料表在實作時多了以下欄位與表，都只有數字與 ID：
-
-- `scan_state.state`（JSON）：跨次掃描要接著用的狀態——Claude 進行中任務的開始時間、第一則回覆的 ID 與模型；Codex 目前的模型（`turn_context`）。
-- `seen_ids.file_key`：Codex 的回應 ID 由哪個檔案計入。該檔重算（第 4 節）時一併移除，才能重新計入。
-- `seen_tasks (provider, id, day, hour, model, seconds)`：已計入的任務（Claude 以任務第一則回覆的 ID、Codex 以 `turn_id`）與當時的秒數。任務跨兩次掃描時補差額；重掃、`--resume` 副本與 Codex 重算時任務不重複計算。與 `seen_ids` 一樣永久保留，「清除並重新掃描」時一併清除。
-- `record_days (day, provider, tokens)`：每天每個服務的主數字，**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，保留期間較短或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它。「清除歷史」時與 `records` 一起清除。
-- `records` 另有各服務的版本（鍵加上 `:claude`／`:codex`），給面板的「全部／Claude／Codex」切換使用。個人紀錄同樣大時記最早的那天。
-- 首次掃描之前已超過保留期間（或每小時資料 90 天）的紀錄不寫進 `daily_tokens`／`hourly_tokens`，只計入 `records`。
-- 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
-- `meta.token_days_from`（`YYYY-MM-DD`，App 寫入）：實際還有每日 Token 的第一天。延長保留期間時記下舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）、「清除歷史」（不重新掃描）時記下今天，只往後移；「清除並重新掃描」時刪除。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界，已刪除的日子不會因為延長保留期間而被畫成 0。收集器不讀寫這個鍵。
 
 ## 決定（使用者於 2026-10-23 決定）
 
