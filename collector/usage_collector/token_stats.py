@@ -82,7 +82,7 @@ def _epoch(value) -> int | None:
 
 def _day_hour(ts: int) -> tuple[str, int]:
     # 掃描當下的本機時區（之後改時區不回頭重算）
-    local = datetime.fromtimestamp(ts)
+    local = system.local_datetime(ts)
     return local.date().isoformat(), local.hour
 
 

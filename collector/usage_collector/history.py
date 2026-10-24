@@ -253,7 +253,7 @@ def _epoch(value: str | None) -> int | None:
 
 def local_day(ts: int) -> str:
     """Unix 秒換算成本機時區的日期 YYYY-MM-DD（Token 統計的 day 欄位）。"""
-    return datetime.fromtimestamp(ts).date().isoformat()
+    return system.local_datetime(ts).date().isoformat()
 
 
 def meta(conn: sqlite3.Connection, key: str) -> str | None:
