@@ -50,6 +50,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSSupportsLiveActivities: true
+        NSCameraUsageDescription: 掃描 Mac 上顯示的配對 QR 碼
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMonitor
