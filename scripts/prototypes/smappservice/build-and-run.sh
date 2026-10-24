@@ -4,7 +4,7 @@
 #
 #   scripts/prototypes/smappservice/build-and-run.sh [輸出資料夾]
 #
-# 會在「系統設定 › 一般 › 登入項目」短暫出現「AUMProbe」，結束時解除註冊。
+# 會在「系統設定 › 一般 › 登入項目」短暫出現「AUMProbe」，結束時（含錯誤與 Ctrl-C）解除註冊。
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=${1:-$(mktemp -d)}
@@ -51,12 +51,24 @@ codesign --force --deep -s - "$APP"
 codesign -dv "$APP" 2>&1 | grep -E "Signature|TeamIdentifier|flags"
 
 PROBE=$APP/Contents/MacOS/Probe
+registered=0
+# 不論正常結束、失敗或中斷都解除註冊，不留下每 10 秒執行一次的背景工作
+cleanup() {
+  [ "$registered" = 1 ] || return 0
+  registered=0
+  "$PROBE" unregister || echo "解除註冊失敗：到「系統設定 › 一般 › 登入項目」移除 AUMProbe" >&2
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 "$PROBE" status
 "$PROBE" register || true
+registered=1
 sleep 25
 echo "agent 執行次數：$(wc -l < "$OUT/agent-output/runs.txt" 2>/dev/null || echo 0)"
 launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null | grep -E "state|program|runs" | head -5 || echo "launchctl 找不到 $LABEL"
-"$PROBE" unregister || true
+cleanup
 sleep 2
 launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1 && echo "解除後仍在 launchd" || echo "解除後已不在 launchd"
 echo "輸出：$OUT"
