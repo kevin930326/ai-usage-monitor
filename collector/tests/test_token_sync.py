@@ -479,6 +479,12 @@ class MergeTest(TokenSyncTestCase):
         self.assertEqual(self.mac.meta("sync_truncated"), "1")
         self.assertEqual(self.mac.log.getvalue().count("超過中繼的列數上限"), 1)
 
+    def test_status_without_a_database_does_not_create_one(self):
+        missing = self.root / "none" / "history.sqlite3"
+        missing.parent.mkdir()
+        self.assertIn("history", token_sync.status(missing))
+        self.assertEqual(list(missing.parent.iterdir()), [])
+
     def test_bad_downloaded_rows_are_skipped(self):
         bad = [
             {"device_id": "not-an-id", "day": "2026-10-14", "provider": "claude", "model": "claude-x", "input_tokens": 1},
