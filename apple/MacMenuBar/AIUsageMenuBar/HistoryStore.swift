@@ -15,7 +15,7 @@ final class HistoryStore {
     static let shared = HistoryStore(url: UsageStore.shared.locator.historyFile)
 
     /// App 支援的資料庫版本（`meta.schema_version`）；收集器的 `history.SCHEMA_VERSION` 改了這裡要一起改
-    nonisolated static let supportedSchema = 2
+    nonisolated static let supportedSchema = 3
     /// 面板需要的範圍：本週走勢最長 7 天、額度消耗 7 天、近期速度 24 小時，多留一天給跨日的差值
     nonisolated static let lookback: TimeInterval = 8 * 86400
     /// 讀取時最多等收集器多久（WAL 模式下讀取通常不會被寫入擋住）
@@ -50,7 +50,7 @@ final class HistoryStore {
     let url: URL
     private(set) var status: Status = .closed
     private(set) var history: QuotaHistory = .empty
-    /// 這台 Mac 的 Token 統計（面板的統計卡片；不含每小時資料）
+    /// Token 統計（面板的統計卡片；不含每小時資料）。有第二層時含其他電腦的每日資料，畫面依裝置範圍 `scoped` 後使用
     private(set) var tokens: TokenStatsData = .empty
     /// 最後一次查詢的時間（Debug 量測與測試用）
     private(set) var loadedAt: Date?
@@ -308,7 +308,7 @@ final class HistoryStore {
         guard FileManager.default.fileExists(atPath: url.path) else { throw WriteError.missing }
         let result: String?? = withConnection(write: false) { db -> String? in
             guard Self.existingTables(db, ["daily_tokens"]).count == 1 else { return nil }
-            return Self.tokenDays(db, device: Self.meta(db, "device_id") ?? "", since: "").map { TokenCSV.make(rows: $0) }
+            return Self.tokenDays(db, local: Self.meta(db, "device_id") ?? "", onlyLocal: true, since: "").map { TokenCSV.make(rows: $0) }
         }
         guard let opened = result else { throw WriteError.failed }
         guard let csv = opened else { throw WriteError.missing }
@@ -459,8 +459,10 @@ final class HistoryStore {
     }
 }
 
-// Token 統計的讀取（FR-43、ADR-0009 第 4、7 節）。只讀這台 Mac 的 device_id；查詢結果交給 UsageKit 的 TokenStats 計算。
+// Token 統計的讀取（FR-43、ADR-0009 第 4、7 節）。查詢結果交給 UsageKit 的 TokenStats 計算。
 // 面板只讀最近一年的每日資料（熱力圖 22 週、活動 30 天／12 週、四個數字）；每小時資料只在完整統計視窗讀。
+// 第二層（FR-49、ADR-0011）：收集器下載的其他電腦的每日資料也在 daily_tokens（其他 device_id）與 devices 表；
+// 每日資料全部讀出、以 `TokenDayRow.device` 標示（這台 Mac 是 `TokenDevices.local`），每小時資料與個人紀錄只有這台 Mac 的。
 
 extension HistoryStore {
     /// 面板讀的每日資料範圍：完整統計視窗的一年熱力圖也用這個範圍
@@ -471,7 +473,7 @@ extension HistoryStore {
         guard existingTables(db, ["daily_tokens", "records", "record_days"]).count == 3 else { return nil }
         let device = meta(db, "device_id") ?? ""
         let since = tokenDay(now.addingTimeInterval(-TimeInterval(tokenLookbackDays) * 86400))
-        guard let days = tokenDays(db, device: device, since: since),
+        guard let days = tokenDays(db, local: device, onlyLocal: false, since: since),
               let records = tokenRecords(db),
               let recordDays = tokenRecordDays(db) else { return nil }
         let hours = hourly ? tokenHours(db, device: device) : []
@@ -483,7 +485,22 @@ extension HistoryStore {
             firstScanDone: meta(db, "first_scan_done") == "1",
             firstScanProgress: meta(db, "first_scan_progress").flatMap(Int.init).map { min(max($0, 0), 100) },
             skippedLines: skipped, retentionDays: retention, dataFrom: meta(db, "token_days_from"),
-            formatSuspect: meta(db, "token_format_suspect") == "1")
+            formatSuspect: meta(db, "token_format_suspect") == "1",
+            devices: tokenDevices(db))
+    }
+
+    /// 中繼的裝置清單（收集器下載時整批取代）與這台 Mac 的上傳狀態；沒有第二層時是空的
+    private nonisolated static func tokenDevices(_ db: OpaquePointer) -> TokenDevices {
+        let revoked = meta(db, "upload_status") == "revoked"
+        guard existingTables(db, ["devices"]).count == 1 else { return TokenDevices(uploadRevoked: revoked) }
+        let list = rows(db, "SELECT device_id, name, last_upload_at, revoked, is_self FROM devices ORDER BY rowid", []) { stmt -> TokenDevice? in
+            guard let id = text(stmt, 0), let name = text(stmt, 1) else { return nil }
+            let last = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil
+                : Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(stmt, 2)))
+            return TokenDevice(id: id, name: name, lastUpload: last, revoked: sqlite3_column_int64(stmt, 3) != 0,
+                               isSelf: sqlite3_column_int64(stmt, 4) != 0)
+        }
+        return TokenDevices(devices: list ?? [], uploadRevoked: revoked)
     }
 
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。
@@ -507,16 +524,18 @@ extension HistoryStore {
         sqlite3_column_text(stmt, column).map { String(cString: $0) }
     }
 
-    private nonisolated static func tokenDays(_ db: OpaquePointer, device: String, since: String) -> [TokenDayRow]? {
+    /// `local` 是這台 Mac 的 device_id（`meta.device_id`）；`onlyLocal` 為假時也讀其他電腦的列
+    private nonisolated static func tokenDays(_ db: OpaquePointer, local: String, onlyLocal: Bool, since: String) -> [TokenDayRow]? {
         let sql = """
-            SELECT day, provider, model, \(tokenColumns), task_count, task_seconds, longest_task_seconds
-            FROM daily_tokens WHERE device_id = ? AND day >= ? ORDER BY day
+            SELECT device_id, day, provider, model, \(tokenColumns), task_count, task_seconds, longest_task_seconds
+            FROM daily_tokens WHERE (device_id = ? OR ? = 0) AND day >= ? ORDER BY day
             """
-        return rows(db, sql, [.text(device), .text(since)]) { stmt in
-            guard let day = text(stmt, 0), let provider = text(stmt, 1), let model = text(stmt, 2) else { return nil }
-            return TokenDayRow(day: day, provider: provider, model: model, counts: counts(stmt, from: 3),
-                               taskCount: Int(sqlite3_column_int64(stmt, 8)), taskSeconds: Int(sqlite3_column_int64(stmt, 9)),
-                               longestTaskSeconds: Int(sqlite3_column_int64(stmt, 10)))
+        return rows(db, sql, [.text(local), .int(onlyLocal ? 1 : 0), .text(since)]) { stmt in
+            guard let device = text(stmt, 0), let day = text(stmt, 1), let provider = text(stmt, 2), let model = text(stmt, 3) else { return nil }
+            return TokenDayRow(day: day, provider: provider, model: model, counts: counts(stmt, from: 4),
+                               taskCount: Int(sqlite3_column_int64(stmt, 9)), taskSeconds: Int(sqlite3_column_int64(stmt, 10)),
+                               longestTaskSeconds: Int(sqlite3_column_int64(stmt, 11)),
+                               device: device == local ? TokenDevices.local : device)
         }
     }
 

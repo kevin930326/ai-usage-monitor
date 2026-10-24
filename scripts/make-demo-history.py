@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """產生假的 usage.json 與 history.sqlite3，給 Mac 面板截圖與效能量測（不碰真實資料）。
 
-    python3 scripts/make-demo-history.py <資料夾> [normal|few|fresh|none]
+    python3 scripts/make-demo-history.py <資料夾> [normal|tier2|few|fresh|none]
 
 - normal：過去 7 天，每晚 01:00～08:30 Mac 睡眠（沒有紀錄）、3 天前下午關機 4 小時；
   Claude 5 小時快用完（剩 15%，用得較快）、Codex 還充足，會出現「建議接下來用」；每週額度 4 天前重置過；
   Token 統計有一年的每日資料（Codex 約 200 天）、90 天的每小時資料，目前連續 9 天（新紀錄）；
   服務狀態：Claude 有一個示範用的事件（影響 Claude Code）、Codex 正常
+- tier2：normal＋第二層（ADR-0011）：中繼上另外三台電腦（工作 PC、筆電、舊電腦）一年的每日資料與裝置清單，
+  筆電 3 天沒有上傳（效能量測用最多列的情況）
 - few：剛安裝 15 分鐘，每個額度 3 筆；Token 統計只有最近 3 天
 - fresh：剛安裝，每個額度只有 1 筆（走勢與額度消耗顯示骨架畫面）；Token 統計首次掃描 37%
 - none：沒有 history.sqlite3（收集器還沒更新）
@@ -139,6 +141,27 @@ def write_tokens(conn, now: int, scenario: str) -> None:
     conn.commit()
 
 
+def write_tier2(conn, now: int) -> None:
+    """其他電腦的每日加總：本機每日資料的固定比例（收集器下載後的樣子，task_count 為 0）"""
+    me = "8c1f2a3b-0d4e-4f5a-9b6c-7d8e9f0a1b2c"
+    others = [("0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b", "工作 PC", 0.6, now - 2 * 3600),
+              ("1a2b3c4d-1b2d-4e5f-8a9b-0c1d2e3f4a5b", "筆電", 0.15, now - 3 * 86400 - 600),
+              ("2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", "舊電腦", 0.3, now - 3600)]
+    local = history.meta(conn, "device_id")
+    columns = "input_tokens, cache_write_tokens, cache_read_tokens, output_tokens, reasoning_tokens, task_seconds, longest_task_seconds"
+    rows = conn.execute(f"SELECT day, provider, model, {columns} FROM daily_tokens WHERE device_id = ?", (local,)).fetchall()
+    stale = history.local_day(now - 3 * 86400)
+    with conn:
+        for device, name, share, last in others:
+            conn.executemany(f"INSERT OR REPLACE INTO daily_tokens (device_id, day, provider, model, {columns}, task_count, updated_at)"
+                             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                             [(device, day, provider, model, *(int(v * share) for v in values), now)
+                              for day, provider, model, *values in rows if name != "筆電" or day <= stale])
+        conn.executemany("INSERT OR REPLACE INTO devices (device_id, name, last_upload_at, revoked, is_self) VALUES (?, ?, ?, 0, ?)",
+                         [(me, "Mac", now - 600, 1)] + [(d, n, last, 0) for d, n, _, last in others])
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('relay_device_id', ?)", (me,))
+
+
 def write_service_status(folder: Path, now: int, scenario: str) -> None:
     """與收集器 service_status.py 相同格式的 service-status.json（FR-45）"""
     def page(url: str) -> dict:
@@ -216,7 +239,9 @@ def main() -> None:
             rows.append((t, provider, wid, values[t], reset - max(k, 0) * duration))
     conn.executemany("INSERT OR REPLACE INTO collector_runs VALUES (?, ?, ?)", runs)
     conn.executemany("INSERT OR REPLACE INTO quota_samples VALUES (?, ?, ?, ?, ?)", rows)
-    write_tokens(conn, now, scenario)
+    write_tokens(conn, now, "normal" if scenario == "tier2" else scenario)
+    if scenario == "tier2":
+        write_tier2(conn, now)
     conn.close()
 
 
