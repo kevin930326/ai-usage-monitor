@@ -27,29 +27,115 @@ enum TokenDateText {
     }
 }
 
-/// 範圍標籤「這台 Mac」：滑鼠移上去說明不包含的來源（ADR-0011 第 4 節）。
+private struct PanelStillKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// ImageRenderer 截圖時為真：AppKit 的選單畫不出來，改畫同樣的標籤
+    var panelStill: Bool {
+        get { self[PanelStillKey.self] }
+        set { self[PanelStillKey.self] = newValue }
+    }
+}
+
+/// 範圍標籤：沒有第二層時「這台 Mac」，有其他電腦時是目前選的範圍；滑鼠移上去說明包含與不包含的來源（ADR-0011 第 4 節）。
 struct ThisMacBadge: View {
-    static let help = "只包含這台 Mac 上 Claude Code 與 Codex CLI 的對話紀錄（含它們的桌面 App 與編輯器外掛）。不包含 claude.ai 網頁、手機 App、其他電腦與雲端 session。額度 % 是整個帳號的數字。"
+    var title = "這台 Mac"
+    var help = TokenDevices.thisMacHelp
 
     var body: some View {
-        Text("這台 Mac")
+        Text(title)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)
+            .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
             .background(.quaternary, in: Capsule())
-            .help(Self.help)
-            .accessibilityLabel("範圍：這台 Mac。不包含網頁、手機 App、其他電腦與雲端 session")
+            .help(help)
+            .accessibilityLabel("範圍：\(title)。\(help)")
     }
 }
 
 struct StatsCardHeader: View {
+    var devices = TokenDevices.none
+    var scope = TokenDeviceScope.thisMac
+    var now = RenderClock.now
+
     var body: some View {
         HStack {
             PanelCardTitle(text: PanelSection.stats.title)
             Spacer(minLength: 4)
-            ThisMacBadge()
+            ThisMacBadge(title: devices.title(scope), help: devices.help(scope, now: now))
         }
+    }
+}
+
+/// 第二層的裝置切換：所有電腦（N 台）／這台 Mac／其他電腦；超過 48 小時沒有上傳的電腦標示「N 天前更新」。
+/// 只在有其他電腦時出現（卡片標題列整列是收合按鈕，選單放在內容裡）
+struct TokenDeviceMenu: View {
+    let devices: TokenDevices
+    let selected: TokenDeviceScope
+    let now: Date
+    let select: (TokenDeviceScope) -> Void
+
+    @Environment(\.panelStill) private var still
+
+    var body: some View {
+        if still {
+            label
+        } else {
+            Menu {
+                ForEach(devices.scopes, id: \.self) { scope in
+                    Button { select(scope) } label: {
+                        if scope == selected {
+                            Label(devices.menuTitle(scope, now: now), systemImage: "checkmark")
+                        } else {
+                            Text(devices.menuTitle(scope, now: now))
+                        }
+                    }
+                }
+            } label: {
+                label
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(devices.help(selected, now: now))
+            .accessibilityLabel("裝置範圍")
+            .accessibilityValue(devices.title(selected))
+        }
+    }
+
+    private var label: some View {
+        HStack(spacing: 4) {
+            Image(systemName: selected == .all ? "display.2" : "desktopcomputer")
+                .imageScale(.small)
+            Text(devices.menuTitle(selected, now: now))
+                .lineLimit(1)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+    }
+}
+
+/// 這台 Mac 的寫入密鑰失效、收集器已停止上傳（ADR-0011 第 2 節）
+struct UploadRevokedNotice: View {
+    static let text = "這台電腦的寫入密鑰已失效，已停止上傳；其他電腦看不到它之後的用量"
+
+    var body: some View {
+        Label(Self.text, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(UsageColors.notice)
+            .fixedSize(horizontal: false, vertical: true)
+            .help("以 scripts/relay-device.sh rotate 換新密鑰後，重新執行 collector/scripts/set-tier2.sh（docs/tier2-setup.md）。本機的統計不受影響。")
     }
 }
 
@@ -94,25 +180,54 @@ struct TokenScopeChips: View {
 }
 
 /// 卡片內容：第一次使用的骨架、沒有紀錄的提示，或四個數字＋Token 活動＋活動熱力圖。
+/// `data` 是所有裝置的資料，依 `device` 篩選後才畫（`TokenStatsData.scoped`）。
 struct StatsCardContent: View {
-    let data: TokenStatsData
+    let all: TokenStatsData
     let status: HistoryStore.Status
+    let device: TokenDeviceScope
     let scope: TokenScope
     let range: TokenActivityRange
     let now: Date
+    let selectDevice: (TokenDeviceScope) -> Void
     let selectScope: (TokenScope) -> Void
     let selectRange: (TokenActivityRange) -> Void
 
     @Environment(\.panelAnimates) private var animates
 
+    init(data: TokenStatsData, status: HistoryStore.Status, device: TokenDeviceScope = .thisMac, scope: TokenScope,
+         range: TokenActivityRange, now: Date, selectDevice: @escaping (TokenDeviceScope) -> Void = { _ in },
+         selectScope: @escaping (TokenScope) -> Void, selectRange: @escaping (TokenActivityRange) -> Void) {
+        all = data
+        self.status = status
+        self.device = data.devices.resolve(device)
+        self.scope = scope
+        self.range = range
+        self.now = now
+        self.selectDevice = selectDevice
+        self.selectScope = selectScope
+        self.selectRange = selectRange
+    }
+
+    private var data: TokenStatsData { all.scoped(device) }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if all.devices.enabled, status.canRead {
+                TokenDeviceMenu(devices: all.devices, selected: device, now: now, select: selectDevice)
+            }
+            if all.devices.uploadRevoked, status.canRead { UploadRevokedNotice() }
+            content
+        }
+    }
+
+    private var content: some View {
         Group {
             if let message = placeholder {
                 StatsSkeleton(message: message)
                     .transition(.opacity)
             } else if !data.hasData {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+                    Text(TokenStatsData.emptyText(device, devices: all.devices))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -121,10 +236,12 @@ struct StatsCardContent: View {
                 }
             } else {
                 StatsBody(data: data, scope: effectiveScope, range: range, now: now, selectScope: selectScope, selectRange: selectRange)
+                    .id(device)
                     .transition(.opacity)
             }
         }
         .animation(animates ? PanelTiming.crossfade : nil, value: placeholder == nil)
+        .animation(animates ? PanelTiming.crossfade : nil, value: device)
     }
 
     /// 只有一個服務的資料時固定為「全部」
