@@ -346,5 +346,58 @@ class CodexReviewTests(unittest.TestCase):
         self.assertIn("不認得的參數：--fast", result.stderr)
 
 
+
+
+class LintCollectorTests(unittest.TestCase):
+    """lint-collector.sh：已有對應版本的 venv 時不安裝、直接在 collector/ 執行 ruff 與 mypy（假工具，不連網）。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="lint test "))  # 含空白的路徑
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = self.tmp / "repo"
+        (self.repo / "scripts").mkdir(parents=True)
+        (self.repo / "collector").mkdir()
+        shutil.copy(ROOT / "scripts" / "lint-collector.sh", self.repo / "scripts")
+        shutil.copy(ROOT / "collector" / "requirements-lint.txt", self.repo / "collector")
+        self.log = self.tmp / "calls.log"
+
+    def fake_venv(self, venv: Path) -> None:
+        (venv / "bin").mkdir(parents=True)
+        shutil.copy(self.repo / "collector" / "requirements-lint.txt", venv / "requirements-lint.txt")
+        for tool in ("ruff", "mypy"):
+            write_exec(venv / "bin" / tool, f"""
+                #!/bin/bash
+                echo "{tool} $PWD $*" >> "{self.log}"
+            """)
+
+    def run_lint(self, venv_arg: str | None, cwd: Path) -> subprocess.CompletedProcess:
+        env = {**os.environ}
+        env.pop("LINT_VENV", None)
+        if venv_arg is not None:
+            env["LINT_VENV"] = venv_arg
+        return subprocess.run(["/bin/bash", str(self.repo / "scripts" / "lint-collector.sh")], cwd=cwd, env=env,
+                              capture_output=True, text=True)
+
+    def test_default_venv_under_build(self):
+        self.fake_venv(self.repo / "build" / "lint-venv")
+        result = self.run_lint(None, self.tmp)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(calls, [f"ruff {self.repo / 'collector'} check .", f"mypy {self.repo / 'collector'} "])
+        self.assertTrue((self.repo / "build" / ".metadata_never_index").exists())
+
+    def test_relative_venv_is_relative_to_caller(self):
+        self.fake_venv(self.repo / "tools" / "venv")
+        result = self.run_lint("tools/venv", self.repo)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.log.read_text().splitlines()), 2)
+
+    def test_absolute_venv(self):
+        self.fake_venv(self.tmp / "abs venv")
+        result = self.run_lint(str(self.tmp / "abs venv"), self.repo / "collector")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.log.read_text().splitlines()), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

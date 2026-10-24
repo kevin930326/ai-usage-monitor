@@ -1,0 +1,15 @@
+# 收集器的靜態檢查（scripts/verify-all.sh 與 CI 都會跑）。收集器只用標準函式庫，這個檔案只放工具設定。
+[tool.ruff]
+target-version = "py310"  # CI 測試的最低版本
+line-length = 130
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "I"]
+# B905（zip 加 strict=True）：會把長度不符改成丟例外，改變行為；這裡的 zip 都是長度固定的向量
+ignore = ["B905"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["usage_collector"]
+warn_unused_ignores = true
+warn_redundant_casts = true
