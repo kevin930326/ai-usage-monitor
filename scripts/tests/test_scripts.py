@@ -399,15 +399,17 @@ class LintCollectorTests(unittest.TestCase):
         self.assertEqual(len(self.log.read_text().splitlines()), 2)
 
 
-def write_png(path: Path, width: int, height: int, changed: int = 0) -> None:
-    """純色 RGBA PNG；`changed` 個像素（從左上角起）改成紅色。"""
+def write_png(path: Path, width: int, height: int, changed: int = 0, block: tuple[int, int, int] | None = None) -> None:
+    """純色 RGBA PNG；`changed` 個像素（從左上角起）改成紅色；`block`＝(x, y, 邊長) 的正方形改成紅色。"""
     import struct
     import zlib
     rows = []
     for y in range(height):
         row = bytearray([0])
         for x in range(width):
-            row += bytes([255, 0, 0, 255]) if y * width + x < changed else bytes([40, 120, 200, 255])
+            red = y * width + x < changed or (block is not None and block[0] <= x < block[0] + block[2]
+                                                 and block[1] <= y < block[1] + block[2])
+            row += bytes([255, 0, 0, 255]) if red else bytes([40, 120, 200, 255])
         rows.append(bytes(row))
 
     def chunk(kind: bytes, data: bytes) -> bytes:
@@ -453,6 +455,15 @@ class CompareSnapshotsTests(unittest.TestCase):
         result = self.compare()
         self.assertEqual(result.returncode, 1)
         self.assertIn("FAIL a.png", result.stdout)
+        self.assertTrue((self.diff / "a-diff.png").exists())
+
+    def test_small_local_change_in_a_large_image_fails(self):
+        # 面板大小的圖上一個數字大小的改變（遠低於整張的 0.2%）也要抓到
+        write_png(self.base / "a.png", 720, 1200)
+        write_png(self.new / "a.png", 720, 1200, block=(200, 600, 40))  # 0.19%
+        result = self.compare()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("區域", result.stdout)
         self.assertTrue((self.diff / "a-diff.png").exists())
 
     def test_size_change_and_missing_image_fail(self):
