@@ -196,7 +196,11 @@ python3 -m unittest -v
 ../scripts/lint-collector.sh   # ruff＋mypy（設定在 pyproject.toml，版本固定在 requirements-lint.txt）
 ```
 
-在 `collector` 資料夾執行。`tests/__init__.py` 會把資料夾與紀錄資料夾指到暫存位置；**不要用 `python3 -m unittest discover -s tests`**，那樣不會載入它（`test_isolation` 會失敗提醒）。
+在 `collector` 資料夾執行。`tests/__init__.py` 會把資料夾與紀錄資料夾指到暫存位置，並設定 `AUM_TESTING=1`。
+
+- 測試環境（已載入 unittest／pytest，或 `AUM_TESTING` 有值）沒有設定 `AI_USAGE_MONITOR_HOME` 時，`usage_collector.paths` 直接丟出 `TestHomeNotSet`，不會退回真的資料夾。
+- 所以 `python3 -m unittest discover -s tests`（不會載入 `tests/__init__.py`）會在匯入時失敗，而不是寫到真的 `history.sqlite3`。
+- Mac App 同理：UsageKit 的 `UsageFileLocator` 在測試環境（`AUM_TESTING`、`xcodebuild test`、`swift test`，以及 Debug 版的截圖與量測）沒有設定 `AI_USAGE_MONITOR_HOME` 時中止。
 
 `scripts/verify-all.sh` 與 CI 都會跑這兩項。收集器本身只用標準函式庫，ruff 與 mypy 只裝在 `build/lint-venv`（開發用）。
 

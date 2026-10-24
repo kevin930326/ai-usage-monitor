@@ -6,7 +6,7 @@ struct UsageFileLocatorTests {
     let home = URL(fileURLWithPath: "/Users/someone", isDirectory: true)
 
     @Test func defaultsToApplicationSupport() {
-        let locator = UsageFileLocator(environment: [:], homeDirectory: home)
+        let locator = UsageFileLocator(environment: [:], homeDirectory: home, testing: false)
         #expect(locator.usageFile.path == "/Users/someone/Library/Application Support/AIUsageMonitor/usage.json")
     }
 
@@ -17,8 +17,30 @@ struct UsageFileLocatorTests {
     }
 
     @Test func emptyEnvironmentFallsBack() {
-        let locator = UsageFileLocator(environment: ["AI_USAGE_MONITOR_HOME": ""], homeDirectory: home)
+        let locator = UsageFileLocator(environment: ["AI_USAGE_MONITOR_HOME": ""], homeDirectory: home, testing: false)
         #expect(locator.directory.path.hasSuffix("Application Support/AIUsageMonitor"))
+    }
+
+    @Test func detectsTestEnvironments() {
+        #expect(UsageFileLocator.isTestEnvironment())  // 這個行程就是 swift test
+        #expect(UsageFileLocator.isTestEnvironment(["AUM_TESTING": "1"], processName: "AIUsageMenuBar"))
+        #expect(UsageFileLocator.isTestEnvironment(["XCTestConfigurationFilePath": "/x"], processName: "AIUsageMenuBar"))
+        #expect(UsageFileLocator.isTestEnvironment([:], processName: "swiftpm-testing-helper"))
+        #expect(UsageFileLocator.isTestEnvironment([:], processName: "UsageKitPackageTests.xctest"))
+        #expect(!UsageFileLocator.isTestEnvironment(["AUM_TESTING": ""], processName: "AIUsageMenuBar"))
+        #expect(!UsageFileLocator.isTestEnvironment([:], processName: "AIUsageMenuBar"))
+    }
+
+    @Test func explicitFolderIsAllowedWhileTesting() {
+        let locator = UsageFileLocator(environment: ["AI_USAGE_MONITOR_HOME": "/tmp/fixture", "AUM_TESTING": "1"],
+                                       homeDirectory: home)
+        #expect(locator.directory.path == "/tmp/fixture")
+    }
+
+    @Test func refusesTheDefaultFolderWhileTesting() async {
+        await #expect(processExitsWith: .failure) {
+            _ = UsageFileLocator(environment: [:], homeDirectory: URL(fileURLWithPath: "/Users/someone"))
+        }
     }
 
     @Test func loadsSnapshotFromDisk() throws {
