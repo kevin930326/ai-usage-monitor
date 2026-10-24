@@ -172,7 +172,10 @@ const PAIR_KEY = "pair";
 // KV 的 expirationTtl 最少 60 秒；到期以 expires_at 為準，TTL 只是讓舊資料自動消失
 const KV_MIN_TTL = 60;
 
-type PairRecord = { hash: string; expires_at: number; failures: number };
+type PairRecord = { hash: string; expires_at: number };
+
+// 失敗次數存在每組短碼自己的鍵：錯誤的請求從不寫回 PAIR_KEY，晚到的寫入不會讓已兌換或已取代的短碼復活（Codex C-01）
+const failKey = (hash: string) => `pair-fail:${hash.slice(0, 16)}`;
 
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -191,9 +194,20 @@ function newCode(): string {
   return [...bytes].map((b) => CODE_ALPHABET[b & 31]).join("");
 }
 
-async function savePair(env: Env, record: PairRecord, now: number): Promise<void> {
-  const ttl = Math.max(KV_MIN_TTL, Math.ceil((record.expires_at - now) / 1000));
-  await env.USAGE_KV.put(PAIR_KEY, JSON.stringify(record), { expirationTtl: ttl });
+function pairTtl(record: PairRecord, now: number): number {
+  return Math.max(KV_MIN_TTL, Math.ceil((record.expires_at - now) / 1000));
+}
+
+/** KV 沒有條件刪除：刪之前再讀一次，只刪仍是同一組的短碼，不誤刪 Mac 剛發的新碼 */
+async function deletePairIfCurrent(env: Env, hash: string): Promise<void> {
+  const stored = await env.USAGE_KV.get(PAIR_KEY);
+  if (stored === null) return;
+  try {
+    if ((JSON.parse(stored) as PairRecord).hash !== hash) return;
+  } catch {
+    // 壞掉的紀錄直接刪
+  }
+  await env.USAGE_KV.delete(PAIR_KEY);
 }
 
 /** Mac 以寫入密鑰要一組短碼；同一時間只有一組，再要一組就取代舊的。只存雜湊。 */
@@ -201,8 +215,8 @@ async function handlePair(request: Request, env: Env): Promise<Response> {
   if (!(await authorized(request, env.WRITE_TOKEN))) return error(401, "unauthorized");
   const now = Date.now();
   const code = newCode();
-  const record: PairRecord = { hash: await sha256Hex(code), expires_at: now + PAIRING.ttlSeconds * 1000, failures: 0 };
-  await savePair(env, record, now);
+  const record: PairRecord = { hash: await sha256Hex(code), expires_at: now + PAIRING.ttlSeconds * 1000 };
+  await env.USAGE_KV.put(PAIR_KEY, JSON.stringify(record), { expirationTtl: pairTtl(record, now) });
   return json({ code, expires_at: new Date(record.expires_at).toISOString().replace(/\.\d{3}Z$/, "Z") });
 }
 
@@ -233,16 +247,20 @@ async function handleClaim(request: Request, env: Env): Promise<Response> {
   }
   const now = Date.now();
   if (!(record.expires_at > now)) {
-    await env.USAGE_KV.delete(PAIR_KEY);
+    await deletePairIfCurrent(env, record.hash);
+    return denied();
+  }
+  const failures = Number(await env.USAGE_KV.get(failKey(record.hash))) || 0;
+  if (failures >= PAIRING.maxFailures) {
+    await deletePairIfCurrent(env, record.hash);
     return denied();
   }
   if (code !== null && (await safeEqual(await sha256Hex(code), record.hash))) {
-    await env.USAGE_KV.delete(PAIR_KEY);
+    await deletePairIfCurrent(env, record.hash);
     return json({ read_token: env.READ_TOKEN });
   }
-  const failures = (record.failures ?? 0) + 1;
-  if (failures >= PAIRING.maxFailures) await env.USAGE_KV.delete(PAIR_KEY);
-  else await savePair(env, { ...record, failures }, now);
+  if (failures + 1 >= PAIRING.maxFailures) await deletePairIfCurrent(env, record.hash);
+  await env.USAGE_KV.put(failKey(record.hash), String(failures + 1), { expirationTtl: pairTtl(record, now) });
   return denied();
 }
 

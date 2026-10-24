@@ -236,11 +236,51 @@ describe("iPhone 配對（ADR-0012）", () => {
     const wrong = code[0] === "0" ? `1${code.slice(1)}` : `0${code.slice(1)}`;
     for (let i = 1; i < PAIRING.maxFailures; i++) {
       assert.equal((await claim(wrong)).status, 403);
-      assert.equal(JSON.parse(kv.store.get("pair")!).failures, i);
+      const { hash } = JSON.parse(kv.store.get("pair")!);
+      assert.equal(kv.store.get(`pair-fail:${hash.slice(0, 16)}`), String(i));
     }
     assert.equal((await claim(wrong)).status, 403);
     assert.equal(kv.store.has("pair"), false);
     assert.equal((await claim(code)).status, 403);
+  });
+
+  it("晚到的失敗寫入不會讓已兌換的短碼復活，也不影響新發的短碼（並行）", async () => {
+    // 讓錯誤請求停在它的第一個寫入，先完成其他請求再放行
+    const pauseNextPut = () => {
+      const realPut = kv.put.bind(kv);
+      let release!: () => void;
+      let reached!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const arrived = new Promise<void>((r) => (reached = r));
+      kv.put = async (key, value, options) => {
+        kv.put = realPut;
+        reached();
+        await gate;
+        return realPut(key, value, options);
+      };
+      return { arrived, release };
+    };
+    const wrongOf = (code: string) => (code[0] === "0" ? `1${code.slice(1)}` : `0${code.slice(1)}`);
+
+    const { code } = await (await pair()).json();
+    let gate = pauseNextPut();
+    const late = claim(wrongOf(code));
+    await gate.arrived;
+    assert.equal((await claim(code)).status, 200);
+    gate.release();
+    assert.equal((await late).status, 403);
+    assert.equal(kv.store.has("pair"), false);
+    assert.equal((await claim(code)).status, 403);
+
+    const { code: old } = await (await pair()).json();
+    gate = pauseNextPut();
+    const stale = claim(wrongOf(old));
+    await gate.arrived;
+    const { code: fresh } = await (await pair()).json();
+    gate.release();
+    assert.equal((await stale).status, 403);
+    if (old !== fresh) assert.equal((await claim(old)).status, 403);
+    assert.equal((await claim(fresh)).status, 200);
   });
 
   it("短碼的正規化與 iPhone 相同", () => {
