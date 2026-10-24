@@ -74,9 +74,11 @@ public struct SetupInputs: Equatable, Sendable {
     public var loginItemEnabled: Bool
     /// config.json 有中繼網址（只看欄位在不在）
     public var relayConfigured: Bool
+    /// 這次偵測有沒有一併更新 config.json（內建收集器在用時會；install-launchd.sh 的收集器由它自己的腳本設定）
+    public var detectionUpdatedConfig: Bool
 
     public init(appInApplications: Bool, collectorNeedsAction: Bool, claude: ProviderSetupInput, codex: ProviderSetupInput,
-                notificationsAllowed: Bool?, loginItemEnabled: Bool, relayConfigured: Bool) {
+                notificationsAllowed: Bool?, loginItemEnabled: Bool, relayConfigured: Bool, detectionUpdatedConfig: Bool = true) {
         self.appInApplications = appInApplications
         self.collectorNeedsAction = collectorNeedsAction
         self.claude = claude
@@ -84,6 +86,7 @@ public struct SetupInputs: Equatable, Sendable {
         self.notificationsAllowed = notificationsAllowed
         self.loginItemEnabled = loginItemEnabled
         self.relayConfigured = relayConfigured
+        self.detectionUpdatedConfig = detectionUpdatedConfig
     }
 }
 
@@ -175,7 +178,10 @@ public enum SetupChecklist {
         let name = step == .codex ? "Codex CLI" : "Claude Code"
         switch situation(step == .codex ? inputs.codex : inputs.claude) {
         case .collecting: return "已登入，正在收集用量。"
-        case .loggedIn: return "已登入，下一次收集（5 分鐘內）就會出現在面板。"
+        case .loggedIn:
+            return inputs.detectionUpdatedConfig
+                ? "已登入，下一次收集（5 分鐘內）就會出現在面板。"
+                : "已登入。5 分鐘後還沒出現的話，重新執行一次 collector/scripts/install-launchd.sh，或在第 2 步改用內建收集器。"
         case .collectError(let error): return "收集時發生問題：\(error)"
         case .notLoggedIn: return "已安裝但還沒登入。在終端機執行下面的指令，用訂閱的帳號登入。"
         case .apiKey: return "目前用 API key 登入，沒有訂閱的額度可以顯示。改用 ChatGPT 帳號登入："

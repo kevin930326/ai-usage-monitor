@@ -35,7 +35,8 @@ final class SetupWizardModel {
         defer { checking = false }
         let collector = CollectorService.shared
         await collector.refresh()
-        let detected = await collector.detectProviders()
+        let updatesConfig = collector.state == .enabled
+        let detected = await collector.detectProviders(updatingConfig: updatesConfig)
         UsageStore.shared.reload()
         let snapshot = UsageStore.shared.snapshot
         func provider(_ key: String, _ login: ProviderLoginState?) -> ProviderSetupInput {
@@ -53,7 +54,8 @@ final class SetupWizardModel {
             codex: provider("codex", detected?.codex),
             notificationsAllowed: Self.allowed(notificationStatus),
             loginItemEnabled: LoginItemSection.isEnabled,
-            relayConfigured: Self.relayConfigured
+            relayConfigured: Self.relayConfigured,
+            detectionUpdatedConfig: updatesConfig
         )
     }
 

@@ -194,7 +194,14 @@ final class CollectorService {
         }
         #if DEBUG
         // 安裝測試：啟動後直接按「改用內建收集器」（scripts 的乾淨環境驗證用，只在 AUM_TEST_AGENT=1 時）
-        if ProcessInfo.processInfo.environment["AUM_TEST_ACTION"] == "migrate" { await migrateFromLegacy() }
+        let action = ProcessInfo.processInfo.environment["AUM_TEST_ACTION"] ?? ""
+        if action == "migrate" { await migrateFromLegacy() }
+        // 「wizard-refresh:<秒>」：等幾秒（測試在這段時間登入假的 CLI）後按一次精靈的「重新檢查」
+        if action.hasPrefix("wizard-refresh:"), let seconds = Double(action.dropFirst("wizard-refresh:".count)) {
+            try? await Task.sleep(for: .seconds(seconds))
+            await SetupWizardModel.shared.refresh()
+            UsageStore.log("setup wizard: test refresh done")
+        }
         #endif
     }
 
@@ -344,11 +351,13 @@ final class CollectorService {
         return status
     }
 
-    /// 精靈用：以內建的 Python 執行 `usage_collector.setup --json --dry-run`，只偵測、不寫 config.json。
+    /// 精靈用：以內建的 Python 執行 `usage_collector.setup --json`。內建收集器在用時一併更新 config.json
+    /// （之後才登入的服務下一次收集就會出現；沒有任何已登入或有「不知道」時不改 enabled_providers，同 setup 的規則），
+    /// 否則加 `--dry-run` 只偵測（install-launchd.sh 的收集器由它自己的腳本設定）。
     /// 結果只有各服務的狀態字串（不含路徑或帳號）；開發版、測試環境或失敗時為 nil
-    func detectProviders() async -> (claude: ProviderLoginState, codex: ProviderLoginState)? {
+    func detectProviders(updatingConfig: Bool) async -> (claude: ProviderLoginState, codex: ProviderLoginState)? {
         guard hasRuntime, allowedToRegister else { return nil }
-        let args = ["-I", "-B", "-X", "utf8", "-m", "usage_collector.setup", "--json", "--dry-run"]
+        let args = ["-I", "-B", "-X", "utf8", "-m", "usage_collector.setup", "--json"] + (updatingConfig ? [] : ["--dry-run"])
         guard let data = await Self.runCapturing(runtimeURL.path, args),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         func state(_ name: String) -> ProviderLoginState {

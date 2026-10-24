@@ -66,6 +66,13 @@ final class SetupChecklistTests: XCTestCase {
         XCTAssertEqual(SetupChecklist.commands(for: .claude, missing).first, "curl -fsSL https://claude.ai/install.sh | bash")
     }
 
+    func testLoggedInDetailDependsOnWhoUpdatesTheConfig() {
+        var i = inputs(claude: .init(login: .enabled))
+        XCTAssertTrue(SetupChecklist.providerDetail(.claude, i).contains("5 分鐘內"))
+        i.detectionUpdatedConfig = false
+        XCTAssertTrue(SetupChecklist.providerDetail(.claude, i).contains("install-launchd.sh"))
+    }
+
     func testOtherSteps() {
         var i = inputs(inApplications: false, collectorNeedsAction: true)
         XCTAssertEqual(SetupChecklist.status(of: .location, i), .needsAction)
