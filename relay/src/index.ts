@@ -220,14 +220,41 @@ async function handlePair(request: Request, env: Env): Promise<Response> {
   return json({ code, expires_at: new Date(record.expires_at).toISOString().replace(/\.\d{3}Z$/, "Z") });
 }
 
+/** 邊讀邊算原始位元組，超過上限就停止讀取並回 null（不先把整份內容讀進記憶體；Codex C-02） */
+export async function readLimited(request: Request, maxBytes: number): Promise<string | null> {
+  const declared = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  if (request.body === null) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /**
  * iPhone 以短碼兌換讀取密鑰。錯誤、到期、沒有短碼、格式不對都回 403（不區分，避免探測）；
  * 錯 5 次就刪除，成功立即刪除（一次性）。
  */
 async function handleClaim(request: Request, env: Env): Promise<Response> {
   const denied = () => error(403, "配對失敗");
-  const body = await request.text();
-  if (new TextEncoder().encode(body).length > PAIRING.maxClaimBytes) return error(413, "內容過大");
+  const body = await readLimited(request, PAIRING.maxClaimBytes);
+  if (body === null) return error(413, "內容過大");
   let code: string | null = null;
   try {
     const data: unknown = JSON.parse(body);

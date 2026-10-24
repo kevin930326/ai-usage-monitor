@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
-import worker, { MAX_BODY_BYTES, PAIRING, normalizeCode, type Env } from "../src/index.ts";
+import worker, { MAX_BODY_BYTES, PAIRING, normalizeCode, readLimited, type Env } from "../src/index.ts";
 
 class MemoryKV {
   store = new Map<string, string>();
@@ -281,6 +281,38 @@ describe("iPhone 配對（ADR-0012）", () => {
     assert.equal((await stale).status, 403);
     if (old !== fresh) assert.equal((await claim(old)).status, 403);
     assert.equal((await claim(fresh)).status, 200);
+  });
+
+  it("兌換內容超過上限時邊讀邊停，不讀完整份（沒有 Content-Length 的串流）", async () => {
+    let pulled = 0;
+    const chunk = new TextEncoder().encode("x".repeat(256));
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += chunk.byteLength;
+        if (pulled > 20 * 1024) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const req = new Request("https://relay.test/pair/claim", { method: "POST", body: stream, duplex: "half" } as RequestInit);
+    assert.equal(req.headers.get("Content-Length"), null);
+    assert.equal((await worker.fetch(req, env)).status, 413);
+    assert.ok(pulled <= PAIRING.maxClaimBytes + 2 * chunk.byteLength, `讀了 ${pulled} bytes`);
+
+    // 宣告的長度超過上限：不讀內容
+    const declared = new Request("https://relay.test/pair/claim", {
+      method: "POST",
+      body: "{}",
+      headers: { "Content-Length": String(PAIRING.maxClaimBytes + 1) },
+    });
+    assert.equal(await readLimited(declared, PAIRING.maxClaimBytes), null);
+
+    // 多位元組字元以位元組計算；恰好在上限是合法的
+    const zh = "中".repeat(PAIRING.maxClaimBytes / 4); // 3 bytes × 256 = 768
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: zh }), PAIRING.maxClaimBytes), zh);
+    const exact = "a".repeat(PAIRING.maxClaimBytes);
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: exact }), PAIRING.maxClaimBytes), exact);
+    const over = "中".repeat(342); // 1026 bytes
+    assert.equal(await readLimited(new Request("https://x", { method: "POST", body: over }), PAIRING.maxClaimBytes), null);
   });
 
   it("短碼的正規化與 iPhone 相同", () => {
