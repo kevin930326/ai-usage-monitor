@@ -40,7 +40,11 @@ done
 [[ $NAME =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || fail "Worker 名稱只能用小寫英數字與連字號"
 
 # wrangler 一律用 relay/ 裡鎖定版本的那份（package-lock.json），不用全域安裝的
-wrangler() { (cd "$RELAY" && npx --no-install wrangler "$@"); }
+# 不寫 wrangler 自己的磁碟日誌、強制遮蔽（繼承 WRANGLER_LOG_SANITIZE=false 時日誌會含 secret put 的內容；Codex C-01）
+wrangler() {
+    (cd "$RELAY" && WRANGLER_WRITE_LOGS=false WRANGLER_LOG_SANITIZE=true WRANGLER_LOG=warn \
+        WRANGLER_SEND_METRICS=false npx --no-install wrangler "$@")
+}
 config_get() {
     python3 -c 'import json,sys
 try: print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")
@@ -105,11 +109,11 @@ if LIST_OUT=$(wrangler deployments list --name "$NAME" 2>&1); then
     fail "Cloudflare 上已經有名為 ${NAME} 的 Worker，沒有做任何變更。用 --name 換一個名稱，或照 relay/README.md 手動處理" 3
 fi
 grep -Eqi 'does not exist|not found|10007' <<<"$LIST_OUT" \
-    || fail "無法確認 Cloudflare 上有沒有 ${NAME}：$(tail -1 <<<"$LIST_OUT")" 4
+    || fail "無法確認 Cloudflare 上有沒有 ${NAME}（網路或權限問題；可執行 npx wrangler deployments list --name ${NAME} 查看）" 4
 ok "沒有同名的 Worker（${NAME}）"
 
 # ---------- 4. KV 與部署 ----------
-KV_OUT=$(wrangler kv namespace create USAGE_KV 2>&1) || fail "建立 KV 失敗：$(tail -1 <<<"$KV_OUT")" 4
+KV_OUT=$(wrangler kv namespace create USAGE_KV 2>&1) || fail "建立 KV 失敗（可在 relay/ 執行 npx wrangler kv namespace list 確認）" 4
 KV_ID=$(grep -Eo '[0-9a-f]{32}' <<<"$KV_OUT" | head -1)
 [ -n "$KV_ID" ] || fail "看不懂 wrangler 的輸出，找不到 KV id" 4
 ok "已建立 KV（${KV_ID}）"
@@ -124,7 +128,7 @@ binding = "USAGE_KV"
 id = "${KV_ID}"
 EOF
 
-DEPLOY_OUT=$(wrangler deploy --config wrangler.local.toml 2>&1) || fail "部署失敗：$(tail -1 <<<"$DEPLOY_OUT")" 4
+DEPLOY_OUT=$(wrangler deploy --config wrangler.local.toml 2>&1) || fail "部署失敗（可在 relay/ 執行 npx wrangler deploy --config wrangler.local.toml 看完整訊息）" 4
 URL=$(grep -Eo "https://${NAME}\.[A-Za-z0-9-]+\.workers\.dev" <<<"$DEPLOY_OUT" | head -1)
 [ -n "$URL" ] || fail "部署成功但找不到 workers.dev 網址（見 Cloudflare 主控台）" 4
 ok "已部署：${URL#https://}"

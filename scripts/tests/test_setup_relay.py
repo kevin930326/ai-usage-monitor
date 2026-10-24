@@ -47,6 +47,7 @@ class SetupRelayTests(unittest.TestCase):
             [ "$1 $2" = "--no-install wrangler" ] || exit 99
             shift 2
             echo "wrangler $* (cwd=$(basename "$PWD"))" >>"{log}"
+            echo "env WRANGLER_WRITE_LOGS=${{WRANGLER_WRITE_LOGS:-}} WRANGLER_LOG_SANITIZE=${{WRANGLER_LOG_SANITIZE:-}}" >>"{t}/wrangler-env"
             case "$1 $2" in
                 "whoami --json") [ -e "{t}/logged-in" ] || [ -n "${{FAKE_LOGGED_IN:-}}" ] ;;
                 "login ") touch "{t}/logged-in" ;;
@@ -119,6 +120,17 @@ class SetupRelayTests(unittest.TestCase):
         self.assertEqual(json.loads((self.home / "config.json").read_text())["relay_url"],
                          "https://ai-usage-relay.tester.workers.dev")
         self.assertIn("setup-iphone.sh --pair-only qr", r.stdout)
+
+    def test_wrangler_never_writes_its_own_logs(self):
+        # Codex C-01：繼承 WRANGLER_LOG_SANITIZE=false 也要覆寫；wrangler 的錯誤原文不轉印
+        r = self.run_script(env={"WRANGLER_LOG_SANITIZE": "false", "WRANGLER_WRITE_LOGS": "true",
+                                 "FAKE_LOGGED_IN": "1", "FAKE_LIST_ERROR": "✘ secret-ish /Users/someone/path"})
+        self.assertEqual(r.returncode, 4)
+        self.assertNotIn("/Users/someone", r.stdout + r.stderr)
+        r = self.run_script()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = set((self.tmp / "wrangler-env").read_text().splitlines())
+        self.assertEqual(lines, {"env WRANGLER_WRITE_LOGS=false WRANGLER_LOG_SANITIZE=true"})
 
     def test_stops_on_existing_settings_without_changes(self):
         (self.home / "config.json").write_text(json.dumps({"relay_url": "https://old.example.workers.dev"}))
