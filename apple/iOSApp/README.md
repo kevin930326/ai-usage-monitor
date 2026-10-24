@@ -179,7 +179,7 @@ Debug 版本以 `AUM_DEMO=<情境>` 啟動時只使用假資料、完全不連�
 | `codex-only` | 只用 Codex |
 | `none` | 收集器沒有啟用任何服務（顯示「沒有啟用任何服務」提示） |
 
-另外設定 `AUM_DEMO_ACTION=settings` 時，啟動後直接打開設定畫面（截圖用）；設定 `AUM_DEMO_ACTION=restart` 時，開卡一秒後會再執行一次捷徑動作，並把前後的卡片 ID 寫到 `Documents/restart-log.json`。
+另外設定 `AUM_DEMO_ACTION=settings` 時，啟動後直接打開設定畫面（截圖用；中繼網址與密鑰一律顯示示範值，不顯示模擬器裡存的設定）；設定 `AUM_DEMO_ACTION=restart` 時，開卡一秒後會再執行一次捷徑動作，並把前後的卡片 ID 寫到 `Documents/restart-log.json`。
 
 ```bash
 SIMCTL_CHILD_AUM_DEMO=normal xcrun simctl launch booted io.github.kevin930326.AIUsageMonitor

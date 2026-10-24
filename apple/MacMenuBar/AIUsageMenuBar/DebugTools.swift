@@ -296,6 +296,13 @@ enum DebugTools {
                 .environment(HistoryStore.shared)
                 .background(Color(nsColor: .windowBackgroundColor))
             write(view, scheme: scheme, to: dir.appendingPathComponent("settings-\(scheme.name).png"))
+            // 只有「外觀」一段（README 用）
+            let appearance = AppearanceSettingsSection()
+                .environment(PanelSettings.shared)
+                .frame(width: 416, alignment: .leading)
+                .padding(22)
+                .background(Color(nsColor: .windowBackgroundColor))
+            write(appearance, scheme: scheme, to: dir.appendingPathComponent("settings-appearance-\(scheme.name).png"))
             // 系統設定中關閉了通知時的提示
             let denied = NotificationSettingsSection(interactive: false, previewDenied: true)
                 .environment(PanelSettings.shared)
@@ -508,6 +515,9 @@ enum DebugTools {
                 writeFrames(frames, name: "anim-\(name)-\(scheme.name)", in: dir)
             }
         }
+        if only?.contains("stats-tour") ?? true, data.providers.count > 1 {
+            for scheme in [ColorScheme.light, .dark] { renderStatsTour(data, scheme: scheme, to: dir) }
+        }
         // 切換服務：交叉淡入 0.3 秒（新畫面的長條與熱力圖同時重新長出）。SwiftUI 的交叉淡入無法逐格指定，以兩張畫面的混合示意
         guard only?.contains("stats-switch") ?? true, data.providers.count > 1 else { return }
         for scheme in [ColorScheme.light, .dark] {
@@ -524,6 +534,29 @@ enum DebugTools {
             }
             writeFrames(frames, name: "anim-stats-switch-\(scheme.name)", in: dir)
         }
+    }
+
+    /// README 用的統計切換（`anim-stats-tour-*.gif`）：全部 → Claude → Codex → 全部，每個畫面停 1.5 秒。
+    /// 切換與 stats-switch 相同（交叉淡入 0.3 秒，長條與熱力圖重新長出），以 20 fps 輸出；停住的畫面只存一格並延長顯示時間，GIF 比較小
+    private static func renderStatsTour(_ data: TokenStatsData, scheme: ColorScheme, to dir: URL) {
+        let tourFPS = 20.0, hold = 1.5
+        guard var previous = cgImage(statsCard(data, scope: .all), scheme: scheme) else { return }
+        var frames: [(CGImage, Double)] = [(previous, hold)]
+        for scope in [TokenScope.claude, .codex, .all] {
+            for index in 1..<Int(1.0 * tourFPS) {
+                let t = Double(index) / tourFPS
+                var m = PanelMotion.settled
+                m.statsBars = Curve.linear(t / 0.9)
+                m.heatmap = Curve.linear(t / 1.0)
+                guard let new = cgImage(statsCard(data, scope: scope, motion: m), scheme: scheme),
+                      let frame = blend(new, previous, 1 - Curve.easeInOut(t / 0.3)) else { continue }
+                frames.append((frame, 1 / tourFPS))
+            }
+            guard let settled = cgImage(statsCard(data, scope: scope), scheme: scheme) else { return }
+            frames.append((settled, hold))
+            previous = settled
+        }
+        writeGIF(frames, to: dir.appendingPathComponent("anim-stats-tour-\(scheme.name).gif"))
     }
 
     private static func writeFrames(_ frames: [CGImage], name: String, in dir: URL) {
@@ -611,11 +644,18 @@ enum DebugTools {
     }
 
     private static func writeGIF(_ frames: [CGImage], to url: URL) {
+        writeGIF(frames.map { ($0, 1 / fps) }, to: url)
+    }
+
+    /// 每一格各自的顯示秒數
+    private static func writeGIF(_ frames: [(CGImage, Double)], to url: URL) {
         guard !frames.isEmpty,
               let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.gif.identifier as CFString, frames.count, nil) else { return }
         CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]] as CFDictionary)
-        let delay = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 1 / fps]] as CFDictionary
-        for frame in frames { CGImageDestinationAddImage(destination, frame, delay) }
+        for (frame, seconds) in frames {
+            let delay = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: seconds, kCGImagePropertyGIFUnclampedDelayTime: seconds]]
+            CGImageDestinationAddImage(destination, frame, delay as CFDictionary)
+        }
         CGImageDestinationFinalize(destination)
         UsageStore.log("rendered \(url.lastPathComponent) (\(frames.count) frames)")
     }

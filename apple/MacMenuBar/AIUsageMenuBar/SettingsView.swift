@@ -30,7 +30,7 @@ struct SettingsView: View {
             Divider()
             CollectorSettingsSection(interactive: scrolls)
             Divider()
-            appearanceSection
+            AppearanceSettingsSection()
             Divider()
             menuBarSection
             Divider()
@@ -45,21 +45,6 @@ struct SettingsView: View {
         .padding(22)
         // 換外觀時與面板相同的過渡；減少動態效果時直接換（FR-51）
         .animation(scrolls && !reduceMotion ? PanelTiming.colorScheme : nil, value: colorScheme)
-    }
-
-    // MARK: - 外觀
-
-    private var appearanceSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("外觀").font(.headline)
-            FlowChips(choices: AppearanceChoice.allCases.map { ($0, $0.title) }, selected: settings.appearance) {
-                settings.appearance = $0
-            }
-            Text("套用到面板、設定、完整統計與設定精靈。選單列圖示跟隨選單列本身的深淺色，不受這個設定影響。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 
     // MARK: - 選單列圖示
@@ -512,6 +497,24 @@ private struct HistorySettingsSection: View {
             message = "還沒有 Token 統計可以匯出"
         } catch {
             message = "匯出失敗"
+        }
+    }
+}
+
+/// 設定「外觀」（FR-51）。獨立出來，README 的截圖可以只畫這一段（DebugTools）
+struct AppearanceSettingsSection: View {
+    @Environment(PanelSettings.self) private var settings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("外觀").font(.headline)
+            FlowChips(choices: AppearanceChoice.allCases.map { ($0, $0.title) }, selected: settings.appearance) {
+                settings.appearance = $0
+            }
+            Text("套用到面板、設定、完整統計與設定精靈。選單列圖示跟隨選單列本身的深淺色，不受這個設定影響。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

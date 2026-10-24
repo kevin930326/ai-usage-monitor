@@ -126,9 +126,9 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 - **只有一個服務是正常狀態**：收集器只收集 Mac 上登入過的服務（`config.json` 的 `enabled_providers`），沒用的服務不會出現在 `providers`，也不是錯誤。畫面不要為缺少的服務留空位；空間大的版面（iPhone 大型小工具）改放大剩餘最少的額度、額度改單欄。`providers` 為空時顯示 `NoProvidersNotice`（`UsageSnapshot.hasNoProviders`），提示到 Mac 登入後重新執行安裝腳本。
   來源：`collector/usage_collector/providers/__init__.py`（`enabled_providers`）、`apple/UsageKit/Sources/UsageKitUI/NoProvidersNotice.swift`、`apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`LargeUsageView`）。
 - **單一服務失敗只影響該服務**（FR-12）：該服務顯示錯誤訊息，其他服務照常顯示；剩餘最少的額度從正常的服務中挑。Live Activity 的錯誤訊息截短到 60 字以控制大小。
-  來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/Shared/UsageViews.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
+  來源：`collector/usage_collector/__main__.py`（`collect()`）、`apple/iOSApp/Shared/ActivityViews.swift`、`apple/MacMenuBar/AIUsageMenuBar/PanelCards.swift`（`provider.error`）、`UsageActivityState.swift`（`maxErrorLength`、`hasPartialFailure`）。
 - **一律顯示最後更新時間**；過期時改為「資料已過期 · HH:mm 更新」（門檻見第 4 節）。錶面空間不足的複雜功能以灰色表示過期。
-  來源：`ActivityViews.swift`（`ActivityFooter`）、`apple/MacMenuBar/Shared/UsageViews.swift`（`UpdatedText`）、`apple/iOSApp/AIUsageMonitor/Views/HomeView.swift`（`UpdatedFooter`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
+  來源：`ActivityViews.swift`（`ActivityFooter`）、`apple/MacMenuBar/AIUsageMenuBar/PanelView.swift`（`UpdatedStatus`）、`apple/iOSApp/AIUsageMonitor/Views/HomeView.swift`（`UpdatedFooter`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。
 - **「更新」按鈕抓不到新資料**：卡片與小工具保留舊資料，頁尾改為「HH:mm 更新 · 更新失敗：原因」（提示色，單行截斷），下次成功就清掉。不能按了沒反應：使用者分不出是網路、密鑰還是中繼的問題。小工具的按鈕要自己呼叫 `WidgetCenter.reloadTimelines`，按鈕執行完系統不一定會重新整理時間軸。
   來源：`UsageActivityState.swift`（`refreshError`、`withRefreshError`）、`ActivityViews.swift`（`ActivityFooter`）、`LiveActivityController.refresh()`、`UsageHomeWidget.swift`（`ReloadUsageWidgetIntent`、`HomeEntry.refreshError`）。
 
@@ -143,7 +143,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |
 | iPhone 主畫面小工具 reload 25 分鐘 | 小工具自己抓中繼，每 25 分鐘（資料過期時 60 分鐘）；App 背景取得新資料時另外 reload（約 5 次／天），前景與按鈕 Intent 不扣次數。一般約 51 次／天、最多約 63 次 | `apple/iOSApp/UsageWidget/UsageHomeWidget.swift`（`refreshInterval`）、`apple/iOSApp/Shared/SharedStore.swift`（`publish`）、`apple/iOSApp/README.md`「重新整理次數」 |
 | 手錶背景更新約 30 分鐘 | 每次背景更新 reload 一次複雜功能，約 48 次／天；實際時間由 watchOS 決定，過期門檻因此是 45 分鐘 | `apple/WatchApp/AIUsageWatch/AIUsageWatchApp.swift`（`backgroundInterval`） |
-| WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `WidgetSupport.swift`（`UsageTimelineSchedule.entryDates`）、`UsageHomeWidget.swift`（`refreshInterval` 註解） |
+| WidgetKit 每日預算約 40～70 次 | **新增任何 reload 邏輯都要先估算每日次數**，連同既有的次數對照預算，寫進 PR；超過時系統會延後更新。Timeline 的時間點（重置、過期）不扣預算，優先用 timeline 而不是 reload | `apple/UsageKit/Sources/UsageKit/WidgetSupport.swift`（`UsageTimelineSchedule.entryDates`）、`UsageHomeWidget.swift`（`refreshInterval` 註解） |
 | Mac 動畫只在面板或統計視窗開啟時執行 | 面板關閉時不能佔 CPU／GPU；選單列圖示不得有持續動畫；計時器允許系統合併喚醒；規則與量測方法見第 9 節（FR-25、NFR-8、NFR-10） | `docs/adr/0010-mac-animation-principles.md`、`apple/MacMenuBar/AIUsageMenuBar/UsageStore.swift`（計時器容許誤差） |
 | 介面語言為繁體中文（zh-Hant） | 所有使用者看得到的文字用繁體中文；開發區域設為 zh-Hant | `apple/UsageKit/Package.swift`（`defaultLocalization`）、三個 `project.yml` 的 `CFBundleDevelopmentRegion` |
 

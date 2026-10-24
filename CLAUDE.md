@@ -24,3 +24,8 @@
 - 畫面**有意**改變時執行 `scripts/update-snapshots.sh` 更新基準，逐張檢查 `git diff` 中的圖再提交，PR 內文說明哪些截圖改了、為什麼。沒打算改畫面卻不符時，看 `build/snapshots/diff/` 的差異圖找原因，不要直接更新基準。
 - 基準綁定產生它的環境（`apple/Snapshots/<平台>/ENVIRONMENT`：Mac 記 macOS 與 Xcode，iPhone 記 Xcode 與模擬器）；某平台環境不同時，該平台的畫面差異只印警告、不算失敗（CI 的 macOS runner 通常屬於這種），缺圖或讀不到圖仍算失敗。升級 macOS 或 Xcode 後先在 main 上更新基準。
 
+## README 截圖
+
+- README 的圖片在 `docs/images/`，來源與對應的截圖基準列在 `docs/images/SOURCES.tsv`；由 `scripts/update-readme-images.sh` 以固定時間與示範資料產生（Mac 與動態島用 ImageRenderer；iPhone 的主畫面、設定與手錶用模擬器截圖，因為 iOS 的 ImageRenderer 畫不出 ProgressView）。主要畫面放淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示。
+- `scripts/check-readme-images.py`（verify-all 與 CI）：README 引用的圖不存在或沒列在 SOURCES.tsv 時失敗；圖片比對應的基準舊（基準後來又提交過）時提醒。
+- 用 `scripts/update-snapshots.sh` 更新了基準、看到提醒，或畫面有意改變時，執行 `scripts/update-readme-images.sh`，逐張檢查 `git diff` 中的圖再和基準一起提交；新增 README 圖片時先加進 SOURCES.tsv。
