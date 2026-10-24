@@ -11,6 +11,13 @@ struct SettingsView: View {
     @State private var testResult: TestResult?
     @State private var testing = false
     @State private var saveError: String?
+    @State private var scanning = false
+    @State private var enteringCode = false
+    /// 掃到、等使用者確認的配對內容（確認畫面只顯示主機名稱）
+    @State private var pendingPairing: PairingPayload?
+    /// 掃描畫面關閉後才顯示確認（sheet 關閉動畫中無法顯示 alert）
+    @State private var scanned: PairingPayload?
+    @State private var paired = false
     @AppStorage(AppearanceChoice.storageKey) private var appearance = AppearanceChoice.system.rawValue
 
     // 貼上的值常帶前後空白或換行，判斷、測試與儲存都用去除後的值
@@ -37,6 +44,22 @@ struct SettingsView: View {
                     Text("中繼 API")
                 } footer: {
                     Text("密鑰只存在這台 iPhone 的 Keychain。請使用讀取密鑰，不要填寫入密鑰。")
+                }
+
+                // iPhone 配對（ADR-0012）：掃 Mac 終端機的 QR 碼，或輸入一次性短碼
+                Section {
+                    Button { scanning = true } label: { Label("掃描 QR 碼", systemImage: "qrcode.viewfinder") }
+                        .disabled(!PairingScannerSheet.isAvailable)
+                    Button { enteringCode = true } label: { Label("輸入短碼", systemImage: "number") }
+                    if paired {
+                        Label("已配對，正在更新", systemImage: "checkmark.circle.fill")
+                    }
+                } header: {
+                    Text("從 Mac 配對")
+                } footer: {
+                    Text(PairingScannerSheet.isAvailable
+                         ? "在 Mac 執行 scripts/setup-iphone.sh --pair qr，掃描終端機上的 QR 碼；會自動填好網址與讀取密鑰。"
+                         : "這台裝置不能掃描 QR 碼（需要相機）。可以改用短碼或手動填寫。")
                 }
 
                 Section {
@@ -106,6 +129,27 @@ struct SettingsView: View {
                 url = model.relayURL
                 token = model.readToken
             }
+            .sheet(isPresented: $scanning, onDismiss: {
+                pendingPairing = scanned
+                scanned = nil
+            }) {
+                PairingScannerSheet { scanned = $0 }
+            }
+            .sheet(isPresented: $enteringCode) {
+                PairingCodeSheet(initialURL: cleanURL) { client in
+                    apply(url: client.baseURL.absoluteString, token: client.readToken)
+                }
+            }
+            .alert(pendingPairing.map { "把中繼設定為 \($0.host)？" } ?? "", isPresented: Binding(
+                get: { pendingPairing != nil }, set: { if !$0 { pendingPairing = nil } }
+            ), presenting: pendingPairing) { payload in
+                Button(model.isConfigured ? "取代目前的設定" : "設定") {
+                    apply(url: payload.url.absoluteString, token: payload.readToken)
+                }
+                Button("取消", role: .cancel) {}
+            } message: { _ in
+                Text("會存下這個中繼的網址與讀取密鑰（密鑰不會顯示）。")
+            }
         }
     }
 
@@ -117,6 +161,22 @@ struct SettingsView: View {
         } else {
             testResult = .success
         }
+    }
+
+    /// 配對成功：與手動儲存相同（網址存 UserDefaults、密鑰存 Keychain），立即更新一次
+    private func apply(url newURL: String, token newToken: String) {
+        do {
+            try model.saveSettings(url: newURL, token: newToken)
+        } catch {
+            saveError = error.localizedDescription
+            return
+        }
+        url = newURL
+        token = newToken
+        saveError = nil
+        testResult = nil
+        paired = true
+        Task { await model.refresh() }
     }
 
     private func save() {
