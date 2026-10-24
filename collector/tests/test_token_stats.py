@@ -786,5 +786,88 @@ class ScanTest(TokenStatsTestCase):
         self.assertLess(elapsed, 1.0)
 
 
+class FormatChangeTest(TokenStatsTestCase):
+    """紀錄格式改變的偵測（ADR-0009 第 9 節）：門檻保守，證據不足時沿用上次的判斷。"""
+
+    def meta(self, key):
+        with self.db() as c:
+            row = c.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else None
+
+    def test_normal_logs_are_not_suspect(self):
+        lines = []
+        for i in range(60):
+            lines += [claude_user(T0 + i * 60), claude_assistant(f"m{i}", T0 + i * 60 + 5, inp=1, out=1)]
+        self.write(self.claude_file(), *lines)
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "0")
+        scan = json.loads(self.meta("token_format_scan"))
+        self.assertEqual((scan["candidates"], scan["bad"], scan["token_lines"]), (120, 0, 60))
+
+    def test_many_unparseable_lines_are_suspect_then_clear(self):
+        good = [claude_assistant(f"m{i}", T0 + i, inp=1, out=1) for i in range(80)]
+        # 新格式：通過位元組篩選但缺少 message.id／requestId 等必要欄位
+        bad = [json.dumps({"type": "assistant", "timestamp": iso(T0 + i), "usage": {"input_tokens": 1}})
+               for i in range(30)]
+        self.write(self.claude_file(), *good, *bad)
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "1")  # 30／110 ≥ 20%
+        # 下一次只有少量新行：證據不足，維持「可能已改變」
+        self.write(self.claude_file(), *[claude_assistant(f"n{i}", T0 + 500 + i, inp=1, out=1) for i in range(5)])
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "1")
+        # 之後又有足夠的正常紀錄：清除
+        self.write(self.claude_file(), *[claude_assistant(f"k{i}", T0 + 900 + i, inp=1, out=1) for i in range(120)])
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "0")
+
+    def test_few_bad_lines_are_below_threshold(self):
+        good = [claude_assistant(f"m{i}", T0 + i, inp=1, out=1) for i in range(100)]
+        self.write(self.claude_file(), *good, *["not json \"user\""] * 10)
+        self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "0")  # 10／110 < 20%
+
+    def test_lots_of_new_bytes_without_any_token_line_is_suspect(self):
+        # 欄位改名之後所有行都通不過位元組篩選：沒有候選行，但新內容很多
+        renamed = json.dumps({"kind": "reply", "tokens": {"in": 1}, "pad": "z" * 2000})
+        self.write(self.codex_file(), *[renamed] * 40)
+        with mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 64 * 1024):
+            self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "1")
+
+    def test_skipped_long_lines_count_as_read(self):
+        # 一行超過上限被丟棄：讀過的位元組也算，沒有任何 Token 時要能觸發
+        self.write(self.codex_file(), json.dumps({"kind": "reply", "pad": "z" * (300 * 1024)}))
+        with mock.patch.object(token_stats, "MAX_LINE_BYTES", 64 * 1024), \
+                mock.patch.object(token_stats, "SKIP_CHUNK_BYTES", 16 * 1024), \
+                mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 256 * 1024):
+            self.scan()
+        self.assertEqual(self.meta("token_format_suspect"), "1")
+        scan = json.loads(self.meta("token_format_scan"))
+        self.assertGreaterEqual(scan["bytes"], 300 * 1024)
+
+    def test_unfinished_last_line_is_not_counted(self):
+        # 還沒寫完的最後一行下次會重讀，這次不算讀取量
+        path = self.codex_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'{"kind": "reply", "pad": "' + b"z" * (300 * 1024))
+        with mock.patch.object(token_stats, "FORMAT_MIN_BYTES", 256 * 1024):
+            self.scan()
+        self.assertIsNone(self.meta("token_format_suspect"))
+
+    def test_small_scans_do_not_decide(self):
+        self.write(self.claude_file(), claude_assistant("m1", T0, inp=1, out=1))
+        self.scan()
+        self.assertIsNone(self.meta("token_format_suspect"))
+
+    def test_verdict_function(self):
+        c = token_stats.Counters
+        self.assertIsNone(token_stats.format_suspect(c(candidate_lines=99, bad_lines=99)))
+        self.assertTrue(token_stats.format_suspect(c(candidate_lines=100, bad_lines=20)))
+        self.assertFalse(token_stats.format_suspect(c(candidate_lines=100, bad_lines=19, token_lines=81)))
+        self.assertTrue(token_stats.format_suspect(c(bytes_read=4 * 1024 * 1024, token_lines=0)))
+        self.assertFalse(token_stats.format_suspect(c(bytes_read=4 * 1024 * 1024, token_lines=1)))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -122,6 +122,8 @@ public struct TokenStatsData: Equatable, Sendable {
     public var firstScanProgress: Int?
     /// 略過的紀錄行數（無法解析＋過長）；> 0 時顯示「部分紀錄無法解析」
     public var skippedLines: Int
+    /// 收集器判斷對話紀錄的格式可能已改變（`meta.token_format_suspect`，ADR-0009 第 9 節）
+    public var formatSuspect: Bool
     /// 保留期間（天，0＝永久）
     public var retentionDays: Int
     /// 實際還有每日資料的第一天（`meta.token_days_from`，`YYYY-MM-DD`）：保留期間縮短或清除歷史後延長保留期間，
@@ -131,7 +133,7 @@ public struct TokenStatsData: Equatable, Sendable {
     public init(days: [TokenDayRow] = [], hours: [TokenHourRow] = [], records: [String: TokenRecord] = [:],
                 recordDays: [String: [String: Int64]] = [:],
                 firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365,
-                dataFrom: String? = nil) {
+                dataFrom: String? = nil, formatSuspect: Bool = false) {
         self.days = days
         self.hours = hours
         self.records = records
@@ -139,11 +141,15 @@ public struct TokenStatsData: Equatable, Sendable {
         self.firstScanDone = firstScanDone
         self.firstScanProgress = firstScanProgress
         self.skippedLines = skippedLines
+        self.formatSuspect = formatSuspect
         self.retentionDays = retentionDays
         self.dataFrom = dataFrom
     }
 
     public static let empty = TokenStatsData()
+
+    /// 統計卡片與完整統計視窗的提示
+    public static let formatSuspectNotice = "紀錄格式可能已改變，統計可能不完整"
 
     /// 有任何 Token 資料（含已超過保留期間、只剩個人紀錄的）
     public var hasData: Bool {

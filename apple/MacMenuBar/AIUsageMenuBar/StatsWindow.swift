@@ -34,8 +34,14 @@ struct StatsWindowView: View {
                 content(shown)
             } else if let shown, !shown.firstScanDone {
                 message(shown.firstScanProgress.map { "正在整理過去的紀錄（\($0)%）" } ?? "正在整理過去的紀錄")
-            } else if shown != nil {
-                message("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+            } else if let shown {
+                VStack(spacing: 8) {
+                    Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    if shown.formatSuspect { FormatSuspectNotice() }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loading {
                 message("正在讀取…")
             } else {
@@ -138,6 +144,7 @@ struct StatsWindowView: View {
     private func footnote(_ data: TokenStatsData) -> String {
         let retention = data.retentionDays == 0 ? "永久保留" : "保留 \(data.retentionDays) 天"
         var text = "Token 不含快取讀取（滑鼠移到數字上可看明細）。每日資料\(retention)，個人紀錄與累計不受保留期間影響。"
+        if data.formatSuspect { text += TokenStatsData.formatSuspectNotice + "。" }
         if data.skippedLines > 0 { text += "部分紀錄無法解析，已略過 \(data.skippedLines) 行。" }
         return text
     }
