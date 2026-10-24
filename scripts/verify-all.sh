@@ -65,6 +65,10 @@ for config in Debug Release; do
   run "mac-$config"   xcbuild MacMenuBar  AIUsageMenuBar AIUsageMenuBar "$config" "$MAC_DEST"
   run "watch-$config" xcbuild WatchApp    AIUsageWatch   AIUsageWatch   "$config" "$WATCH_DEST"
 done
+# 截圖比對：用上面建置好的 Debug 版產生截圖，和 apple/Snapshots/ 的基準比對（scripts/snapshots.sh）
+run snapshots         env SNAPSHOT_OUT="$OUT/snapshots" \
+  SNAPSHOT_MAC_APP="$DD/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app" \
+  SNAPSHOT_IOS_APP="$DD/iOSApp/Build/Products/Debug-iphonesimulator/AIUsageMonitor.app" scripts/snapshots.sh
 run ios-appex         test -d "$DD/iOSApp/Build/Products/Release-iphonesimulator/AIUsageMonitor.app/PlugIns/UsageWidget.appex"
 # Mac 桌面小工具已移除（FR-24 不做）：App 內不應再有任何擴充
 run mac-no-appex      test ! -e "$DD/MacMenuBar/Build/Products/Release/AIUsageMenuBar.app/Contents/PlugIns"

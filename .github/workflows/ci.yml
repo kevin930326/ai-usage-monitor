@@ -120,6 +120,18 @@ jobs:
           xcodebuild -project ${{ matrix.xcodeproj }}.xcodeproj -scheme ${{ matrix.xcodeproj }} \
             -configuration Debug -destination '${{ matrix.destination }}' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGNING_ALLOWED=NO build
+      # 截圖比對（只比 Mac）：runner 的 macOS／Xcode 和基準不同時只印警告，差異圖放在 artifact
+      - name: Snapshots
+        if: matrix.project == 'MacMenuBar'
+        run: |
+          SNAPSHOT_PLATFORMS=mac SNAPSHOT_MAC_APP="$RUNNER_TEMP/dd/Build/Products/Debug/AIUsageMenuBar.app" \
+            scripts/snapshots.sh
+      - if: matrix.project == 'MacMenuBar' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: build/snapshots/
+          if-no-files-found: ignore
       # Mac 沒有擴充（桌面小工具已移除）
       - name: Extension is embedded
         if: matrix.appex != ''

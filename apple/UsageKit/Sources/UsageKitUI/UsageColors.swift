@@ -55,7 +55,7 @@ public enum UsageColors {
     public static let stale = Color.gray
 
     /// 進度條顏色：過期灰色、剩餘 < 20% 紅色、其他為服務識別色。
-    public static func bar(_ window: UsageWindow, provider key: String, stale: Bool, now: Date = .now) -> Color {
+    public static func bar(_ window: UsageWindow, provider key: String, stale: Bool, now: Date = RenderClock.now) -> Color {
         switch window.barTone(stale: stale, at: now) {
         case .provider: provider(key)
         case .critical: critical

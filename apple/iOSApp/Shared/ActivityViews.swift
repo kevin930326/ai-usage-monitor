@@ -9,7 +9,7 @@ import UsageKitUI
 /// 頁尾右側換成小工具自己的按鈕。
 struct LockScreenActivityView<Trailing: View>: View {
     let state: UsageActivityState
-    var now: Date = .now
+    var now: Date = RenderClock.now
     @ViewBuilder var trailing: Trailing
 
     // 只看資料時間（FR-11）。ActivityKit 的 `context.isStale` 在 staleDate 到時變成 true，
@@ -37,7 +37,7 @@ struct LockScreenActivityView<Trailing: View>: View {
 }
 
 extension LockScreenActivityView where Trailing == RefreshButton {
-    init(state: UsageActivityState, now: Date = .now) {
+    init(state: UsageActivityState, now: Date = RenderClock.now) {
         self.init(state: state, now: now) { RefreshButton() }
     }
 }
@@ -140,7 +140,7 @@ struct ResetLabel: View {
         if window.isReset(at: now) {
             Text("已重置")
         } else if let resetsAt = window.resetsAt {
-            Text(resetsAt, style: .relative)
+            Text.relative(to: resetsAt)
                 .multilineTextAlignment(.trailing)
         }
     }
@@ -330,7 +330,7 @@ struct IslandBar: View {
 /// Apple Watch 智慧型堆疊的精簡版面：只顯示剩餘最少的額度（FR-27）。
 struct WatchActivityView: View {
     let state: UsageActivityState
-    var now: Date = .now
+    var now: Date = RenderClock.now
 
     private var stale: Bool { state.isStale(at: now) }
 

@@ -71,7 +71,7 @@ final class HistoryStore {
     // MARK: - 面板用的唯讀連線
 
     /// 面板變成看得見時呼叫：開啟連線並查詢。
-    func open(now: Date = .now) {
+    func open(now: Date = RenderClock.now) {
         active = true
         if db == nil {
             guard FileManager.default.fileExists(atPath: url.path) else {
@@ -147,7 +147,7 @@ final class HistoryStore {
     }
 
     /// `usage.json` 有新內容時重新查詢（只在連線開著時）。
-    func reload(now: Date = .now) {
+    func reload(now: Date = RenderClock.now) {
         guard let db else { return }
         let version = Self.schemaVersion(db)
         switch version {
@@ -234,7 +234,7 @@ final class HistoryStore {
     /// 延長時舊期間以前的每日 Token 已刪除，把邊界記在 `meta.token_days_from`，統計才不會把它們畫成 0。
     /// 收集器停過時實際刪到的地方比「現在 − 舊期間」早，所以取它與資料庫裡最早一天較早的一個：
     /// 還在的資料一定不會被藏起來；最早一天之前若剛好沒有使用，會顯示成「沒有資料」而不是 0（保守）。
-    nonisolated func setRetention(days: Int, now: Date = .now) throws {
+    nonisolated func setRetention(days: Int, now: Date = RenderClock.now) throws {
         try write { db in
             let old = Self.meta(db, "retention_days").flatMap(Int.init) ?? Self.defaultRetentionDays
             guard Self.exec(db, "INSERT OR REPLACE INTO meta (key, value) VALUES ('retention_days', ?)", [.text(String(days))]) else { return false }
@@ -263,7 +263,7 @@ final class HistoryStore {
     /// 清除歷史（ADR-0009 第 5 節）。`rescan` 為真時連同掃描進度與去重表一起清除（Token 統計會從對話紀錄重建；
     /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
     /// 不重新掃描時 `file_tokens` 歸零而不刪除：對應的加總已清除，之後收集器重算該檔時只清空、不會扣到新的資料。
-    nonisolated func clear(rescan: Bool, now: Date = .now) throws {
+    nonisolated func clear(rescan: Bool, now: Date = RenderClock.now) throws {
         var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days"]
         if rescan { tables += ["scan_state", "seen_ids", "seen_tasks", "file_tokens"] }
         try write(vacuum: true) { db in
@@ -487,7 +487,7 @@ extension HistoryStore {
     }
 
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。
-    nonisolated func loadFullTokenStats(now: Date = .now) -> TokenStatsData? {
+    nonisolated func loadFullTokenStats(now: Date = RenderClock.now) -> TokenStatsData? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         return withConnection(write: false) { db -> TokenStatsData? in
             guard let version = Self.schemaVersion(db), version >= Self.supportedSchema else { return nil }

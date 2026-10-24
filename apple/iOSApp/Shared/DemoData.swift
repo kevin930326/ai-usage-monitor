@@ -25,7 +25,7 @@ enum DemoData {
         scenario == .used ? .used : .remaining
     }
 
-    static func snapshot(for scenario: Scenario, now: Date = .now) -> UsageSnapshot {
+    static func snapshot(for scenario: Scenario, now: Date = RenderClock.now) -> UsageSnapshot {
         func at(_ minutes: Double) -> Date { now.addingTimeInterval(minutes * 60) }
         let updatedAt: Date = switch scenario {
         case .stale: at(-45)

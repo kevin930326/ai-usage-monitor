@@ -72,7 +72,7 @@ public enum UsageBarTone: Equatable, Sendable {
 public extension UsageWindow {
     /// 進度條顏色規則（FR-16）：過期灰色；剩餘 < 20% 紅色；其他用服務識別色。
     /// 已重置的額度視為剩餘 100%（FR-26）。
-    func barTone(stale: Bool, at now: Date = .now) -> UsageBarTone {
+    func barTone(stale: Bool, at now: Date = RenderClock.now) -> UsageBarTone {
         if stale { return .stale }
         return effectiveSeverity(at: now) == .critical ? .critical : .provider
     }

@@ -17,7 +17,7 @@ final class UsageStore {
     /// 收集器寫的服務狀態（FR-45）；沒有檔案或讀不懂時為 nil
     private(set) var serviceStatus: ServiceStatusFile?
     /// 每分鐘更新，讓選單列在沒有新資料時也能轉灰或顯示已重置
-    private(set) var now = Date.now
+    private(set) var now = RenderClock.now
 
     @ObservationIgnored private var source: DispatchSourceFileSystemObject?
     @ObservationIgnored private var timer: Timer?
@@ -40,7 +40,7 @@ final class UsageStore {
     }
 
     private func tick() {
-        now = .now
+        now = RenderClock.now
         if source == nil {
             // 監看失效：輪詢讀檔，並在資料夾出現後重新監看
             watchDirectory()

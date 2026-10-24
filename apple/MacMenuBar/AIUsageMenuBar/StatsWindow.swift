@@ -21,7 +21,7 @@ struct StatsWindowView: View {
     /// Debug 截圖直接給資料與動畫進度
     var fixedData: TokenStatsData?
     var fixedMotion: PanelMotion?
-    var now: Date = .now
+    var now: Date = RenderClock.now
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
