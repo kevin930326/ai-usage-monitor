@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import worker, { type Env } from "../src/index.ts";
-import { MAX_ROWS, MAX_TOKENS_BODY_BYTES } from "../src/tokens.ts";
+import { MAX_DOWNLOAD_ROWS, MAX_ROWS, MAX_TOKENS_BODY_BYTES } from "../src/tokens.ts";
 import { FakeD1 } from "./fake-d1.ts";
 
 class MemoryKV {
@@ -296,6 +296,20 @@ describe("GET /tokens/daily", () => {
     assert.equal((await call("GET", "/tokens/daily", "read-secret")).status, 422);
     assert.equal((await call("GET", "/tokens/daily?from=yesterday", "read-secret")).status, 422);
     assert.equal((await call("GET", "/tokens/daily?from=2026-13-01", "read-secret")).status, 422);
+  });
+
+  it("超過上限時留下最新的日子並標 truncated", async () => {
+    const a = await addDevice("Mac");
+    const insert = db.db.prepare("INSERT INTO daily_tokens (device_id, day, provider, model, updated_at) VALUES (?, ?, 'claude', ?, 0)");
+    db.db.exec("BEGIN");
+    for (let i = 0; i <= MAX_DOWNLOAD_ROWS; i++) insert.run(a.device_id, daysAgo(i % 30), `claude-m${Math.floor(i / 30)}`);
+    db.db.exec("COMMIT");
+    const data = (await download(daysAgo(30))) as { rows: Record<string, unknown>[]; truncated?: boolean };
+    assert.equal(data.truncated, true);
+    assert.equal(data.rows.length, MAX_DOWNLOAD_ROWS);
+    assert.equal(data.rows.at(-1)?.day, today());
+    assert.ok(data.rows.every((r, i) => i === 0 || String(r.day) >= String(data.rows[i - 1].day)));
+    assert.equal((await download(today())).truncated, undefined);
   });
 
   it("其他方法回 405", async () => {

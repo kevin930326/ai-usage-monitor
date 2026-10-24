@@ -458,6 +458,27 @@ class MergeTest(TokenSyncTestCase):
         token_sync.forget(self.root / "missing.sqlite3")  # 沒有檔案時不建立
         self.assertFalse((self.root / "missing.sqlite3").exists())
 
+    def test_truncated_download_keeps_the_days_it_did_not_return(self):
+        pc = self.pc
+        for offset in (-3, -2, -1):
+            pc.set_tokens(offset, 10)
+        pc.run(NOW)
+        self.mac.run(NOW)
+        self.assertEqual(self.mac.total_by_device()[pc.relay_id], 30)
+        real = self.relay.__call__
+
+        def truncated(url, headers, body=None, timeout=15):
+            data = real(url, headers, body, timeout)
+            if body is None:  # 中繼只回最新的兩天
+                data["rows"] = [r for r in data["rows"] if r["day"] >= history.local_day(NOW - 2 * DAY)]
+                data["truncated"] = True
+            return data
+        self.mac.relay = truncated
+        self.mac.run(NOW + DAY)
+        self.assertEqual(self.mac.total_by_device()[pc.relay_id], 30)
+        self.assertEqual(self.mac.meta("sync_truncated"), "1")
+        self.assertEqual(self.mac.log.getvalue().count("超過中繼的列數上限"), 1)
+
     def test_bad_downloaded_rows_are_skipped(self):
         bad = [
             {"device_id": "not-an-id", "day": "2026-10-14", "provider": "claude", "model": "claude-x", "input_tokens": 1},

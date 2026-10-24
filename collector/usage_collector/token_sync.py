@@ -244,8 +244,19 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
         if isinstance(d, dict) and isinstance(d.get("device_id"), str) and _DEVICE_RE.match(d["device_id"]):
             devices.append((d["device_id"], _clean_name(d.get("name")), _timestamp(d.get("last_upload_at")),
                             1 if d.get("revoked") is True else 0, 1 if d["device_id"] in own else 0))
+    # 中繼超過下載上限時只回最新的日子（truncated）：最舊的那天可能不完整、更早的沒有回傳，
+    # 只取代比最舊那天更新的日子，其餘保留上次的數字（不倒退）
+    truncated = response.get("truncated") is True
+    delete = ("DELETE FROM daily_tokens WHERE device_id != ? AND day >= ?", (local_id, since))
+    if truncated:
+        returned = [r["day"] for r in response["rows"]
+                    if isinstance(r, dict) and isinstance(r.get("day"), str) and _DAY_RE.match(r["day"])]
+        delete = ("DELETE FROM daily_tokens WHERE device_id != ? AND day > ?", (local_id, min(returned or ["9999"])))
+        if history.meta(conn, "sync_truncated") != "1":
+            log("第二層下載超過中繼的列數上限，只更新最近的日子（較早的日子保留上次的數字）")
     with history._transaction(conn):
-        conn.execute("DELETE FROM daily_tokens WHERE device_id != ? AND day >= ?", (local_id, since))
+        _set_meta(conn, sync_truncated=1 if truncated else 0)
+        conn.execute(*delete)
         if oldest is not None:
             conn.execute("DELETE FROM daily_tokens WHERE device_id != ? AND day < ?", (local_id, oldest))
         conn.executemany(f"""INSERT OR REPLACE INTO daily_tokens
