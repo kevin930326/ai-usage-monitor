@@ -104,19 +104,47 @@ public enum SetupChecklist {
         }
     }
 
-    /// 已登入或已收到資料＝完成；沒安裝＝可選（另一個服務可用時），兩個都不能用時兩個都要處理
-    static func providerStatus(_ provider: ProviderSetupInput, other: ProviderSetupInput) -> SetupStepStatus {
-        if isUsable(provider) { return .done }
-        if provider.collectError != nil { return .needsAction }
-        switch provider.login {
-        case .notLoggedIn, .apiKey, .unknown: return .needsAction
-        case .notInstalled, nil: return isUsable(other) ? .optional : .needsAction
-        case .enabled: return .done
+    /// 一個服務目前的情況。狀態、說明與指令都由這裡決定，三者一致。
+    /// 優先序：最新偵測的明確結果（沒登入、API key、沒安裝）> 還沒過期的 usage.json > 偵測「不知道」
+    enum ProviderSituation: Equatable {
+        /// usage.json 有這個服務、沒過期、沒有錯誤
+        case collecting
+        /// 偵測是已登入，但還沒有資料
+        case loggedIn
+        case notLoggedIn
+        case apiKey
+        case notInstalled
+        case collectError(String)
+        /// 偵測結果認不得，也沒有資料
+        case unknown
+        /// 沒有偵測結果（開發版），也沒有資料
+        case noInfo
+    }
+
+    static func situation(_ p: ProviderSetupInput) -> ProviderSituation {
+        switch p.login {
+        case .notLoggedIn: return .notLoggedIn
+        case .apiKey: return .apiKey
+        case .enabled: return p.collecting ? .collecting : .loggedIn
+        case .notInstalled: return p.collecting ? .collecting : .notInstalled
+        case .unknown, nil:
+            if p.collecting { return .collecting }
+            if let error = p.collectError { return .collectError(error) }
+            return p.login == .unknown ? .unknown : .noInfo
         }
     }
 
-    static func isUsable(_ provider: ProviderSetupInput) -> Bool {
-        provider.collecting || provider.login == .enabled
+    static func isUsable(_ p: ProviderSetupInput) -> Bool {
+        [.collecting, .loggedIn].contains(situation(p))
+    }
+
+    /// 可以用＝完成；沒安裝或沒有任何資訊＝可選（另一個服務可用時），兩個都不能用時兩個都要處理
+    static func providerStatus(_ provider: ProviderSetupInput, other: ProviderSetupInput) -> SetupStepStatus {
+        switch situation(provider) {
+        case .collecting, .loggedIn: .done
+        case .notInstalled, .noInfo: isUsable(other) ? .optional : .needsAction
+        case .notLoggedIn, .apiKey, .collectError, .unknown: .needsAction
+        }
     }
 
     /// 首次打開時要不要自動顯示：沒有按過「完成」，而且還沒有任何資料（usage.json 不存在）。
@@ -127,33 +155,28 @@ public enum SetupChecklist {
 
     /// 終端機指令（給「複製」按鈕）；不需要時是空的
     public static func commands(for step: SetupStepID, _ inputs: SetupInputs) -> [String] {
-        switch step {
-        case .claude:
-            switch inputs.claude.login {
-            case .notInstalled: return ["curl -fsSL https://claude.ai/install.sh | bash", "claude auth login"]
-            case .notLoggedIn, .unknown: return ["claude auth login"]
-            default: return inputs.claude.collectError != nil && !isUsable(inputs.claude) ? ["claude auth login"] : []
-            }
-        case .codex:
-            switch inputs.codex.login {
-            case .notInstalled: return ["npm install -g @openai/codex", "codex login"]
-            case .notLoggedIn, .unknown: return ["codex login"]
-            case .apiKey: return ["codex logout", "codex login"]
-            default: return inputs.codex.collectError != nil && !isUsable(inputs.codex) ? ["codex login"] : []
-            }
-        default:
+        guard step == .claude || step == .codex else { return [] }
+        let claude = step == .claude
+        switch situation(claude ? inputs.claude : inputs.codex) {
+        case .notInstalled:
+            return claude ? ["curl -fsSL https://claude.ai/install.sh | bash", "claude auth login"]
+                          : ["npm install -g @openai/codex", "codex login"]
+        case .notLoggedIn, .unknown, .collectError, .noInfo:
+            return [claude ? "claude auth login" : "codex login"]
+        case .apiKey:
+            return ["codex logout", "codex login"]
+        case .collecting, .loggedIn:
             return []
         }
     }
 
     /// 服務那一步的說明
     public static func providerDetail(_ step: SetupStepID, _ inputs: SetupInputs) -> String {
-        let provider = step == .codex ? inputs.codex : inputs.claude
         let name = step == .codex ? "Codex CLI" : "Claude Code"
-        if provider.collecting { return "已登入，正在收集用量。" }
-        if provider.login == .enabled { return "已登入，下一次收集（5 分鐘內）就會出現在面板。" }
-        if let error = provider.collectError { return "收集時發生問題：\(error)" }
-        switch provider.login {
+        switch situation(step == .codex ? inputs.codex : inputs.claude) {
+        case .collecting: return "已登入，正在收集用量。"
+        case .loggedIn: return "已登入，下一次收集（5 分鐘內）就會出現在面板。"
+        case .collectError(let error): return "收集時發生問題：\(error)"
         case .notLoggedIn: return "已安裝但還沒登入。在終端機執行下面的指令，用訂閱的帳號登入。"
         case .apiKey: return "目前用 API key 登入，沒有訂閱的額度可以顯示。改用 ChatGPT 帳號登入："
         case .notInstalled:
@@ -161,7 +184,10 @@ public enum SetupChecklist {
                 ? "沒有安裝。沒在用 \(name) 的話可以略過。"
                 : "沒有安裝。至少要有 Claude Code 或 Codex 其中一個：安裝後登入。"
         case .unknown: return "無法確認登入狀態（指令沒有回應或結果認不得）。在終端機登入一次後按「重新檢查」。"
-        case .enabled, nil: return "還沒有資料。登入 \(name) 後，下一次收集就會出現。"
+        case .noInfo:
+            return status(of: step, inputs) == .optional
+                ? "還沒有資料。沒在用 \(name) 的話可以略過。"
+                : "還沒有資料。登入 \(name) 後，下一次收集就會出現。"
         }
     }
 }

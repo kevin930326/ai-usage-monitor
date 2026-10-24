@@ -40,7 +40,9 @@ final class SetupWizardModel {
         let snapshot = UsageStore.shared.snapshot
         func provider(_ key: String, _ login: ProviderLoginState?) -> ProviderSetupInput {
             let usage = snapshot?.providers[key]
-            let collecting = usage.map { $0.error == nil && !$0.windows.isEmpty } ?? false
+            // 過期的快照（收集器停了）不算正在收集
+            let fresh = snapshot.map { !$0.isStale(now: RenderClock.now) } ?? false
+            let collecting = fresh && (usage.map { $0.error == nil && !$0.windows.isEmpty } ?? false)
             return ProviderSetupInput(login: login, collecting: collecting, collectError: usage?.error)
         }
         notificationStatus = await QuotaNotifier.shared.authorizationStatus()

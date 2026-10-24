@@ -46,6 +46,26 @@ final class SetupChecklistTests: XCTestCase {
         XCTAssertTrue(SetupChecklist.providerDetail(.codex, i).contains("尚未登入"))
     }
 
+    func testLatestExplicitDetectionBeatsOldData() {
+        // 收集成功後登出、或改用 API key：最新的偵測結果優先
+        let i = inputs(claude: .init(login: .notLoggedIn, collecting: true), codex: .init(login: .apiKey, collecting: true))
+        XCTAssertEqual(SetupChecklist.status(of: .claude, i), .needsAction)
+        XCTAssertEqual(SetupChecklist.commands(for: .claude, i), ["claude auth login"])
+        XCTAssertFalse(SetupChecklist.providerDetail(.claude, i).contains("正在收集"))
+        XCTAssertEqual(SetupChecklist.status(of: .codex, i), .needsAction)
+        XCTAssertEqual(SetupChecklist.commands(for: .codex, i), ["codex logout", "codex login"])
+        // 偵測「不知道」時，還沒過期的資料可以當作可用
+        let unknown = inputs(claude: .init(login: .unknown, collecting: true))
+        XCTAssertEqual(SetupChecklist.status(of: .claude, unknown), .done)
+        // 沒安裝但收集器在別的路徑照樣收集到：以資料為準
+        let elsewhere = inputs(claude: .init(login: .notInstalled, collecting: true))
+        XCTAssertEqual(SetupChecklist.status(of: .claude, elsewhere), .done)
+        // 沒安裝而且收集失敗：給安裝指令
+        let missing = inputs(claude: .init(login: .notInstalled, collectError: "找不到 claude 執行檔"), codex: .init(collecting: true))
+        XCTAssertEqual(SetupChecklist.status(of: .claude, missing), .optional)
+        XCTAssertEqual(SetupChecklist.commands(for: .claude, missing).first, "curl -fsSL https://claude.ai/install.sh | bash")
+    }
+
     func testOtherSteps() {
         var i = inputs(inApplications: false, collectorNeedsAction: true)
         XCTAssertEqual(SetupChecklist.status(of: .location, i), .needsAction)
