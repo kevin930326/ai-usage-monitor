@@ -315,6 +315,23 @@ describe("iPhone 配對（ADR-0012）", () => {
     assert.equal(await readLimited(new Request("https://x", { method: "POST", body: over }), PAIRING.maxClaimBytes), null);
   });
 
+  it("格式不對的請求不讀寫 KV、不算錯誤次數（Fable F-01）", async () => {
+    const { code } = await (await pair()).json();
+    let reads = 0;
+    let writes = 0;
+    const get = kv.get.bind(kv);
+    const put = kv.put.bind(kv);
+    kv.get = async (key) => (reads++, get(key));
+    kv.put = async (key, value, options) => (writes++, put(key, value, options));
+    for (let i = 0; i < PAIRING.maxFailures + 2; i++) {
+      assert.equal((await claim("short")).status, 403);
+      assert.equal((await call("POST", undefined, "{not json", "/pair/claim")).status, 403);
+    }
+    assert.equal(reads, 0);
+    assert.equal(writes, 0);
+    assert.equal((await claim(code)).status, 200);
+  });
+
   it("短碼的正規化與 iPhone 相同", () => {
     assert.equal(normalizeCode("7k3m-q9td"), "7K3MQ9TD");
     assert.equal(normalizeCode(" oil0 1234 "), "01101234");

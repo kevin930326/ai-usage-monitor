@@ -263,6 +263,8 @@ async function handleClaim(request: Request, env: Env): Promise<Response> {
     // 與錯誤的短碼相同處理
   }
 
+  // 格式不對的不讀 KV、不算錯誤次數：不能用垃圾請求消耗 KV 用量或作廢進行中的配對（Fable F-01）
+  if (code === null) return denied();
   const stored = await env.USAGE_KV.get(PAIR_KEY);
   if (stored === null) return denied();
   let record: PairRecord;
@@ -282,7 +284,7 @@ async function handleClaim(request: Request, env: Env): Promise<Response> {
     await deletePairIfCurrent(env, record.hash);
     return denied();
   }
-  if (code !== null && (await safeEqual(await sha256Hex(code), record.hash))) {
+  if (await safeEqual(await sha256Hex(code), record.hash)) {
     await deletePairIfCurrent(env, record.hash);
     return json({ read_token: env.READ_TOKEN });
   }
