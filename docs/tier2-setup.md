@@ -20,7 +20,7 @@ cd relay
 npx wrangler d1 create ai-usage-tokens
 ```
 
-把輸出的 `database_id` 填進 `relay/wrangler.toml`，並取消註解 `[[d1_databases]]` 那一段（5 行）：
+把輸出的 `database_id` 填進 `relay/wrangler.toml`，並取消註解 `[[d1_databases]]` 那一段（5 行）。用 `scripts/setup-relay.sh` 部署的，設定在 `relay/wrangler.local.toml`：把同一段加進那個檔案，下面的 `wrangler` 指令都加上 `--config wrangler.local.toml`（`npm run deploy` 改成 `npx wrangler deploy --config wrangler.local.toml`）：
 
 ```toml
 [[d1_databases]]
