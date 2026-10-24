@@ -61,7 +61,6 @@ Mac 收集器 (Python, launchd) ──POST──▶ Cloudflare Worker (KV) ◀�
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [解除安裝](docs/uninstall.md) | 各部分怎麼移除、哪些資料會留下 |
-| [Windows 收集器](docs/windows.md) | PC 的安裝、選項與限制（#71 合併後） |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
@@ -163,7 +162,7 @@ Windows 收集器統計這台 PC 上 Claude Code 與 Codex CLI 的 Token（預�
 irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1 | iex
 ```
 
-沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](docs/windows.md)。
+沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md)（在 #71 的分支上，合併後移到 main）。
 
 > 狀態：Windows 收集器（[#71](https://github.com/kevin930326/ai-usage-monitor/pull/71)）與「在 Mac 面板合併多台電腦的 Token」（第二層，[#73](https://github.com/kevin930326/ai-usage-monitor/pull/73)）還沒合併；合併並發布之前上面的指令還不能用。
 

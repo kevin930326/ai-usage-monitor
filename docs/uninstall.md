@@ -69,7 +69,7 @@ rm -f relay/wrangler.local.toml
 & ([scriptblock]::Create((irm https://github.com/kevin930326/ai-usage-monitor/releases/latest/download/install.ps1))) -Uninstall
 ```
 
-移除工作排程 `\AIUsageMonitor\Collector` 與 `%LOCALAPPDATA%\AIUsageMonitor\app`；`%LOCALAPPDATA%\AIUsageMonitor` 裡的 history.sqlite3、config.json、collector.log 保留，不需要時自行刪除。從 repo 安裝的用 `collector\windows\uninstall-task.ps1`（見 [windows.md](windows.md#移除)）。用 winget 裝的 Python 不會被移除（`winget uninstall Python.Python.3.13`）。
+移除工作排程 `\AIUsageMonitor\Collector` 與 `%LOCALAPPDATA%\AIUsageMonitor\app`；`%LOCALAPPDATA%\AIUsageMonitor` 裡的 history.sqlite3、config.json、collector.log 保留，不需要時自行刪除。從 repo 安裝的用 `collector\windows\uninstall-task.ps1`（見 [windows.md](https://github.com/kevin930326/ai-usage-monitor/blob/feat/windows-collector/docs/windows.md#移除)，#71 合併前在該分支上）。用 winget 裝的 Python 不會被移除（`winget uninstall Python.Python.3.13`）。
 
 ## 會留下什麼
 
