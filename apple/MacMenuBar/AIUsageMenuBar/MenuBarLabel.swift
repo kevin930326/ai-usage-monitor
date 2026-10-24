@@ -20,6 +20,8 @@ struct MenuBarLabel: View {
             .onAppear {
                 AppActions.openStats = { [openWindow] in openWindow(id: StatsWindowView.windowID) }
                 AppActions.openSettings = { [openSettings] in openSettings() }
+                AppActions.openWizard = { [openWindow] in openWindow(id: SetupWizardView.windowID) }
+                SetupWizardModel.openIfNeeded()
             }
     }
 

@@ -1,6 +1,7 @@
 #if DEBUG
 import ImageIO
 import SwiftUI
+import UserNotifications
 import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
@@ -33,6 +34,7 @@ enum DebugTools {
             if name == "panel" {
                 renderMenuBarIcons(to: url)
                 renderSettings(to: url)
+                renderWizard(to: url)
                 renderStats(to: url)
                 renderStatus(to: url)
             }
@@ -294,6 +296,34 @@ enum DebugTools {
             .padding(16)
             .background(Color(nsColor: .windowBackgroundColor))
             write(collector, scheme: scheme, to: dir.appendingPathComponent("settings-collector-states-\(scheme.name).png"))
+        }
+    }
+
+    /// 設定精靈（FR-54）的三種情境：新使用者（從 .dmg 直接打開）、都設定好了、用 install-launchd.sh 的舊使用者。
+    /// `wizard-<scheme>.png` 是新使用者（截圖比對的基準）
+    private static func renderWizard(to dir: URL) {
+        let cases: [(String, SetupInputs, UNAuthorizationStatus, CollectorService.State)] = [
+            ("", SetupInputs(appInApplications: false, collectorNeedsAction: true,
+                             claude: .init(login: .notLoggedIn), codex: .init(login: .notInstalled),
+                             notificationsAllowed: nil, loginItemEnabled: false, relayConfigured: false),
+             .notDetermined, .needsApplicationsFolder),
+            ("-done", SetupInputs(appInApplications: true, collectorNeedsAction: false,
+                                  claude: .init(login: .enabled, collecting: true), codex: .init(login: .enabled, collecting: true),
+                                  notificationsAllowed: true, loginItemEnabled: true, relayConfigured: true),
+             .authorized, .enabled),
+            ("-legacy", SetupInputs(appInApplications: true, collectorNeedsAction: false,
+                                    claude: .init(collecting: true), codex: .init(collectError: "尚未登入 Codex CLI，請在終端機執行 codex login"),
+                                    notificationsAllowed: false, loginItemEnabled: false, relayConfigured: true),
+             .denied, .legacy),
+        ]
+        for scheme in [ColorScheme.light, .dark] {
+            for (suffix, inputs, notification, collector) in cases {
+                let view = SetupWizardView(model: SetupWizardModel(inputs: inputs, notificationStatus: notification), interactive: false)
+                    .environment(CollectorService.preview(collector))
+                    .environment(PanelSettings.shared)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                write(view, scheme: scheme, to: dir.appendingPathComponent("wizard\(suffix)-\(scheme.name).png"))
+            }
         }
     }
 

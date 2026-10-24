@@ -34,6 +34,16 @@ struct AIUsageMenuBarApp: App {
         .defaultSize(width: 860, height: 700)
         .windowResizability(.contentMinSize)
 
+        // 首次設定精靈（FR-54）：第一次打開且還沒有資料時自動顯示，之後從設定重新打開
+        Window("設定精靈", id: SetupWizardView.windowID) {
+            SetupWizardView(model: .shared)
+                .followsAppearanceSetting()
+                .environment(collector)
+                .environment(settings)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
         // 設定視窗：關閉後釋放（ADR-0008 第 5 節）
         Settings {
             SettingsView()

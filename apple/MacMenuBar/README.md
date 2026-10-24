@@ -83,6 +83,22 @@ scripts/build-release.sh --version 1.0.0
 
 產出 `build/release/1.0.0/` 的 `.zip`、`.dmg`、寫好版本與 SHA-256 的 `install.sh` 與 `SHA256SUMS`。`--test-home <資料夾>` 建置安裝測試版（Debug、bundle ID 加 `.installtest`、收集器只讀寫該資料夾），驗證步驟見 [手動測試清單](../../docs/manual-test-checklist.md) 第 12 節。推 `v*` tag 時 `.github/workflows/release.yml` 建立草稿 Release。
 
+## 首次設定精靈（FR-54）
+
+第一次打開、而且還沒有任何資料（`usage.json` 不存在）時自動打開「設定精靈」視窗；已經在用的人不會看到，從設定 › 一般 ›「重新執行設定精靈」打開。按「完成」後不再自動出現（`wizard.completed`）。判斷規則在 UsageKit 的 `SetupChecklist`（有單元測試）。
+
+| 步驟 | 怎麼判斷 | 需要處理時 |
+|---|---|---|
+| 1. 放進「應用程式」資料夾 | App 的位置（App Translocation 算不在） | 說明拖到「應用程式」、「強制打開」；「打開『應用程式』資料夾」 |
+| 2. 背景收集器 | `CollectorService` 的狀態（與設定相同；舊安裝時有「改用內建收集器」） | 對應的按鈕；第 1 步沒完成時只說明會自動啟用 |
+| 3. Claude Code、4. Codex | 內建收集器 `usage_collector.setup --json --dry-run` 的狀態字串＋`usage.json` 有沒有這個服務的資料或錯誤 | 指令與「複製」：沒安裝 `curl -fsSL https://claude.ai/install.sh \| bash`、`npm install -g @openai/codex`；沒登入 `claude auth login`、`codex login`；Codex 用 API key 時 `codex logout`＋`codex login`。只用其中一個服務時另一個是「可選」 |
+| 5. 通知 | 通知權限 | 「允許通知」或「打開通知設定」 |
+| 6. 登入時自動打開 | `SMAppService.mainApp` | 開關 |
+| 7. 外觀 | — | 跟隨系統／淺色／深色 |
+| 8. 在 iPhone 上看 | `config.json` 有沒有 `relay_url`（不讀密鑰） | 「打開說明」（用瀏覽器開 README，App 本身不連網） |
+
+狀態：完成（綠色勾）、需要處理（橘色）、可選（虛線圈）。視窗回到前景時與按「重新檢查」時重新檢查，從終端機登入後回來就會更新。
+
 ## 開發版安裝到「應用程式」
 
 ```bash

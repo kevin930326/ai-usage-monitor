@@ -7,10 +7,12 @@ struct CollectorSettingsSection: View {
     @Environment(CollectorService.self) private var collector
     /// 截圖時不執行狀態查詢
     var interactive = true
+    /// 設定精靈裡：步驟自己有標題，執行中時也不放「停用」
+    var inWizard = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("背景收集器").font(.headline)
+            if !inWizard { Text("背景收集器").font(.headline) }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: icon.name)
                     .foregroundStyle(icon.color)
@@ -92,7 +94,7 @@ struct CollectorSettingsSection: View {
         case .quarantined: ("允許內建收集器執行", { await collector.allowQuarantinedRuntime() })
         case .notRegistered: ("啟用", { await collector.register() })
         case .requiresApproval: ("打開「登入項目」設定", { collector.openLoginItems() })
-        case .enabled: ("停用", { await collector.disable() })
+        case .enabled: inWizard ? nil : ("停用", { await collector.disable() })
         }
     }
 }

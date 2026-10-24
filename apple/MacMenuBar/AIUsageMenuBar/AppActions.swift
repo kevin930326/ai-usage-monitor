@@ -14,6 +14,8 @@ enum AppActions {
     static var openStats: (() -> Void)?
     /// 打開設定視窗（由 SwiftUI 的 `openSettings` 提供）
     static var openSettings: (() -> Void)?
+    /// 打開設定精靈（FR-54；由 SwiftUI 的 `openWindow` 提供）
+    static var openWizard: (() -> Void)?
     /// 面板打開時要亮一下的卡片（點通知打開面板時設定，面板顯示後播放並清除）
     static var pendingHighlight: String?
 

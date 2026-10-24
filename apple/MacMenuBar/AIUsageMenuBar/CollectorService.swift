@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ServiceManagement
+import UsageKit
 
 /// App 內建的收集器（FR-53、ADR-0013 第 3 節）：發布版的 App 內嵌 Python 與收集器，
 /// 以 `SMAppService.agent` 註冊 App 內的 LaunchAgent（`Contents/Library/LaunchAgents/<bundle ID>.collector.plist`）。
@@ -123,6 +124,14 @@ final class CollectorService {
 
     private var runtimeQuarantined: Bool {
         getxattr(runtimeURL.path, "com.apple.quarantine", nil, 0, 0, 0) >= 0
+    }
+
+    /// 精靈「背景收集器」這一步要不要使用者處理（開發版與舊安裝都算可以用）
+    var needsAction: Bool {
+        switch state {
+        case .needsApplicationsFolder, .quarantined, .notRegistered, .requiresApproval: true
+        case .devBuild, .legacy, .enabled: false
+        }
     }
 
     /// 面板「更新」要踢的 label：內建的在執行就踢它，否則踢舊的（開發版、或還沒遷移）
@@ -335,8 +344,37 @@ final class CollectorService {
         return status
     }
 
+    /// 精靈用：以內建的 Python 執行 `usage_collector.setup --json --dry-run`，只偵測、不寫 config.json。
+    /// 結果只有各服務的狀態字串（不含路徑或帳號）；開發版、測試環境或失敗時為 nil
+    func detectProviders() async -> (claude: ProviderLoginState, codex: ProviderLoginState)? {
+        guard hasRuntime, allowedToRegister else { return nil }
+        let args = ["-I", "-B", "-X", "utf8", "-m", "usage_collector.setup", "--json", "--dry-run"]
+        guard let data = await Self.runCapturing(runtimeURL.path, args),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        func state(_ name: String) -> ProviderLoginState {
+            ((object[name] as? [String: Any])?["state"] as? String).flatMap(ProviderLoginState.init(rawValue:)) ?? .unknown
+        }
+        return (state("claude"), state("codex"))
+    }
+
     private nonisolated static func launchctl(_ arguments: [String]) async -> Int32? {
         await run("/bin/launchctl", arguments)
+    }
+
+    /// 在背景執行指令，回傳標準輸出（結束碼不是 0 或無法啟動時為 nil）；標準錯誤丟棄
+    private nonisolated static func runCapturing(_ path: String, _ arguments: [String]) async -> Data? {
+        await Task.detached {
+            let process = Process()
+            let pipe = Pipe()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = arguments
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            do { try process.run() } catch { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return process.terminationStatus == 0 ? data : nil
+        }.value
     }
 
     /// 在背景執行指令，丟棄輸出，回傳結束碼（無法啟動時為 nil）
