@@ -458,15 +458,18 @@ public enum TokenBreakdown {
 // MARK: - 文字
 
 public enum TokenFormat {
-    /// 「980」「12.3K」「4.56M」「1.2B」
+    /// 「9,999」「1.23萬」「12.3萬」「1,470萬」「3.85億」：一萬以上用萬／億、三位有效數字，
+    /// 不到一萬顯示整數。面板、統計視窗與 VoiceOver 都用這個；滑鼠說明用 `full`。
     public static func short(_ value: Int64) -> String {
-        let v = Double(value)
-        switch abs(v) {
-        case ..<1000: return "\(value)"
-        case ..<1_000_000: return trimmed(v / 1000) + "K"
-        case ..<1_000_000_000: return trimmed(v / 1_000_000) + "M"
-        default: return trimmed(v / 1_000_000_000) + "B"
+        let v = abs(Double(value))
+        guard v >= 10_000 else { return full(value) }
+        var scaled = significant(v / 1e4)
+        var unit = "萬"
+        if scaled >= 10_000 {  // 包含四捨五入後進位到一億（9,999.5 萬 → 1 億）
+            scaled = significant(v / 1e8)
+            unit = "億"
         }
+        return (value < 0 ? "-" : "") + trimmed(scaled) + unit
     }
 
     /// 完整數字加千分位：「12,345,678」
@@ -488,8 +491,16 @@ public enum TokenFormat {
         return m == 0 ? "\(h) 小時" : "\(h) 小時 \(m) 分"
     }
 
+    /// 四捨五入到三位有效數字（`v` ≥ 1）
+    private static func significant(_ v: Double) -> Double {
+        let step = pow(10, floor(log10(v)) - 2)
+        return (v / step).rounded() * step
+    }
+
+    /// 三位有效數字的文字：「1.47」「12.3」「147」「1,470」；小數尾端的 0 去掉（「1.5」）
     private static func trimmed(_ v: Double) -> String {
-        let digits = abs(v) < 10 ? 2 : abs(v) < 100 ? 1 : 0
+        guard v < 1000 else { return full(Int64(v.rounded())) }
+        let digits = v < 10 ? 2 : v < 100 ? 1 : 0
         var s = String(format: "%.\(digits)f", v)
         if s.contains(".") {
             while s.hasSuffix("0") { s.removeLast() }

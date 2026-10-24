@@ -162,12 +162,23 @@ import Testing
     }
 
     @Test func formatting() {
+        // 萬／億、三位有效數字；不到一萬顯示整數
+        #expect(TokenFormat.short(0) == "0")
         #expect(TokenFormat.short(980) == "980")
-        #expect(TokenFormat.short(12_345) == "12.3K")
-        #expect(TokenFormat.short(1_500) == "1.5K")
-        #expect(TokenFormat.short(4_560_000) == "4.56M")
-        #expect(TokenFormat.short(123_000_000) == "123M")
-        #expect(TokenFormat.short(1_200_000_000) == "1.2B")
+        #expect(TokenFormat.short(9_999) == "9,999")
+        #expect(TokenFormat.short(10_000) == "1萬")
+        #expect(TokenFormat.short(12_345) == "1.23萬")
+        #expect(TokenFormat.short(15_000) == "1.5萬")
+        #expect(TokenFormat.short(123_456) == "12.3萬")
+        #expect(TokenFormat.short(4_560_000) == "456萬")
+        #expect(TokenFormat.short(14_700_000) == "1,470萬")
+        #expect(TokenFormat.short(14_749_999) == "1,470萬")
+        #expect(TokenFormat.short(99_950_000) == "1億")  // 9,995 萬四捨五入進位到 1 億
+        #expect(TokenFormat.short(99_940_000) == "9,990萬")
+        #expect(TokenFormat.short(385_000_000) == "3.85億")
+        #expect(TokenFormat.short(1_234_567_890) == "12.3億")
+        #expect(TokenFormat.short(123_456_789_012) == "1,230億")
+        #expect(TokenFormat.short(-12_345) == "-1.23萬")
         #expect(TokenFormat.full(12_345_678) == "12,345,678")
         #expect(TokenFormat.duration(30) == "30 秒")
         #expect(TokenFormat.duration(45 * 60) == "45 分")
