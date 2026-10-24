@@ -93,6 +93,7 @@ Mac 收集器 (Python)     ──POST──▶ Cloudflare Worker (KV) ◀──G
 | [相關專案調查](docs/04-related-work.md) | 既有開源方案比較與本專案定位 |
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [解除安裝](docs/uninstall.md) | 各部分怎麼移除、哪些資料會留下 |
+| [Windows 收集器](docs/windows.md) | Windows PC 的 Token 統計：安裝、移除、手動確認 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
