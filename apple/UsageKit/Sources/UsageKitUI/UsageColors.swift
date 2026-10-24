@@ -54,6 +54,18 @@ public enum UsageColors {
     /// 資料過期時的進度條
     public static let stale = Color.gray
 
+    /// 資料過期時的熱力圖（代替服務識別色傳給 `heatmap(level:tint:)`）
+    public static let heatmapStale = Color(UsagePalette.heatmapStale)
+
+    /// 熱力圖第 `level` 階（0＝沒有使用，1～5）。`tint` 為 nil 時是「全部」的藍色，
+    /// 否則是 `tint`（服務識別色或 `heatmapStale`）依階數調整不透明度。
+    public static func heatmap(level: Int, tint: Color?) -> Color {
+        guard level > 0 else { return Color.primary.opacity(UsagePalette.heatmapEmptyOpacity) }
+        let index = min(level, UsagePalette.heatmapLevels) - 1
+        guard let tint else { return Color(UsagePalette.heatmapAll[index]) }
+        return tint.opacity(UsagePalette.heatmapOpacities[index])
+    }
+
     /// 進度條顏色：過期灰色、剩餘 < 20% 紅色、其他為服務識別色。
     public static func bar(_ window: UsageWindow, provider key: String, stale: Bool, now: Date = RenderClock.now) -> Color {
         switch window.barTone(stale: stale, at: now) {

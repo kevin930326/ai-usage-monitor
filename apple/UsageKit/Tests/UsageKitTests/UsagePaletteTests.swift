@@ -46,6 +46,56 @@ import Testing
         #expect(UsagePalette.notice.dark.contrastRatio(with: UsagePalette.blackBackground) >= 4.5)
     }
 
+    // MARK: 熱力圖色階
+
+    /// 深色、淺色外觀各自的卡片底色與「沒有使用」的格子（primary 7%）
+    static let heatmapBackgrounds: [(name: String, card: RGBColor, empty: RGBColor)] = [
+        ("淺色", UsagePalette.lightCard, RGBColor(0x000000).blended(over: UsagePalette.lightCard, opacity: UsagePalette.heatmapEmptyOpacity)),
+        ("深色", UsagePalette.darkCard, RGBColor(0xFFFFFF).blended(over: UsagePalette.darkCard, opacity: UsagePalette.heatmapEmptyOpacity)),
+    ]
+
+    /// 5 階的共同規則：最淺一階和「沒有使用」分得出來（≥ 1.25:1）、相鄰兩階 ≥ 1.25:1、
+    /// 亮度單調（越多越突出）、最多的一階對卡片 ≥ 3:1（WCAG 非文字對比）
+    func checkRamp(_ ramp: [RGBColor], card: RGBColor, empty: RGBColor, _ label: String) {
+        #expect(ramp.count == UsagePalette.heatmapLevels, "\(label)")
+        #expect(ramp[0].contrastRatio(with: empty) >= 1.25, "\(label) 最淺一階對沒有使用")
+        let towardCard = card.relativeLuminance > 0.5 ? -1.0 : 1.0
+        for (a, b) in zip(ramp, ramp.dropFirst()) {
+            #expect(a.contrastRatio(with: b) >= 1.25, "\(label) 相鄰兩階")
+            #expect((b.relativeLuminance - a.relativeLuminance) * towardCard > 0, "\(label) 亮度方向")
+        }
+        #expect(ramp[ramp.count - 1].contrastRatio(with: card) >= 3, "\(label) 最多的一階對卡片")
+    }
+
+    @Test func allScopeHeatmapIsBlueAndReadable() {
+        #expect(UsagePalette.heatmapAll.last?.dark == RGBColor(0x7FB2F0))
+        for color in UsagePalette.heatmapAll {
+            for rgb in [color.light, color.dark] { #expect(rgb.blue > rgb.green && rgb.green > rgb.red, "藍色系") }
+        }
+        for bg in Self.heatmapBackgrounds {
+            let ramp = UsagePalette.heatmapAll.map { bg.name == "淺色" ? $0.light : $0.dark }
+            checkRamp(ramp, card: bg.card, empty: bg.empty, "全部 \(bg.name)")
+        }
+    }
+
+    /// Claude、Codex 用識別色；額度消耗的資料過期時用 `heatmapStale`
+    @Test(arguments: ["claude", "codex", "stale"])
+    func providerHeatmapKeepsBrandColorAndIsReadable(key: String) {
+        #expect(UsagePalette.heatmapOpacities.count == UsagePalette.heatmapLevels)
+        let color = key == "stale" ? UsagePalette.heatmapStale : UsagePalette.provider(key)
+        for bg in Self.heatmapBackgrounds {
+            let tint = bg.name == "淺色" ? color.light : color.dark
+            let ramp = UsagePalette.heatmapOpacities.map { tint.blended(over: bg.card, opacity: $0) }
+            #expect(ramp.last == tint)
+            checkRamp(ramp, card: bg.card, empty: bg.empty, "\(key) \(bg.name)")
+        }
+    }
+
+    @Test func blendedMatchesManualMix() {
+        #expect(RGBColor(0xFFFFFF).blended(over: RGBColor(0x000000), opacity: 0.5) == RGBColor(0x808080))
+        #expect(RGBColor(0x123456).blended(over: RGBColor(0xABCDEF), opacity: 1) == RGBColor(0x123456))
+    }
+
     // MARK: 進度條顏色規則
 
     func window(remaining: Double, resetsIn: TimeInterval? = 3600) -> UsageWindow {

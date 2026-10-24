@@ -4,7 +4,7 @@ import UsageKitUI
 
 // 面板第三階段：這台 Mac 的 Token 統計卡片（FR-43、FR-46，ADR-0008 第 2 節、ADR-0009 第 4、8 節、ADR-0011 第 4 節）。
 // 計算都在 UsageKit（TokenStats.swift），這裡只負責畫。
-// 文字一律 primary／secondary；顏色只用在服務圖示、長條與熱力圖（「全部」的熱力圖用灰階，不代表任何服務）。
+// 文字一律 primary／secondary；顏色只用在服務圖示、長條與熱力圖（「全部」的熱力圖用藍色色階，不代表任何服務）。
 
 private struct TokenStatsKey: EnvironmentKey {
     static let defaultValue = TokenStatsData.empty

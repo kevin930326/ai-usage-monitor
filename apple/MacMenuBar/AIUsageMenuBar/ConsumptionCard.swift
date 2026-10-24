@@ -69,7 +69,7 @@ private struct ConsumptionBlock: View {
 
     var body: some View {
         let tint = stale ? UsageColors.stale : UsageColors.provider(option.provider)
-        let peak = max(consumption.hours.compactMap(\.consumed).max() ?? 0, 1)
+        let heatTint = stale ? UsageColors.heatmapStale : UsageColors.provider(option.provider)
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 4) {
                 VStack(alignment: .trailing, spacing: Self.gap) {
@@ -87,8 +87,7 @@ private struct ConsumptionBlock: View {
                                               width: Self.cell, height: Self.cell)
                             let shape = Path(roundedRect: rect, cornerRadius: 2)
                             if let consumed = hour.consumed {
-                                let color = consumed > 0 ? tint.opacity(0.18 + 0.82 * min(consumed / peak, 1)) : Color.primary.opacity(0.07)
-                                context.fill(shape, with: .color(color))
+                                context.fill(shape, with: .color(UsageColors.heatmap(level: consumption.level(consumed), tint: heatTint)))
                                 if hour.estimated { drawHatch(&context, in: rect, color: Color.primary.opacity(0.35), spacing: 3) }
                             } else if hour.start < now {
                                 context.fill(shape, with: .color(Color.primary.opacity(0.03)))
@@ -126,9 +125,9 @@ private struct ConsumptionBlock: View {
             HStack(spacing: 10) {
                 HStack(spacing: 2) {
                     Text("少")
-                    ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { level in
+                    ForEach(0...UsagePalette.heatmapLevels, id: \.self) { level in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(level == 0 ? Color.primary.opacity(0.07) : tint.opacity(0.18 + 0.82 * level))
+                            .fill(UsageColors.heatmap(level: level, tint: heatTint))
                             .frame(width: 9, height: 9)
                     }
                     Text("多")
