@@ -32,7 +32,7 @@ collector/scripts/uninstall-launchd.sh
 
 ## iPhone 與 Apple Watch
 
-1. 在 iPhone 上長按「AI 用量」→「移除 App」（Keychain 裡的讀取密鑰會一起移除）；手錶 App 隨 iPhone App 移除。
+1. 在 iPhone 上長按「AI 用量」→「移除 App」；手錶 App 隨 iPhone App 移除。**Keychain 裡的讀取密鑰不一定會跟著移除**（iOS 不保證刪除 App 的 Keychain 項目，重裝後可能還在）。要確保這支手機（或遺失的手機）不能再讀用量，就換掉中繼的讀取密鑰（見下方「中繼」的「換掉讀取密鑰」），再讓其他裝置重新配對。
 2. 在 Mac 上停止每 6 天自動重新安裝：
 
    ```bash
@@ -61,6 +61,17 @@ python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop("relay_u
 security delete-generic-password -s AIUsageMonitor-relay-write -a default
 security delete-generic-password -s AIUsageMonitor-relay-read -a default   # setup-relay.sh 或 setup-iphone.sh 存的
 rm -f relay/wrangler.local.toml
+```
+
+換掉讀取密鑰（不刪中繼，只讓舊的讀取密鑰失效；新密鑰只經過標準輸入，不會印出）：
+
+```bash
+cd relay
+NEW=$(openssl rand -base64 32)
+printf '%s' "$NEW" | npx wrangler secret put READ_TOKEN --config wrangler.local.toml
+printf 'add-generic-password -U -s AIUsageMonitor-relay-read -a default -w %s\n' "$NEW" | security -i
+unset NEW
+cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新配對 iPhone
 ```
 
 ## Windows PC
