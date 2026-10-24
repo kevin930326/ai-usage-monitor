@@ -94,6 +94,7 @@ Mac 收集器 (Python)     ──POST──▶ Cloudflare Worker (KV) ◀──G
 | [手動測試清單](docs/manual-test-checklist.md) | 模擬器與實機的操作步驟與預期結果 |
 | [解除安裝](docs/uninstall.md) | 各部分怎麼移除、哪些資料會留下 |
 | [Windows 收集器](docs/windows.md) | Windows PC 的 Token 統計：安裝、移除、手動確認 |
+| [第二層：多台電腦的 Token 合併](docs/tier2-setup.md) | 選用：D1、裝置密鑰、Mac 與 PC 的設定、換新與撤銷 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
@@ -210,9 +211,9 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 
 `X.Y.Z` 同樣換成 Releases 上的版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
 
-沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](docs/windows.md)。
+沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](docs/windows.md)。要在 Mac 的面板看到所有電腦的合計，另外設定第二層：見 [docs/tier2-setup.md](docs/tier2-setup.md)。
 
-> 狀態：一行指令要等第一次發布後才能用，在那之前照 [docs/windows.md](docs/windows.md) 從原始碼安裝。「在 Mac 面板合併多台電腦的 Token」（第二層，[#73](https://github.com/kevin930326/ai-usage-monitor/pull/73)）還沒合併。
+> 狀態：一行指令要等第一次發布後才能用，在那之前照 [docs/windows.md](docs/windows.md) 從原始碼安裝。
 
 ### 解除安裝
 

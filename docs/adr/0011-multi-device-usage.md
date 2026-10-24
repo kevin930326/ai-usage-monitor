@@ -94,6 +94,17 @@ KV 的替代做法（每台裝置一個鍵 `daily:<device_id>`，值為最近 40
 2. Mac 的 Token 統計（ADR-0009）。
 3. Windows 收集器與第二層合併（中繼新增端點與 D1、裝置管理、上傳、Mac 下載合併、裝置切換）。
 
+### 6. 實作補充（v2.0）
+
+- **裝置管理**：`/devices` 以另一把 `ADMIN_TOKEN`（secret）驗證，和 `READ_TOKEN`／`WRITE_TOKEN` 不同（相同或未設定時回 503）。除了 `add`／`list`／`revoke`，另有 `rotate`（換新密鑰、`device_id` 與資料不變），避免同一台電腦重新註冊造成重複計算。撤銷時密鑰雜湊改為不可能相符的值。
+- **密鑰失效的判斷**：連續 **兩次** 401／403 才停止上傳（`REVOKE_AFTER = 2`），一次可能是中繼暫時設定錯誤；本機資料不刪除，重新執行設定腳本（`token_sync reset`）後恢復。
+- **自己在中繼上的 `device_id`**：由中繼依密鑰決定，收集器從上傳的回應取得並記在 `meta.relay_device_id`，所有用過的 id 記在 `meta.relay_device_ids`；下載時略過全部。還不知道自己的 id 時不下載。換成另一台裝置的密鑰時清除 `upload_state`，全部重新上傳到新的 id。
+- **上傳欄位**：不含任務次數（`task_count` 只用在本機的 CSV）；下載的列 `task_count` 為 0。
+- **下載**：從 399 天前（本機日期）起，整批取代本機的其他裝置列與 `devices` 表；只有 Mac 存了讀取密鑰時才下載（Windows 只上傳）。
+- **App 的範圍**：每小時資料與個人紀錄（`records`、`record_days`）只有這台 Mac 有。「所有電腦」與單一電腦的個人紀錄與累計由面板讀到的每日資料（最近一年）計算；「一天中的時段」只有這台 Mac。
+- **關閉上傳**（第 3 節）以 `set-tier2.sh --disable`／`set-tier2.ps1 -Disable` 實作，不是 App 的設定（App 不寫 `config.json`、不持有密鑰）；Mac 關閉時一併刪除本機的其他電腦資料。
+- **D1 綁定**在 `wrangler.toml` 預設註解（填了不存在的 `database_id` 會讓 `wrangler deploy` 失敗）；沒有綁定時第二層的端點回 503，`/usage` 不受影響。
+
 ## 參考專案
 
 | 專案 | 參考了什麼 | 不採用的部分 |
