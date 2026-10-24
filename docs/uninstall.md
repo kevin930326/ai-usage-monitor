@@ -60,7 +60,7 @@ python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop("relay_u
   "$HOME/Library/Application Support/AIUsageMonitor/config.json"
 security delete-generic-password -s AIUsageMonitor-relay-write -a default
 security delete-generic-password -s AIUsageMonitor-relay-read -a default   # setup-relay.sh 或 setup-iphone.sh 存的
-rm -f relay/wrangler.local.toml
+rm -f wrangler.local.toml                                 # 還在 relay/ 裡
 ```
 
 換掉讀取密鑰（不刪中繼，只讓舊的讀取密鑰失效；新密鑰只經過標準輸入，不會印出）：
