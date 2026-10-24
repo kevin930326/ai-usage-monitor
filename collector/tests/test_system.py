@@ -141,6 +141,41 @@ class TokensOnlyTest(unittest.TestCase):
             self.assertEqual(total, 7)
 
 
+    def test_second_run_on_windows_keeps_counting(self):
+        """Windows 的 stat 一律回報 0666（C-01）：第二次執行不能因為權限檢查而略過統計。"""
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            claude_dir = home / "claude" / "projects" / "p"
+            claude_dir.mkdir(parents=True)
+            log = claude_dir / "11111111-1111-4111-8111-111111111111.jsonl"
+            db = home / "history.sqlite3"
+            dirs = {"claude": home / "claude", "codex": home / "codex"}
+
+            def line(n):
+                return json.dumps({"type": "assistant", "timestamp": "2026-10-20T01:00:00Z", "requestId": f"r{n}",
+                                   "message": {"id": f"m{n}", "model": "claude-opus-5-5",
+                                               "usage": {"input_tokens": 3, "output_tokens": 4}}}) + "\n"
+
+            original = main_module.token_stats.run
+            with mock.patch.object(main_module.history.system, "IS_WINDOWS", True), \
+                    mock.patch.object(main_module.token_stats, "run", lambda path=None: original(db, dirs)), \
+                    mock.patch.object(main_module.token_stats.system, "lower_priority"):
+                log.write_text(line(1), encoding="utf-8")
+                self.assertEqual(main_module.main(["--tokens-only", "--quiet"]), 0)
+                os.chmod(db, 0o666)
+                with log.open("a", encoding="utf-8") as f:
+                    f.write(line(2))
+                self.assertEqual(main_module.main(["--tokens-only", "--quiet"]), 0)
+            with sqlite3.connect(db) as conn:
+                total = conn.execute("SELECT SUM(input_tokens + output_tokens) FROM daily_tokens").fetchone()[0]
+            conn.close()
+            self.assertEqual(total, 14)
+
+    def test_failure_returns_non_zero(self):
+        with mock.patch.object(main_module.token_stats, "run_safely", return_value=False):
+            self.assertEqual(main_module.main(["--tokens-only", "--quiet"]), 1)
+
+
 class LogFileTest(unittest.TestCase):
     def test_log_file_is_utf8(self):
         with tempfile.TemporaryDirectory() as d:

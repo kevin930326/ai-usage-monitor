@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from . import system
 from .log import log
 from .models import parse_iso
 from .paths import APP_SUPPORT_DIR
@@ -214,7 +215,11 @@ def _private_files() -> Iterator[None]:
 
 
 def _tighten_permissions(path: Path) -> None:
-    """既有的資料庫與 -wal／-shm 改成 0600；改不了就丟出 HistoryError，這次不寫入歷史。"""
+    """既有的資料庫與 -wal／-shm 改成 0600；改不了就丟出 HistoryError，這次不寫入歷史。
+    Windows 沒有 POSIX 權限（chmod 只能切換唯讀，stat 一律回報 0666）：資料夾在 %LOCALAPPDATA%，
+    預設的 ACL 只有使用者本人、SYSTEM 與 Administrators 能存取，不另外檢查。"""
+    if system.IS_WINDOWS:
+        return
     for suffix in ("", "-wal", "-shm"):
         p = Path(f"{path}{suffix}")
         try:
