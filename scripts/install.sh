@@ -72,20 +72,18 @@ quit_app() {
   ! pgrep -x "$NAME" >/dev/null || fail "AI 用量沒有結束；結束它之後再執行一次"
 }
 
-# 解除內建收集器的註冊（App 處理 --unregister-collector 後立即結束）；最多等 20 秒
+# 解除內建收集器的註冊（App 處理 --unregister-collector 後立即結束）；最多等 20 秒。失敗或逾時回傳非 0
 unregister_collector() {
   [ -x "$DEST/Contents/MacOS/$NAME" ] || return 0
-  if perl -e 'alarm 20; exec @ARGV' "$DEST/Contents/MacOS/$NAME" --unregister-collector >/dev/null 2>&1; then
-    say "已停用內建收集器"
-  else
-    say "無法停用內建收集器：到「系統設定 › 一般 › 登入項目與延伸功能」移除「AI 用量」"
-  fi
+  perl -e 'alarm 20; exec @ARGV' "$DEST/Contents/MacOS/$NAME" --unregister-collector >/dev/null 2>&1 || return 1
+  say "已停用內建收集器"
 }
 
 if [ "$MODE" = uninstall ]; then
   if [ -d "$DEST" ]; then
     quit_app
-    unregister_collector
+    # 背景收集器沒確定停下來就不移走 App 與資料：它還會每 5 分鐘寫入（App 留著，之後可以重跑）
+    unregister_collector || fail "無法停用內建收集器，App 與資料都沒有移走：到「系統設定 › 一般 › 登入項目與延伸功能」關掉「AI 用量」後再執行一次" 5
     trash "$DEST"
     say "App 已移到垃圾桶：$DEST"
   else

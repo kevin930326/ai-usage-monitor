@@ -40,7 +40,7 @@ class InstallShTests(unittest.TestCase):
             d.mkdir()
         self.marker = self.tmp / "unregistered"
 
-    def make_zip(self, version="1.2.3", bundle_id=BUNDLE_ID, sign=True) -> tuple[Path, str]:
+    def make_zip(self, version="1.2.3", bundle_id=BUNDLE_ID, sign=True, unregister_rc=0) -> tuple[Path, str]:
         build = Path(tempfile.mkdtemp(dir=self.tmp))
         app = build / "AIUsageMenuBar.app" / "Contents"
         (app / "MacOS").mkdir(parents=True)
@@ -50,12 +50,12 @@ class InstallShTests(unittest.TestCase):
         exe.write_text(textwrap.dedent(f"""\
             #!/bin/sh
             [ "$1" = --unregister-collector ] && echo {version} > "{self.marker}"
-            exit 0
+            exit {unregister_rc}
         """))
         exe.chmod(0o755)
         if sign:
             subprocess.run(["codesign", "--force", "--deep", "-s", "-", str(app.parent)], check=True, capture_output=True)
-        zip_path = self.tmp / f"app-{version}-{bundle_id}-{sign}.zip"
+        zip_path = self.tmp / f"app-{version}-{bundle_id}-{sign}-{unregister_rc}.zip"
         subprocess.run(["ditto", "-c", "-k", "--keepParent", str(app.parent), str(zip_path)], check=True)
         return zip_path, hashlib.sha256(zip_path.read_bytes()).hexdigest()
 
@@ -131,6 +131,17 @@ class InstallShTests(unittest.TestCase):
         self.assertTrue((self.data / "usage.json").exists())
         # 再跑一次不出錯
         self.assertEqual(self.run_script("--uninstall").returncode, 0)
+
+    def test_failed_unregister_keeps_app_and_data(self):
+        zip_path, sha = self.make_zip("2.0.0", unregister_rc=1)
+        self.run_script("--version", "2.0.0", "--sha256", sha, zip_path=zip_path)
+        (self.data / "usage.json").write_text("{}")
+        result = self.run_script("--uninstall", "--purge", "--yes")
+        self.assertEqual(result.returncode, 5)
+        self.assertIn("無法停用內建收集器", result.stderr)
+        self.assertTrue((self.apps / "AIUsageMenuBar.app").exists())
+        self.assertTrue((self.data / "usage.json").exists())
+        self.assertFalse(self.trash.exists())
 
     def test_purge_moves_data_and_logs_to_trash(self):
         logs = self.home / "Library" / "Logs" / "AIUsageMonitor"
