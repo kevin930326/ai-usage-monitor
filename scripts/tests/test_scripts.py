@@ -504,6 +504,7 @@ class SnapshotsScriptTests(unittest.TestCase):
         self.repo = Path(tempfile.mkdtemp(dir=self.tmp))
         (self.repo / "scripts").mkdir()
         shutil.copy(ROOT / "scripts" / "snapshots.sh", self.repo / "scripts")
+        shutil.copy(ROOT / "scripts" / "ios-render-launch.sh", self.repo / "scripts")  # snapshots.sh 以 source 載入
         shutil.copy(ROOT / "scripts" / "compare-snapshots.swift", self.repo / "scripts")
         (self.repo / "build" / "snapshots").mkdir(parents=True)
         shutil.copy(self.tool, self.repo / "build" / "snapshots" / "compare-snapshots")  # 比原始碼新：不重新編譯

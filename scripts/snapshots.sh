@@ -15,6 +15,8 @@
 # - 不符時差異圖在 build/snapshots/diff/<平台>/（不同的像素標紅）。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# shellcheck source=scripts/ios-render-launch.sh
+source "$ROOT/scripts/ios-render-launch.sh"
 BASE=$ROOT/apple/Snapshots
 OUT=${SNAPSHOT_OUT:-$ROOT/build/snapshots}
 MODE=compare
@@ -107,21 +109,9 @@ render_ios() {
   docs=$(xcrun simctl get_app_container "$udid" "$IOS_BUNDLE" data)/Documents
   mkdir -p "$docs"
   rm -f "$docs"/*.png "$docs/island-sizes.json"
-  # 剛開機後的第一次啟動，App 程序在、畫面卻常常沒出現（截圖由畫面的 .task 觸發，所以一張都不會輸出），
-  # bootstatus -b 等不到這一步。第一次啟動 45 秒內一張 PNG 都沒有就結束 App 再啟動一次（開始畫了就一直等，
-  # 慢的機器不會被誤判）；平常 2～15 秒完成
-  local attempt second
-  for attempt in 1 2; do
-    SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
-      xcrun simctl launch --terminate-running-process "$udid" "$IOS_BUNDLE" "${LANG_ARGS[@]}" >/dev/null
-    for second in $(seq 300); do
-      [ -f "$docs/island-sizes.json" ] && break
-      if [ "$attempt" = 1 ] && [ "$second" -ge 45 ] && ! compgen -G "$docs/*.png" >/dev/null; then break; fi
-      sleep 1
-    done
-    [ -f "$docs/island-sizes.json" ] && break
-    [ "$attempt" = 1 ] && echo "iOS 截圖：第一次啟動沒有完成（剛開機時畫面常常沒出現），重新啟動一次"
-  done
+  # 剛開機後的第一次啟動常常不出畫面，launch_ios_render 會重新啟動一次（scripts/ios-render-launch.sh）
+  SIMCTL_CHILD_AUM_RENDER=1 SIMCTL_CHILD_AUM_DEMO=normal SIMCTL_CHILD_AUM_RENDER_NOW=$RENDER_NOW SIMCTL_CHILD_TZ=$TZ \
+    launch_ios_render "$udid" "$IOS_BUNDLE" "$docs" "${LANG_ARGS[@]}" || true
   xcrun simctl terminate "$udid" "$IOS_BUNDLE" 2>/dev/null || true
   [ "$booted_here" = 1 ] && xcrun simctl shutdown "$udid"
   [ -f "$docs/island-sizes.json" ] || { echo "iOS 截圖逾時"; exit 2; }
