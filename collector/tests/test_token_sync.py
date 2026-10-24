@@ -5,6 +5,7 @@ import json
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 from contextlib import redirect_stderr
@@ -35,6 +36,7 @@ class FakeRelay:
         self.tokens: list[str] = []
         self.fail: list[Exception] = []
         self.apply_then_fail = False
+        self.now: int | None = None
 
     def add(self, key: str, name: str) -> str:
         device_id = str(uuid.uuid4())
@@ -56,6 +58,10 @@ class FakeRelay:
             device_id = self.keys.get(token)
             if device_id is None:
                 raise HTTPStatusError("驗證失敗 (HTTP 401)，請重新登入", 401)
+            # 中繼的 dayInRange 與數值上限：一列不合整批 422
+            latest = time.strftime("%Y-%m-%d", time.gmtime(self.now + DAY)) if self.now else "9999-12-31"
+            if any(r["day"] > latest or any(r[f] > token_sync.MAX_VALUE for f in FIELDS) for r in body["rows"]):
+                raise HTTPStatusError("HTTP 422：day 必須是 400 天內到明天的日期", 422)
             for r in body["rows"]:
                 self.rows[(device_id, r["day"], r["provider"], r["model"])] = {f: r[f] for f in FIELDS}
             if self.apply_then_fail:  # 中繼寫入了，但回應在路上斷掉
@@ -104,6 +110,7 @@ class Machine:
         conn.close()
 
     def run(self, now: int):
+        self.relay.now = now
         with mock.patch.object(token_sync, "request_json", self.relay), \
                 mock.patch.object(token_sync.credentials, "read", side_effect=lambda n: self.secrets.get(n)), \
                 redirect_stderr(self.log):
@@ -228,6 +235,24 @@ class UploadTest(TokenSyncTestCase):
         mac.set_tokens(0, 1)
         mac.run(NOW)
         self.assertEqual([r["input_tokens"] for r in self.relay.uploads()[0]], [1])
+
+    def test_rows_the_relay_would_reject_do_not_block_the_others(self):
+        # 本機時鐘曾經設錯：紀錄裡有未來的日期。一列被拒整批都會被拒，今天的列就永遠傳不上去
+        mac = self.machine()
+        mac.set_tokens(0, 100)
+        mac.set_tokens(30, 5)
+        mac.set_tokens(-1, token_sync.MAX_VALUE + 1)
+        mac.run(NOW)
+        self.assertEqual(mac.meta("upload_status"), "ok")
+        self.assertEqual(self.relay.total(mac.relay_id), 100)
+        self.assertEqual(mac.meta("relay_device_id"), mac.relay_id)
+
+    def test_rejected_upload_logs_the_relay_reason(self):
+        mac = self.machine()
+        mac.set_tokens(0, 100)
+        self.relay.fail = [HTTPStatusError("HTTP 422：provider 只能是 claude 或 codex", 422)]
+        mac.run(NOW)
+        self.assertIn("HTTP 422：provider 只能是 claude 或 codex", mac.log.getvalue())
 
 
 class FailureTest(TokenSyncTestCase):
