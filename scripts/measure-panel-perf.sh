@@ -5,7 +5,7 @@
 #   AUM_PERF_SCENARIO=fresh scripts/measure-panel-perf.sh …   # 歷史只有 1 筆：量測骨架掃光
 #
 # 以 Debug 版的 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 啟動（面板放在一般視窗，依固定時間表觸發動畫、
-# 64 秒時關閉面板，156 秒時再開關一次，184 秒打開完整統計視窗、194 秒關閉，214 秒再開、224 秒再關，約 244 秒後結束），
+# 64 秒時關閉面板，156 秒時再開關一次，184 秒打開完整統計視窗、194 秒關閉，214 秒再開、224 秒再關，244 秒打開設定精靈、254 秒關閉，274 秒再開、284 秒再關，約 309 秒後結束），
 # 每秒用 ps 取樣，依 App 印出的 perf-mark 分段計算（scripts/perf-summary.py）。
 # Debug 版比 Release 慢，用 Debug 量測是較保守的結果（觸發用的環境變數只在 Debug 版）。
 # 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3），不讀真實資料；設定也用獨立的 demo 設定。

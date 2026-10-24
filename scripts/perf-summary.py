@@ -37,6 +37,14 @@ if so and sc:
 sc2 = marks.get("stats-close-2")
 if sc2:
     rows.append(("完整統計視窗第二次關閉後 5～18 秒", window(sc2 + 5, sc2 + 18), "avg"))
+wo, wc = marks.get("wizard-open"), marks.get("wizard-close")
+if wo and wc:
+    rows.append(("播放中：打開設定精靈（0～3 秒）", window(wo, wo + 3), "peak"))
+    rows.append(("設定精靈開啟、靜止（3～9 秒）", window(wo + 3, wo + 9), "avg"))
+    rows.append(("設定精靈關閉後 5～18 秒", window(wc + 5, wc + 18), "avg"))
+wc2 = marks.get("wizard-close-2")
+if wc2:
+    rows.append(("設定精靈第二次關閉後 5～18 秒", window(wc2 + 5, wc2 + 18), "avg"))
 print(f"情境：{sys.argv[3]}（scripts/make-demo-history.py）")
 print()
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
@@ -68,5 +76,14 @@ stats_after_2 = window(sc2 + 5, sc2 + 18) if sc2 else []
 stats_limit_2 = peak(stats_after, 2) + 5 * 1024 if stats_after else float("nan")
 ok_stats_repeat = bool(stats_after) and bool(stats_after_2) and peak(stats_after_2, 2) <= stats_limit_2
 print(f"- 完整統計視窗第二次開關後 RSS 不超過第一次關閉後 +5 MB（{stats_limit_2 / 1024:.1f} MB）：{'通過' if ok_stats_repeat else '未通過'}")
+# 設定精靈（FR-54）：靜止 ≤ 2%；第二次開關後不超過第一次關閉後 +5 MB（第一次打開會載入通知、背景項目等框架）
+wizard_static = window(wo + 3, wo + 9) if wo else []
+wizard_after = window(wc + 5, wc + 18) if wc else []
+wizard_after_2 = window(wc2 + 5, wc2 + 18) if wc2 else []
+ok_wizard_static = bool(wizard_static) and avg(wizard_static, 1) <= 2
+wizard_limit = peak(wizard_after, 2) + 5 * 1024 if wizard_after else float("nan")
+ok_wizard_rss = bool(wizard_after) and bool(wizard_after_2) and peak(wizard_after_2, 2) <= wizard_limit
+print(f"- 設定精靈靜止 ≤ 2%：{'通過' if ok_wizard_static else '未通過'}")
+print(f"- 設定精靈第二次開關後 RSS 不超過第一次關閉後 +5 MB（{wizard_limit / 1024:.1f} MB）：{'通過' if ok_wizard_rss else '未通過'}")
 # 任何一項未通過（含沒有取樣，平均為 NaN）就以非零結束
-sys.exit(0 if ok_static and ok_cpu and ok_rss and ok_stats_static and ok_stats_rss and ok_stats_repeat else 1)
+sys.exit(0 if ok_static and ok_cpu and ok_rss and ok_stats_static and ok_stats_rss and ok_stats_repeat and ok_wizard_static and ok_wizard_rss else 1)

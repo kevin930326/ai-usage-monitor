@@ -19,6 +19,7 @@ import UsageKitUI
 enum DebugTools {
     private static var panelWindow: NSWindow?
     private static var statsWindow: NSWindow?
+    private static var wizardWindow: NSWindow?
 
     static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
@@ -70,6 +71,19 @@ enum DebugTools {
         statsWindow = window
     }
 
+    /// 量測用：以一般視窗打開設定精靈（與 Window scene 相同的視圖）
+    private static func showWizardWindow() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 640), styleMask: [.titled, .closable],
+                              backing: .buffered, defer: false)
+        window.title = "設定精靈"
+        window.contentView = NSHostingView(rootView: SetupWizardView(model: .shared)
+            .followsAppearanceSetting().environment(CollectorService.shared).environment(PanelSettings.shared))
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        wizardWindow = window
+    }
+
     // MARK: - 效能量測的時間表（ADR-0010 第 3 節）
 
     /// 每個步驟在 stderr 印出 `perf-mark <秒> <名稱>`，量測腳本依此把 ps 的取樣分段。
@@ -106,7 +120,13 @@ enum DebugTools {
             // 再開關一次：第一次打開的一次性成本（系統框架、字型、斷詞字典）之外，確認沒有累積
             (close + 150, "stats-open-2", { showStatsWindow() }),
             (close + 160, "stats-close-2", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
-            (close + 180, "exit", { exit(0) }),
+            // 設定精靈（FR-54）：統計視窗第二次關閉後的取樣（+5～18 秒）結束後才打開，10 秒後關閉
+            (close + 180, "wizard-open", { showWizardWindow() }),
+            (close + 190, "wizard-close", { wizardWindow?.close(); wizardWindow?.contentView = nil; wizardWindow = nil }),
+            // 再開關一次：第一次打開會載入通知、背景項目等框架，比較兩次關閉後確認沒有累積
+            (close + 210, "wizard-open-2", { showWizardWindow() }),
+            (close + 220, "wizard-close-2", { wizardWindow?.close(); wizardWindow?.contentView = nil; wizardWindow = nil }),
+            (close + 245, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {

@@ -13,13 +13,14 @@ MARKS = {
     "panel-open": 10, "refresh": 22, "glow": 27, "collapse": 32, "expand": 35, "trend-next": 38, "departing": 41,
     "appearance-dark": 44, "appearance-light": 47, "stats-scope": 51, "stats-range": 54, "status-pulse": 57,
     "highlight": 60, "panel-close": 64, "panel-close-2": 166, "stats-open": 184, "stats-close": 194,
-    "stats-open-2": 214, "stats-close-2": 224,
+    "stats-open-2": 214, "stats-close-2": 224, "wizard-open": 244, "wizard-close": 254,
+    "wizard-open-2": 274, "wizard-close-2": 284,
 }
 BASE = 140 * 1024  # KB
 
 
 class PerfSummaryTests(unittest.TestCase):
-    def run_summary(self, rss=lambda t: BASE, marks=MARKS, until=245):
+    def run_summary(self, rss=lambda t: BASE, marks=MARKS, until=305):
         tmp = Path(tempfile.mkdtemp(prefix="aum-perf-summary-"))
         self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(tmp)]))
         samples = "".join(f"{t} 0.0 {rss(t)}\n" for t in range(until))
@@ -39,6 +40,20 @@ class PerfSummaryTests(unittest.TestCase):
         r = self.run_summary(lambda t: BASE + (100 * 1024 if t >= 214 else 0))
         self.assertEqual(r.returncode, 1)
         self.assertIn("完整統計視窗第二次開關後 RSS 不超過第一次關閉後 +5 MB（145.0 MB）：未通過", r.stdout)
+
+    def test_wizard_first_open_cost_passes_but_growth_on_reopen_fails(self):
+        # 第一次打開多 12 MB（載入框架）不算累積
+        r = self.run_summary(lambda t: BASE + (12 * 1024 if t >= 244 else 0))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        r = self.run_summary(lambda t: BASE + (50 * 1024 if t >= 274 else 0))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("設定精靈第二次開關後 RSS 不超過第一次關閉後 +5 MB（145.0 MB）：未通過", r.stdout)
+
+    def test_missing_wizard_marks_fail(self):
+        marks = {k: v for k, v in MARKS.items() if not k.startswith("wizard")}
+        r = self.run_summary(marks=marks)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("設定精靈靜止 ≤ 2%：未通過", r.stdout)
 
     def test_missing_second_close_mark_fails(self):
         marks = {k: v for k, v in MARKS.items() if k != "stats-close-2"}
