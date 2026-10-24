@@ -121,13 +121,15 @@ jobs:
           Set-Content (Join-Path $bin 'codex.ps1') 'exit 1'
           Set-Content (Join-Path $bin 'codex.cmd') '@exit /b 1'
           $env:PATH = "$bin;$env:PATH"
-          $env:CODEX_HOME = Join-Path $env:RUNNER_TEMP 'custom-codex'
+          # a space plus a trailing backslash: PowerShell 5.1 would pass it as an escaped quote
+          $codexHome = Join-Path $env:RUNNER_TEMP 'custom codex'
+          $env:CODEX_HOME = $codexHome + '\'
           .\windows\install-task.ps1 -WithQuota -Python (Get-Command python).Source
           $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           $config | Format-List
           if ($config.codex_path -notlike '*\codex.cmd') { throw "codex_path should be codex.cmd: $($config.codex_path)" }
           if (@($config.enabled_providers) -notcontains 'codex') { throw 'enabled_providers lacks codex' }
-          if ($config.codex_home -ne $env:CODEX_HOME) { throw 'codex_home missing from config.json' }
+          if ($config.codex_home -ne $codexHome) { throw "codex_home should be $codexHome : $($config.codex_home)" }
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
           if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota should run with --write-local' }
           .\windows\uninstall-task.ps1

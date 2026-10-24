@@ -60,8 +60,12 @@ function Update-Config([string[]]$ConfigArgs) {
 # 工作排程器不會繼承這個 PowerShell 視窗裡設定的環境變數：安裝時有設定 CLAUDE_CONFIG_DIR／CODEX_HOME 就寫進
 # config.json 的 claude_config_dir／codex_home（ADR-0009 第 3 節，同 install-launchd.sh）。沒有設定時不動
 # config.json 裡原本的值（使用者可能手動設定過）；使用者層級的環境變數排程本來就讀得到，且優先於 config.json
+# 結尾的反斜線去掉：Windows PowerShell 5.1 對含空白的參數只在前後加引號，`C:\a b\` 會變成 `"C:\a b\"`，
+# Python 把 `\"` 讀成跳脫的引號，寫進去的路徑就壞了（磁碟根目錄 `C:\` 保留）
 foreach ($pair in @(@('claude_config_dir', $env:CLAUDE_CONFIG_DIR), @('codex_home', $env:CODEX_HOME))) {
-    if ($pair[1]) { Update-Config @($Config, $pair[0], $pair[1]) }
+    $value = $pair[1]
+    if ($value -and $value.Length -gt 3) { $value = $value.TrimEnd('\') }
+    if ($value) { Update-Config @($Config, $pair[0], $value) }
 }
 
 if ($WithQuota) {
