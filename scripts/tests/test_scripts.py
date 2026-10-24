@@ -482,6 +482,56 @@ class RelayDeviceTests(unittest.TestCase):
         self.assertNotIn("寫入密鑰", result.stdout)
 
 
+class SetTier2Tests(unittest.TestCase):
+    """collector/scripts/set-tier2.sh：密鑰只經過假的 security 的提示（不在參數裡），config 與上傳狀態在暫存資料夾。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="set tier2 "))
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.bin = self.tmp / "bin"
+        self.bin.mkdir()
+        self.log = self.tmp / "security.log"
+        write_exec(self.bin / "security", f"""
+            #!/bin/bash
+            echo "$*" >> "{self.log}"
+        """)
+        self.home = self.tmp / "home"
+        self.home.mkdir()
+        self.config = self.home / "config.json"
+
+    def run_script(self, *args):
+        env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "AI_USAGE_MONITOR_HOME": str(self.home)}
+        return subprocess.run(["/bin/bash", str(ROOT / "collector" / "scripts" / "set-tier2.sh"), *args], env=env,
+                              capture_output=True, text=True, stdin=subprocess.DEVNULL)
+
+    def test_stores_both_keys_and_enables_upload(self):
+        import json
+        self.config.write_text('{"relay_url": "https://relay.example.dev", "claude_path": "/bin/claude"}')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(calls, ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
+                                 "add-generic-password -U -s AIUsageMonitor-relay-read -a default -w"])
+        config = json.loads(self.config.read_text())
+        self.assertIs(config["token_sync"], True)
+        self.assertEqual(config["claude_path"], "/bin/claude")
+        self.assertTrue((self.home / "history.sqlite3").exists())  # reset 在暫存資料夾
+
+    def test_no_read_key_and_disable(self):
+        import json
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        self.assertEqual(self.run_script("--no-read-key").returncode, 0)
+        self.assertEqual(len(self.log.read_text().splitlines()), 1)
+        self.assertEqual(self.run_script("--disable").returncode, 0)
+        self.assertIs(json.loads(self.config.read_text())["token_sync"], False)
+
+    def test_requires_an_https_relay_url(self):
+        self.config.write_text('{"relay_url": "http://relay.example.dev"}')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse(self.log.exists())
+
+
 def write_png(path: Path, width: int, height: int, changed: int = 0, block: tuple[int, int, int] | None = None) -> None:
     """純色 RGBA PNG；`changed` 個像素（從左上角起）改成紅色；`block`＝(x, y, 邊長) 的正方形改成紅色。"""
     import struct

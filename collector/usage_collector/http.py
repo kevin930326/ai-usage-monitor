@@ -35,6 +35,14 @@ class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_SameOriginRedirectHandler)
 
 
+class HTTPStatusError(ProviderError):
+    """伺服器回了錯誤狀態碼；`status` 讓呼叫端分辨 401／403（密鑰失效）與其他失敗（第二層的上傳）。"""
+
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 def _reason(e: urllib.error.HTTPError) -> str:
     """4xx 回應若帶我們自己的 `{"error": "…"}`（中繼 API 的驗證訊息），把原因附在錯誤後面，
     否則日誌只有「HTTP 422」看不出哪個欄位被拒。只取短的純文字，不帶其他內容。"""
@@ -64,8 +72,8 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
         if 300 <= e.code < 400:
             raise ProviderError(f"伺服器要求重新導向（HTTP {e.code}），已停止") from None
         if e.code in (401, 403):
-            raise ProviderError(f"驗證失敗 (HTTP {e.code})，請重新登入") from None
-        raise ProviderError(f"HTTP {e.code}{_reason(e)}") from None
+            raise HTTPStatusError(f"驗證失敗 (HTTP {e.code})，請重新登入", e.code) from None
+        raise HTTPStatusError(f"HTTP {e.code}{_reason(e)}", e.code) from None
     except urllib.error.URLError:
         raise ProviderError("網路錯誤") from None
     except ValueError:  # JSONDecodeError，以及不是 UTF-8 的回應（UnicodeDecodeError）

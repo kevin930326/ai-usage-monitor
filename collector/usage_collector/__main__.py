@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import history, local_store, paths, relay, service_status, token_stats
+from . import history, local_store, paths, relay, service_status, token_stats, token_sync
 from .log import log
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -106,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
         # 這是唯一的工作，失敗時回傳非 0，工作排程器的「上次執行結果」才看得出來
         ok = token_stats.run_safely()
         history.tidy_safely()  # 保留期間的清理（收集額度時由 history.record 執行）
+        # 第二層（只有安裝了才執行；失敗不影響結束碼）
+        token_sync.run_safely()
         return 0 if ok else 1
 
     if args.agent == "app":
@@ -144,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         history.record_safely(snapshot)
         # Token 統計（ADR-0009）：最後執行、降低優先順序；首次掃描每次最多 64 MB 或 15 秒
         token_stats.run_safely()
+        # 第二層（ADR-0011 第 2 節）：只有安裝第二層的電腦才上傳每日加總、下載其他電腦的；失敗只記日誌
+        token_sync.run_safely()
         # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘
         service_status.update_safely(list(snapshot["providers"]))
 
