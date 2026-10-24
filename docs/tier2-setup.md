@@ -102,8 +102,9 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`） |
 
 - 被撤銷或換掉的電腦收到兩次 401 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
+- **換新電腦**（移轉輔助程式或 Time Machine 會把 Keychain 的寫入密鑰與 `history.sqlite3` 一起搬過去）：新電腦沿用同一個 `device_id`，不需要重新設定；舊電腦若還會繼續使用，在舊電腦執行 `set-tier2.sh --disable`（停止上傳）。同一把密鑰在兩台電腦上傳時，兩台會互相覆蓋同一個 `device_id` 的數字，其他電腦看到的合計會來回跳。
 - **同一台電腦不要用 `add` 重新註冊**（請用 `rotate`）：新的 `device_id` 會把所有資料重新上傳一次，舊 `device_id` 的資料若沒有以 `revoke --delete-data` 刪除，其他 Mac 會把它們算兩次。
 
 ## 中繼的用量（免費方案）
 
-每台電腦每小時最多上傳一批（通常只有今天與昨天的幾列），Mac 每小時下載一次。三台電腦每天約數百列寫入，遠低於 D1 免費方案的上限（撰寫時：每天 10 萬列寫入、500 萬列讀取；以 Cloudflare 目前的公告為準）。
+平常每台電腦每小時上傳一批（通常只有今天與昨天的幾列；第一次上傳一年的資料時每 5 分鐘一輪、每輪最多 5 批），Mac 每小時下載一次。三台電腦每天約數百列寫入，遠低於 D1 免費方案的上限（撰寫時：每天 10 萬列寫入、500 萬列讀取；以 Cloudflare 目前的公告為準）。
