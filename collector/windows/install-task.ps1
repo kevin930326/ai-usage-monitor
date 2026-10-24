@@ -50,18 +50,25 @@ if (-not (Test-Path $Pythonw)) { throw "找不到 $Pythonw（Microsoft Store 版
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 $UpdateConfig = Join-Path $Collector 'scripts\update-config.py'
 
+# 合併寫入 config.json 的一個欄位；失敗時中止安裝（不留下缺少設定的排程）。
+# 字串陣列用 --list 逐項傳入：Windows PowerShell 5.1 會吃掉外部程式參數裡的雙引號，JSON 傳不過去
+function Update-Config([string[]]$ConfigArgs) {
+    & $Python -X utf8 $UpdateConfig @ConfigArgs
+    if ($LASTEXITCODE -ne 0) { throw "無法寫入 $Config，沒有安裝排程。" }
+}
+
 if ($WithQuota) {
     # 安裝時找到的 CLI 寫進 config.json（排程執行時的 PATH 可能不同）；找不到的服務不啟用
     $enabled = @()
     foreach ($name in @('claude', 'codex')) {
         $cmd = Get-Command $name -ErrorAction SilentlyContinue
         if ($cmd) {
-            & $Python -X utf8 $UpdateConfig $Config "$($name)_path" $cmd.Source
+            Update-Config @($Config, "$($name)_path", $cmd.Source)
             $enabled += $name
         }
     }
     if ($enabled.Count -eq 0) { Write-Warning '找不到 claude 或 codex，額度不會收集（Token 統計照常）。' }
-    & $Python -X utf8 $UpdateConfig --json $Config enabled_providers (ConvertTo-Json -Compress @($enabled))
+    Update-Config (@('--list', $Config, 'enabled_providers') + $enabled)
     $Mode = '--write-local'
 } else {
     $Mode = '--tokens-only'
