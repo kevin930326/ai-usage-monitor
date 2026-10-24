@@ -52,11 +52,11 @@ def resolve_executable(config_key: str, name: str, fallbacks: Iterable[str] | No
     except (FileNotFoundError, json.JSONDecodeError, AttributeError):
         path = None
     if not isinstance(path, str):
-        path = None  # config.json 被改成別的型別時當成沒設定，不讓 os.access 丟 TypeError
+        path = None  # config.json 被改成別的型別時當成沒設定，不讓 is_launchable 丟 TypeError
     if fallbacks is None:
         fallbacks = system.executable_fallbacks(name)
     for candidate in (path, shutil.which(name), *fallbacks):
-        if candidate and os.access(candidate, os.X_OK):
+        if candidate and system.is_launchable(candidate):
             # 絕對路徑：provider 在暫存資料夾執行，相對路徑會指到別的地方
             return os.path.abspath(candidate)
     return None

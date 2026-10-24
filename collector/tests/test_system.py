@@ -54,6 +54,23 @@ class ExecutableFallbackTest(unittest.TestCase):
                 self.assertIsNone(paths.resolve_executable("claude_path", "claude", (), config_path=config))
 
 
+    def test_windows_skips_powershell_shims(self):
+        """npm 會同時產生 codex.ps1 與 codex.cmd：.ps1 不能直接執行，要選 .cmd（C-03）。"""
+        with tempfile.TemporaryDirectory() as d:
+            ps1, cmd = Path(d) / "codex.ps1", Path(d) / "codex.cmd"
+            ps1.write_text("")
+            cmd.write_text("")
+            config = Path(d) / "config.json"
+            config.write_text(json.dumps({"codex_path": str(ps1)}), encoding="utf-8")
+            with mock.patch.object(system, "IS_WINDOWS", True), \
+                    mock.patch.dict(os.environ, {"PATH": str(Path(d) / "empty")}):
+                self.assertFalse(system.is_launchable(str(ps1)))
+                self.assertFalse(system.is_launchable(d))
+                self.assertTrue(system.is_launchable(str(cmd)))
+                self.assertEqual(paths.resolve_executable("codex_path", "codex", (str(ps1), str(cmd)),
+                                                          config_path=config), str(cmd))
+
+
 class ZoneTest(unittest.TestCase):
     def test_known_zone(self):
         self.assertEqual(str(system.zone("UTC", None)), "UTC")

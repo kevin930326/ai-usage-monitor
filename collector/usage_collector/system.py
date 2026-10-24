@@ -41,6 +41,18 @@ def executable_fallbacks(name: str, environ: Mapping[str, str] = os.environ, win
             str(Path(appdata) / "npm" / f"{name}.cmd"))
 
 
+# Windows 上 subprocess 能直接啟動的副檔名。npm 另外產生的 codex.ps1 要經過 PowerShell，不能直接執行
+LAUNCHABLE_SUFFIXES = (".exe", ".cmd", ".bat", ".com")
+
+
+def is_launchable(path: str) -> bool:
+    """可以用 subprocess.Popen([path, ...]) 直接執行的檔案。Windows 的 os.access(X_OK) 對任何存在的檔案都成立，
+    改看副檔名。"""
+    if IS_WINDOWS:
+        return os.path.isfile(path) and os.path.splitext(path)[1].lower() in LAUNCHABLE_SUFFIXES
+    return os.access(path, os.X_OK)
+
+
 def entry_stat(entry: os.DirEntry) -> os.stat_result:
     """列舉到的檔案的 stat（不跟隨連結）。Windows 的 DirEntry.stat() 一律把 st_ino、st_dev 填 0，
     和開檔後 fstat 的值對不起來（每個檔案都會被當成「被換掉」而略過），要另外呼叫 os.stat。"""
