@@ -28,18 +28,28 @@ final class QuotaNotifier: NSObject {
         Bundle.main.bundleIdentifier == nil ? nil : UNUserNotificationCenter.current()
     }
 
+    /// 第一次打開 App 時的權限詢問還沒有結果：這段期間不判斷事件，否則已經剩不到 20% 的額度
+    /// 會在允許之前就被記成「送過」，允許後這一輪就收不到（審查 C-01）
+    private var awaitingLaunchAuthorization = false
+
+    /// 要在 `UsageStore.start()` 之前呼叫（它讀到快照就會判斷事件）
     func start() {
         guard !disabled else { return }
         center?.delegate = self
         // 「剩不到 20%」預設開：第一次打開 App 時要求權限（系統只會在尚未決定時跳出詢問）
         if PanelSettings.shared.takeLaunchAuthorizationRequest() {
-            Task { _ = await requestAuthorization() }
+            awaitingLaunchAuthorization = true
+            Task {
+                _ = await requestAuthorization()
+                awaitingLaunchAuthorization = false
+                evaluate(snapshot: UsageStore.shared.snapshot, now: .now)
+            }
         }
     }
 
     /// 每次讀到新的快照、以及每分鐘呼叫（重置時間到了也要判斷）
     func evaluate(snapshot: UsageSnapshot?, now: Date) {
-        guard !disabled, let snapshot else { return }
+        guard !disabled, !awaitingLaunchAuthorization, let snapshot else { return }
         let sent = Set(defaults.stringArray(forKey: Self.sentKey) ?? [])
         let alerts = QuotaAlerts.detect(snapshot: snapshot, now: now, sent: sent)
         guard !alerts.isEmpty else { return }
