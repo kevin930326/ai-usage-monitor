@@ -11,7 +11,15 @@ import UsageKit
 final class UsageStore {
     static let shared = UsageStore()
 
-    let locator = UsageFileLocator()
+    /// HistoryStore 也用這個位置。截圖與量測（Debug 的 `AUM_DEMO_PANEL`、`AUM_RENDER_DIR`）算測試環境：
+    /// 沒有設定 AI_USAGE_MONITOR_HOME 時直接中止，不讀寫真的資料夾
+    let locator: UsageFileLocator = {
+        #if DEBUG
+        let env = ProcessInfo.processInfo.environment
+        if env["AUM_DEMO_PANEL"] == "1" || env["AUM_RENDER_DIR"] != nil { return UsageFileLocator(testing: true) }
+        #endif
+        return UsageFileLocator()
+    }()
     private(set) var snapshot: UsageSnapshot?
     private(set) var errorMessage: String?
     /// 收集器寫的服務狀態（FR-45）；沒有檔案或讀不懂時為 nil

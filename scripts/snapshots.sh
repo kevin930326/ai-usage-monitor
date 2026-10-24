@@ -62,7 +62,7 @@ render_mac() {
   fi
   local all=$WORK/mac-all
   AUM_RENDER_NOW=$RENDER_NOW python3 "$ROOT/scripts/make-demo-history.py" "$WORK/home" normal >/dev/null
-  env AI_USAGE_MONITOR_HOME="$WORK/home" AUM_DEMO_PANEL=1 AUM_RENDER_DIR="$all" AUM_RENDER_EXIT=1 \
+  env AI_USAGE_MONITOR_HOME="$WORK/home" AUM_TESTING=1 AUM_DEMO_PANEL=1 AUM_RENDER_DIR="$all" AUM_RENDER_EXIT=1 \
     AUM_RENDER_NOW=$RENDER_NOW perl -e 'alarm 600; exec @ARGV' "$app/Contents/MacOS/AIUsageMenuBar" "${LANG_ARGS[@]}" \
     >"$OUT/render-mac.log" 2>&1 || { echo "Mac 截圖失敗（$OUT/render-mac.log）"; exit 2; }
   collect mac "$all" "${MAC_SET[@]}"

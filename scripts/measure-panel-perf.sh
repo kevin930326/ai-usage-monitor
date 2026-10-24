@@ -24,7 +24,7 @@ HOME_DIR=$(mktemp -d)
 SCENARIO=${AUM_PERF_SCENARIO:-normal}
 python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" "$SCENARIO"
 
-AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 "$BIN" 2>"$OUT/app.log" &
+AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_TESTING=1 AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1 "$BIN" 2>"$OUT/app.log" &
 PID=$!
 START=$(python3 -c 'import time; print(time.time())')
 : > "$OUT/samples.tsv"

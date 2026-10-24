@@ -3,17 +3,34 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from collections.abc import Iterable, Mapping
+import sys
+from collections.abc import Container, Iterable, Mapping
 from pathlib import Path
 
+TESTING_ENV = "AUM_TESTING"
 
-def resolve_home(environ: Mapping[str, str] = os.environ) -> Path:
+
+class TestHomeNotSet(RuntimeError):
+    """測試環境沒有指定 `AI_USAGE_MONITOR_HOME`：不得退回真的資料夾。"""
+
+
+def is_testing(environ: Mapping[str, str] = os.environ, modules: Container[str] = sys.modules) -> bool:
+    """`AUM_TESTING` 有值，或已載入 unittest／pytest（收集器本身不會載入它們）。"""
+    return bool(environ.get(TESTING_ENV)) or "unittest" in modules or "pytest" in modules
+
+
+def resolve_home(environ: Mapping[str, str] = os.environ, modules: Container[str] = sys.modules) -> Path:
     """資料夾位置，規則與 UsageKit 的 UsageFileLocator 相同：
     `AI_USAGE_MONITOR_HOME` 有值才採用（空字串視為未設定，避免寫到目前目錄），
-    否則為 ~/Library/Application Support/AIUsageMonitor。"""
+    否則為 ~/Library/Application Support/AIUsageMonitor。
+    測試環境（`is_testing`）沒有指定時丟出 `TestHomeNotSet`，不使用預設資料夾。"""
     custom = environ.get("AI_USAGE_MONITOR_HOME")
     if custom:
         return Path(custom)
+    if is_testing(environ, modules):
+        raise TestHomeNotSet(
+            "測試環境沒有設定 AI_USAGE_MONITOR_HOME，不使用真的資料夾。"
+            "請在 collector 資料夾執行 `python3 -m unittest`（tests/__init__.py 會指到暫存位置）")
     return Path.home() / "Library" / "Application Support" / "AIUsageMonitor"
 
 
