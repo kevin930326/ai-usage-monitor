@@ -337,6 +337,22 @@ def reset(path: Path | None = None) -> None:
         history._tighten_permissions(path)
 
 
+def forget(path: Path | None = None) -> None:
+    """關閉第二層時呼叫：刪除本機的其他裝置列與裝置清單（面板回到「這台 Mac」）；本機的統計與上傳進度保留。"""
+    path = path or history.HISTORY_PATH
+    if not path.exists():
+        return
+    with history._private_files():
+        conn = history.connect(path)
+        try:
+            with history._transaction(conn):
+                conn.execute("DELETE FROM daily_tokens WHERE device_id != ?", (history.meta(conn, "device_id") or "",))
+                conn.execute("DELETE FROM devices")
+        finally:
+            conn.close()
+        history._tighten_permissions(path)
+
+
 def status(path: Path | None = None) -> dict:
     """`python -m usage_collector.token_sync status`：上傳狀態（不含密鑰與資料內容）。"""
     conn = history.connect(path or history.HISTORY_PATH)
@@ -356,10 +372,14 @@ def main(argv: list[str]) -> int:
         reset()
         print("已重設第二層的上傳狀態，下一輪（5 分鐘內）會上傳")
         return 0
+    if argv == ["forget"]:
+        forget()
+        print("已刪除本機的其他電腦資料（中繼上的資料不動）")
+        return 0
     if argv == ["status"]:
         print(json.dumps(status(), ensure_ascii=False, indent=2))
         return 0
-    print("用法：python -m usage_collector.token_sync reset|status", file=sys.stderr)
+    print("用法：python -m usage_collector.token_sync reset|forget|status", file=sys.stderr)
     return 2
 
 

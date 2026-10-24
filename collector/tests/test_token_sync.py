@@ -395,6 +395,18 @@ class MergeTest(TokenSyncTestCase):
         self.assertEqual(json.loads(self.mac.meta("relay_device_ids")), sorted([old_id, self.mac.relay_id]))
         self.assertEqual(self.mac.total_by_device(), {self.mac.device_id: 105})  # 舊 id 的列也是自己的：略過
 
+    def test_forget_removes_other_devices_but_keeps_local_stats(self):
+        self.mac.set_tokens(0, 100)
+        self.pc.set_tokens(0, 40)
+        self.pc.run(NOW)
+        self.mac.run(NOW)
+        token_sync.forget(self.mac.path)
+        self.assertEqual(self.mac.total_by_device(), {self.mac.device_id: 100})
+        self.assertEqual(self.mac.query("SELECT COUNT(*) FROM devices"), [(0,)])
+        self.assertEqual(self.relay.total(self.pc.relay_id), 40)  # 中繼上的資料不動
+        token_sync.forget(self.root / "missing.sqlite3")  # 沒有檔案時不建立
+        self.assertFalse((self.root / "missing.sqlite3").exists())
+
     def test_bad_downloaded_rows_are_skipped(self):
         bad = [
             {"device_id": "not-an-id", "day": "2026-10-14", "provider": "claude", "model": "claude-x", "input_tokens": 1},
