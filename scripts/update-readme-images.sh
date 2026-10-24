@@ -11,6 +11,8 @@
 #   暫時切換模擬器的外觀與狀態列，結束後還原。
 #   Live Activity 卡片與小工具不放：ImageRenderer 把 ProgressView 畫成黃色佔位符。手錶：模擬器截圖（示範模式）。
 # - README_IMAGES_MAC_APP／README_IMAGES_IOS_APP／README_IMAGES_WATCH_APP：已建置的 Debug 版 .app；沒給就自己建置到 build/readme-images。
+# - SOURCES.tsv 第 5 欄「後製」（可省略）：crop=<y>:<高>（裁切，原圖像素）、frame=<圓角半徑>（圓角與細邊框，縮放後的像素），
+#   由 scripts/readme-image-post.swift 處理，順序固定為裁切 → 縮放（第 4 欄）→ 加框。
 # - 畫面改變並以 scripts/update-snapshots.sh 更新基準後執行；scripts/check-readme-images.py 會提醒比基準舊的截圖。
 # 執行後逐張檢查 git diff 中的圖再提交。
 set -euo pipefail
@@ -60,17 +62,26 @@ boot() {  # boot <UDID>：沒開機就開，結束時再關掉
   xcrun simctl bootstatus "$1" -b >/dev/null
 }
 
-# 依 SOURCES.tsv 把 <前綴>: 開頭的來源從 <資料夾> 複製到 docs/images（有寬度時縮放）
+POST=$OUT/readme-image-post
+if [ ! -x "$POST" ] || [ "$ROOT/scripts/readme-image-post.swift" -nt "$POST" ]; then
+  swiftc -O "$ROOT/scripts/readme-image-post.swift" -o "$POST"
+fi
+
+# 依 SOURCES.tsv 把 <前綴>: 開頭的來源從 <資料夾> 複製到 docs/images，再裁切、縮放、加框
 place() {  # place <前綴> <資料夾>
-  local image src baseline width missing=0
-  while IFS=$'\t' read -r image src baseline width; do
+  local image src baseline width post missing=0
+  while IFS=$'\t' read -r image src baseline width post; do
     case "$image" in ''|'#'*) continue ;; esac
     [ "${src%%:*}" = "$1" ] || continue
     local from=$2/${src#*:}
     case "$1" in ios-screen|watch-screen) from=$from.png ;; esac
     if [ ! -f "$from" ]; then echo "沒有產生 ${src}"; missing=1; continue; fi
     cp "$from" "$IMAGES/$image"
-    if [ "$width" != - ]; then sips --resampleWidth "$width" "$IMAGES/$image" >/dev/null; fi
+    local ops=""
+    [ "$width" = - ] || ops="width=$width"
+    [ "${post:--}" = - ] || ops="$ops $post"
+    # shellcheck disable=SC2086  # ops 是以空白分隔的參數（crop=…、width=…、frame=…，本身不含空白）
+    if [ -n "$ops" ]; then "$POST" "$IMAGES/$image" $ops; fi
     echo "  $image"
   done <"$SOURCES"
   [ "$missing" = 0 ] || exit 2
