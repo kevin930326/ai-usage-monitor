@@ -1,3 +1,5 @@
+// SwiftUI 只有 Apple 平台有；Linux CI 只編譯、測試 UsageKit
+#if canImport(SwiftUI)
 import SwiftUI
 import UsageKit
 
@@ -9,3 +11,4 @@ public extension Text {
         return Text(verbatim: ResetCountdown.text(until: max(date, now), now: min(date, now)) ?? "0分鐘")
     }
 }
+#endif
