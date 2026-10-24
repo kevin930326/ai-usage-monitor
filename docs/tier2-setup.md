@@ -101,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | 電腦遺失或不再使用 | `scripts/relay-device.sh revoke <device_id> --delete-data`：密鑰立即失效，它的資料一併刪除，其他 Mac 下一次下載時就不再計入 |
 | 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`） |
 
-- 被撤銷或換掉的電腦收到兩次 401／403 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
+- 被撤銷或換掉的電腦收到兩次 401 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
 - **同一台電腦不要用 `add` 重新註冊**（請用 `rotate`）：新的 `device_id` 會把所有資料重新上傳一次，舊 `device_id` 的資料若沒有以 `revoke --delete-data` 刪除，其他 Mac 會把它們算兩次。
 
 ## 中繼的用量（免費方案）

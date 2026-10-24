@@ -303,6 +303,19 @@ class FailureTest(TokenSyncTestCase):
         self.assertEqual(mac.meta("upload_status"), "ok")
         self.assertEqual(mac.meta("upload_auth_failures"), "0")
 
+    def test_403_from_the_edge_backs_off_without_revoking(self):
+        # 中繼自己不回 403：Cloudflare 邊緣的拒絕（WAF、Bot Fight Mode）可能持續好幾輪，不是密鑰失效
+        mac = self.machine()
+        mac.set_tokens(0, 100)
+        self.relay.fail = [HTTPStatusError("驗證失敗 (HTTP 403)，請重新登入", 403)] * 3
+        mac.run(NOW)
+        mac.run(NOW + 300)
+        mac.run(NOW + 1200)
+        self.assertEqual(mac.meta("upload_status"), "error")
+        mac.run(NOW + 1200 + 3600)
+        self.assertEqual(mac.meta("upload_status"), "ok")
+        self.assertEqual(self.relay.total(mac.relay_id), 100)
+
     def test_bad_response_is_a_failure(self):
         mac = self.machine()
         mac.set_tokens(0, 100)

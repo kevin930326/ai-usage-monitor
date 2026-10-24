@@ -6,7 +6,7 @@
   欄位只有日期、服務、模型名稱、四種 Token 與推理、任務秒數、最長任務；不含任務次數、每小時資料、路徑、
   session／訊息 ID、檔名。
 - 每小時一次＋本機日期改變後的第一次執行；每批最多 400 列。失敗時不前進，以 5 分鐘、15 分鐘、1 小時、6 小時
-  遞增間隔重試；連續兩次 401／403 停止上傳（meta.upload_status = revoked，不刪除本機資料），重新執行設定腳本才恢復。
+  遞增間隔重試；連續兩次 401 停止上傳（meta.upload_status = revoked，不刪除本機資料），重新執行設定腳本才恢復。
 - 有讀取密鑰（Mac）時下載所有裝置的每日加總：這台電腦在中繼上的 device_id（中繼依密鑰決定，和本機
   meta.device_id 不同）一律略過，本機的數字以本機統計為準；其他裝置的列整批取代寫進本機 daily_tokens。
   上傳只選本機 device_id 的列，所以下載到的列永遠不會再上傳。
@@ -36,7 +36,8 @@ BATCH_ROWS = 400
 MAX_BATCHES = 5  # 一次執行最多 2,000 列；首次上傳一年的資料分幾輪（每 5 分鐘一輪）
 TIME_BUDGET = 60  # 秒：一次執行花在上傳的時間上限（排程的執行時間上限是 4 分鐘）
 BACKOFF = (300, 900, 3600, 21600)
-REVOKE_AFTER = 2  # 連續幾次 401／403 視為密鑰失效（一次可能是中繼暫時設定錯誤）
+REVOKE_AFTER = 2  # 連續幾次 401 視為密鑰失效（一次可能是中繼暫時設定錯誤）。中繼自己不回 403：
+# 403 來自 Cloudflare 邊緣（WAF、Bot Fight Mode 等），照一般失敗退避重試，不當成密鑰失效
 SYNC_DAYS = 399  # 中繼只收 400 天內（UTC）的日期；本機日期與 UTC 最多差一天
 MAX_VALUE = 10**12
 NAME_MAX = 32
@@ -276,7 +277,7 @@ def _sync_upload(conn: sqlite3.Connection, url: str, now: int) -> None:
     try:
         more = upload(conn, url, key, now)
     except HTTPStatusError as e:
-        if e.status in (401, 403):
+        if e.status == 401:
             auth = _meta_int(conn, "upload_auth_failures") + 1
             _set_meta(conn, upload_auth_failures=auth)
             if auth >= REVOKE_AFTER:
