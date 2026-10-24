@@ -57,6 +57,13 @@ function Update-Config([string[]]$ConfigArgs) {
     if ($LASTEXITCODE -ne 0) { throw "無法寫入 $Config，沒有安裝排程。" }
 }
 
+# 工作排程器不會繼承這個 PowerShell 視窗裡設定的環境變數：安裝時有設定 CLAUDE_CONFIG_DIR／CODEX_HOME 就寫進
+# config.json 的 claude_config_dir／codex_home（ADR-0009 第 3 節，同 install-launchd.sh）。沒有設定時不動
+# config.json 裡原本的值（使用者可能手動設定過）；使用者層級的環境變數排程本來就讀得到，且優先於 config.json
+foreach ($pair in @(@('claude_config_dir', $env:CLAUDE_CONFIG_DIR), @('codex_home', $env:CODEX_HOME))) {
+    if ($pair[1]) { Update-Config @($Config, $pair[0], $pair[1]) }
+}
+
 if ($WithQuota) {
     # 安裝時找到的 CLI 寫進 config.json（排程執行時的 PATH 可能不同）；找不到的服務不啟用
     $enabled = @()
