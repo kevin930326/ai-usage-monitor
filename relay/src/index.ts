@@ -3,14 +3,18 @@
  *
  *   POST /usage  Authorization: Bearer <WRITE_TOKEN>
  *   GET  /usage  Authorization: Bearer <READ_TOKEN>
+ *
+ * 第二層（多裝置 Token 合併，選用）的 /tokens/daily 與 /devices 在 tokens.ts。
  */
+
+import { handleTier2, type TokensEnv } from "./tokens.ts";
 
 export interface KV {
   get(key: string): Promise<string | null>;
   put(key: string, value: string): Promise<void>;
 }
 
-export interface Env {
+export interface Env extends TokensEnv {
   USAGE_KV: KV;
   READ_TOKEN: string;
   WRITE_TOKEN: string;
@@ -166,6 +170,9 @@ export default {
     if (!env.READ_TOKEN || !env.WRITE_TOKEN || env.READ_TOKEN === env.WRITE_TOKEN) {
       return error(500, "relay 密鑰設定錯誤");
     }
+
+    const tier2 = await handleTier2(request, env);
+    if (tier2) return tier2;
 
     const { pathname } = new URL(request.url);
     if (pathname !== "/usage") return error(404, "not found");
