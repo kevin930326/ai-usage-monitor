@@ -12,16 +12,26 @@
     <img src="docs/images/mac-panel-light.png" width="300" alt="Mac 選單列面板：剩餘最少的額度、建議接下來用、各額度進度條、接下來的重置、本週額度走勢、額度消耗、這台 Mac 的 Token 統計與服務狀態">
   </picture>
   &nbsp;
-  <img src="docs/images/demo-mac-stats-switch.gif" width="300" alt="統計卡片在全部、Claude、Codex 之間切換的動畫">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-switch-dark.gif">
+    <img src="docs/images/mac-stats-switch-light.gif" width="300" alt="統計卡片依序切換全部、Claude、Codex：全部的熱力圖是藍色色階，Claude、Codex 用各自的識別色；Token 數以萬、億顯示">
+  </picture>
 </p>
 
 <p align="center">
-  <img src="docs/images/iphone-island-expanded.png" width="220" alt="iPhone 模擬器：動態島展開，剩餘最少的額度大字與兩個服務各額度的進度條（鎖定畫面卡片另外顯示每個額度的重置倒數）">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/iphone-app-dark.png">
+    <img src="docs/images/iphone-app-light.png" width="240" alt="iPhone App：剩餘最少的額度、各服務各額度的進度條與重置倒數">
+  </picture>
   &nbsp;
   <img src="docs/images/watch-app.png" width="200" alt="Apple Watch App：剩餘最少的額度與各額度進度條">
 </p>
 
-截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量。
+<p align="center">
+  <img src="docs/images/iphone-island.png" width="440" alt="動態島展開：剩餘最少的額度大字、兩個服務各額度的進度條與更新按鈕">
+</p>
+
+截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
 
 ## 功能
 
@@ -35,7 +45,16 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-stats-window-dark.png">
-    <img src="docs/images/mac-stats-window-light.png" width="720" alt="完整統計視窗：一年活動熱力圖、最近 30 天長條、各模型與一天中的時段">
+    <img src="docs/images/mac-stats-window-light.png" width="720" alt="完整統計視窗：一年活動熱力圖（全部為藍色色階）、最近 30 天長條、各模型與一天中的時段">
+  </picture>
+</p>
+
+外觀可選跟隨系統、淺色或深色（Mac 套用到面板、設定、完整統計與設定精靈；iPhone 只套用到 App 本身）：
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-settings-appearance-dark.png">
+    <img src="docs/images/mac-settings-appearance-light.png" width="460" alt="Mac 設定的「外觀」：跟隨系統、淺色、深色">
   </picture>
 </p>
 

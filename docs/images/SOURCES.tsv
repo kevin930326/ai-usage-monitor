@@ -1,0 +1,21 @@
+# README 截圖（docs/images/）的來源：scripts/update-readme-images.sh 依這張表產生，scripts/check-readme-images.py 依這張表檢查。
+# 欄位以 tab 分隔：圖片	來源	對應的截圖基準（apple/Snapshots/ 下；- 表示沒有）	寬度（像素；- 表示原尺寸）
+# 來源：mac:<檔名>＝Mac 的 ImageRenderer 輸出（AUM_RENDER_DIR）；ios:<檔名>＝iPhone 模擬器的 ImageRenderer 輸出（AUM_RENDER）；
+#       ios-screen:<home|settings>-<light|dark>＝iPhone 模擬器的截圖（App 主畫面、設定畫面）；watch-screen:app＝手錶模擬器的截圖
+# iPhone 的 Live Activity 卡片與小工具沒有放進 README：ImageRenderer 把 ProgressView 畫成黃色佔位符，只適合截圖比對。
+mac-panel-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-
+mac-panel-dark.png	mac:panel-dark.png	apple/Snapshots/mac/panel-dark.png	-
+mac-stats-switch-light.gif	mac:anim-stats-tour-light.gif	apple/Snapshots/mac/panel-light.png	-
+mac-stats-switch-dark.gif	mac:anim-stats-tour-dark.gif	apple/Snapshots/mac/panel-dark.png	-
+mac-stats-window-light.png	mac:stats-window-light.png	apple/Snapshots/mac/stats-window-light.png	-
+mac-stats-window-dark.png	mac:stats-window-dark.png	apple/Snapshots/mac/stats-window-dark.png	-
+mac-settings-appearance-light.png	mac:settings-appearance-light.png	apple/Snapshots/mac/settings-light.png	-
+mac-settings-appearance-dark.png	mac:settings-appearance-dark.png	apple/Snapshots/mac/settings-dark.png	-
+mac-wizard-light.png	mac:wizard-light.png	apple/Snapshots/mac/wizard-light.png	-
+mac-wizard-dark.png	mac:wizard-dark.png	apple/Snapshots/mac/wizard-dark.png	-
+iphone-app-light.png	ios-screen:home-light	-	520
+iphone-app-dark.png	ios-screen:home-dark	-	520
+iphone-island.png	ios:island-normal.png	apple/Snapshots/ios/island-normal.png	-
+iphone-settings-pairing-light.png	ios-screen:settings-light	-	520
+iphone-settings-pairing-dark.png	ios-screen:settings-dark	-	520
+watch-app.png	watch-screen:app	-	-
