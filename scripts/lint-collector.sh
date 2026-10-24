@@ -8,6 +8,8 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 VENV=${LINT_VENV:-$ROOT/build/lint-venv}
+# 相對路徑以呼叫的位置為準：下面會切換到 collector/，先換成絕對路徑（審查 C-01）
+case "$VENV" in /*) ;; *) VENV=$PWD/$VENV ;; esac
 REQ=$ROOT/collector/requirements-lint.txt
 mkdir -p "$ROOT/build"
 touch "$ROOT/build/.metadata_never_index"
