@@ -204,7 +204,7 @@ private struct StyleTile: View {
 }
 
 /// 單選的膠囊按鈕，自動換行。
-private struct FlowChips<Choice: Hashable>: View {
+struct FlowChips<Choice: Hashable>: View {
     let choices: [(Choice, String)]
     let selected: Choice
     let select: (Choice) -> Void

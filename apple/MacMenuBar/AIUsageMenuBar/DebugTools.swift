@@ -1,6 +1,7 @@
 #if DEBUG
 import ImageIO
 import SwiftUI
+import UserNotifications
 import UniformTypeIdentifiers
 import UsageKit
 import UsageKitUI
@@ -18,6 +19,7 @@ import UsageKitUI
 enum DebugTools {
     private static var panelWindow: NSWindow?
     private static var statsWindow: NSWindow?
+    private static var wizardWindow: NSWindow?
 
     static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
@@ -33,6 +35,7 @@ enum DebugTools {
             if name == "panel" {
                 renderMenuBarIcons(to: url)
                 renderSettings(to: url)
+                renderWizard(to: url)
                 renderStats(to: url)
                 renderStatus(to: url)
             }
@@ -66,6 +69,19 @@ enum DebugTools {
         window.center()
         window.makeKeyAndOrderFront(nil)
         statsWindow = window
+    }
+
+    /// 量測用：以一般視窗打開設定精靈（與 Window scene 相同的視圖）
+    private static func showWizardWindow() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 640), styleMask: [.titled, .closable],
+                              backing: .buffered, defer: false)
+        window.title = "設定精靈"
+        window.contentView = NSHostingView(rootView: SetupWizardView(model: .shared)
+            .followsAppearanceSetting().environment(CollectorService.shared).environment(PanelSettings.shared))
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        wizardWindow = window
     }
 
     // MARK: - 效能量測的時間表（ADR-0010 第 3 節）
@@ -104,7 +120,13 @@ enum DebugTools {
             // 再開關一次：第一次打開的一次性成本（系統框架、字型、斷詞字典）之外，確認沒有累積
             (close + 150, "stats-open-2", { showStatsWindow() }),
             (close + 160, "stats-close-2", { statsWindow?.close(); statsWindow?.contentView = nil; statsWindow = nil }),
-            (close + 180, "exit", { exit(0) }),
+            // 設定精靈（FR-54）：統計視窗第二次關閉後的取樣（+5～18 秒）結束後才打開，10 秒後關閉
+            (close + 180, "wizard-open", { showWizardWindow() }),
+            (close + 190, "wizard-close", { wizardWindow?.close(); wizardWindow?.contentView = nil; wizardWindow = nil }),
+            // 再開關一次：第一次打開會載入通知、背景項目等框架，比較兩次關閉後確認沒有累積
+            (close + 210, "wizard-open-2", { showWizardWindow() }),
+            (close + 220, "wizard-close-2", { wizardWindow?.close(); wizardWindow?.contentView = nil; wizardWindow = nil }),
+            (close + 245, "exit", { exit(0) }),
         ]
         let start = Date.now
         for (offset, name, action) in steps {
@@ -294,6 +316,34 @@ enum DebugTools {
             .padding(16)
             .background(Color(nsColor: .windowBackgroundColor))
             write(collector, scheme: scheme, to: dir.appendingPathComponent("settings-collector-states-\(scheme.name).png"))
+        }
+    }
+
+    /// 設定精靈（FR-54）的三種情境：新使用者（從 .dmg 直接打開）、都設定好了、用 install-launchd.sh 的舊使用者。
+    /// `wizard-<scheme>.png` 是新使用者（截圖比對的基準）
+    private static func renderWizard(to dir: URL) {
+        let cases: [(String, SetupInputs, UNAuthorizationStatus, CollectorService.State)] = [
+            ("", SetupInputs(appInApplications: false, collectorNeedsAction: true,
+                             claude: .init(login: .notLoggedIn), codex: .init(login: .notInstalled),
+                             notificationsAllowed: nil, loginItemEnabled: false, relayConfigured: false),
+             .notDetermined, .needsApplicationsFolder),
+            ("-done", SetupInputs(appInApplications: true, collectorNeedsAction: false,
+                                  claude: .init(login: .enabled, collecting: true), codex: .init(login: .enabled, collecting: true),
+                                  notificationsAllowed: true, loginItemEnabled: true, relayConfigured: true),
+             .authorized, .enabled),
+            ("-legacy", SetupInputs(appInApplications: true, collectorNeedsAction: false,
+                                    claude: .init(collecting: true), codex: .init(collectError: "尚未登入 Codex CLI，請在終端機執行 codex login"),
+                                    notificationsAllowed: false, loginItemEnabled: false, relayConfigured: true),
+             .denied, .legacy),
+        ]
+        for scheme in [ColorScheme.light, .dark] {
+            for (suffix, inputs, notification, collector) in cases {
+                let view = SetupWizardView(model: SetupWizardModel(inputs: inputs, notificationStatus: notification), interactive: false)
+                    .environment(CollectorService.preview(collector))
+                    .environment(PanelSettings.shared)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                write(view, scheme: scheme, to: dir.appendingPathComponent("wizard\(suffix)-\(scheme.name).png"))
+            }
         }
     }
 

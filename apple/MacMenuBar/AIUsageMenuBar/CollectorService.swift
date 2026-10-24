@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ServiceManagement
+import UsageKit
 
 /// App 內建的收集器（FR-53、ADR-0013 第 3 節）：發布版的 App 內嵌 Python 與收集器，
 /// 以 `SMAppService.agent` 註冊 App 內的 LaunchAgent（`Contents/Library/LaunchAgents/<bundle ID>.collector.plist`）。
@@ -125,6 +126,14 @@ final class CollectorService {
         getxattr(runtimeURL.path, "com.apple.quarantine", nil, 0, 0, 0) >= 0
     }
 
+    /// 精靈「背景收集器」這一步要不要使用者處理（開發版與舊安裝都算可以用）
+    var needsAction: Bool {
+        switch state {
+        case .needsApplicationsFolder, .quarantined, .notRegistered, .requiresApproval: true
+        case .devBuild, .legacy, .enabled: false
+        }
+    }
+
     /// 面板「更新」要踢的 label：內建的在執行就踢它，否則踢舊的（開發版、或還沒遷移）
     var kickLabel: String { state == .enabled ? builtinLabel : Self.legacyLabel }
 
@@ -185,7 +194,14 @@ final class CollectorService {
         }
         #if DEBUG
         // 安裝測試：啟動後直接按「改用內建收集器」（scripts 的乾淨環境驗證用，只在 AUM_TEST_AGENT=1 時）
-        if ProcessInfo.processInfo.environment["AUM_TEST_ACTION"] == "migrate" { await migrateFromLegacy() }
+        let action = ProcessInfo.processInfo.environment["AUM_TEST_ACTION"] ?? ""
+        if action == "migrate" { await migrateFromLegacy() }
+        // 「wizard-refresh:<秒>」：等幾秒（測試在這段時間登入假的 CLI）後按一次精靈的「重新檢查」
+        if action.hasPrefix("wizard-refresh:"), let seconds = Double(action.dropFirst("wizard-refresh:".count)) {
+            try? await Task.sleep(for: .seconds(seconds))
+            await SetupWizardModel.shared.refresh()
+            UsageStore.log("setup wizard: test refresh done")
+        }
         #endif
     }
 
@@ -335,8 +351,39 @@ final class CollectorService {
         return status
     }
 
+    /// 精靈用：以內建的 Python 執行 `usage_collector.setup --json`。內建收集器在用時一併更新 config.json
+    /// （之後才登入的服務下一次收集就會出現；沒有任何已登入或有「不知道」時不改 enabled_providers，同 setup 的規則），
+    /// 否則加 `--dry-run` 只偵測（install-launchd.sh 的收集器由它自己的腳本設定）。
+    /// 結果只有各服務的狀態字串（不含路徑或帳號）；開發版、測試環境或失敗時為 nil
+    func detectProviders(updatingConfig: Bool) async -> (claude: ProviderLoginState, codex: ProviderLoginState)? {
+        guard hasRuntime, allowedToRegister else { return nil }
+        let args = ["-I", "-B", "-X", "utf8", "-m", "usage_collector.setup", "--json"] + (updatingConfig ? [] : ["--dry-run"])
+        guard let data = await Self.runCapturing(runtimeURL.path, args),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        func state(_ name: String) -> ProviderLoginState {
+            ((object[name] as? [String: Any])?["state"] as? String).flatMap(ProviderLoginState.init(rawValue:)) ?? .unknown
+        }
+        return (state("claude"), state("codex"))
+    }
+
     private nonisolated static func launchctl(_ arguments: [String]) async -> Int32? {
         await run("/bin/launchctl", arguments)
+    }
+
+    /// 在背景執行指令，回傳標準輸出（結束碼不是 0 或無法啟動時為 nil）；標準錯誤丟棄
+    private nonisolated static func runCapturing(_ path: String, _ arguments: [String]) async -> Data? {
+        await Task.detached {
+            let process = Process()
+            let pipe = Pipe()
+            process.executableURL = URL(fileURLWithPath: path)
+            process.arguments = arguments
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            do { try process.run() } catch { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            return process.terminationStatus == 0 ? data : nil
+        }.value
     }
 
     /// 在背景執行指令，丟棄輸出，回傳結束碼（無法啟動時為 nil）

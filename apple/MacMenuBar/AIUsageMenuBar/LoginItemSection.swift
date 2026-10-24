@@ -7,6 +7,10 @@ import SwiftUI
 struct LoginItemSection: View {
     @State private var status = Self.currentStatus()
     @State private var errorText: String?
+    /// 設定精靈裡：步驟自己有標題，也不放「重新執行設定精靈」
+    var inWizard = false
+    /// 開關改變後（精靈用來重新檢查）
+    var onChange: (() -> Void)?
 
     private var installed: Bool {
         let applications = FileManager.default.urls(for: .applicationDirectory, in: .localDomainMask).first?.path ?? "/Applications"
@@ -15,8 +19,10 @@ struct LoginItemSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("一般").font(.headline)
-            SwitchRow(title: "登入時自動打開", detail: "登入 Mac 後自動在選單列顯示用量", isOn: Binding(
+            if !inWizard { Text("一般").font(.headline) }
+            // 精靈的步驟標題已經是「登入時自動打開」
+            SwitchRow(title: inWizard ? "登入 Mac 後自動在選單列顯示用量" : "登入時自動打開",
+                      detail: inWizard ? nil : "登入 Mac 後自動在選單列顯示用量", isOn: Binding(
                 get: { status == .enabled || status == .requiresApproval }, set: { setEnabled($0) }
             ))
             .disabled(!installed)
@@ -31,6 +37,15 @@ struct LoginItemSection: View {
                 Button("打開「登入項目」設定") { SMAppService.openSystemSettingsLoginItems() }
                     .buttonStyle(PanelPillButtonStyle())
             }
+            if !inWizard {
+                // FR-54：已設定好的人不會自動看到精靈，從這裡重新打開
+                Button("重新執行設定精靈") {
+                    NSApplication.shared.activate()
+                    AppActions.openWizard?()
+                }
+                .buttonStyle(PanelPillButtonStyle())
+                .padding(.top, 4)
+            }
         }
         // 使用者可能在系統設定裡改過
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -40,6 +55,9 @@ struct LoginItemSection: View {
 
     /// Debug 的截圖與量測（`AUM_DEMO_PANEL`、`AUM_RENDER_DIR`）一律「沒有登記」：不讀這台 Mac 正式安裝那份 App 的登記狀態，
     /// 換一台 Mac 截圖才會一樣
+    /// 精靈的「登入時自動打開」這一步用
+    static var isEnabled: Bool { currentStatus() == .enabled }
+
     private static func currentStatus() -> SMAppService.Status {
         #if DEBUG
         let env = ProcessInfo.processInfo.environment
@@ -69,5 +87,6 @@ struct LoginItemSection: View {
             UsageStore.log("login item \(enabled ? "register" : "unregister") failed: \(type(of: error))")
         }
         status = Self.currentStatus()
+        onChange?()
     }
 }
