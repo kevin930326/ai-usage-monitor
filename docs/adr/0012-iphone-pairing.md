@@ -52,7 +52,7 @@ JSON = {"url": "https://ai-usage-relay.<帳號>.workers.dev", "read": "<READ_TOK
 |---|---|
 | 產生 | **中繼**以 `crypto.getRandomValues` 產生（Mac 腳本以**寫入密鑰**呼叫 `POST /pair`），回傳短碼與到期時間 |
 | 格式 | 8 個 Crockford base32 字元（不含 I、L、O、U），顯示成 `XXXX-XXXX`；約 40 位元。iPhone 輸入時忽略大小寫、空白與連字號，`O`→`0`、`I`／`L`→`1` |
-| 保存 | KV 一個鍵 `pair`：`{hash: SHA-256(短碼), expires_at, failures}`；**只存雜湊**，同一時間只有一組（再產生一組就取代舊的） |
+| 保存 | KV 一個鍵 `pair`：`{hash: SHA-256(短碼), expires_at}`，錯誤次數另存在 `pair-fail:<雜湊前 16 字>`；**只存雜湊**，同一時間只有一組（再產生一組就取代舊的） |
 | 到期 | 10 分鐘 |
 | 一次性 | 兌換成功立即刪除（KV 沒有原子操作，見「已知限制」） |
 | 嘗試次數 | 錯誤 5 次就刪除（必須重新產生）；攻擊者最多猜 5 次 40 位元的碼 |

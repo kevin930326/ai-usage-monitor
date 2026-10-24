@@ -198,7 +198,10 @@ function pairTtl(record: PairRecord, now: number): number {
   return Math.max(KV_MIN_TTL, Math.ceil((record.expires_at - now) / 1000));
 }
 
-/** KV 沒有條件刪除：刪之前再讀一次，只刪仍是同一組的短碼，不誤刪 Mac 剛發的新碼 */
+/**
+ * KV 沒有條件刪除：刪之前再讀一次，只刪仍是同一組的短碼，縮小誤刪 Mac 剛發的新碼的機會。
+ * 再讀與刪除之間仍有空窗（Codex C-02）；新碼被刪時 Mac 重新產生一組即可。
+ */
 async function deletePairIfCurrent(env: Env, hash: string): Promise<void> {
   const stored = await env.USAGE_KV.get(PAIR_KEY);
   if (stored === null) return;
