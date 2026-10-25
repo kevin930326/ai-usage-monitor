@@ -71,35 +71,18 @@ import Testing
         #expect(revoked.title(.all) == "所有電腦（3 台）")
     }
 
-    /// 撤銷並刪除資料的電腦不再列出、不算台數；只撤銷、保留資料的仍列出並標「已撤銷」、數字照算
-    @Test func revokedComputersWithDeletedDataAreRemoved() {
-        let vmID = "2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
-        var d = devices
-        d.devices.append(TokenDevice(id: vmID, name: "Windows-VM", lastUpload: now.addingTimeInterval(-3600), revoked: true))
-        d.devices[2].revoked = true  // 筆電：只撤銷，資料還在
-        var withVM = data
-        withVM.devices = d
-        let listed = d.removingDeleted(days: withVM.days)
-        #expect(listed.scopes == [.all, .thisMac, .device(pcID), .device(laptopID)])
-        #expect(listed.title(.all) == "所有電腦（3 台）")
-        #expect(listed.menuTitle(.device(laptopID), now: now) == "筆電（已撤銷）")
-        #expect(listed.resolve(.device(vmID)) == .all)
-        withVM.devices = listed
-        #expect(TokenSummary(data: withVM.scoped(.all), scope: .all, now: now, calendar: cal).thisWeek.main == 147)
+    /// 只撤銷、保留資料的電腦仍列出並標「已撤銷」、數字照算；撤銷並刪除資料的電腦收集器不寫進清單，
+    /// 唯一的其他電腦被刪除後回到「這台 Mac」
+    @Test func revokedComputersKeepTheirDataUntilDeleted() {
+        var kept = data
+        kept.devices.devices[2].revoked = true
+        #expect(kept.devices.scopes == [.all, .thisMac, .device(pcID), .device(laptopID)])
+        #expect(kept.devices.menuTitle(.device(laptopID), now: now) == "筆電（已撤銷）")
+        #expect(TokenSummary(data: kept.scoped(.all), scope: .all, now: now, calendar: cal).thisWeek.main == 147)
 
-        // 只剩這台 Mac：回到「這台 Mac」，不顯示裝置切換
-        let onlyVM = TokenDevices(devices: [d.devices[0], d.devices[3]])
-        let localDays = data.days.filter { $0.device == TokenDevices.local }
-        let alone = onlyVM.removingDeleted(days: localDays)
+        let alone = TokenDevices(devices: [devices.devices[0]])
         #expect(!alone.enabled)
-        #expect(alone.scopes == [.thisMac])
-        #expect(alone.resolve(.all) == .thisMac)
-        #expect(alone.title(alone.resolve(.device(vmID))) == "這台 Mac")
-
-        // 還沒撤銷、尚未上傳的電腦照常列出；撤銷了但資料還在的也列出
-        let fresh = TokenDevices(devices: [d.devices[0], TokenDevice(id: vmID, name: "新電腦")])
-        #expect(fresh.removingDeleted(days: localDays).scopes == [.all, .thisMac, .device(vmID)])
-        #expect(onlyVM.removingDeleted(days: localDays + [row("2026-11-01", 3, device: vmID)]).title(.all) == "所有電腦（2 台）")
+        #expect(alone.title(alone.resolve(.device(laptopID))) == "這台 Mac")
     }
 
     @Test func helpListsEveryComputerWithItsLastUpload() {

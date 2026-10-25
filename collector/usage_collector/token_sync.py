@@ -241,6 +241,9 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
     rows = [v for v in (_remote_row(r, own | {local_id}, since) for r in response["rows"]) if v]
     devices = []
     for d in response["devices"]:
+        # 撤銷時一併刪除了資料（中繼回 has_data: false）：不再列出、不算台數。舊版中繼沒有這個欄位時照常列出
+        if isinstance(d, dict) and d.get("revoked") is True and d.get("has_data") is False:
+            continue
         if isinstance(d, dict) and isinstance(d.get("device_id"), str) and _DEVICE_RE.match(d["device_id"]):
             devices.append((d["device_id"], _clean_name(d.get("name")), _timestamp(d.get("last_upload_at")),
                             1 if d.get("revoked") is True else 0, 1 if d["device_id"] in own else 0))

@@ -488,7 +488,7 @@ extension HistoryStore {
             firstScanProgress: meta(db, "first_scan_progress").flatMap(Int.init).map { min(max($0, 0), 100) },
             skippedLines: skipped, retentionDays: retention, dataFrom: meta(db, "token_days_from"),
             formatSuspect: meta(db, "token_format_suspect") == "1",
-            devices: tokenDevices(db).removingDeleted(days: days))
+            devices: tokenDevices(db))
     }
 
     /// 中繼的裝置清單（收集器下載時整批取代）與這台 Mac 的上傳狀態；沒有第二層時是空的

@@ -134,7 +134,11 @@ describe("裝置管理", () => {
     assert.equal((await call("POST", `/devices/${keep.device_id}/rotate`, "admin-secret")).status, 409);
     const data = await download();
     assert.deepEqual(data.rows.map((r) => r.device_id), [keep.device_id]);
-    assert.deepEqual(data.devices.map((d) => [d.name, d.revoked]), [["留資料", true], ["刪資料", true]]);
+    assert.deepEqual(data.devices.map((d) => [d.name, d.revoked, d.has_data]), [["留資料", true, true], ["刪資料", true, false]]);
+    // has_data 不受 from 限制：只有很久以前的資料也算有
+    const later = await download(daysAgo(-1));
+    assert.deepEqual(later.rows, []);
+    assert.equal(later.devices[0].has_data, true);
   });
 
   it("不存在的裝置與格式錯誤的 delete_data", async () => {

@@ -98,7 +98,7 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | 情況 | 做法 |
 |---|---|
 | 密鑰外流、想換新 | `scripts/relay-device.sh rotate <device_id>`，再在那台電腦重新執行 `set-tier2.sh`／`set-tier2.ps1` 貼上新的。`device_id` 與資料不變 |
-| 電腦遺失或不再使用 | `scripts/relay-device.sh revoke <device_id> --delete-data`：密鑰立即失效，它的資料一併刪除，其他 Mac 下一次下載後不再計入，也從裝置切換與「N 台」中拿掉（只剩這台 Mac 時回到「這台 Mac」） |
+| 電腦遺失或不再使用 | `scripts/relay-device.sh revoke <device_id> --delete-data`：密鑰立即失效，它的資料一併刪除，其他 Mac 下一次下載後不再計入，也從裝置切換與「N 台」中拿掉（只剩這台 Mac 時回到「這台 Mac」；中繼要更新並重新部署才會生效） |
 | 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`）：仍列在裝置切換、標「已撤銷」，數字照算 |
 
 - 被撤銷或換掉的電腦收到兩次 401 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
