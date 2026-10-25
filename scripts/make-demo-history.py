@@ -8,7 +8,7 @@
   Token 統計有一年的每日資料（Codex 約 200 天）、90 天的每小時資料，目前連續 9 天（新紀錄）；
   服務狀態：Claude 有一個示範用的事件（影響 Claude Code）、Codex 正常
 - tier2：normal＋第二層（ADR-0011）：中繼上另外三台電腦（工作 PC、筆電、舊電腦）一年的每日資料與裝置清單，
-  筆電 3 天沒有上傳（效能量測用最多列的情況）
+  筆電 3 天沒有上傳（效能量測用最多列的情況）；裝置清單另有撤銷時一併刪除資料的 Windows-VM（面板不列出）
 - few：剛安裝 15 分鐘，每個額度 3 筆；Token 統計只有最近 3 天
 - fresh：剛安裝，每個額度只有 1 筆（走勢與額度消耗顯示骨架畫面）；Token 統計首次掃描 37%
 - none：沒有 history.sqlite3（收集器還沒更新）
@@ -157,8 +157,10 @@ def write_tier2(conn, now: int) -> None:
                              " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
                              [(device, day, provider, model, *(int(v * share) for v in values), now)
                               for day, provider, model, *values in rows if name != "筆電" or day <= stale])
-        conn.executemany("INSERT OR REPLACE INTO devices (device_id, name, last_upload_at, revoked, is_self) VALUES (?, ?, ?, 0, ?)",
-                         [(me, "Mac", now - 600, 1)] + [(d, n, last, 0) for d, n, _, last in others])
+        conn.executemany("INSERT OR REPLACE INTO devices (device_id, name, last_upload_at, revoked, is_self) VALUES (?, ?, ?, ?, ?)",
+                         [(me, "Mac", now - 600, 0, 1)] + [(d, n, last, 0, 0) for d, n, _, last in others]
+                         # 撤銷時一併刪除了資料：中繼的清單仍有它，但沒有每日資料，面板不列出
+                         + [("3c4d5e6f-1b2d-4e5f-8a9b-0c1d2e3f4a5b", "Windows-VM", now - 3600, 1, 0)])
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('relay_device_id', ?)", (me,))
 
 

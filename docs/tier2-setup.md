@@ -98,8 +98,8 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | 情況 | 做法 |
 |---|---|
 | 密鑰外流、想換新 | `scripts/relay-device.sh rotate <device_id>`，再在那台電腦重新執行 `set-tier2.sh`／`set-tier2.ps1` 貼上新的。`device_id` 與資料不變 |
-| 電腦遺失或不再使用 | `scripts/relay-device.sh revoke <device_id> --delete-data`：密鑰立即失效，它的資料一併刪除，其他 Mac 下一次下載時就不再計入 |
-| 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`） |
+| 電腦遺失或不再使用 | `scripts/relay-device.sh revoke <device_id> --delete-data`：密鑰立即失效，它的資料一併刪除，其他 Mac 下一次下載後不再計入，也從裝置切換與「N 台」中拿掉（只剩這台 Mac 時回到「這台 Mac」） |
+| 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`）：仍列在裝置切換、標「已撤銷」，數字照算 |
 
 - 被撤銷或換掉的電腦收到兩次 401 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
 - **換新電腦**（移轉輔助程式或 Time Machine 會把 Keychain 的寫入密鑰與 `history.sqlite3` 一起搬過去）：新電腦沿用同一個 `device_id`，不需要重新設定；舊電腦若還會繼續使用，在舊電腦執行 `set-tier2.sh --disable`（停止上傳）。同一把密鑰在兩台電腦上傳時，兩台會互相覆蓋同一個 `device_id` 的數字，其他電腦看到的合計會來回跳。

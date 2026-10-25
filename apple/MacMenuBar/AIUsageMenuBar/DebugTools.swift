@@ -274,6 +274,16 @@ enum DebugTools {
         let pc = TokenDeviceScope.device("0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b")
         var noUpload = data
         noUpload.devices.devices.append(TokenDevice(id: "2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", name: "新電腦"))
+        // 撤銷：筆電只撤銷（資料保留，仍算在「N 台」裡），Windows-VM 撤銷並刪除資料（不列出）
+        let vm = TokenDevice(id: "3c4d5e6f-1b2d-4e5f-8a9b-0c1d2e3f4a5b", name: "Windows-VM",
+                             lastUpload: RenderClock.now.addingTimeInterval(-3600), revoked: true)
+        var revokedDevice = data
+        revokedDevice.devices.devices[2].revoked = true
+        revokedDevice.devices.devices.append(vm)
+        revokedDevice.devices = revokedDevice.devices.removingDeleted(days: revokedDevice.days)
+        // 唯一的其他電腦撤銷並刪除資料：回到「這台 Mac」，沒有裝置切換
+        var deleted = local
+        deleted.devices = TokenDevices(devices: [data.devices.devices[0], vm]).removingDeleted(days: local.days)
         for scheme in [ColorScheme.light, .dark] {
             let n = scheme.name
             write(statsCard(data, device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-all-\(n).png"))
@@ -282,6 +292,8 @@ enum DebugTools {
             write(statsCard(noUpload, device: .device("2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")), scheme: scheme,
                   to: dir.appendingPathComponent("tier2-card-no-upload-\(n).png"))
             write(statsCard(tier2Sample(local, revoked: true), device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-revoked-\(n).png"))
+            write(statsCard(revokedDevice, device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-revoked-device-\(n).png"))
+            write(statsCard(deleted, device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-deleted-device-\(n).png"))
             if var full = HistoryStore.shared.loadFullTokenStats() {
                 full.days = data.days
                 full.devices = data.devices

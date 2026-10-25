@@ -69,6 +69,17 @@ public struct TokenDevices: Equatable, Sendable {
 
     public var others: [TokenDevice] { devices.filter { !$0.isSelf } }
 
+    /// 拿掉撤銷時一併刪除了資料的電腦（`relay-device.sh revoke --delete-data`）：中繼的清單仍有它（標撤銷），
+    /// 但已沒有任何每日資料，不再列出、也不算在「N 台」裡；只剩這台 Mac 時回到「這台 Mac」。
+    /// 中繼不回報資料是否刪除，以 `days`（收集器下載後本機的每日資料）裡沒有它判斷。
+    /// 只撤銷、保留資料的電腦照常列出並標「已撤銷」；沒撤銷的電腦即使還沒有資料也列出（「尚未上傳」）
+    public func removingDeleted(days: [TokenDayRow]) -> TokenDevices {
+        let withData = Set(days.map(\.device))
+        var result = self
+        result.devices = devices.filter { $0.isSelf || !$0.revoked || withData.contains($0.id) }
+        return result
+    }
+
     /// 有其他電腦時才顯示裝置切換；沒有第二層時一律「這台 Mac」（ADR-0011 第 4 節）
     public var enabled: Bool { !others.isEmpty }
 
