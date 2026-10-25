@@ -1,5 +1,5 @@
 #!/bin/bash
-# 重新產生 iOS 與 Mac 的 App 圖示 PNG（寫進兩個 App 的 Assets.xcassets/AppIcon.appiconset）。
+# 重新產生 iOS、手錶與 Mac 的 App 圖示 PNG（寫進三個 App 的 Assets.xcassets/AppIcon.appiconset）。
 #
 #   scripts/render-app-icon.sh
 #

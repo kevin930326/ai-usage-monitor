@@ -74,10 +74,10 @@ L12.00 23.00 L10.35 15.97 L6.20 17.80 L8.03 13.65 L1.00 12.00 L8.03 10.35 L6.20 
 
 - 雲朵的 `>_` 鏤空透出底下的背景（一般為青綠，深色與主題色為黑色）。
 - Mac 選單列 App 用一般外觀：1024 畫布中置中 824×824、連續圓角半徑 22.5%（約 185），加向下 10、模糊 10、黑色 30% 的陰影，四周透明；輸出 16～1024 各尺寸。
-- 手錶 App 尚未加圖示。
+- 手錶 App 用一般外觀，單一 1024×1024（watchOS 沒有深色、主題色版本），與 iPhone 的一般版相同。
 - **不要手改 PNG**：改 `scripts/render-app-icon.swift` 後執行 `scripts/render-app-icon.sh`，它直接用 UsageKitUI 的兩個 Shape，圖示會和 App 內一致。
 
-來源：`scripts/render-app-icon.swift`、`apple/iOSApp/AIUsageMonitor/Assets.xcassets/AppIcon.appiconset`、`apple/MacMenuBar/AIUsageMenuBar/Assets.xcassets/AppIcon.appiconset`、兩個 `project.yml` 的 `ASSETCATALOG_COMPILER_APPICON_NAME`。
+來源：`scripts/render-app-icon.swift`、`apple/iOSApp/AIUsageMonitor/Assets.xcassets/AppIcon.appiconset`、`apple/WatchApp/AIUsageWatch/Assets.xcassets/AppIcon.appiconset`、`apple/MacMenuBar/AIUsageMenuBar/Assets.xcassets/AppIcon.appiconset`、`apple/iOSApp/project.yml`、`apple/WatchApp/project.yml`、`apple/MacMenuBar/project.yml` 的 `ASSETCATALOG_COMPILER_APPICON_NAME`。
 
 ## 3. 不收錄官方 logo
 
