@@ -12,8 +12,12 @@ MAX_LOG_BYTES = 1_000_000
 
 
 def log(message: str) -> None:
-    # launchd 會把 stderr 導到日誌檔，加上時間方便追查
-    print(f"[{iso_utc(datetime.now(timezone.utc))}] {message}", file=sys.stderr)
+    # launchd 會把 stderr 導到日誌檔，加上時間方便追查。日誌寫不進去（磁碟滿、檔案已關）時放棄這一行：
+    # 記錄失敗不能中斷收集，尤其是磁碟不足時照常上傳（ADR-0014 LT-06，審查 C-01）
+    try:
+        print(f"[{iso_utc(datetime.now(timezone.utc))}] {message}", file=sys.stderr, flush=True)
+    except (OSError, ValueError):
+        pass
 
 
 def rotate_if_large(path: Path, limit: int = MAX_LOG_BYTES, expected: tuple[int, int] | None = None) -> bool:

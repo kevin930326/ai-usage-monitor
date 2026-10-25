@@ -19,6 +19,13 @@ MB = 1024 * 1024
 NO_LOGS = {"claude": Path("/nonexistent/claude"), "codex": Path("/nonexistent/codex")}
 
 
+class FullStream(io.StringIO):
+    """日誌所在的磁碟也滿了：每次寫入都丟 ENOSPC"""
+
+    def write(self, s):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+
 class DiskTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -58,7 +65,7 @@ class LowSpaceTest(DiskTestCase):
 
 
 class CollectorTest(DiskTestCase):
-    def run_cli(self, *args, write_error=None):
+    def run_cli(self, *args, write_error=None, log_full=False):
         self.usage = self.dir / "usage.json"
         self.history = self.dir / "history.sqlite3"
         providers = {"claude": mock.Mock(fetch=mock.Mock(return_value=ProviderUsage(
@@ -69,7 +76,7 @@ class CollectorTest(DiskTestCase):
             if write_error:
                 raise write_error
             return write(s, self.usage)
-        err = io.StringIO()
+        err = FullStream() if log_full else io.StringIO()
         with mock.patch.dict(cli.PROVIDERS, providers, clear=True), \
              mock.patch.object(cli, "enabled_providers", return_value=["claude"]), \
              mock.patch.object(cli.local_store, "write_snapshot", side_effect=write_snapshot), \
@@ -113,6 +120,21 @@ class CollectorTest(DiskTestCase):
         upload.assert_called_once()
         self.assertIn("無法寫入 usage.json（OSError），照常上傳", err)
         self.assertNotIn("/x/usage.json", err)
+
+    def test_full_log_disk_does_not_stop_the_upload(self):
+        """日誌也寫不進去（同一顆滿的磁碟）：狀態轉換與快照失敗的日誌丟掉，上傳照常（審查 C-01）"""
+        with self.free(100):
+            code, upload, tokens, sync, _, _ = self.run_cli("--write-local", "--upload", log_full=True)
+        self.assertEqual(code, 0)
+        upload.assert_called_once()
+        tokens.assert_not_called()
+        sync.assert_not_called()
+        with self.free(100):
+            code, upload, _, _, _, _ = self.run_cli(
+                "--write-local", "--upload", log_full=True,
+                write_error=OSError(errno.ENOSPC, "No space left on device", "/x/usage.json"))
+        self.assertEqual(code, 1)
+        upload.assert_called_once()
 
     def test_tokens_only_on_low_disk_skips_everything(self):
         with self.free(100):
