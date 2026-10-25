@@ -186,12 +186,13 @@ enum DebugTools {
 
     /// 統計卡片單獨輸出（面板寬度），方便比較各種狀態
     private static func statsCard(_ data: TokenStatsData, status: HistoryStore.Status = .ready, device: TokenDeviceScope? = nil,
-                                  scope: TokenScope = .all, range: TokenActivityRange = .days30, motion: PanelMotion = .settled) -> some View {
+                                  scope: TokenScope = .all, range: TokenActivityRange = .days30, measure: TokenMeasure = .main,
+                                  motion: PanelMotion = .settled) -> some View {
         let device = data.devices.resolve(device)
         return PanelCard(id: PanelSection.stats.rawValue, accessibilityTitle: PanelSection.stats.title, collapsed: .constant(false)) {
             StatsCardHeader(devices: data.devices, scope: device, now: RenderClock.now)
         } content: {
-            StatsCardContent(data: data, status: status, device: device, scope: scope, range: range, now: RenderClock.now,
+            StatsCardContent(data: data, status: status, device: device, scope: scope, range: range, measure: measure, now: RenderClock.now,
                              selectScope: { _ in }, selectRange: { _ in })
         }
         .frame(width: 328)
@@ -217,6 +218,10 @@ enum DebugTools {
             write(statsCard(data, scope: .codex, range: .weeks), scheme: scheme, to: dir.appendingPathComponent("stats-card-codex-weeks-\(n).png"))
             write(statsCard(data, scope: .claude, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-claude-cumulative-\(n).png"))
             write(statsCard(short, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-retention7-\(n).png"))
+            // 含快取讀取（FR-60）：數字、長條、熱力圖都改變，數字旁標「含快取」
+            write(statsCard(data, measure: .includingCacheRead), scheme: scheme, to: dir.appendingPathComponent("stats-card-cache-read-\(n).png"))
+            write(statsCard(data, range: .cumulative, measure: .includingCacheRead), scheme: scheme,
+                  to: dir.appendingPathComponent("stats-card-cache-read-cumulative-\(n).png"))
             write(statsCard(fresh), scheme: scheme, to: dir.appendingPathComponent("stats-skeleton-\(n).png"))
             write(statsCard(none), scheme: scheme, to: dir.appendingPathComponent("stats-empty-\(n).png"))
             var suspect = data
@@ -233,6 +238,10 @@ enum DebugTools {
             if let full = HistoryStore.shared.loadFullTokenStats() {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
                       scheme: scheme, to: dir.appendingPathComponent("stats-window-\(n).png"))
+                PanelSettings.shared.statsMeasure = .includingCacheRead
+                write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
+                      scheme: scheme, to: dir.appendingPathComponent("stats-window-cache-read-\(n).png"))
+                PanelSettings.shared.statsMeasure = .main
             }
         }
         renderTier2(data, to: dir)
@@ -285,6 +294,10 @@ enum DebugTools {
             write(statsCard(data, device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-all-\(n).png"))
             write(statsCard(data, device: .thisMac), scheme: scheme, to: dir.appendingPathComponent("tier2-card-this-mac-\(n).png"))
             write(statsCard(data, device: pc), scheme: scheme, to: dir.appendingPathComponent("tier2-card-pc-\(n).png"))
+            write(statsCard(data, device: .all, measure: .includingCacheRead), scheme: scheme,
+                  to: dir.appendingPathComponent("tier2-card-all-cache-read-\(n).png"))
+            write(statsCard(data, device: pc, measure: .includingCacheRead), scheme: scheme,
+                  to: dir.appendingPathComponent("tier2-card-pc-cache-read-\(n).png"))
             write(statsCard(noUpload, device: .device("2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")), scheme: scheme,
                   to: dir.appendingPathComponent("tier2-card-no-upload-\(n).png"))
             write(statsCard(tier2Sample(local, revoked: true), device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-revoked-\(n).png"))

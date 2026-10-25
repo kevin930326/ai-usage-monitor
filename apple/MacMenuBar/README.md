@@ -31,7 +31,7 @@
 
 統計卡片與完整統計視窗讀同一個 `history.sqlite3` 的 `daily_tokens`、`records`、`record_days`（完整統計視窗另讀 `hourly_tokens`），只讀這台 Mac 的 `device_id`；計算在 UsageKit 的 `TokenStats.swift`。
 
-- 主數字＝input＋cache_write＋output；快取讀取另外列在滑鼠說明。「本週」從本機時間星期一 00:00 起，與上週同一段期間比較。
+- 主數字＝input＋cache_write＋output；快取讀取另外列在滑鼠說明。全部／Claude／Codex 旁的「含快取讀取」（FR-60，預設關閉、記住選擇）打開時所有數字、圖表與個人紀錄都加上快取讀取，數字旁標「含快取」。「本週」從本機時間星期一 00:00 起，與上週同一段期間比較。
 - 單日最高、最長任務、最長連續天數、累計以收集器的 `records` 為準（不受保留期間影響）；目前的連續天數以 `record_days` 計算，今天還沒用時算到昨天。
 - 首次掃描完成前（`meta.first_scan_done`）顯示骨架「正在整理過去的紀錄（N%）」；沒有任何紀錄時顯示「這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄」。
 - 完整統計視窗打開時另開一個短暫的連線讀完就關，關閉視窗時釋放資料。

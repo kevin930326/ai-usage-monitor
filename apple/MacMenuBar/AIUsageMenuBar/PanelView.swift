@@ -211,8 +211,8 @@ struct PanelView: View {
                 StatsCardHeader(devices: historyStore.tokens.devices, scope: statsDevice, now: store.now)
             } content: {
                 StatsCardContent(data: historyStore.tokens, status: historyStore.status, device: statsDevice, scope: settings.statsScope,
-                                 range: settings.statsRange, now: store.now, selectDevice: selectStatsDevice,
-                                 selectScope: selectStatsScope, selectRange: selectStatsRange)
+                                 range: settings.statsRange, measure: settings.statsMeasure, now: store.now, selectDevice: selectStatsDevice,
+                                 selectScope: selectStatsScope, selectRange: selectStatsRange, selectMeasure: selectStatsMeasure)
             }
         case .status:
             // 都正常時一行低調顯示；有服務異常或額度用完時才是卡片（FR-45）
@@ -279,6 +279,13 @@ struct PanelView: View {
     private func selectStatsScope(_ scope: TokenScope) {
         guard scope != settings.statsScope else { return }
         settings.statsScope = scope
+        replayStatsCharts()
+    }
+
+    /// 含快取讀取的切換（FR-60）：與切換服務一樣交叉淡入、圖表重新長出
+    private func selectStatsMeasure(_ measure: TokenMeasure) {
+        guard measure != settings.statsMeasure else { return }
+        settings.statsMeasure = measure
         replayStatsCharts()
     }
 

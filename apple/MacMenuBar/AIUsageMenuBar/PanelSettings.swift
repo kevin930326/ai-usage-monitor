@@ -100,6 +100,7 @@ final class PanelSettings {
         static let statsScope = "panel.statsScope"
         static let statsRange = "panel.statsRange"
         static let statsDevice = "panel.statsDevice"
+        static let statsMeasure = "panel.statsMeasure"
         static let celebratedStreak = "panel.celebratedStreak"
         static let notifyLow = "notify.low"
         static let notifyTooFast = "notify.tooFast"
@@ -161,6 +162,11 @@ final class PanelSettings {
         didSet { defaults.set(statsDevice?.rawValue, forKey: Key.statsDevice) }
     }
 
+    /// 統計是否含快取讀取（FR-60）；預設不含。面板與完整統計視窗共用
+    var statsMeasure: TokenMeasure {
+        didSet { defaults.set(statsMeasure.rawValue, forKey: Key.statsMeasure) }
+    }
+
     /// 已經播過 🔥 的連續天數紀錄（每個新紀錄只播一次）
     var celebratedStreak: Int {
         didSet { defaults.set(celebratedStreak, forKey: Key.celebratedStreak) }
@@ -220,6 +226,7 @@ final class PanelSettings {
         statsScope = defaults.string(forKey: Key.statsScope).flatMap(TokenScope.init) ?? .all
         statsRange = defaults.string(forKey: Key.statsRange).flatMap(TokenActivityRange.init) ?? .days30
         statsDevice = defaults.string(forKey: Key.statsDevice).flatMap(TokenDeviceScope.init)
+        statsMeasure = defaults.string(forKey: Key.statsMeasure).flatMap(TokenMeasure.init) ?? .main
         celebratedStreak = defaults.integer(forKey: Key.celebratedStreak)
         notifyLow = defaults.object(forKey: Key.notifyLow) as? Bool ?? true
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
