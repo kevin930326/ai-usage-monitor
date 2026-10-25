@@ -80,7 +80,7 @@ Codex 的 L-03（其餘表多數有界）與 Fable 的容量表合併到下一�
 - 每 30 天一次（或可回收空間超過 20% 且至少 1 MB）`VACUUM`＋`wal_checkpoint(TRUNCATE)`，放在每天第一次的清理之後；清理在 `usage.json` 與上傳**之後**執行，所以維護再久也不會延誤快照與上傳。磁碟剩餘空間不到資料庫大小的 2 倍＋64 MB 時不做。
   - 時間：實測 120 MB 的資料庫 `VACUUM` 0.3 秒（Apple Silicon SSD）；時間窗上線後資料庫約 15～45 MB，遠低於這個量。這一輪可能超過 NFR-10 的「一般輪次 < 1 秒」，屬於每月一次的例外。
   - 鎖：`VACUUM` 是一個寫入交易，等待上限與其他寫入相同（busy_timeout 5 秒）；等不到時 `record_safely` 記一行、不寫 `last_vacuum_at`，隔天再試。App 的讀取連線（WAL）不擋 `VACUUM`；`wal_checkpoint(TRUNCATE)` 遇到讀取中只回傳 busy、不等待，下次 checkpoint 照常。
-- 可用空間低於門檻時暫停寫歷史與 Token 統計，`usage.json` 與上傳照常；面板顯示警告。`usage.json` 寫入失敗只記一行，不中止上傳。
+- 可用空間低於門檻時暫停寫歷史與 Token 統計，`usage.json` 與額度快照的上傳照常；第二層的每日加總上傳與下載也暫停（上傳要寫 `upload_state`），其他電腦看到的這台 Token 停在暫停前（ADR-0011 第 6 節）；面板顯示警告。`usage.json` 寫入失敗只記一行，不中止上傳。
 - 啟動時清掉 1 天以上的暫存快照檔。
 
 ### 4. 時間與並行（LT-10、LT-11、LT-16）

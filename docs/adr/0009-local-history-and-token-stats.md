@@ -203,7 +203,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建（清除剛好落在收集器一輪中間時，那一輪在交易外判斷沒變而略過的檔案已沒有掃描進度，收集器不標記首次掃描完成、不設略過界，下一輪照常完整重建；ADR-0014 總檢查 F-02） |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
-估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 每年數十萬列；整個檔案預期 < 50 MB。
+估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 只留 90 天的時間窗（ADR-0014 LT-01，約 10 萬列）；10 年的總佔用與實測數字見 ADR-0014「10 年總佔用」。
 
 ### 6. 裝置識別
 
