@@ -22,6 +22,13 @@ import UsageKitUI
 /// - `AUM_DEMO_SYSTEM_APPEARANCE=light|dark`：把 `NSApp.appearance` 設成這個外觀，模擬系統的淺色／深色（不改系統設定）。
 @MainActor
 enum DebugTools {
+    /// 示範與截圖模式（面板預覽、打開實際視窗、切換外觀）：設定用獨立、每次清空的網域，不送通知，
+    /// 不會改到正式的設定與通知紀錄（Codex C-01）
+    nonisolated static var isDemo: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return env["AUM_DEMO_PANEL"] == "1" || !(env["AUM_DEMO_WINDOWS"] ?? "").isEmpty || !(env["AUM_DEMO_SWITCH"] ?? "").isEmpty
+    }
+
     private static var panelWindow: NSWindow?
     private static var statsWindow: NSWindow?
     private static var wizardWindow: NSWindow?

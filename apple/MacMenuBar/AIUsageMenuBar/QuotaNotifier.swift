@@ -17,7 +17,7 @@ final class QuotaNotifier: NSObject {
     /// Debug 的截圖與量測（假資料）不送通知、不改記錄
     private var disabled: Bool {
         #if DEBUG
-        ProcessInfo.processInfo.environment["AUM_DEMO_PANEL"] == "1" || ProcessInfo.processInfo.environment["AUM_RENDER_DIR"] != nil
+        DebugTools.isDemo || ProcessInfo.processInfo.environment["AUM_RENDER_DIR"] != nil
         #else
         false
         #endif
