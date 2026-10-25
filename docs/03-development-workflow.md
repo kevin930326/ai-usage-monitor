@@ -60,3 +60,7 @@ docs: add architecture diagram
 
 - `git diff --staged` 確認沒有 token、密鑰、個人帳號資訊。
 - 新的設定檔先寫 `.example` 版本，真實檔案加入 `.gitignore`。
+
+## 7. 清理開發產物
+
+建置產物、舊的 DerivedData、無法使用的模擬器、本機的 `backup/*` 分支與 `design/_trash/` 中超過 30 天的東西會一直累積（一個 worktree 跑過 verify-all 約 3 GB）。`scripts/clean-dev.sh` 預設只列出每一類與大小；`--clean` 逐類詢問後清理（`_trash` 的項目移到垃圾桶、不直接刪除），`--clean --yes` 不詢問。xcodebuild 執行中時不清建置產物與 DerivedData；iPhone 自動重裝用的 `~/Library/Caches/AIUsageMonitor/DerivedData` 與收集器的資料不在範圍內。
