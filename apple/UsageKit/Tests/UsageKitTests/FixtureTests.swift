@@ -82,6 +82,10 @@ import Testing
         #expect(tightest.window.effectiveRemainingPct(at: updatedAt) == 0)
         let state = UsageActivityState(snapshot: codexOnly, mode: .remaining)
         #expect(!state.hasPartialFailure)
+        // 重置卷 3 張，明細 2 張（一張 10/23 03:00Z 到期、一張不會到期）
+        let credits = try #require(codex.resetCredits)
+        #expect(credits.available == 3)
+        #expect(credits.credits.map(\.expiresAt) == [Date(timeIntervalSince1970: 1_792_724_400), nil])
         #expect(try UsageDecoder.decode(UsageEncoder.encode(codexOnly)) == codexOnly)
     }
 

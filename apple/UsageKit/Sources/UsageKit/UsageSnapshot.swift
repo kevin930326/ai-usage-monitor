@@ -27,11 +27,28 @@ public struct ProviderUsage: Codable, Equatable, Sendable {
     public var plan: String?
     public var error: String?
     public var windows: [UsageWindow]
+    /// 重置次數卷（目前只有 Codex，FR-58）；收集器沒給時為 nil
+    public var resetCredits: ResetCredits?
 
-    public init(plan: String? = nil, error: String? = nil, windows: [UsageWindow] = []) {
+    public init(plan: String? = nil, error: String? = nil, windows: [UsageWindow] = [], resetCredits: ResetCredits? = nil) {
         self.plan = plan
         self.error = error
         self.windows = windows
+        self.resetCredits = resetCredits
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case plan, error, windows
+        case resetCredits = "reset_credits"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        plan = try c.decodeIfPresent(String.self, forKey: .plan)
+        error = try c.decodeIfPresent(String.self, forKey: .error)
+        windows = try c.decode([UsageWindow].self, forKey: .windows)
+        // 選填的附加資訊：格式不對時當成沒有，不讓整份快照讀不了
+        resetCredits = try? c.decodeIfPresent(ResetCredits.self, forKey: .resetCredits)
     }
 
     /// 預設顯示的額度（排除各模型等次要額度，FR-14）
