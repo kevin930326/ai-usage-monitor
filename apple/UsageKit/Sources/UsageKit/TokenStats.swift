@@ -30,6 +30,16 @@ public enum TokenScope: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// 統計的計算方式（FR-60）：主數字（input＋cache_write＋output，預設），或再加上 cache_read。
+public enum TokenMeasure: String, Sendable {
+    case main
+    case includingCacheRead
+
+    /// 數字旁的小字與滑鼠說明
+    public static let badge = "含快取"
+    public static let help = "包含 AI 重複讀取對話的快取，通常佔總量的大部分"
+}
+
 /// 四種 Token 分開保存（ADR-0009 第 4 節）；`reasoning` 是 `output` 的明細，不另外加總。
 public struct TokenCounts: Equatable, Sendable {
     public var input: Int64
@@ -50,6 +60,11 @@ public struct TokenCounts: Equatable, Sendable {
 
     /// 顯示的「Token」主數字 = input + cache_write + output（不含 cache_read）
     public var main: Int64 { input + cacheWrite + output }
+
+    /// 依計算方式的數字：主數字，或再加上 cache_read（FR-60）
+    public func value(_ measure: TokenMeasure) -> Int64 {
+        measure == .includingCacheRead ? main + cacheRead : main
+    }
 
     public static func + (a: TokenCounts, b: TokenCounts) -> TokenCounts {
         TokenCounts(input: a.input + b.input, cacheWrite: a.cacheWrite + b.cacheWrite, cacheRead: a.cacheRead + b.cacheRead,
@@ -134,6 +149,8 @@ public struct TokenStatsData: Equatable, Sendable {
     public var dataFrom: String?
     /// 第二層的裝置清單（沒有安裝第二層時為 `.none`）
     public var devices: TokenDevices
+    /// 計算方式（`measured(_:)` 設定）；所有 Token 數字、長條、熱力圖與各模型都依它計算
+    public private(set) var measure: TokenMeasure = .main
 
     public init(days: [TokenDayRow] = [], hours: [TokenHourRow] = [], records: [String: TokenRecord] = [:],
                 recordDays: [String: [String: Int64]] = [:],
@@ -178,6 +195,18 @@ public struct TokenStatsData: Equatable, Sendable {
         case let (a?, b?): return max(a, b)
         case let (a, b): return a ?? b
         }
+    }
+
+    /// 改用另一種計算方式。收集器的 `best_day_tokens`、`total_tokens` 只記主數字（不含 cache_read），
+    /// 含快取讀取時拿掉，單日最高與累計改由每日資料計算（範圍是每日資料還在的期間，與所有電腦相同）；
+    /// 最長任務與連續天數與計算方式無關，照舊
+    public func measured(_ measure: TokenMeasure) -> TokenStatsData {
+        var result = self
+        result.measure = measure
+        if measure == .includingCacheRead {
+            result.records = records.filter { !$0.key.hasPrefix("best_day_tokens") && !$0.key.hasPrefix("total_tokens") }
+        }
+        return result
     }
 
     /// 每天（依範圍）的合計
@@ -229,7 +258,7 @@ public enum TokenCalendar {
 public struct TokenSummary: Equatable, Sendable {
     /// 本週（星期一起）的合計
     public var thisWeek: TokenCounts
-    /// 上週同一段期間（星期一到上週的今天）的主數字
+    /// 上週同一段期間（星期一到上週的今天）的數字（依計算方式）
     public var lastWeekSamePeriod: Int64
     public var bestDay: TokenRecord?
     public var longestTaskSeconds: TokenRecord?
@@ -237,11 +266,16 @@ public struct TokenSummary: Equatable, Sendable {
     public var currentStreak: Int
     public var longestStreak: TokenRecord?
     public var total: TokenRecord?
+    /// 計算方式（`TokenStatsData.measure`）
+    public var measure: TokenMeasure
+
+    /// 本週的數字（依計算方式）
+    public var thisWeekValue: Int64 { thisWeek.value(measure) }
 
     /// 與上週同期相比的變化（%）；上週同期為 0 時為 nil
     public var changePct: Double? {
         guard lastWeekSamePeriod > 0 else { return nil }
-        return (Double(thisWeek.main) - Double(lastWeekSamePeriod)) / Double(lastWeekSamePeriod) * 100
+        return (Double(thisWeekValue) - Double(lastWeekSamePeriod)) / Double(lastWeekSamePeriod) * 100
     }
 
     /// 目前的連續天數就是（或追平）最長紀錄
@@ -251,6 +285,8 @@ public struct TokenSummary: Equatable, Sendable {
 
     public init(data: TokenStatsData, scope: TokenScope, now: Date, calendar base: Calendar = .current) {
         let calendar = TokenCalendar.make(base)
+        let m = data.measure
+        measure = m
         let totals = data.dailyTotals(scope: scope)
         let today = calendar.startOfDay(for: now)
         let monday = TokenCalendar.startOfWeek(now, calendar: calendar)
@@ -260,7 +296,7 @@ public struct TokenSummary: Equatable, Sendable {
         for offset in 0...max(daysIntoWeek, 0) {
             let day = TokenCalendar.adding(offset, to: monday, calendar: calendar)
             week += totals[TokenCalendar.key(day, calendar: calendar)] ?? .zero
-            last += totals[TokenCalendar.key(TokenCalendar.adding(-7, to: day, calendar: calendar), calendar: calendar)]?.main ?? 0
+            last += totals[TokenCalendar.key(TokenCalendar.adding(-7, to: day, calendar: calendar), calendar: calendar)]?.value(m) ?? 0
         }
         thisWeek = week
         // 上週同期已超過保留期間：無法比較
@@ -270,23 +306,23 @@ public struct TokenSummary: Equatable, Sendable {
 
         // 個人紀錄以 records 為準（不受保留期間影響）；收集器還沒寫入時從每日資料算
         func record(_ base: String) -> TokenRecord? { data.records[scope.recordKey(base)] }
-        let computedBest = totals.filter { $0.value.main > 0 }.max { ($0.value.main, $1.key) < ($1.value.main, $0.key) }
-            .map { TokenRecord(value: $0.value.main, day: $0.key) }
+        let computedBest = totals.filter { $0.value.value(m) > 0 }.max { ($0.value.value(m), $1.key) < ($1.value.value(m), $0.key) }
+            .map { TokenRecord(value: $0.value.value(m), day: $0.key) }
         bestDay = [record("best_day_tokens"), computedBest].compactMap { $0 }.max { $0.value < $1.value }
         let computedLongest = data.days.filter { scope.includes($0.provider) && $0.longestTaskSeconds > 0 }
             .max { $0.longestTaskSeconds < $1.longestTaskSeconds }
             .map { TokenRecord(value: Int64($0.longestTaskSeconds), day: $0.day) }
         longestTaskSeconds = [record("longest_task_seconds"), computedLongest].compactMap { $0 }.max { $0.value < $1.value }
-        total = record("total_tokens") ?? (totals.isEmpty ? nil : TokenRecord(value: totals.values.reduce(0) { $0 + $1.main }))
+        total = record("total_tokens") ?? (totals.isEmpty ? nil : TokenRecord(value: totals.values.reduce(0) { $0 + $1.value(m) }))
 
         // 有 record_days 時以它為準（不受保留期間影響），否則用每日資料
         func used(_ date: Date) -> Bool {
             let key = TokenCalendar.key(date, calendar: calendar)
             if !data.recordDays.isEmpty {
                 return (data.recordDays[key] ?? [:]).contains { scope.includes($0.key) && $0.value > 0 }
-                    || (totals[key]?.main ?? 0) > 0
+                    || (totals[key]?.value(m) ?? 0) > 0
             }
-            return (totals[key]?.main ?? 0) > 0
+            return (totals[key]?.value(m) ?? 0) > 0
         }
         var streak = 0
         var cursor = used(today) ? today : TokenCalendar.adding(-1, to: today, calendar: calendar)
@@ -322,13 +358,15 @@ public enum TokenActivityRange: String, CaseIterable, Identifiable, Sendable {
 /// 長條圖的一根（一天或一週）。
 public struct TokenBar: Equatable, Sendable {
     public var start: Date
-    /// 依服務分開的主數字（疊加長條用）
+    /// 依服務分開的數字（疊加長條用，依計算方式）
     public var byProvider: [String: Int64]
     public var counts: TokenCounts
     /// 這段期間的每日資料還在保留期間內（否則不畫，也不當成 0）
     public var available: Bool = true
+    public var measure: TokenMeasure = .main
 
-    public var main: Int64 { counts.main }
+    /// 長條的高度（依計算方式；累計時是當天結束時的累計）
+    public var value: Int64 { counts.value(measure) }
 }
 
 public enum TokenActivity {
@@ -338,13 +376,14 @@ public enum TokenActivity {
     public static func bars(data: TokenStatsData, scope: TokenScope, range: TokenActivityRange, now: Date,
                             calendar base: Calendar = .current) -> [TokenBar] {
         let calendar = TokenCalendar.make(base)
+        let m = data.measure
         let today = calendar.startOfDay(for: now)
         let first = data.firstAvailableDay(now: now, calendar: base)
         func available(_ date: Date) -> Bool { first.map { date >= $0 } ?? true }
         var byDay: [String: (counts: TokenCounts, providers: [String: Int64])] = [:]
         for row in data.days where scope.includes(row.provider) {
             byDay[row.day, default: (.zero, [:])].counts += row.counts
-            byDay[row.day, default: (.zero, [:])].providers[row.provider, default: 0] += row.counts.main
+            byDay[row.day, default: (.zero, [:])].providers[row.provider, default: 0] += row.counts.value(m)
         }
         func day(_ date: Date) -> (TokenCounts, [String: Int64]) {
             let value = byDay[TokenCalendar.key(date, calendar: calendar)]
@@ -355,7 +394,7 @@ public enum TokenActivity {
             return (0..<dayCount).map { i in
                 let date = TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)
                 let (counts, providers) = day(date)
-                return TokenBar(start: date, byProvider: providers, counts: counts, available: available(date))
+                return TokenBar(start: date, byProvider: providers, counts: counts, available: available(date), measure: m)
             }
         case .weeks:
             let monday = TokenCalendar.startOfWeek(now, calendar: calendar)
@@ -369,17 +408,18 @@ public enum TokenActivity {
                     providers.merge(p, uniquingKeysWith: +)
                 }
                 // 一週的第一天也在保留期間內才算完整；跨過保留邊界的週有幾天已刪除，合計不可信
-                return TokenBar(start: start, byProvider: providers, counts: counts, available: available(start))
+                return TokenBar(start: start, byProvider: providers, counts: counts, available: available(start), measure: m)
             }
         case .cumulative:
-            // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣。
-            // 保留期間以前的日子算不出當天的累計，不畫
+            // 每天結束時的累計：以 records 的累計 Token（含保留期間以前）往回扣；沒有 records 時（所有電腦、
+            // 含快取讀取）是每日資料的合計。保留期間以前的日子算不出當天的累計，不畫。
+            // 累計放在 input（兩種計算方式都等於它）
             let daily = (0..<dayCount).map { i in day(TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)) }
-            let windowTotal = daily.reduce(Int64(0)) { $0 + $1.0.main }
-            let allTotals = data.dailyTotals(scope: scope).values.reduce(Int64(0)) { $0 + $1.main }
+            let windowTotal = daily.reduce(Int64(0)) { $0 + $1.0.value(m) }
+            let allTotals = data.dailyTotals(scope: scope).values.reduce(Int64(0)) { $0 + $1.value(m) }
             var running = max((data.records[scope.recordKey("total_tokens")]?.value ?? allTotals) - windowTotal, 0)
             return daily.enumerated().map { i, value in
-                running += value.0.main
+                running += value.0.value(m)
                 let date = TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)
                 return TokenBar(start: date, byProvider: [:], counts: TokenCounts(input: running), available: available(date))
             }
@@ -402,6 +442,7 @@ public struct TokenHeatmap: Equatable, Sendable {
 
     public init(data: TokenStatsData, scope: TokenScope, now: Date, weeks: Int, calendar base: Calendar = .current) {
         let calendar = TokenCalendar.make(base)
+        let m = data.measure
         let totals = data.dailyTotals(scope: scope)
         let today = calendar.startOfDay(for: now)
         self.weeks = weeks
@@ -416,7 +457,7 @@ public struct TokenHeatmap: Equatable, Sendable {
                 cells.append(nil)
                 continue
             }
-            cells.append(date > today ? nil : totals[TokenCalendar.key(date, calendar: calendar)]?.main ?? 0)
+            cells.append(date > today ? nil : totals[TokenCalendar.key(date, calendar: calendar)]?.value(m) ?? 0)
         }
         self.cells = cells
         self.truncated = truncated
@@ -446,22 +487,24 @@ public struct TokenModelTotal: Equatable, Sendable, Identifiable {
 }
 
 public enum TokenBreakdown {
-    /// 各模型的合計，依主數字由大到小。以（服務、模型）分組：兩家都有白名單外的模型時各自一列 `other`
+    /// 各模型的合計，依數字（計算方式）由大到小。以（服務、模型）分組：兩家都有白名單外的模型時各自一列 `other`
     public static func models(data: TokenStatsData, scope: TokenScope) -> [TokenModelTotal] {
+        let m = data.measure
         var result: [String: TokenModelTotal] = [:]
         for row in data.days where scope.includes(row.provider) {
             let key = "\(row.provider)/\(row.model)"
             result[key, default: TokenModelTotal(provider: row.provider, model: row.model, counts: .zero)].counts += row.counts
         }
-        return result.values.filter { $0.counts.main > 0 }
-            .sorted { ($0.counts.main, $1.model, $1.provider) > ($1.counts.main, $0.model, $0.provider) }
+        return result.values.filter { $0.counts.value(m) > 0 }
+            .sorted { ($0.counts.value(m), $1.model, $1.provider) > ($1.counts.value(m), $0.model, $0.provider) }
     }
 
-    /// 一天中各時段（0～23 時）的主數字合計
+    /// 一天中各時段（0～23 時）的合計（依計算方式）
     public static func hours(data: TokenStatsData, scope: TokenScope) -> [Int64] {
+        let m = data.measure
         var result = [Int64](repeating: 0, count: 24)
         for row in data.hours where scope.includes(row.provider) && (0..<24).contains(row.hour) {
-            result[row.hour] += row.counts.main
+            result[row.hour] += row.counts.value(m)
         }
         return result
     }
