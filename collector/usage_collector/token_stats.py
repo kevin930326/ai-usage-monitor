@@ -15,7 +15,7 @@ import sqlite3
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import history, system
@@ -28,6 +28,12 @@ CHUNK_BYTES = 64 * 1024 * 1024  # 每次執行最多處理的位元組（首次�
 CHUNK_SECONDS = 15.0
 TASK_CAP_SECONDS = 6 * 3600  # Claude：超過 6 小時視為中斷，以 6 小時計
 LAST_SEEN_REFRESH = 86400  # 沒有變化的檔案一天更新一次 last_seen
+# 去重的時間窗（ADR-0014 第 1 節）：本機日期早於略過界 D（meta.seen_cutoff_day）的訊息、回應、任務與 Codex 累計差額
+# 不計算也不記錄；D 每次執行最多前進一天到 SEEN_DAYS 天前、只進不退，首次掃描完成前不設定。
+# 去重表只留 day >= D − 1 的列（多留一天吸收改時區後同一時間戳算出不同日期），每次最多刪 SEEN_PRUNE_ROWS 列
+SEEN_DAYS = 90
+SEEN_PRUNE_ROWS = 20_000
+SEEN_TABLES = ("seen_ids", "seen_tasks", "file_tokens")
 
 PROVIDERS = ("claude", "codex")
 # 向量順序：input、cache_write、cache_read、output、reasoning（與資料表欄位相同）
@@ -244,6 +250,11 @@ class Totals:
     total: dict = field(default_factory=dict)  # provider → 主數字的變化（records.total_tokens）
     total_cached: dict = field(default_factory=dict)  # provider → 含快取讀取的變化（records.total_tokens_cached）
     longest: dict = field(default_factory=dict)  # provider → (seconds, day)
+    seen_cutoff: str | None = None  # 略過界 D；None 時不略過（首次掃描）
+
+    def too_old(self, ts: int) -> bool:
+        """這個時間點的本機日期早於略過界：不計算也不記錄（它的去重列可能已經刪了，算了會重複）。"""
+        return self.seen_cutoff is not None and _day_hour(ts)[0] < self.seen_cutoff
 
     def add(self, provider: str, day: str, hour: int, model: str, vec=(0, 0, 0, 0, 0),
             tasks: int = 0, seconds: int = 0, longest: int = 0, ledger: bool = False) -> None:
@@ -341,6 +352,8 @@ def _count_id(conn: sqlite3.Connection, totals: Totals, provider: str, msg_id: s
               vec, file_key: str | None = None, deltas: bool = True) -> None:
     """以 seen_ids 去重。第一次計入時記下歸屬（日期、小時、模型）與數值；之後再看到同一 ID 時，
     每個欄位都不小於已計入值才把差額加到第一次的歸屬（串流被切在兩次掃描之間）；否則忽略。"""
+    if totals.too_old(ts):
+        return
     row = conn.execute(f"SELECT day, hour, model, {', '.join(TOKEN_FIELDS)} FROM seen_ids"
                        " WHERE provider = ? AND id = ?", (provider, msg_id)).fetchone()
     ledger = provider == "codex"
@@ -364,6 +377,8 @@ def _count_id(conn: sqlite3.Connection, totals: Totals, provider: str, msg_id: s
 def _count_task(conn: sqlite3.Connection, totals: Totals, provider: str, task_id: str, start: int,
                 model: str, seconds: int) -> None:
     """以 seen_tasks 去重；同一任務之後變長（跨兩次掃描）時補上差額。任務歸到開始的那天與小時。"""
+    if totals.too_old(start):
+        return
     seconds = max(0, seconds)
     row = conn.execute("SELECT day, hour, model, seconds FROM seen_tasks WHERE provider = ? AND id = ?",
                        (provider, task_id)).fetchone()
@@ -554,7 +569,7 @@ def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Coun
                 return  # compaction：以新值重新起算，不計入
         else:
             delta = raw
-        if any(delta):
+        if any(delta) and not totals.too_old(ts):  # 太舊的只接上累計值，不計入
             day, hour = _day_hour(ts)
             totals.add("codex", day, hour, st.state.get("model", "other"), _codex_vec(delta), ledger=True)
     elif ptype == "task_complete":
@@ -604,10 +619,12 @@ def _load_state(row) -> FileState:
 
 
 def _reset_codex(conn: sqlite3.Connection, totals: Totals, file_key: str, cutoffs) -> None:
-    """扣掉這個檔案在 file_tokens 的貢獻、清空帳本與它計入的回應 ID（ADR-0009 第 4 節的重算）。"""
+    """扣掉這個檔案在 file_tokens 的貢獻、清空帳本與它計入的回應 ID（ADR-0009 第 4 節的重算）。
+    只扣略過界以後的日子：更早的事件重算時會被略過、不會加回來，那些日子的數字維持原樣（ADR-0014）。"""
     cols = ", ".join(TOKEN_FIELDS)
     for day, hour, model, *vec in conn.execute(
-            f"SELECT day, hour, model, {cols} FROM file_tokens WHERE file_key = ?", (file_key,)).fetchall():
+            f"SELECT day, hour, model, {cols} FROM file_tokens WHERE file_key = ? AND day >= ?",
+            (file_key, totals.seen_cutoff or "")).fetchall():
         totals.add("codex", day, hour, model, [-v for v in vec])
     totals.flush(conn, None, cutoffs)
     conn.execute("DELETE FROM file_tokens WHERE file_key = ?", (file_key,))
@@ -734,6 +751,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     days = history.retention_days(conn)
     cutoffs = (history.local_day(now - days * 86400) if days > 0 else "",
                history.local_day(now - min(days or history.HOURLY_TOKENS_DAYS, history.HOURLY_TOKENS_DAYS) * 86400))
+    seen_cutoff = _seen_cutoff(conn)
     conn.row_factory = sqlite3.Row
     rows = {r["file_key"]: r for r in conn.execute("SELECT * FROM scan_state")}
     conn.row_factory = None
@@ -755,7 +773,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
         try:
             for switch in (False, True):
                 # 換來源時整個交易回復（這一段已累積、還沒寫入帳本的數字一併丟掉），再從頭重算
-                totals, counters = Totals(device_id, now), Counters()
+                totals, counters = Totals(device_id, now, seen_cutoff=seen_cutoff), Counters()
                 try:
                     with history._transaction(conn):
                         # 拿到寫入鎖後重新讀這個檔案的進度：上面的整批讀取在交易外，另一個收集器（手動執行、
@@ -801,7 +819,40 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                          (str(result.progress),))
             if result.done:
                 conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
+        _advance_seen_window(conn, now, seen_cutoff)
     return result
+
+
+def _seen_cutoff(conn: sqlite3.Connection) -> str | None:
+    """這次掃描的略過界。「清除並重新掃描」（首次掃描未完成、去重表與掃描進度都是空的）時刪掉舊的略過界，
+    整個歷史重建（舊版 App 的重新掃描不會刪這個鍵）。"""
+    cutoff = history.meta(conn, "seen_cutoff_day")
+    if cutoff is None or history.meta(conn, "first_scan_done") == "1":
+        return cutoff
+    if any(conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone() for t in ("scan_state", "seen_ids", "seen_tasks")):
+        return cutoff
+    with history._transaction(conn):
+        conn.execute("DELETE FROM meta WHERE key = 'seen_cutoff_day'")
+    return None
+
+
+def _advance_seen_window(conn: sqlite3.Connection, now: int, cutoff: str | None) -> None:
+    """略過界只進不退、每次最多一天（時鐘被設到未來時，錯一次只縮一天，改回後就停）；再刪掉 D − 1 以前的去重列。"""
+    if history.meta(conn, "first_scan_done") != "1":
+        return
+    target = history.local_day(now - SEEN_DAYS * 86400)
+    if cutoff is None:
+        cutoff = target  # 首次掃描剛完成，或升級前就完成了：一次到位
+    elif target > cutoff:
+        cutoff = min(target, (date.fromisoformat(cutoff) + timedelta(days=1)).isoformat())
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('seen_cutoff_day', ?)", (cutoff,))
+    prune_before = (date.fromisoformat(cutoff) - timedelta(days=1)).isoformat()
+    left = SEEN_PRUNE_ROWS
+    for table in SEEN_TABLES:
+        if left <= 0:
+            break
+        left -= conn.execute(f"DELETE FROM {table} WHERE rowid IN (SELECT rowid FROM {table} WHERE day < ? LIMIT ?)",
+                             (prune_before, left)).rowcount
 
 
 def run(path: Path | None = None, dirs: Mapping[str, Path] | None = None, now: int | None = None,

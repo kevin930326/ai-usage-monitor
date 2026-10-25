@@ -145,6 +145,11 @@ class TokenStatsTestCase(unittest.TestCase):
         with redirect_stderr(self.stderr):
             return token_stats.run(path or self.path, self.dirs, now=now, budget=budget)
 
+    def scan_before_seen_window(self):
+        """以加入去重時間窗（ADR-0014）之前的行為掃描：不設略過界、不刪去重列（模擬當時的資料庫）。"""
+        with mock.patch.object(token_stats, "_advance_seen_window", lambda *a: None):
+            self.scan()
+
     @contextmanager
     def db(self, path=None):
         conn = sqlite3.connect(path or self.path)
@@ -248,7 +253,7 @@ class SchemaTest(TokenStatsTestCase):
                    claude_assistant("old", T0 - 400 * DAY + 5, inp=100, cr=900, out=0),
                    claude_assistant("new", T0, inp=50, cr=50, out=0))
         self.write(self.codex_file(), codex_turn(), codex_count(T0 - 400 * DAY, inp=1000, cached=600, out=0))
-        self.scan()
+        self.scan_before_seen_window()
         expected = self.records()
         self.assertEqual(expected["total_tokens_cached"][0], 1000 + 100 + 1000)
         self.simulate_before_cached_records()
@@ -259,7 +264,7 @@ class SchemaTest(TokenStatsTestCase):
         """升級後改寫只剩扣除帳本（file_tokens）的舊 Codex 檔：先扣再加不會誤扣其他日子（審查 C-01）。"""
         self.write(self.codex_file(), codex_turn(), codex_count(T0 - 400 * DAY, inp=1000, cached=900, out=0))
         self.write(self.claude_file(), claude_assistant("new", T0, inp=50, cr=50, out=0))
-        self.scan()
+        self.scan_before_seen_window()
         self.simulate_before_cached_records()
         history.connect(self.path).close()
         self.assertEqual(self.records()["total_tokens_cached"][0], 1000 + 100)
@@ -918,7 +923,7 @@ class ScanTest(TokenStatsTestCase):
         history.cleanup(conn, T0)
         self.assertEqual(conn.execute("SELECT SUM(input_tokens) FROM daily_tokens").fetchone()[0], 2)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM scan_state").fetchone()[0], 0)
-        self.assertEqual(conn.execute("SELECT COUNT(*) FROM seen_ids").fetchone()[0], 2)  # 去重表永久保留
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM seen_ids").fetchone()[0], 2)  # cleanup 不動去重表
         conn.close()
 
     def test_unchanged_files_are_not_reopened(self):
@@ -984,6 +989,236 @@ class ScanTest(TokenStatsTestCase):
         self.scan()
         elapsed = time.monotonic() - started
         self.assertLess(elapsed, 1.0)
+
+    def test_run_that_advances_the_window_stays_fast(self):
+        """時間窗內的去重列到上限（90 天 × 每天 3,000 則 ≈ 27 萬列）、這一輪 D 前進一天並刪一天的列：仍 < 1 秒。"""
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=1))
+        self.scan()
+        start = datetime(2026, 6, 23, tzinfo=TAIPEI)
+        with self.db() as c:
+            c.executemany("INSERT INTO seen_ids (provider, id, day, hour, model, input_tokens) VALUES (?, ?, ?, 0, ?, 1)",
+                          (("claude", f"msg_{d:03d}_{i:05d}_0123456789abcdef", (start + timedelta(days=d)).date().isoformat(),
+                            "claude-opus-5-5") for d in range(91) for i in range(3000)))
+            c.commit()
+        self.write(self.claude_file(), claude_assistant("new", T0 + DAY, inp=1, out=1))
+        started = time.monotonic()
+        self.scan(now=T0 + 2 * DAY)
+        elapsed = time.monotonic() - started
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0], "2026-06-25")
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM seen_ids WHERE day < '2026-06-24'").fetchone()[0], 0)
+        self.assertLess(elapsed, 1.0)
+
+
+class SeenWindowTest(TokenStatsTestCase):
+    """去重時間窗（ADR-0014 第 1 節）：略過界 D 以前的訊息不計算也不記錄；一次讀完、分批讀、重掃、舊副本重現結果相同。"""
+
+    def cutoff(self, path=None):
+        with self.db(path) as c:
+            row = c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()
+        return row[0] if row else None
+
+    def prime(self, path):
+        """首次掃描已完成（沒有紀錄檔），略過界設好：之後的掃描都是一般的增量掃描。"""
+        empty = Path(self.dir.name) / f"empty-{path.parent.name}"
+        with redirect_stderr(io.StringIO()):
+            token_stats.run(path, {"claude": empty / "claude", "codex": empty / "codex"}, now=T0 + DAY)
+
+    def spread(self):
+        """T0 往前 0～200 天、每 10 天一則：Claude 訊息、Codex record 與 Codex token_count（累計值）各一檔。"""
+        self.write(self.claude_file(), *[claude_assistant(f"m{k}", T0 - k * 10 * DAY, inp=k + 1, out=1)
+                                         for k in range(20, -1, -1)])
+        self.write(self.codex_file(), codex_turn(), *[codex_record(f"r{k}", T0 - k * 10 * DAY, inp=100 * (k + 1), out=1)
+                                                      for k in range(20, -1, -1)])
+        total = 0
+        lines = [codex_turn()]
+        for k in range(20, -1, -1):
+            total += 1000 * (k + 1)
+            lines.append(codex_count(T0 - k * 10 * DAY, inp=total, out=0))
+        self.write(self.codex_file(OTHER), *lines)
+
+    def counted(self, path=None):
+        with self.db(path) as c:
+            return dict(c.execute("SELECT provider, SUM(input_tokens) FROM daily_tokens GROUP BY provider").fetchall())
+
+    def snapshot(self, path=None):
+        return [self.table(t, path) for t in ("daily_tokens", "hourly_tokens", "record_days", "record_days_cached")] \
+            + [self.records(path)]
+
+    def test_one_pass_batched_and_rescan_agree(self):
+        self.prime(self.path)
+        self.assertEqual(self.cutoff(), "2026-06-24")  # 2026-09-22（掃描當天）往前 90 天
+        self.spread()
+        for _ in range(200):
+            result = self.scan(budget=token_stats.Budget(bytes_left=1500))
+            if result.done and result.processed == 0:
+                break
+        one_pass = Path(self.dir.name) / "one" / "history.sqlite3"
+        self.prime(one_pass)
+        with redirect_stderr(io.StringIO()):
+            token_stats.run(one_pass, self.dirs, now=T0 + DAY)
+        self.assertEqual(self.snapshot(), self.snapshot(one_pass))
+        # 只算 D 以後的：往前 0～80 天（k = 0～8）；90 天前是 06-23，早於 D
+        in_window = range(9)
+        self.assertEqual(self.counted(), {"claude": sum(k + 1 for k in in_window),
+                                          "codex": sum(100 * (k + 1) + 1000 * (k + 1) for k in in_window)})
+        with self.db() as c:
+            for table in token_stats.SEEN_TABLES:
+                self.assertEqual(c.execute(f"SELECT COUNT(*) FROM {table} WHERE day < '2026-06-24'").fetchone()[0], 0)
+        # 重掃（掃描進度不見了，例如 90 天沒看到的檔案又出現）：每個檔案從頭讀，結果不變
+        before = self.snapshot()
+        with self.db() as c:
+            c.execute("DELETE FROM scan_state")
+            c.commit()
+        self.scan()
+        self.scan()
+        self.assertEqual(self.snapshot(), before)
+
+    def test_old_copy_after_the_window_is_not_counted_again(self):
+        self.prime(self.path)
+        self.write(self.claude_file(), claude_assistant("old", T0, inp=100, out=1))
+        self.scan()
+        # 時間往前走 100 天（每天一輪）：D 走過 T0，"old" 的去重列被刪
+        for day in range(1, 101):
+            self.scan(now=T0 + DAY + day * DAY)
+        self.assertEqual(self.cutoff(), history.local_day(T0 + 101 * DAY - token_stats.SEEN_DAYS * DAY))
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM seen_ids WHERE id = 'old'").fetchone()[0], 0)
+        before = self.snapshot()
+        # --resume 把舊訊息（原始時間戳，數字甚至更大）複製到新檔：不計入、不記錄
+        self.write(self.claude_file(OTHER), claude_assistant("old", T0, inp=500, out=9),
+                   claude_assistant("new", T0 + 101 * DAY, inp=7, out=0))
+        self.scan(now=T0 + 101 * DAY)
+        after = self.snapshot()
+        self.assertEqual(after[-1]["total_tokens"][0], before[-1]["total_tokens"][0] + 7)
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM seen_ids WHERE id = 'old'").fetchone()[0], 0)
+
+    def test_copy_inside_the_window_adds_only_the_difference_once(self):
+        self.prime(self.path)
+        self.write(self.claude_file(), claude_assistant("a", T0 - 30 * DAY, inp=10, out=1))
+        self.scan()
+        self.write(self.claude_file(OTHER), claude_assistant("a", T0 - 30 * DAY, inp=15, out=1))
+        self.scan()
+        self.scan()
+        self.assertEqual(self.counted(), {"claude": 15})
+
+    def test_boundary_days(self):
+        self.prime(self.path)
+        cutoff = datetime(2026, 6, 24, 12, tzinfo=TAIPEI).timestamp()
+        self.write(self.claude_file(), claude_assistant("on", int(cutoff), inp=1, out=0),
+                   claude_assistant("day-1", int(cutoff - DAY), inp=10, out=0),
+                   claude_assistant("day-2", int(cutoff - 2 * DAY), inp=100, out=0))
+        self.scan()
+        self.assertEqual(self.counted(), {"claude": 1})
+        # 去重表留 D − 1 那天的列（吸收時區差），更早的刪掉
+        with self.db() as c:
+            c.execute("INSERT INTO seen_ids (provider, id, day, hour, model) VALUES ('claude', 'x1', '2026-06-23', 0, 'm'),"
+                      " ('claude', 'x2', '2026-06-22', 0, 'm')")
+            c.commit()
+        self.scan(now=T0 + DAY + 60)
+        with self.db() as c:
+            self.assertEqual(sorted(r[0] for r in c.execute("SELECT id FROM seen_ids")), ["on", "x1"])
+
+    def test_clock_jumps(self):
+        self.prime(self.path)
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
+        self.scan()
+        # 時鐘被設到一年後：D 只前進一天
+        self.scan(now=T0 + 400 * DAY)
+        self.assertEqual(self.cutoff(), "2026-06-25")
+        # 改回來（比 D 對應的時間早）：D 不動、不刪；今天的新訊息照算
+        self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=2, out=0))
+        self.scan(now=T0 + DAY + 60)
+        self.assertEqual(self.cutoff(), "2026-06-25")
+        # 倒退 10 天：D 不動，副本不重算
+        self.write(self.claude_file(OTHER), claude_assistant("a", T0, inp=1, out=0))
+        self.scan(now=T0 - 10 * DAY)
+        self.assertEqual(self.cutoff(), "2026-06-25")
+        self.assertEqual(self.counted(), {"claude": 3})
+
+    def test_codex_rewrite_across_the_window_keeps_old_days(self):
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0),
+                   codex_count(T0, inp=1500, out=0))
+        self.scan()  # 首次掃描：不略過，兩段都計入
+        self.assertEqual(self.counted(), {"codex": 1500})
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        with self.db() as c:  # T0 − 120 天的帳本列已刪
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM file_tokens WHERE day < '2026-06-23'").fetchone()[0], 0)
+        old_day = self.table("daily_tokens")[0]
+        # 改寫（同樣內容、mtime 倒退 → 重算）：只扣 D 以後的帳本；舊事件重讀時略過，舊日子的數字不動
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0),
+                   codex_count(T0, inp=1500, out=0), mode="w")
+        os.utime(self.codex_file(), (T0 - DAY, T0 - DAY))
+        self.scan()
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 1500})
+        self.assertEqual(self.table("daily_tokens")[0], old_day)
+        self.assertEqual(self.records()["total_tokens"][0], 1500)
+
+    def test_leftover_old_ledger_rows_are_not_subtracted(self):
+        """分段刪除還沒刪到的舊帳本列：改寫該檔時不能扣掉（那些事件不會再加回來）。"""
+        self.prime(self.path)
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=50, out=0))
+        self.scan()
+        with self.db() as c:
+            fk = c.execute("SELECT file_key FROM file_tokens").fetchone()[0]
+            c.execute("INSERT INTO file_tokens (file_key, day, hour, model, input_tokens, cache_write_tokens,"
+                      " cache_read_tokens, output_tokens, reasoning_tokens) VALUES (?, '2026-05-01', 0, 'gpt-6.1-sol',"
+                      " 999, 0, 0, 0, 0)", (fk,))
+            c.commit()
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=50, out=0), mode="w")
+        os.utime(self.codex_file(), (T0 - DAY, T0 - DAY))
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 50})
+        self.assertEqual(self.records()["total_tokens"][0], 50)
+
+    def test_upgrade_prunes_existing_rows_in_chunks(self):
+        self.write(self.claude_file(), *[claude_assistant(f"o{i}", T0 - 200 * DAY + i, inp=1, out=0) for i in range(12)],
+                   claude_assistant("n", T0, inp=1, out=0))
+        self.scan_before_seen_window()
+        totals = self.snapshot()
+        with mock.patch.object(token_stats, "SEEN_PRUNE_ROWS", 5):
+            counts = []
+            for _ in range(4):
+                self.scan()
+                with self.db() as c:
+                    counts.append(c.execute("SELECT COUNT(*) FROM seen_ids").fetchone()[0])
+        self.assertEqual(counts, [8, 3, 1, 1])
+        self.assertEqual(self.snapshot(), totals)
+
+    def test_first_scan_counts_the_whole_history(self):
+        self.write(self.claude_file(), claude_assistant("old", T0 - 200 * DAY, inp=100, out=0),
+                   claude_assistant("new", T0, inp=1, out=0))
+        self.scan()
+        self.assertEqual(self.records()["total_tokens"][0], 101)
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        with self.db() as c:
+            self.assertEqual([r[0] for r in c.execute("SELECT id FROM seen_ids")], ["new"])
+
+    def test_rescan_from_the_app_rebuilds_the_whole_history(self):
+        self.write(self.claude_file(), claude_assistant("old", T0 - 200 * DAY, inp=100, out=0),
+                   claude_assistant("new", T0, inp=1, out=0))
+        self.scan()
+        # 舊版 App 的「清除並重新掃描」：清空統計、去重表與掃描進度，刪 first_scan_done，但留著略過界
+        with self.db() as c:
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached",
+                          "scan_state", "seen_ids", "seen_tasks", "file_tokens"):
+                c.execute(f"DELETE FROM {table}")
+            c.execute("DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done')")
+            c.commit()
+        self.scan()
+        self.assertEqual(self.records()["total_tokens"][0], 101)
+        self.assertEqual(self.cutoff(), "2026-06-24")
+
+    def test_tasks_started_before_the_cutoff_are_skipped(self):
+        self.prime(self.path)
+        old_start = int(datetime(2026, 6, 23, 23, tzinfo=TAIPEI).timestamp())
+        self.write(self.codex_file(), codex_turn(), codex_task("t-old", old_start, old_start + 7200),
+                   codex_task("t-new", T0, T0 + 60))
+        self.scan()
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT SUM(task_count), SUM(task_seconds) FROM daily_tokens").fetchone(), (1, 60))
 
 
 class FormatChangeTest(TokenStatsTestCase):
