@@ -316,6 +316,7 @@ struct FlowLayout: Layout {
 /// 歷史資料（FR-37、ADR-0009 第 5 節）：保留期間、匯出 CSV、清除歷史、清除並重新掃描。
 /// 每次打開設定視窗時另開短暫的連線讀取資訊，寫入（清除、縮短保留期間）由 App 直接執行。
 private struct HistorySettingsSection: View {
+    @Environment(PanelSettings.self) private var settings
     let store: HistoryStore
     /// 截圖時不讀資料庫以外的東西、不開對話框
     var interactive = true
@@ -515,6 +516,8 @@ private struct HistorySettingsSection: View {
         let date = Date.now.formatted(.iso8601.year().month().day())
         panel.nameFieldStringValue = kind == .quota ? "ai-usage-history-\(date).csv" : "ai-usage-tokens-\(date).csv"
         panel.canCreateDirectories = true
+        // runModal 的對話框是獨立視窗、不是設定視窗的 sheet，不會繼承設定視窗的外觀（總檢查 F-05）
+        panel.appearance = settings.appearance.nsAppearance
         NSApplication.shared.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {

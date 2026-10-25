@@ -171,7 +171,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（只保留時間窗內的列；比時間窗舊的訊息不計算，所以去重列刪掉之後舊副本再出現也不會重算，見下方「去重時間窗」）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **去重時間窗**（2026-10-26 修訂，[ADR-0014](0014-long-term-operation.md) LT-01）：去重表原本永久保留，10 年約 0.3～0.7 GB。改為略過界 D（`meta.seen_cutoff_day`，本機日期）：
   - 本機日期早於 D 的訊息、回應、任務（以開始時間）與 Codex 累計差額**不計算也不記錄**（不查、不寫去重表；Codex `token_count` 只接上累計值）。
-  - D 在每次掃描的最後一個交易前進到「今天往前 90 天」（`SEEN_DAYS`），**每次最多一天、只進不退**：時鐘被設到未來時錯一次只縮一天、改回後就停；時鐘倒退或往西改時區時不動；收集器停擺後恢復，停擺期間的訊息都在 D 之後，全部計入。
+  - D 在每次掃描的最後一個交易前進到「今天往前 90 天」（`SEEN_DAYS`），**每個本機日期最多前進兩天、只進不退**（`meta.seen_cutoff_stepped` 記上次前進的日期）：時鐘被設到未來時，不論那段時間跑了幾輪，每個錯的日期只多縮兩天、改回後就停；收集器停擺後的落差每天縮小一天。首次設定（一次到位）不超過去重表裡最新的日期：訊息的時間來自寫紀錄時的時鐘，那一輪時鐘錯了 D 也不會跑過真實的今天（ADR-0014 總檢查 F-01）。不往回退：退回會讓去重列已刪掉的舊訊息副本再計入一次（審查 C-01）；D 仍跑到今天之後（時鐘錯了一個半月以上，或首次設定時紀錄的時間也是錯的）時每天記一行日誌，「清除並重新掃描」可以恢復；時鐘倒退或往西改時區時不動；收集器停擺後恢復，停擺期間的訊息都在 D 之後，全部計入。
   - 首次掃描完成前不設 D（首次掃描與「清除並重新掃描」照舊讀完整歷史，個人紀錄的累計不變）；完成那一輪一次設到 90 天前。「清除並重新掃描」也刪 D（舊版 App 沒刪時，收集器看到首次掃描未完成且去重表、掃描進度都是空的就刪）。
   - 去重表（`seen_ids`、`seen_tasks`、`file_tokens`）刪 `day < D − 1` 的列：多留一天，吸收改時區後同一時間戳算出不同日期。每次最多刪 2 萬列，刪不完下次接著刪（升級時的一次大量刪除不會讓單次執行超過 1 秒）。Codex 重算只扣 `day ≥ D` 的帳本：更早的事件重讀時會被略過、不會加回來。重算開始時的 D 凍結在該檔的 `scan_state.state.cutoff`，直到讀到檔尾：扣帳本與重讀用同一個值，所以重讀分成幾輪、期間 D 前進（含升級那一輪 D 從無到有）都與一次讀完相同（審查 C-01）。
   - D 在每個檔案的交易內重讀、在最後一個交易內以資料庫目前的值前進：兩個收集器同時執行時，用的都是拿到寫入鎖當下的 D，也不會把 D 寫回較早的日期（審查 C-02）。
@@ -179,6 +179,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
   - **N 與 `cleanupPeriodDays` 無關**：被 Claude Code 清掉的檔案沒有東西可讀；舊訊息只會以副本重現，副本不是略過就是去重。90 天與每小時資料、掃描進度的期限相同。會漏算的只有「超過 90 天、以前從未掃到」的紀錄（還原備份、搬回舊的歸檔）。
   - D 以前的每日資料不再被加或扣，第二層的雜湊不變，不會重傳（ADR-0011 不變）。
   - 限制：Codex 帳本只記當時時區的日期，改時區後重算一個含 D 前後幾小時事件的 Codex 檔，那幾小時可能多算或少算（扣與補用的日期換算不同）。需要「改時區＋Codex 改寫 90 天前的紀錄」同時發生，Codex 只附加、不改寫 rollout，實際極少（`test_timezone_change_then_codex_rewrite` 以 expectedFailure 記錄）。
+  - 限制：升級到有時間窗的收集器時，舊收集器正在分輪重算的 Codex 檔沒有凍結的 D（舊版不記）；升級後下一輪起 D 已設定，該檔剩下、早於 D 的事件不會加回來。需要「Codex 改寫一個檔、重算跨兩輪以上（> 64 MB 或超過 15 秒）、剛好卡在升級時」同時發生，實際幾乎不會（ADR-0014 總檢查 F-07）。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
 - **Codex 的重算**：每個檔案計入的數字同時記在 `file_tokens`。累計差值只在「從上次的位置接著讀」時正確，所以以下兩種情況都**先從 `daily_tokens`／`hourly_tokens` 扣掉該檔在 `file_tokens` 的貢獻、清空該檔的 `file_tokens` 與 `last_total`，再從頭重掃該檔**（同一個交易內完成）：(1) 檔案被改寫（第 7 節）；(2) 已用 `token_count` 的檔案之後出現 `token_usage_record`（來源改為 record）。來源一旦是 record 就不再改回。以測試驗證：截斷、改寫、compaction 後重掃、先只有 `token_count` 再追加重疊或不重疊的 record，結果都與一次讀完整個檔案相同，重複執行不改變統計。
 - **日期與時區**：以紀錄的 `timestamp` 換算成**掃描當下**的本機時區取日期與小時；之後改時區不回頭重算。限制：旅行或另一台電腦在不同時區時，第二層合併的「同一天」不是同一個 24 小時（ADR-0011 第 1 節）。
@@ -200,10 +201,10 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
 | 匯出 CSV | 設定中按「匯出額度 CSV」或「匯出 Token CSV」→ 系統儲存對話框，由使用者選位置。額度：每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`）；Token：這台電腦的 `daily_tokens`（`day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds`，四種 Token 分開，`day` 是本機日期）。不含 `device_id`、`scan_state`、`seen_ids`、`file_tokens`、`meta` |
-| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建 |
+| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建（清除剛好落在收集器一輪中間時，那一輪在交易外判斷沒變而略過的檔案已沒有掃描進度，收集器不標記首次掃描完成、不設略過界，下一輪照常完整重建；ADR-0014 總檢查 F-02） |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
-估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 每年數十萬列；整個檔案預期 < 50 MB。
+估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 只留 90 天的時間窗（ADR-0014 LT-01，約 10 萬列）；10 年的總佔用與實測數字見 ADR-0014「10 年總佔用」。
 
 ### 6. 裝置識別
 

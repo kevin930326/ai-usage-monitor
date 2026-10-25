@@ -5,9 +5,9 @@
 ## [Unreleased]
 
 ### Changed
-- Token 統計的去重表改為 90 天時間窗（ADR-0014 LT-01，ADR-0009 第 4 節）：比時間窗舊的訊息不計算也不記錄，去重表每天刪掉時間窗以前的列（每次最多 2 萬列），10 年下 `history.sqlite3` 不再無限成長；首次掃描與「清除並重新掃描」照舊讀完整歷史
+- Token 統計的去重表改為 90 天時間窗（ADR-0014 LT-01，ADR-0009 第 4 節）：比時間窗舊的訊息不計算也不記錄，去重表每天刪掉時間窗以前的列（每次最多 2 萬列），10 年下 `history.sqlite3` 不再無限成長；首次掃描與「清除並重新掃描」照舊讀完整歷史。時間窗的起點每天最多前進兩天、首次設定不超過最新的訊息日期：系統時鐘被設到未來時，統計不會停擺
 - `history.sqlite3` 每 30 天（或可回收的空間超過 20%）由收集器 `VACUUM` 並截斷 WAL，縮短保留期間或刪除去重列後檔案會變小；磁碟空間不夠時跳過（ADR-0014 LT-14）
-- 磁碟空間不足（剩不到 500 MB）時收集器暫停寫 `history.sqlite3`，`usage.json`、上傳與服務狀態照常，Mac 面板底部顯示警告；`usage.json` 寫不進去時不再讓整輪中止、上傳照常；被強制結束留下的暫存檔一天後刪除（ADR-0014 LT-06、LT-20）
+- 磁碟空間不足（剩不到 500 MB）時收集器暫停寫 `history.sqlite3`，`usage.json`、額度快照上傳與服務狀態照常（第二層的每日加總上傳與下載也暫停），Mac 面板底部顯示警告；`usage.json` 寫不進去時不再讓整輪中止、上傳照常；被強制結束留下的暫存檔一天後刪除（ADR-0014 LT-06、LT-20）
 - 熱力圖（#74）：「全部」改為藍色 5 階色階（淺色淺藍→深藍、深色暗藍→亮藍），面板的活動熱力圖、完整統計視窗與額度消耗共用同一個色階；Claude、Codex 維持各自的識別色，依階數疊透明度。分級從 4 階改成 5 階，對比由 `UsagePaletteTests` 檢查
 - 文件（#88）：README 的安裝改成三層（0. 只有 Mac、1. 加上 iPhone、2. 加上 PC），一行安裝指向固定版本並說明 SHA-256 的保護範圍；新增 `docs/uninstall.md`（各部分怎麼移除、會留下什麼）
 - ADR-0012（iPhone 配對）與 ADR-0013（下載與安裝）改為「已採用」，記錄使用者的決定（#90）：發布檔只放 arm64；「允許內建收集器執行」維持由使用者按；第一次發布用 tag 產生草稿 Release；FR-57 以 `relay-device.sh` 的裝置密鑰加入第二層（以短碼加入之後再做）
@@ -21,7 +21,7 @@
 - 含快取讀取的 Token 統計（v1.11，FR-60）：Mac 統計卡片與完整統計視窗在全部／Claude／Codex 旁加「含快取讀取」切換（預設關閉，記住選擇，面板與視窗共用）。打開時所有 Token 數字、Token 活動、熱力圖、各模型、時段與個人紀錄改用 input＋cache_write＋cache_read＋output，數字旁標「含快取」（滑鼠移上去說明）；這台 Mac、所有電腦與各電腦都適用。收集器另外記含快取讀取的單日最高與累計（`record_days_cached`、`best_day_tokens_cached`、`total_tokens_cached`，不受保留期間影響；同一個 schema 版本，升級時以 `seen_ids`／`file_tokens` 已計入的數值算出初始值，保留期間以前的快取讀取也算），舊版收集器沒有時 App 改由每日資料計算。VoiceOver 讀出切換狀態；截圖基準新增完整統計（含快取）與所有電腦（含快取）
 - Codex 重置次數卷（v1.10，FR-58、FR-59，#94）：收集器從 `account/rateLimits/read` 讀可用張數與各張到期時間，寫進 `usage.json` 的選填欄位 `reset_credits`（同一個 `schema_version`；只讀、不使用卷，測試掃描收集器的程式碼確認）；Mac 面板的 Codex 額度卡片與 iPhone 主畫面顯示「重置卷 2 張 · 最早 11/20 到期」（0 張不顯示，Mac 滑鼠移上去列出每張）；Mac 通知「重置卷快到期」（3 天內到期，每張一次，預設開）。中繼要重新部署 iPhone 才看得到
 - README 截圖：`scripts/update-readme-images.sh` 依 `docs/images/SOURCES.tsv` 以固定時間與示範資料重新產生（Mac 與動態島用 ImageRenderer，iPhone 主畫面、設定與手錶用模擬器截圖）；主要畫面有淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示；新增外觀設定的截圖，統計切換的 GIF 改為全部 → Claude → Codex → 全部。開頭一排是 Mac 面板的上半部（完整面板收在「看完整的 Mac 面板」）與 iPhone、下一排是動態島與手錶，同一排等高；統計 GIF 與完整統計視窗並排；畫面加上圓角與細邊框（`scripts/readme-image-post.swift`，SOURCES.tsv 第 5 欄）。`scripts/check-readme-images.py`（verify-all、CI）在 README 引用的圖不存在或沒有來源時失敗，比對應的截圖基準舊時提醒
-- 外觀設定（v1.9，FR-51、FR-52，#81）：Mac 設定「外觀」可選跟隨系統（預設）、淺色、深色，套用到面板、設定、完整統計與設定精靈的視窗，選單列圖示仍跟隨選單列；iPhone 設定「外觀」只套用到 App 本身，Live Activity、小工具與手錶跟隨系統。切換有 0.3 秒過渡，減少動態效果時直接換
+- 外觀設定（v1.9，FR-51、FR-52，#81）：Mac 設定「外觀」可選跟隨系統（預設）、淺色、深色，套用到面板、設定、完整統計與設定精靈的視窗，以及匯出 CSV 的儲存對話框，選單列圖示仍跟隨選單列；iPhone 設定「外觀」只套用到 App 本身，Live Activity、小工具與手錶跟隨系統。切換有 0.3 秒過渡，減少動態效果時直接換
 - Mac 一鍵安裝與內建收集器（v1.9，FR-53，ADR-0013，#83）：發布版 App 內嵌 Python（python-build-standalone 3.13 arm64，固定 SHA-256）與收集器，以 `SMAppService.agent` 註冊背景收集器；`scripts/build-release.sh` 產生 .zip、.dmg、寫好版本與 SHA-256 的一行安裝 `install.sh`（驗證 SHA-256、bundle ID、簽章；重跑即更新；`--uninstall`）；`.github/workflows/release.yml` 在 `v*` tag 只建立草稿 Release（附建置來源證明）。偵測到 `install-launchd.sh` 的舊收集器時**不註冊**，只提示，使用者按「改用內建收集器」才遷移；設定新增「背景收集器」
 - 首次設定精靈（v1.9，FR-54，#84）：第一次打開、還沒有用量資料時顯示 8 個步驟（App 位置、背景收集器、Claude Code、Codex、通知、登入時開啟、外觀、在 iPhone 上看），每步顯示完成或要處理的事，需要指令時附「複製」；可從「設定 › 一般 › 重新執行設定精靈」再打開
 - iPhone 配對與 `scripts/setup-iphone.sh`（v1.9，FR-55，ADR-0012，#85、#86）：Mac 終端機顯示 QR 碼（只含中繼網址與讀取密鑰，任何結束方式都清除畫面），iPhone 設定「從 Mac 配對 › 掃描 QR 碼」並確認主機名稱；輔助用中繼發的一次性短碼（`POST /pair`、`POST /pair/claim`：8 個字元、10 分鐘、錯 5 次作廢、只存雜湊，中繼要重新部署才有）。`setup-iphone.sh` 檢查 Xcode 與裝置、建置安裝、可選每 6 天自動重裝；`--dry-run`

@@ -436,6 +436,47 @@ class VacuumTest(HistoryTestCase):
         conn.close()
 
 
+    def test_failed_vacuum_is_retried_without_blaming_the_database(self):
+        """VACUUM 等不到寫入鎖（或暫存空間不夠）：不丟例外、不記上次時間、日誌不說損毀（總檢查 F-03）。"""
+        conn = history.connect(self.path)
+        self.fill_and_delete(conn)
+        conn.execute("PRAGMA busy_timeout = 0")
+        writer = sqlite3.connect(self.path, isolation_level=None)
+        try:
+            writer.execute("BEGIN IMMEDIATE")
+            with redirect_stderr(io.StringIO()) as err:
+                self.assertFalse(history.maybe_vacuum(conn, T0))
+            writer.execute("ROLLBACK")
+        finally:
+            writer.close()
+        self.assertIn("整理 history.sqlite3 失敗（OperationalError），下次清理再試", err.getvalue())
+        self.assertNotIn("損毀", err.getvalue())
+        self.assertIsNone(history.meta(conn, "last_vacuum_at"))
+        conn.close()
+
+    def test_wal_shrinks_after_the_reader_closes(self):
+        """VACUUM 時讀取端開著、WAL 截斷不了：讀取端關閉後，下一次一般寫入就把 WAL 縮回上限內，
+        不會停在整個資料庫的大小等 30 天（總檢查 F-04）。"""
+        with mock.patch.object(history, "WAL_SIZE_LIMIT", 65536):
+            conn = history.connect(self.path)
+        conn.executemany("INSERT INTO seen_ids (provider, id, day, hour, model) VALUES ('claude', ?, '2026-01-01', 0, 'm')",
+                         ((f"msg_{i:06d}_0123456789abcdef0123456789",) for i in range(50000)))
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # 超過自動 checkpoint 的 1000 頁，VACUUM 後的 WAL 也是
+        reader = sqlite3.connect(self.path, isolation_level=None)
+        try:
+            reader.execute("BEGIN")
+            reader.execute("SELECT COUNT(*) FROM seen_ids").fetchone()
+            with redirect_stderr(io.StringIO()):
+                self.assertTrue(history.maybe_vacuum(conn, T0))
+            self.assertGreater(os.path.getsize(f"{self.path}-wal"), 5 * 1024 * 1024)
+            reader.execute("COMMIT")
+        finally:
+            reader.close()
+        for ts in range(3):
+            conn.execute("INSERT INTO collector_runs (ts, ok, runs) VALUES (?, 1, 1)", (T0 + ts,))
+        self.assertLessEqual(os.path.getsize(f"{self.path}-wal"), 65536)
+        conn.close()
+
 class FailureIsolationTest(HistoryTestCase):
     """歷史寫不進去時，usage.json 與上傳照常，結束碼不變。"""
 
