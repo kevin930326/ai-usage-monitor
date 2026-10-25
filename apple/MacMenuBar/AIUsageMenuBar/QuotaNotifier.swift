@@ -4,7 +4,7 @@ import UserNotifications
 import UsageKit
 import UsageKitUI
 
-/// 額度通知（FR-19、ADR-0008 第 5 節）：剩不到 20%、用得太快、額度重置。
+/// 額度通知（FR-19、ADR-0008 第 5 節）：剩不到 20%、用得太快、額度重置；以及重置卷快到期（FR-59）。
 /// 事件判斷在 UsageKit（`QuotaAlerts`）；這裡保存送過的鍵（UserDefaults）、依開關送出，並在點通知時打開面板。
 /// 送過的鍵不論開關都記錄：打開開關時不會補送已經發生的事件，「重置」也需要知道這一輪曾經剩不到 20%。
 @MainActor
@@ -116,7 +116,7 @@ extension QuotaNotifier: UNUserNotificationCenterDelegate {
     }
 }
 
-/// 設定的「通知」：三個開關（FR-19；「剩不到 20%」預設開，其他預設關）。打開開關時向系統要求權限；
+/// 設定的「通知」：四個開關（FR-19、FR-59；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）。打開開關時向系統要求權限；
 /// 系統設定中關閉了通知時說明，並提供打開系統設定的按鈕。
 struct NotificationSettingsSection: View {
     @Environment(PanelSettings.self) private var settings
@@ -133,6 +133,8 @@ struct NotificationSettingsSection: View {
             SwitchRow(title: "剩不到 20%", detail: "任一額度剩不到 20% 時通知一次（每一輪一次）", isOn: binding(\.notifyLow))
             SwitchRow(title: "用得太快", detail: "照目前速度會在重置前用完時通知一次", isOn: binding(\.notifyTooFast))
             SwitchRow(title: "額度重置", detail: "曾經剩不到 20% 的額度重置後通知一次", isOn: binding(\.notifyReset))
+            SwitchRow(title: "重置卷快到期", detail: "Codex 的重置卷 3 天內到期時通知一次（每張一次）",
+                      isOn: binding(\.notifyCreditExpiring))
             if status == .denied || previewDenied, settings.notifiesAnything {
                 HStack(spacing: 8) {
                     Text("通知已在系統設定中關閉")

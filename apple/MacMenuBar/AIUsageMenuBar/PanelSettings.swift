@@ -104,6 +104,7 @@ final class PanelSettings {
         static let notifyLow = "notify.low"
         static let notifyTooFast = "notify.tooFast"
         static let notifyReset = "notify.reset"
+        static let notifyCreditExpiring = "notify.creditExpiring"
         static let notifyAskedAtLaunch = "notify.askedAtLaunch"
         static let hotKey = "hotKey.panel"
     }
@@ -165,7 +166,7 @@ final class PanelSettings {
         didSet { defaults.set(celebratedStreak, forKey: Key.celebratedStreak) }
     }
 
-    /// 通知的三個開關（FR-19）。「剩不到 20%」預設開（第一次打開 App 時向系統要求權限），其他兩個預設關
+    /// 額度通知的三個開關（FR-19）。「剩不到 20%」預設開（第一次打開 App 時向系統要求權限），其他兩個預設關
     var notifyLow: Bool {
         didSet { defaults.set(notifyLow, forKey: Key.notifyLow) }
     }
@@ -178,15 +179,21 @@ final class PanelSettings {
         didSet { defaults.set(notifyReset, forKey: Key.notifyReset) }
     }
 
+    /// 重置卷 3 天內到期（FR-59），預設開
+    var notifyCreditExpiring: Bool {
+        didSet { defaults.set(notifyCreditExpiring, forKey: Key.notifyCreditExpiring) }
+    }
+
     func notifies(_ kind: QuotaAlertKind) -> Bool {
         switch kind {
         case .low: notifyLow
         case .tooFast: notifyTooFast
         case .reset: notifyReset
+        case .creditExpiring: notifyCreditExpiring
         }
     }
 
-    var notifiesAnything: Bool { notifyLow || notifyTooFast || notifyReset }
+    var notifiesAnything: Bool { notifyLow || notifyTooFast || notifyReset || notifyCreditExpiring }
 
     /// 啟動時是否該向系統要求通知權限：有任一個開關打開、而且還沒在啟動時問過（只問一次，之後由設定的開關處理）
     func takeLaunchAuthorizationRequest() -> Bool {
@@ -217,6 +224,7 @@ final class PanelSettings {
         notifyLow = defaults.object(forKey: Key.notifyLow) as? Bool ?? true
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
         notifyReset = defaults.bool(forKey: Key.notifyReset)
+        notifyCreditExpiring = defaults.object(forKey: Key.notifyCreditExpiring) as? Bool ?? true
         hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
     }
 
