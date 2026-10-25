@@ -284,8 +284,10 @@ public struct WeeklyForecast: Equatable, Sendable {
     public enum Outcome: Equatable, Sendable {
         /// 照目前速度在重置前用完
         case runsOut(Date)
-        /// 撐得到重置
+        /// 撐得到重置（含最近沒有在用）
         case lastsUntilReset
+        /// 速度資料還不夠：剛重置不久、照平均速度會用完（一次大量使用就會誤判），或額度長度不明
+        case notEnoughData
     }
 
     public var provider: String
@@ -295,7 +297,13 @@ public struct WeeklyForecast: Equatable, Sendable {
     /// 是否用了近期速度（否則是本額度開始至今的平均速度）
     public var usesRecentRate: Bool
 
-    /// 每個服務的 `weekly` 額度一筆；資料過期、重置時間不明或已重置時不列。
+    /// 每個服務的 `weekly` 額度一筆，Claude 與 Codex 同一規則；資料過期、重置時間不明或已重置時不列。
+    ///
+    /// 1. 已用完：現在就用完。
+    /// 2. 有近期速度（ADR-0009 第 4 節）：照它算；最近沒有在用（速度 0）就是撐得到重置。
+    /// 3. 沒有近期速度（例如剛重置，本輪還不到 12 小時）：用本輪開始至今的平均速度。剛開始時平均速度只會因為
+    ///    一次大量使用而偏高，所以照它都撐得到重置就直接顯示；照它會用完時，要經過一成（`UsagePace.minimumElapsed`，
+    ///    與「用得太快」同一規則）才相信，之前顯示「資料還不夠」。
     public static func list(snapshot: UsageSnapshot, history: QuotaHistory, now: Date) -> [WeeklyForecast] {
         guard !snapshot.isStale(now: now) else { return [] }
         return snapshot.orderedProviderKeys.compactMap { key in
@@ -304,19 +312,25 @@ public struct WeeklyForecast: Equatable, Sendable {
                   let resetsAt = w.resetsAt, !w.isReset(at: now) else { return nil }
             let used = w.effectiveUsedPct(at: now)
             let recent = history.recentRate(provider: key, windowID: w.id, now: now)
-            var rate = recent
-            if rate == nil, let elapsed = w.elapsedFraction(at: now), let duration = w.duration {
-                // 平均速度與「用得太快」同一規則（ADR-0008 第 4 節）：剛開始時一次大請求就會誤判，先不預測
-                guard elapsed >= UsagePace.minimumElapsed || used >= 100 else { return nil }
-                rate = used / (elapsed * duration)
+            /// 照這個速度用完的時間；重置前用不完（含速度 0）時為 nil
+            func exhausts(_ rate: Double) -> Date? {
+                guard rate > 0 else { return nil }
+                let at = now.addingTimeInterval((100 - used) / rate)
+                return at < resetsAt ? at : nil
             }
             let outcome: Outcome
             if used >= 100 {
                 outcome = .runsOut(now)
-            } else if let rate, rate > 0, now.addingTimeInterval((100 - used) / rate) < resetsAt {
-                outcome = .runsOut(now.addingTimeInterval((100 - used) / rate))
+            } else if let recent {
+                outcome = exhausts(recent).map(Outcome.runsOut) ?? .lastsUntilReset
+            } else if let elapsed = w.elapsedFraction(at: now), let duration = w.duration, elapsed > 0 {
+                if let at = exhausts(used / (elapsed * duration)) {
+                    outcome = elapsed >= UsagePace.minimumElapsed ? .runsOut(at) : .notEnoughData
+                } else {
+                    outcome = .lastsUntilReset
+                }
             } else {
-                outcome = .lastsUntilReset
+                outcome = .notEnoughData
             }
             return WeeklyForecast(provider: key, window: w, resetsAt: resetsAt, outcome: outcome, usesRecentRate: recent != nil)
         }
