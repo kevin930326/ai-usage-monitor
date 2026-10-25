@@ -58,10 +58,11 @@ class CleanDevTests(unittest.TestCase):
             """))
         self.simctl.chmod(0o755)
 
-    def run_script(self, *args: str, busy: bool = False, stdin=subprocess.DEVNULL):
+    def run_script(self, *args: str, busy: bool | str = False, stdin=subprocess.DEVNULL):
+        check = busy if isinstance(busy, str) else ("true" if busy else "false")
         env = {**os.environ, "CLEAN_DEV_WORK": str(self.work), "CLEAN_DEV_DERIVED": str(self.derived),
                "CLEAN_DEV_TRASH": str(self.trash), "CLEAN_DEV_SIMCTL": str(self.simctl),
-               "CLEAN_DEV_BUSY_CHECK": "true" if busy else "false", "LANG": "en_US.UTF-8"}
+               "CLEAN_DEV_BUSY_CHECK": check, "LANG": "en_US.UTF-8"}
         return subprocess.run(["/bin/bash", str(self.repo / "scripts" / "clean-dev.sh"), *args], env=env,
                               stdin=stdin, capture_output=True, text=True)
 
@@ -113,6 +114,32 @@ class CleanDevTests(unittest.TestCase):
         result = self.run_script("--clean", "--yes")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.repo / "build").exists())
+        self.assertFalse((self.repo / "apple/MacMenuBar/build").exists())
+
+    def test_build_started_after_listing_keeps_products(self):
+        """列出之後、刪除之前開始建置（等待回答的期間）：建置產物與 DerivedData 都留著（審查 C-01）。"""
+        calls = self.tmp / "busy-calls"
+        check = self.tmp / "busy"
+        check.write_text(f"#!/bin/bash\necho x >> {calls}\n[ $(wc -l < {calls}) -gt 1 ]\n")
+        check.chmod(0o755)
+        result = self.run_script("--clean", "--yes", busy=str(check))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("剛開始執行", result.stdout)
+        self.assertTrue((self.repo / "build").exists())
+        self.assertTrue((self.derived / "AIUsageMenuBar-old").exists())
+
+    def test_install_lock_created_after_listing_is_respected(self):
+        """列出之後才出現的 install.lock：那個 build/ 不刪（審查 C-01）。"""
+        calls = self.tmp / "lock-calls"
+        check = self.tmp / "lock-then-idle"
+        # 第一次（列出前）沒有鎖；第二次（刪除前的再確認）時 install-mac-app.sh 剛建立鎖
+        check.write_text(f"#!/bin/bash\necho x >> {calls}\n"
+                         f"[ $(wc -l < {calls}) -gt 1 ] && mkdir -p {self.repo}/build/install.lock\nexit 1\n")
+        check.chmod(0o755)
+        result = self.run_script("--clean", "--yes", busy=str(check))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("略過", result.stdout)
+        self.assertTrue((self.repo / "build" / "install.lock").exists())
         self.assertFalse((self.repo / "apple/MacMenuBar/build").exists())
 
     def test_clean_without_terminal_needs_yes(self):

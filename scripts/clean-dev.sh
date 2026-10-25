@@ -56,8 +56,9 @@ confirm() {  # confirm <說明>：--clean 時詢問，回答 y 才回傳 0
   [ "$answer" = y ] || [ "$answer" = Y ]
 }
 
+is_busy() { "${BUSY_CHECK[@]}" >/dev/null 2>&1; }
 busy=0
-if "${BUSY_CHECK[@]}" >/dev/null 2>&1; then busy=1; fi
+if is_busy; then busy=1; fi
 total_found=0
 
 section() { echo; echo "== $1"; }
@@ -85,8 +86,21 @@ else
   if [ $busy = 1 ]; then
     [ $CLEAN = 1 ] && echo "  xcodebuild 正在執行，這次不清理建置產物"
   elif confirm "建置產物"; then
-    rm -rf "${builds[@]}"
-    echo "  已刪除 ${#builds[@]} 個資料夾"
+    # 等待回答的期間可能開始建置或安裝：刪除前再確認一次
+    if is_busy; then
+      echo "  xcodebuild 剛開始執行，這次不清理建置產物"
+    else
+      removed=0
+      for dir in "${builds[@]}"; do
+        if [ -e "$dir/install.lock" ]; then
+          echo "  略過 ${dir}（install-mac-app.sh 剛開始執行）"
+          continue
+        fi
+        rm -rf "$dir"
+        removed=$((removed + 1))
+      done
+      echo "  已刪除 ${removed} 個資料夾"
+    fi
   fi
 fi
 
@@ -109,8 +123,12 @@ else
   if [ $busy = 1 ]; then
     [ $CLEAN = 1 ] && echo "  xcodebuild 正在執行，這次不清理 DerivedData"
   elif confirm "舊的 DerivedData"; then
-    rm -rf "${derived[@]}"
-    echo "  已刪除 ${#derived[@]} 個資料夾"
+    if is_busy; then
+      echo "  xcodebuild 剛開始執行，這次不清理 DerivedData"
+    else
+      rm -rf "${derived[@]}"
+      echo "  已刪除 ${#derived[@]} 個資料夾"
+    fi
   fi
 fi
 
