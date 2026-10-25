@@ -100,13 +100,7 @@ private struct WindowAppearanceSetter: NSViewRepresentable {
             }
         }
 
-        private var wanted: NSAppearance? {
-            switch choice {
-            case .system: nil
-            case .light: NSAppearance(named: .aqua)
-            case .dark: NSAppearance(named: .darkAqua)
-            }
-        }
+        private var wanted: NSAppearance? { choice.nsAppearance }
 
         private func reapplyIfChanged() {
             guard let window, window.appearance?.name != wanted?.name, reapplied < 3 else { return }
@@ -123,6 +117,17 @@ private struct WindowAppearanceSetter: NSViewRepresentable {
             }
             #endif
             if window.appearance?.name != appearance?.name { window.appearance = appearance }
+        }
+    }
+}
+
+extension AppearanceChoice {
+    /// 這個設定對應的 AppKit 外觀；跟隨系統時為 nil。SwiftUI 以外自己顯示的視窗（例如 `NSSavePanel`）也要套用
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
         }
     }
 }

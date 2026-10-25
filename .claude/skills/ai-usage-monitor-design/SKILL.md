@@ -28,7 +28,7 @@ description: AI Usage Monitor 的設計與識別規則：服務識別色、原�
   Claude、Codex 用識別色疊 30%／47%／64%／82%／100%；資料過期時改用 `UsageColors.heatmapStale`（淺色 `#636366`、深色 `#98989D`；淺色的系統灰色太淺，第 1 階會和「沒有使用」分不出來）。最淺一階對「沒有使用」≥ 1.25:1、相鄰兩階 ≥ 1.25:1、最多的一階對卡片底色（深色 `#272727`、淺色 `#F5F5F5`）≥ 3:1（`UsagePaletteTests`）。
 - **文字一律 primary／secondary**，不用顏色表示狀態；顏色只用在進度條、服務圖示、熱力圖與提示文字。文字對比度 ≥ 4.5:1，圖形 ≥ 3:1（`UsagePaletteTests` 會檢查）。
 - 黑底場合（動態島、手錶錶面）固定用深色值：`UsageColors.providerMark(_:)`。
-- **外觀設定**（FR-51、FR-52）：跟隨系統（預設）／淺色／深色，`AppearanceChoice`（UsageKit，鍵 `app.appearance`）。只改 App 自己的視窗：Mac 用各視窗的 `NSWindow.appearance`（`followsAppearanceSetting()`，面板、設定、完整統計、設定精靈），**不設 `NSApp.appearance`**，選單列圖示跟隨選單列本身；iPhone 用視窗的 `overrideUserInterfaceStyle`（`windowAppearance(_:)`），Live Activity、動態島、小工具與手錶跟隨系統，設定不放 App Group。新視窗要加 `followsAppearanceSetting()`。畫面裡的顏色仍一律用動態色（`UsageColors`），不要依設定自己挑淺色或深色值。
+- **外觀設定**（FR-51、FR-52）：跟隨系統（預設）／淺色／深色，`AppearanceChoice`（UsageKit，鍵 `app.appearance`）。只改 App 自己的視窗：Mac 用各視窗的 `NSWindow.appearance`（`followsAppearanceSetting()`，面板、設定、完整統計、設定精靈；自己顯示的 `NSSavePanel` 等設 `appearance = AppearanceChoice.nsAppearance`），**不設 `NSApp.appearance`**，選單列圖示跟隨選單列本身；iPhone 用視窗的 `overrideUserInterfaceStyle`（`windowAppearance(_:)`），Live Activity、動態島、小工具與手錶跟隨系統，設定不放 App Group。新視窗要加 `followsAppearanceSetting()`。畫面裡的顏色仍一律用動態色（`UsageColors`），不要依設定自己挑淺色或深色值。
 - 不要在畫面裡寫死色碼，一律用 `UsageColors`（SwiftUI）或 `UsagePalette`（數值）。
 
 來源：`apple/UsageKit/Sources/UsageKit/UsagePalette.swift`、`apple/UsageKit/Sources/UsageKitUI/UsageColors.swift`。
