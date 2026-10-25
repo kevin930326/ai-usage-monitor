@@ -163,6 +163,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 - **四個欄位分開存**：資料庫（`daily_tokens`、`hourly_tokens`、`seen_ids`、`file_tokens`、`records`）與第二層的上傳格式都分別保存 `input`、`cache_write`、`cache_read`、`output`（另有 `reasoning` 明細），不預先加總，之後改顯示方式不必重算。
 - **顯示的「Token」主數字 = `input + cache_write + output`**（不含 `cache_read`、不加 `reasoning`）。快取讀取是重複送出的上下文，數量常是其他三項的數十倍，算進主數字會蓋過實際的用量變化。滑鼠移上去的說明顯示四項明細，其中 `cache_read` 單獨一行（「快取讀取 N（不計入上方數字）」）。單日最高、Token 活動、熱力圖與個人紀錄的「累計 Token」都用同一個主數字定義。
+  - 補充（FR-60）：統計卡片與完整統計視窗可切換「含快取讀取」（預設關閉），打開時以上全部改用 `input + cache_write + cache_read + output`。`records` 的 `best_day_tokens`、`total_tokens` 與 `record_days` 仍只記主數字（不改收集器與資料庫）；打開時單日最高與累計改由每日資料計算，範圍是每日資料還在的期間。
 - 以測試驗證 Codex 的 `input + cache_write + cache_read + output == total_tokens`（確認正規化正確）；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。
 - **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
