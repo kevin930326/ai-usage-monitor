@@ -179,6 +179,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
   - **N 與 `cleanupPeriodDays` 無關**：被 Claude Code 清掉的檔案沒有東西可讀；舊訊息只會以副本重現，副本不是略過就是去重。90 天與每小時資料、掃描進度的期限相同。會漏算的只有「超過 90 天、以前從未掃到」的紀錄（還原備份、搬回舊的歸檔）。
   - D 以前的每日資料不再被加或扣，第二層的雜湊不變，不會重傳（ADR-0011 不變）。
   - 限制：Codex 帳本只記當時時區的日期，改時區後重算一個含 D 前後幾小時事件的 Codex 檔，那幾小時可能多算或少算（扣與補用的日期換算不同）。需要「改時區＋Codex 改寫 90 天前的紀錄」同時發生，Codex 只附加、不改寫 rollout，實際極少（`test_timezone_change_then_codex_rewrite` 以 expectedFailure 記錄）。
+  - 限制：升級到有時間窗的收集器時，舊收集器正在分輪重算的 Codex 檔沒有凍結的 D（舊版不記）；升級後下一輪起 D 已設定，該檔剩下、早於 D 的事件不會加回來。需要「Codex 改寫一個檔、重算跨兩輪以上（> 64 MB 或超過 15 秒）、剛好卡在升級時」同時發生，實際幾乎不會（ADR-0014 總檢查 F-07）。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
 - **Codex 的重算**：每個檔案計入的數字同時記在 `file_tokens`。累計差值只在「從上次的位置接著讀」時正確，所以以下兩種情況都**先從 `daily_tokens`／`hourly_tokens` 扣掉該檔在 `file_tokens` 的貢獻、清空該檔的 `file_tokens` 與 `last_total`，再從頭重掃該檔**（同一個交易內完成）：(1) 檔案被改寫（第 7 節）；(2) 已用 `token_count` 的檔案之後出現 `token_usage_record`（來源改為 record）。來源一旦是 record 就不再改回。以測試驗證：截斷、改寫、compaction 後重掃、先只有 `token_count` 再追加重疊或不重疊的 record，結果都與一次讀完整個檔案相同，重複執行不改變統計。
 - **日期與時區**：以紀錄的 `timestamp` 換算成**掃描當下**的本機時區取日期與小時；之後改時區不回頭重算。限制：旅行或另一台電腦在不同時區時，第二層合併的「同一天」不是同一個 24 小時（ADR-0011 第 1 節）。
