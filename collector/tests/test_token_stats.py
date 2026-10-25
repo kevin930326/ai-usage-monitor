@@ -1221,6 +1221,39 @@ class SeenWindowTest(TokenStatsTestCase):
             self.assertEqual(c.execute("SELECT SUM(task_count), SUM(task_seconds) FROM daily_tokens").fetchone(), (1, 60))
 
 
+    # 審查 C-02：並行收集器
+    def on_cutoff_day(self):
+        return int(datetime(2026, 6, 24, 12, tzinfo=TAIPEI).timestamp())  # 略過界 D 當天
+
+
+    def test_concurrent_collector_advances_the_cutoff_twice(self):
+        """A 開始掃描後，另一個收集器跑了兩輪（D 06-24 → 06-26，刪掉 day < 06-25 的去重列）：
+        A 不能用舊的 D 把副本裡的同一則訊息再算一次，也不能把 D 寫回較早的日期（審查 C-02）。"""
+        self.prime(self.path)
+        on_d = self.on_cutoff_day()
+        self.write(self.claude_file(), claude_assistant("x", on_d, inp=100, out=0))
+        self.scan()
+        self.write(self.claude_file(OTHER), claude_assistant("x", on_d, inp=100, out=0))  # --resume 的副本
+        original = history._transaction
+        other_ran = []
+
+        @contextmanager
+        def racing(conn):
+            if not other_ran:
+                other_ran.append(True)
+                empty = Path(self.dir.name) / "empty-b"
+                for later in (T0 + 2 * DAY, T0 + 3 * DAY):
+                    with redirect_stderr(io.StringIO()):
+                        token_stats.run(self.path, {"claude": empty / "claude", "codex": empty / "codex"}, now=later)
+            with original(conn):
+                yield
+
+        with mock.patch.object(history, "_transaction", racing):
+            self.scan(now=T0 + DAY)
+        self.assertTrue(other_ran)
+        self.assertEqual(self.counted(), {"claude": 100})
+        self.assertEqual(self.cutoff(), "2026-06-26")
+
 class FormatChangeTest(TokenStatsTestCase):
     """紀錄格式改變的偵測（ADR-0009 第 9 節）：門檻保守，證據不足時沿用上次的判斷。"""
 
