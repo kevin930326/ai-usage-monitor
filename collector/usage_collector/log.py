@@ -52,10 +52,16 @@ def rotate_inherited(path: Path, limit: int = MAX_LOG_BYTES) -> bool:
             stream.flush()
         except (OSError, ValueError):
             pass
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    # 開不了新檔（磁碟滿、權限）時沿用原本的描述元：它指向剛改名的 `.1`，日誌照寫，收集照常（審查 C-01）
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    except OSError:
+        return False
     try:
         for target in targets:
             os.dup2(fd, target)
+    except OSError:
+        return False
     finally:
         os.close(fd)
     return True

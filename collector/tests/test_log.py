@@ -87,6 +87,29 @@ class RotateInheritedTest(unittest.TestCase):
         self.assertIn("stdout line", new)  # StandardOutPath 是同一個檔案，也要換過去
         self.assertNotIn("old line", new)
 
+    def test_reopen_failure_keeps_logging_to_the_old_descriptor(self):
+        """改名後開不了新檔（磁碟滿）：沿用原本的描述元（指向 .1），不中斷收集（審查 C-01）。"""
+        self.path.write_text("old line\n" * 20)
+        code = f"""
+            import os, sys
+            from pathlib import Path
+            from usage_collector import log as L
+            real_open = os.open
+            def failing(path, *a, **k):
+                if str(path) == {str(self.path)!r}:
+                    raise OSError(28, "No space left on device")
+                return real_open(path, *a, **k)
+            L.os.open = failing
+            rotated = L.rotate_inherited(Path({str(self.path)!r}), limit=100)
+            L.log(f"after rotated={{rotated}}")
+        """
+        with open(self.path, "a") as f:
+            result = child(code, stdout=f, stderr=f)
+        self.assertEqual(result.returncode, 0)
+        old = self.path.with_name("collector.log.1").read_text()
+        self.assertIn("after rotated=False", old)
+        self.assertNotIn("Traceback", old)
+
     def test_small_log_is_not_rotated(self):
         self.path.write_text("x\n")
         self.run_child(self.path)
