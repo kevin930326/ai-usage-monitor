@@ -37,6 +37,9 @@ VACUUM_INTERVAL_DAYS = 30
 VACUUM_FREE_RATIO = 0.2
 VACUUM_MIN_RECLAIM = 1024 * 1024
 VACUUM_DISK_MARGIN = 64 * 1024 * 1024
+# 任何一次完整的 checkpoint 之後把 WAL 縮回這個大小以內：VACUUM 時 App 正開著讀取、截斷不了時，
+# WAL 不會停在整個資料庫的大小等到下一次 VACUUM（總檢查 F-04）
+WAL_SIZE_LIMIT = 4 * 1024 * 1024
 # 清理用的時間比上次清理最多前進 2 天（ADR-0014 LT-11）：時鐘被設到未來時，一次清理不會把保留期間內的資料全部刪掉；
 # 正常每天清理一次只前進約 1 天，收集器停了一陣子時晚幾天刪（多留一點），每天追上 1 天
 CLEANUP_CLOCK_STEP = 2 * 86400
@@ -331,6 +334,7 @@ def connect(path: Path) -> sqlite3.Connection:
         if schema_version(conn) > SCHEMA_VERSION:
             raise HistoryError(f"history.sqlite3 的版本（{schema_version(conn)}）比收集器新，請更新收集器")
         conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute(f"PRAGMA journal_size_limit = {WAL_SIZE_LIMIT}")
         migrate(conn)
     except BaseException:
         conn.close()
