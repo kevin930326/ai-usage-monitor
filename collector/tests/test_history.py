@@ -436,6 +436,24 @@ class VacuumTest(HistoryTestCase):
         conn.close()
 
 
+    def test_failed_vacuum_is_retried_without_blaming_the_database(self):
+        """VACUUM 等不到寫入鎖（或暫存空間不夠）：不丟例外、不記上次時間、日誌不說損毀（總檢查 F-03）。"""
+        conn = history.connect(self.path)
+        self.fill_and_delete(conn)
+        conn.execute("PRAGMA busy_timeout = 0")
+        writer = sqlite3.connect(self.path, isolation_level=None)
+        try:
+            writer.execute("BEGIN IMMEDIATE")
+            with redirect_stderr(io.StringIO()) as err:
+                self.assertFalse(history.maybe_vacuum(conn, T0))
+            writer.execute("ROLLBACK")
+        finally:
+            writer.close()
+        self.assertIn("整理 history.sqlite3 失敗（OperationalError），下次清理再試", err.getvalue())
+        self.assertNotIn("損毀", err.getvalue())
+        self.assertIsNone(history.meta(conn, "last_vacuum_at"))
+        conn.close()
+
 class FailureIsolationTest(HistoryTestCase):
     """歷史寫不進去時，usage.json 與上傳照常，結束碼不變。"""
 

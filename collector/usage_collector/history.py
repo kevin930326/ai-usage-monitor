@@ -482,7 +482,13 @@ def maybe_vacuum(conn: sqlite3.Connection, now: int) -> bool:
             return False
     except OSError:
         return False
-    conn.execute("VACUUM")
+    try:
+        conn.execute("VACUUM")
+    except sqlite3.OperationalError as e:
+        # 等不到寫入鎖、暫存空間不夠（暫存資料夾可能在別的磁碟區）或剛好被寫滿：資料沒事（VACUUM 是一個交易），
+        # 下次清理再試；不讓 record_safely 記成「被鎖住或已損毀，建議清除歷史」（總檢查 F-03）
+        log(f"整理 history.sqlite3 失敗（{type(e).__name__}），下次清理再試")
+        return False
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_vacuum_at', ?)", (str(now),))
     # App 正在讀時截斷不了：TRUNCATE 會用 busy handler 等讀取結束，所以暫時不等（busy_timeout 0，回傳 busy）；
     # 下次 checkpoint 照常，不影響 VACUUM 的結果（審查 C-01）
