@@ -160,7 +160,7 @@ Codex 的「重置次數卷」（reset credits）可以讓額度提早重置，�
 
 | ID | 需求 | 優先度 | 里程碑 |
 |---|---|---|---|
-| FR-60 | Mac 統計卡片與完整統計視窗在全部／Claude／Codex 旁加「含快取讀取」切換（預設關閉，存在 UserDefaults，面板與視窗共用）。打開時所有 Token 數字、Token 活動（30 天、週、累計）、活動熱力圖、各模型、一天中的時段與個人紀錄都改用 input＋cache_write＋cache_read＋output；Token 數字旁標小字「含快取」，切換與小字的滑鼠說明「包含 AI 重複讀取對話的快取，通常佔總量的大部分」，VoiceOver 讀出切換的開關狀態與「含快取讀取」。這台 Mac、所有電腦與單台電腦都適用（第二層上傳的每日加總已有 cache_read）。收集器另外記含快取的單日最高與累計（`record_days_cached`、`records` 的 `best_day_tokens_cached`、`total_tokens_cached`，與不含快取的紀錄同樣方式：單日最高取最大、累計加總、改寫或重算時先扣再加，不受保留期間影響）；同一個 schema 版本新增，升級時以 `record_days` 加上已計入的 cache_read（Claude 的 `seen_ids`、Codex 的 `file_tokens`，都是永久保留、重算時扣除的同一份）算出初始值。舊版收集器沒有這些紀錄時，App 改由每日資料（最近一年）計算。最長任務與連續天數不受切換影響 | Could | v1.11 |
+| FR-60 | Mac 統計卡片與完整統計視窗在全部／Claude／Codex 旁加「含快取讀取」切換（預設關閉，存在 UserDefaults，面板與視窗共用）。打開時所有 Token 數字、Token 活動（30 天、週、累計）、活動熱力圖、各模型、一天中的時段與個人紀錄都改用 input＋cache_write＋cache_read＋output；Token 數字旁標小字「含快取」，切換與小字的滑鼠說明「包含 AI 重複讀取對話的快取，通常佔總量的大部分」，VoiceOver 讀出切換的開關狀態與「含快取讀取」。這台 Mac、所有電腦與單台電腦都適用（第二層上傳的每日加總已有 cache_read）。收集器另外記含快取的單日最高與累計（`record_days_cached`、`records` 的 `best_day_tokens_cached`、`total_tokens_cached`，與不含快取的紀錄同樣方式：單日最高取最大、累計加總、改寫或重算時先扣再加，不受保留期間影響）；同一個 schema 版本新增，升級時以 `record_days` 加上已計入的 cache_read（Claude 的 `seen_ids`、Codex 的 `file_tokens`，重算時扣除的同一份；升級時在任何去重列被時間窗刪除之前算出）算出初始值。舊版收集器沒有這些紀錄時，App 改由每日資料（最近一年）計算。最長任務與連續天數不受切換影響 | Could | v1.11 |
 
 ### 3.7 里程碑（Mac 面板、統計與安裝）
 

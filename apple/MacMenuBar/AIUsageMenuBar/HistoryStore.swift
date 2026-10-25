@@ -273,7 +273,7 @@ final class HistoryStore {
                         + " output_tokens = 0, reasoning_tokens = 0", [])
                 })
                 && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
-                    + " 'token_bad_lines', 'token_long_lines', 'token_days_from')", []))
+                    + " 'token_bad_lines', 'token_long_lines', 'token_days_from', 'seen_cutoff_day')", []))
                 // 不重新掃描時，今天以前的每日 Token 不會再算回來
                 && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
                 // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時，也不等失敗後的退避）
