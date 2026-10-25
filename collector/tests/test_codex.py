@@ -270,6 +270,7 @@ class NeverConsumeResetCreditsTest(unittest.TestCase):
                 self.assertNotIn("consume", text)
                 self.assertNotIn("ratelimitresetcredit/", text)
 
+    @unittest.skipIf(sys.platform == "win32", "假的 codex 是 shebang 腳本")
     def test_only_read_methods_are_sent(self):
         result = json.loads(json.dumps(RATE_LIMITS))
         result["rateLimitResetCredits"] = {"availableCount": 2, "credits": [credit(1792800000)]}
