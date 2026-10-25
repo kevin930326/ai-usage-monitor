@@ -170,31 +170,42 @@ _CACHED_RECORD_DAYS = """CREATE TABLE IF NOT EXISTS record_days_cached (
 
 
 def _add_cached_records(conn: sqlite3.Connection) -> None:
-    """還沒有 record_days_cached 時建立，並以目前的資料算出初始值：每天的數字是 record_days（主數字，不受保留期間影響）
-    加上每日資料裡的 cache_read（只有保留期間內的，更早的日子少算快取讀取）；累計是 total_tokens 加上每日資料的 cache_read；
-    單日最高取最大的一天。已經有這張表時什麼都不做（之後的掃描照常累加）。"""
+    """還沒有 record_days_cached 時建立，並以目前的資料算出初始值。每天的數字是 record_days（主數字，不受保留期間影響）
+    加上那天已計入的 cache_read，來源與重算時扣除的一致（不用會過期的每日資料）：
+    - Claude：seen_ids 記著每則訊息計入的數值（永久保留）。只加 record_days 有的日子：「清除歷史」（不重新掃描）會清空
+      record_days 卻留下 seen_ids，那些日子的主數字已不在累計裡，快取讀取也不該算進來
+    - Codex：file_tokens 是各檔案已計入的數值，改寫時就是扣這份（「清除歷史」時歸零）
+    累計是 total_tokens 加上這些 cache_read；單日最高取最大的一天。已經有這張表時什麼都不做（之後的掃描照常累加）。"""
     if _table_exists(conn, "record_days_cached") or not _table_exists(conn, "record_days"):
         return  # 已經有了，或是還沒有 Token 統計的版本 1 檔案
-    device = meta(conn, "device_id") or ""
     with _transaction(conn):
         conn.execute(_CACHED_RECORD_DAYS)
         conn.execute("""
+            WITH extra (day, provider, c) AS (
+              SELECT s.day, 'claude', SUM(s.cache_read_tokens) FROM seen_ids s
+              WHERE s.provider = 'claude'
+                AND EXISTS (SELECT 1 FROM record_days r WHERE r.day = s.day AND r.provider = 'claude')
+              GROUP BY s.day
+              UNION ALL
+              SELECT day, 'codex', SUM(cache_read_tokens) FROM file_tokens GROUP BY day
+            )
             INSERT INTO record_days_cached (day, provider, tokens)
             SELECT day, provider, SUM(t) FROM (
               SELECT day, provider, tokens AS t FROM record_days
               UNION ALL
-              SELECT day, provider, SUM(cache_read_tokens) FROM daily_tokens WHERE device_id = ? GROUP BY day, provider
-            ) GROUP BY day, provider HAVING SUM(t) > 0""", (device,))
+              SELECT day, provider, c FROM extra
+            ) GROUP BY day, provider HAVING SUM(t) > 0""")
         for provider in (None, "claude", "codex"):
             suffix = f":{provider}" if provider else ""
-            where, args = (" AND provider = ?", (provider,)) if provider else ("", ())
+            where, args = (" WHERE provider = ?", (provider,)) if provider else ("", ())
             base = conn.execute("SELECT value FROM records WHERE key = ?", ("total_tokens" + suffix,)).fetchone()
-            cache = conn.execute(f"SELECT COALESCE(SUM(cache_read_tokens), 0) FROM daily_tokens WHERE device_id = ?{where}",
-                                 (device, *args)).fetchone()[0]
-            if (base[0] if base else 0) + cache > 0:
+            cache = (conn.execute(f"SELECT COALESCE(SUM(tokens), 0) FROM record_days_cached{where}", args).fetchone()[0]
+                     - conn.execute(f"SELECT COALESCE(SUM(tokens), 0) FROM record_days{where}", args).fetchone()[0])
+            total = (base[0] if base else 0) + max(cache, 0)
+            if total > 0:
                 conn.execute("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, ?, NULL)",
-                             ("total_tokens_cached" + suffix, (base[0] if base else 0) + cache))
-            best = conn.execute(f"SELECT day, SUM(tokens) AS t FROM record_days_cached WHERE 1 = 1{where}"
+                             ("total_tokens_cached" + suffix, total))
+            best = conn.execute(f"SELECT day, SUM(tokens) AS t FROM record_days_cached{where}"
                                 " GROUP BY day HAVING t > 0 ORDER BY t DESC, day LIMIT 1", args).fetchone()
             if best:
                 conn.execute("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, ?, ?)",
