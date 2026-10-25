@@ -297,6 +297,75 @@ class CleanupTest(HistoryTestCase):
         conn.close()
 
 
+class VacuumTest(HistoryTestCase):
+    """定期 VACUUM（ADR-0014 LT-14）：到期或可回收空間夠多才做，磁碟空間不夠時不做。"""
+
+    def fill_and_delete(self, conn, rows=20000):
+        conn.executemany("INSERT INTO seen_ids (provider, id, day, hour, model) VALUES ('claude', ?, '2026-01-01', 0, 'm')",
+                         ((f"msg_{i:06d}_0123456789abcdef0123456789",) for i in range(rows)))
+        conn.execute("DELETE FROM seen_ids")
+
+    def size(self):
+        return self.path.stat().st_size
+
+    def test_vacuum_when_much_space_is_free(self):
+        conn = history.connect(self.path)
+        conn.execute("INSERT INTO meta (key, value) VALUES ('last_vacuum_at', ?)", (str(T0 - DAY),))
+        self.fill_and_delete(conn)
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        before = self.size()
+        with redirect_stderr(io.StringIO()) as err:
+            self.assertTrue(history.maybe_vacuum(conn, T0))
+        self.assertLess(self.size(), before / 2)
+        self.assertEqual(conn.execute("PRAGMA freelist_count").fetchone()[0], 0)
+        self.assertEqual(Path(f"{self.path}-wal").stat().st_size, 0)  # WAL 截斷
+        self.assertIn("整理 history.sqlite3", err.getvalue())
+        self.assertEqual(history.meta(conn, "last_vacuum_at"), str(T0))
+        conn.close()
+
+    def test_not_due_when_recent_and_little_to_reclaim(self):
+        conn = history.connect(self.path)
+        conn.execute("INSERT INTO meta (key, value) VALUES ('last_vacuum_at', ?)", (str(T0 - DAY),))
+        self.assertFalse(history.maybe_vacuum(conn, T0))
+        # 30 天到期；上次時間在未來（時鐘曾被設到未來）也算到期
+        self.assertTrue(history.maybe_vacuum(conn, T0 + 31 * DAY))
+        conn.execute("UPDATE meta SET value = ? WHERE key = 'last_vacuum_at'", (str(T0 + 400 * DAY),))
+        self.assertTrue(history.maybe_vacuum(conn, T0 + 32 * DAY))
+        conn.close()
+
+    def test_skipped_when_the_disk_is_almost_full(self):
+        conn = history.connect(self.path)
+        self.fill_and_delete(conn)
+        usage = mock.Mock(free=history.VACUUM_DISK_MARGIN)
+        with mock.patch.object(history.shutil, "disk_usage", return_value=usage):
+            self.assertFalse(history.maybe_vacuum(conn, T0))
+        self.assertIsNone(history.meta(conn, "last_vacuum_at"))  # 隔天再試
+        self.assertGreater(conn.execute("PRAGMA freelist_count").fetchone()[0], 0)
+        conn.close()
+
+    def test_daily_cleanup_vacuums_once_due(self):
+        conn = history.connect(self.path)
+        with mock.patch.object(history, "maybe_vacuum") as vacuum:
+            history.maybe_cleanup(conn, T0, date(2026, 9, 21))
+            history.maybe_cleanup(conn, T0 + 300, date(2026, 9, 21))
+        self.assertEqual(vacuum.call_count, 1)
+        conn.close()
+
+    def test_vacuum_while_another_connection_reads(self):
+        """App 開著讀取連線（WAL）：VACUUM 照常完成，讀取端之後讀到同樣的資料。"""
+        conn = history.connect(self.path)
+        conn.execute("INSERT INTO collector_runs (ts, ok, runs) VALUES (?, 1, 1)", (T0,))
+        self.fill_and_delete(conn)
+        reader = sqlite3.connect(self.path)
+        try:
+            self.assertEqual(reader.execute("SELECT COUNT(*) FROM collector_runs").fetchone()[0], 1)
+            with redirect_stderr(io.StringIO()):
+                self.assertTrue(history.maybe_vacuum(conn, T0))
+            self.assertEqual(reader.execute("SELECT COUNT(*) FROM collector_runs").fetchone()[0], 1)
+        finally:
+            reader.close()
+            conn.close()
+
 class FailureIsolationTest(HistoryTestCase):
     """歷史寫不進去時，usage.json 與上傳照常，結束碼不變。"""
 

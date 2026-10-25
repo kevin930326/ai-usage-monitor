@@ -194,6 +194,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 項目 | 規則 |
 |---|---|
 | 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`、`record_days_cached`（個人紀錄）與 `seen_ids`、`seen_tasks`、`file_tokens`（這三張由去重時間窗管理）。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
+| 檔案大小 | 刪除只把頁面放回 freelist；收集器每天清理後，到期（30 天，或可回收的空間超過 20% 且至少 1 MB）且磁碟剩餘空間夠（資料庫大小的 2 倍＋64 MB）時 `VACUUM` 並 `wal_checkpoint(TRUNCATE)`（2026-10-26 修訂，[ADR-0014](0014-long-term-operation.md) LT-14） |
 | 延長保留期間 | 已刪除的日子不能畫成 0：App 寫入 `meta.token_days_from`（`YYYY-MM-DD`，實際還有每日 Token 的第一天），取舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）；只往後移。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界 |
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
