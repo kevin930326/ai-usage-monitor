@@ -113,7 +113,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 
 - 只存數字、時間、服務與額度 id：不存方案名稱、錯誤訊息、額度顯示名稱。**不上傳。**
 - SQLite WAL 模式、`busy_timeout` 5 秒；資料庫與 `-wal`／`-shm` 權限 `0600`。
-- 每天（本機日期）第一次執行時清理：刪除超過保留期間的資料（`meta.retention_days`，預設 365，`0`＝永久，由 App 的設定修改）；35 天前的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆，`collector_runs` 合成一列並保留次數）。每 30 天（或可回收的空間超過 20%）`VACUUM` 並截斷 WAL，讓刪掉的空間還給磁碟；剩餘空間不到資料庫大小的 2 倍＋64 MB 時隔天再試（ADR-0014 LT-14）。
+- 每天（本機日期）第一次執行時清理：刪除超過保留期間的資料（`meta.retention_days`，預設 365，`0`＝永久，由 App 的設定修改）；35 天前的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆，`collector_runs` 合成一列並保留次數）。每 30 天（或可回收的空間超過 20%）`VACUUM` 並截斷 WAL，讓刪掉的空間還給磁碟；剩餘空間不到資料庫大小的 2 倍＋64 MB 時隔天再試（ADR-0014 LT-14）。清理用的時間比上次清理最多前進 2 天（`meta.cleanup_clock`）：時鐘被設到未來時不會一次刪光保留期間內的資料，時鐘往回走時用現在的時間（ADR-0014 LT-11）。
 - **歷史是附加功能**：寫在 `usage.json` 與上傳之後；資料庫被鎖住、損毀、版本較新或資料夾不能寫入時，只在日誌記一行「略過額度歷史（例外類別）」，不影響 `usage.json`、上傳與結束碼。損毀的檔案不會被自動刪除或覆蓋。
 - **磁碟空間不足**（剩不到 500 MB，ADR-0014 LT-06）：不寫 `history.sqlite3`（額度歷史、Token 統計、第二層同步、每日清理都暫停），`usage.json`、上傳與服務狀態照常；本機的 `usage.json` 多 `"local_status": {"history_paused": "low_disk", "disk_free_mb": N}`，Mac 面板顯示警告。不足與恢復各記一行日誌。`--tokens-only`（Windows）在不足時直接結束並回傳 1。`usage.json` 本身寫不進去時只記一行，照常上傳。被強制結束留下的暫存檔（`.usage-*.json`、`.service-status-*.json`）超過 1 天就刪掉
 - 只有收集器執行 migration；App 只讀（清除歷史、縮短保留期間除外）。

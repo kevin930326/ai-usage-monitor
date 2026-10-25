@@ -279,8 +279,9 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
 # MARK: - 每輪執行
 
 def _due(conn: sqlite3.Connection, kind: str, interval: int, now: int) -> bool:
-    if now < _meta_int(conn, f"{kind}_next_at"):
-        return False  # 失敗後的退避期間
+    next_at = _meta_int(conn, f"{kind}_next_at")
+    if now < next_at <= now + BACKOFF[-1]:
+        return False  # 失敗後的退避期間（比最長的退避還遠：時鐘曾被設到未來時寫下的，視為已到期，ADR-0014 LT-11）
     return (now - _meta_int(conn, f"{kind}_last_success") >= interval
             or history.meta(conn, f"{kind}_last_day") != history.local_day(now)
             or history.meta(conn, f"{kind}_more") == "1")

@@ -262,6 +262,16 @@ class UploadTest(TokenSyncTestCase):
 
 
 class FailureTest(TokenSyncTestCase):
+    def test_backoff_written_with_a_future_clock_does_not_block_forever(self):
+        """時鐘曾被設到未來時寫下的退避時間（比最長的退避還遠）：改回來後照常上傳（ADR-0014 LT-11）。"""
+        mac = self.machine()
+        mac.set_tokens(0, 100)
+        self.relay.fail = [ProviderError("網路錯誤")]
+        mac.run(NOW + 730 * 86400)  # 時鐘快兩年時失敗一次：退避到兩年後
+        self.assertGreater(int(mac.meta("upload_next_at")), NOW + 730 * 86400)
+        mac.run(NOW)
+        self.assertEqual(self.relay.total(mac.relay_id), 100)
+
     def test_failure_backs_off_and_does_not_advance(self):
         mac = self.machine()
         mac.set_tokens(0, 100)
