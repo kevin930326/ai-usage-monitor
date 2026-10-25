@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import history, local_store, paths, relay, service_status, token_stats, token_sync
+from . import disk, history, local_store, paths, relay, service_status, token_stats, token_sync
 from .log import log, rotate_if_large, rotate_inherited
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -115,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.tokens_only:
         # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）。
         # 這是唯一的工作，失敗時回傳非 0，工作排程器的「上次執行結果」才看得出來
+        if disk.low_space() is not None:
+            return 1  # 磁碟空間不足：不寫 history.sqlite3（ADR-0014 LT-06）
         ok = token_stats.run_safely()
         history.tidy_safely()  # 保留期間的清理（收集額度時由 history.record 執行）
         # 第二層（只有安裝了才執行；失敗不影響結束碼）
@@ -140,8 +142,18 @@ def main(argv: list[str] | None = None) -> int:
         json.dump(snapshot, sys.stdout, ensure_ascii=False, indent=None if args.compact else 2)
         print()
 
+    low_disk = disk.low_space() if args.write_local else None
     if args.write_local:
-        local_store.write_snapshot(snapshot)
+        local = snapshot
+        if low_disk is not None:
+            # 只寫進本機的 usage.json（不上傳）：App 依此在面板顯示暫停記錄歷史
+            local = {**snapshot, "local_status": {"history_paused": "low_disk", "disk_free_mb": low_disk // (1024 * 1024)}}
+        try:
+            local_store.write_snapshot(local)
+        except OSError as e:
+            # 磁碟滿、唯讀或權限錯誤：不能讓上傳也跟著停（ADR-0014 LT-06），只記類別
+            log(f"無法寫入 usage.json（{type(e).__name__}），照常上傳")
+            ok = False
 
     if args.upload:
         try:
@@ -153,13 +165,15 @@ def main(argv: list[str] | None = None) -> int:
             ok = False
 
     # 額度歷史（ADR-0009）放在最後：鎖住時最多等 5 秒，不能拖慢 usage.json 與上傳；失敗只記日誌、不影響結束碼
-    if args.write_local:
+    if args.write_local and low_disk is None:
         history.record_safely(snapshot)
         # Token 統計（ADR-0009）：最後執行、降低優先順序；首次掃描每次最多 64 MB 或 15 秒
         token_stats.run_safely()
         # 第二層（ADR-0011 第 2 節）：只有安裝第二層的電腦才上傳每日加總、下載其他電腦的；失敗只記日誌
         token_sync.run_safely()
-        # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘
+    if args.write_local:
+        # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘。
+        # 和 usage.json 一樣是覆寫的小檔案，磁碟空間不足時照常
         service_status.update_safely(list(snapshot["providers"]))
 
     # 全部 provider 失敗或上傳失敗時回傳非 0，方便 launchd / 腳本判斷

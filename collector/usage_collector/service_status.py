@@ -14,7 +14,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import http
+from . import http, local_store
 from .log import log
 from .models import ProviderError, iso_utc
 from .paths import APP_SUPPORT_DIR
@@ -107,6 +107,7 @@ def _read(path: Path) -> dict | None:
 
 def _write(data: dict, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    local_store.remove_stale_temp(path.parent, ".service-status-")
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".service-status-", suffix=".json")
     try:
         if sys.platform != "win32":  # Windows 的 Python 3.12 沒有 fchmod；%LOCALAPPDATA% 本來就只有使用者本人能讀

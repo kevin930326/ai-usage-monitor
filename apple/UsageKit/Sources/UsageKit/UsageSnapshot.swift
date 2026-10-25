@@ -5,22 +5,45 @@ public struct UsageSnapshot: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var updatedAt: Date
     public var providers: [String: ProviderUsage]
+    /// 只在 Mac 本機的 usage.json（不上傳）：收集器的本機狀態，例如磁碟空間不足而暫停記錄歷史（ADR-0014 LT-06）
+    public var localStatus: LocalStatus?
 
-    public init(schemaVersion: Int = UsageSnapshot.currentSchemaVersion, updatedAt: Date, providers: [String: ProviderUsage]) {
+    public init(schemaVersion: Int = UsageSnapshot.currentSchemaVersion, updatedAt: Date, providers: [String: ProviderUsage],
+                localStatus: LocalStatus? = nil) {
         self.schemaVersion = schemaVersion
         self.updatedAt = updatedAt
         self.providers = providers
+        self.localStatus = localStatus
     }
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case updatedAt = "updated_at"
         case providers
+        case localStatus = "local_status"
     }
 
     /// App 能解析的 schema 版本（FR-13）
     public static let currentSchemaVersion = 1
     public static let supportedSchemaVersions: Set<Int> = [1]
+}
+
+public struct LocalStatus: Codable, Equatable, Sendable {
+    /// 暫停記錄歷史的原因；目前只有 "low_disk"
+    public var historyPaused: String?
+    public var diskFreeMB: Int?
+
+    public init(historyPaused: String? = nil, diskFreeMB: Int? = nil) {
+        self.historyPaused = historyPaused
+        self.diskFreeMB = diskFreeMB
+    }
+
+    public var lowDisk: Bool { historyPaused == "low_disk" }
+
+    enum CodingKeys: String, CodingKey {
+        case historyPaused = "history_paused"
+        case diskFreeMB = "disk_free_mb"
+    }
 }
 
 public struct ProviderUsage: Codable, Equatable, Sendable {

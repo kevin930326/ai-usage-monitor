@@ -409,6 +409,14 @@ struct PanelView: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
             .help("一年熱力圖、30 天長條、各模型與時段分布")
         }
+        if let status = store.snapshot?.localStatus, status.lowDisk {
+            // 收集器在磁碟剩餘空間不足時暫停寫 history.sqlite3（ADR-0014 LT-06）；額度照常更新
+            Label("磁碟空間不足\(status.diskFreeMB.map { "（剩 \($0) MB）" } ?? "")，暫停記錄額度歷史與 Token 統計；用量照常更新",
+                  systemImage: "externaldrive.badge.exclamationmark")
+                .font(.caption)
+                .foregroundStyle(UsageColors.notice)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         if let refreshHint {
             Text(refreshHint.text)
                 .font(.caption)

@@ -228,3 +228,11 @@ QR 碼含讀取密鑰：測試時不要截圖或錄影終端機畫面。
 | 16.5 | （有第二層時）切換所有電腦／這台 Mac／其他電腦，各打開一次「含快取讀取」 | 三種範圍的數字都變大；其他電腦的「一天中的時段」仍顯示沒有時段資料、標題沒有「含快取」 | |
 | 16.6 | VoiceOver（⌘F5）移到切換按 VO-空白鍵 | 讀出「含快取讀取，切換按鈕，開啟／關閉」與說明；移到本週 Token 讀出「…含快取讀取」 | |
 | 16.7 | 更新收集器後等它跑一輪，`sqlite3 ~/Library/Application\ Support/AIUsageMonitor/history.sqlite3 "SELECT key, value, day FROM records WHERE key LIKE '%_cached%'"` | 有 `total_tokens_cached`、`best_day_tokens_cached`（含 `:claude`／`:codex`），數字比不含快取的大；再跑一輪後累計只增加這段期間的用量（沒有重複加上初始值） | |
+
+## 17. 磁碟空間不足（ADR-0014 LT-06）
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 17.1 | 在暫存資料夾建 1 GB 的磁碟映像並掛載（`hdiutil create -size 1g -fs APFS -volname aumtest /tmp/aum.dmg && hdiutil attach /tmp/aum.dmg`），塞到剩不到 500 MB（`mkfile 600m /Volumes/aumtest/fill`），以 `AI_USAGE_MONITOR_HOME=/Volumes/aumtest python3 -m usage_collector --write-local --quiet` 執行兩次 | `usage.json` 有 `local_status`（`low_disk`、剩餘 MB）；沒有 `history.sqlite3`；日誌（stderr）只有第一次記「磁碟剩餘空間不足」 | |
+| 17.2 | 以同一個資料夾打開 Debug 版面板（`AI_USAGE_MONITOR_HOME=/Volumes/aumtest AUM_DEMO_PANEL=1`） | 面板底部顯示「磁碟空間不足（剩 N MB），暫停記錄額度歷史與 Token 統計；用量照常更新」，淺色、深色都看得清楚 | |
+| 17.3 | 刪掉 `fill` 再執行一次收集器 | 日誌記「磁碟空間已恢復」；`usage.json` 沒有 `local_status`、建立了 `history.sqlite3`；面板的警告消失。最後 `hdiutil detach /Volumes/aumtest` 並刪掉映像 | |
