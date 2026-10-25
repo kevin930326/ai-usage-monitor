@@ -75,11 +75,11 @@ enum PanelSection: String, CaseIterable, Identifiable {
 final class PanelSettings {
     static let shared = PanelSettings(defaults: storage)
 
-    /// Debug 版的面板預覽、截圖與效能量測用獨立、每次清空的設定，不動到正式設定，
+    /// Debug 版的面板預覽、截圖、實際視窗檢查與效能量測（`DebugTools.isDemo`）用獨立、每次清空的設定，不動到正式設定，
     /// 結果也不受使用者隱藏或收合的卡片影響。
     private static var storage: UserDefaults {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["AUM_DEMO_PANEL"] == "1" {
+        if DebugTools.isDemo {
             let suite = "io.github.kevin930326.ai-usage-monitor.demo-panel"
             let demo = UserDefaults(suiteName: suite) ?? .standard
             demo.removePersistentDomain(forName: suite)
