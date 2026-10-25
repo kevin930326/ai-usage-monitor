@@ -780,11 +780,13 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     changed = False
     done_bytes = 0
     stale = []
+    skipped = []  # 交易外判斷沒變而略過的檔案
     for index, f in enumerate(files, 1):
         row = rows.get(f.key)
         if row is not None and (row["device"], row["inode"]) == (f.device, f.inode) \
                 and row["offset"] == f.size and f.mtime >= row["mtime"]:
             done_bytes += f.size
+            skipped.append(f.key)
             if now - row["last_seen"] >= LAST_SEEN_REFRESH or f.mtime != row["mtime"]:
                 stale.append((now, f.mtime, f.key))
             continue
@@ -837,13 +839,23 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('token_format_scan', ?)",
                          (json.dumps({"bytes": c.bytes_read, "candidates": c.candidate_lines, "bad": c.bad_lines,
                                       "token_lines": c.token_lines, "at": now}),))
-        if history.meta(conn, "first_scan_done") != "1":
+        if history.meta(conn, "first_scan_done") != "1" and not (result.done and _cleared_meanwhile(conn, skipped)):
             conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_progress', ?)",
                          (str(result.progress),))
             if result.done:
                 conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
         _advance_seen_window(conn, now)
     return result
+
+
+def _cleared_meanwhile(conn: sqlite3.Connection, skipped: list[str]) -> bool:
+    """這一輪在交易外判斷沒變而略過的檔案，到最後一個交易時掃描進度裡卻沒有它的列：App 的「清除並重新掃描」
+    在這一輪中間清空了掃描進度。這時不能標記首次掃描完成（下一輪會帶著略過界重掃、90 天以前的紀錄不再計入），
+    也不寫這一輪的進度（總檢查 F-02）。打不開的檔案本來就沒有列，但不在 `skipped` 裡，不影響首次掃描完成。"""
+    if not skipped:
+        return False
+    tracked = {r[0] for r in conn.execute("SELECT file_key FROM scan_state")}
+    return any(key not in tracked for key in skipped)
 
 
 def _seen_cutoff(conn: sqlite3.Connection, now: int) -> str | None:

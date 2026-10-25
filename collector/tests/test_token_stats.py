@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sqlite3
+import sys
 import tempfile
 import time
 import unittest
@@ -1367,6 +1368,56 @@ class SeenWindowTest(TokenStatsTestCase):
         self.assertTrue(other_ran)
         self.assertEqual(self.counted(), {"claude": 100})
         self.assertEqual(self.cutoff(), "2026-06-26")
+
+    def test_clear_and_rescan_during_a_run_does_not_mark_the_first_scan_done(self):
+        """App 的「清除並重新掃描」落在一輪中間（交易外判斷檔案沒變之後、最後一個交易之前）：這一輪不能標記
+        首次掃描完成、不能設略過界，下一輪才會重建完整歷史（Codex 200 天前的紀錄也算回來；總檢查 F-02）。"""
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 200 * DAY, inp=100, out=0),
+                   codex_count(T0, inp=101, out=0))
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 101})
+        original = history._transaction
+        cleared = []
+
+        @contextmanager
+        def racing(conn):
+            if not cleared:  # 檔案都沒變：第一個交易就是最後一個，App 在它拿到鎖之前清除
+                cleared.append(True)
+                with self.db() as other:
+                    for t in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached",
+                              "scan_state", "seen_ids", "seen_tasks", "file_tokens"):
+                        other.execute(f"DELETE FROM {t}")
+                    other.execute("DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
+                                  " 'token_bad_lines', 'token_long_lines', 'token_days_from', 'seen_cutoff_day')")
+                    other.commit()
+            with original(conn):
+                yield
+
+        with mock.patch.object(history, "_transaction", racing):
+            self.scan(now=T0 + DAY + 300)
+        self.assertTrue(cleared)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'first_scan_done'").fetchone())
+        self.assertIsNone(self.cutoff())
+        self.scan(now=T0 + DAY + 600)
+        self.scan(now=T0 + DAY + 900)
+        self.assertEqual(self.counted(), {"codex": 101})
+        self.assertEqual(self.records()["total_tokens"][0], 101)
+        self.assertEqual(self.cutoff(), "2026-06-24")
+
+    @unittest.skipIf(sys.platform == "win32" or os.geteuid() == 0, "chmod 000 擋不住 Windows 與 root")
+    def test_unreadable_file_still_lets_the_first_scan_finish(self):
+        """打不開的檔案沒有掃描進度列，但首次掃描照樣完成（ADR-0014 LT-19：下一輪再讀）。"""
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
+        self.write(self.claude_file(OTHER), claude_assistant("b", T0, inp=2, out=0))
+        os.chmod(self.claude_file(OTHER), 0)
+        try:
+            self.scan()
+        finally:
+            os.chmod(self.claude_file(OTHER), 0o600)
+        self.assertEqual(self.counted(), {"claude": 1})
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'first_scan_done'").fetchone()[0], "1")
 
     @unittest.expectedFailure
     def test_timezone_change_then_codex_rewrite(self):
