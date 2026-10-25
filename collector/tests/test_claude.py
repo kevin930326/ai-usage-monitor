@@ -111,6 +111,21 @@ class ClaudeParseTest(unittest.TestCase):
                 resets = claude.parse_reset(text, RECORDED_AT).astimezone(timezone.utc)
                 self.assertEqual(resets.strftime("%Y-%m-%dT%H:%M:%SZ"), expected)
 
+    def test_reset_without_year_across_new_year(self):
+        """沒有年份時取離現在最近的合理年份（ADR-0014 LT-10）：12 月底的「Jan 2」是明年、1 月初的「Dec 31」是去年。"""
+        cases = [
+            (datetime(2026, 12, 30, 15, 0, tzinfo=timezone.utc), "Jan 2 at 1am (Asia/Taipei)", "2027-01-01T17:00:00Z"),
+            (datetime(2026, 12, 31, 16, 30, tzinfo=timezone.utc), "Jan 1 at 3am (Asia/Taipei)", "2026-12-31T19:00:00Z"),
+            (datetime(2026, 12, 31, 15, 30, tzinfo=timezone.utc), "Dec 31 at 11pm (Asia/Taipei)", "2026-12-31T15:00:00Z"),
+            (datetime(2027, 1, 1, 0, 30, tzinfo=timezone.utc), "Dec 31 at 11pm (UTC)", "2026-12-31T23:00:00Z"),
+            (datetime(2026, 10, 21, 15, 25, tzinfo=timezone.utc), "Oct 28 at 1am (Asia/Taipei)", "2026-10-27T17:00:00Z"),
+            (datetime(2027, 1, 3, 0, 0, tzinfo=timezone.utc), "Jan 2, 2028 at 1am (UTC)", "2028-01-02T01:00:00Z"),  # 有年份就照用
+        ]
+        for now, text, expected in cases:
+            with self.subTest(text=text, now=now):
+                resets = claude.parse_reset(text, now).astimezone(timezone.utc)
+                self.assertEqual(resets.strftime("%Y-%m-%dT%H:%M:%SZ"), expected)
+
     def test_format_changed_is_error_not_zero(self):
         for text in (fixture("format-changed.txt"),
                      "Current session: 45% used · resets tomorrow",

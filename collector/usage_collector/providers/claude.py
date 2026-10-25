@@ -13,7 +13,7 @@ import json
 import re
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
 
@@ -85,10 +85,19 @@ def parse_reset(text: str, now: datetime) -> datetime:
     if not 1 <= int(m["hour"]) <= 12:
         raise ProviderError(FORMAT_CHANGED)  # 12 小時制沒有 0am／13pm
     hour = int(m["hour"]) % 12 + (12 if m["ampm"].lower() == "pm" else 0)
-    year = int(m["year"]) if m["year"] else now.astimezone(tz).year
+    month, day, minute = MONTHS.index(m["month"].lower()) + 1, int(m["day"]), int(m["minute"] or 0)
     try:
-        return datetime(year, MONTHS.index(m["month"].lower()) + 1, int(m["day"]), hour,
-                        int(m["minute"] or 0), tzinfo=tz)
+        if m["year"]:
+            return datetime(int(m["year"]), month, day, hour, minute, tzinfo=tz)
+        # 沒有年份：取離現在最近的合理年份（ADR-0014 LT-10）。重置最多在一週後，所以 12 月底看到「Jan 2」是明年、
+        # 1 月初看到「Dec 31」是去年；Claude Code 跨年時多半會印年份，這裡是沒印時的保護
+        year = now.astimezone(tz).year
+        resets = datetime(year, month, day, hour, minute, tzinfo=tz)
+        if resets < now - timedelta(days=1):
+            resets = datetime(year + 1, month, day, hour, minute, tzinfo=tz)
+        elif resets > now + timedelta(days=8):
+            resets = datetime(year - 1, month, day, hour, minute, tzinfo=tz)
+        return resets
     except ValueError:
         raise ProviderError(FORMAT_CHANGED) from None
 
