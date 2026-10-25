@@ -716,6 +716,14 @@ class ScanResult:
     counters: Counters = field(default_factory=Counters)
 
 
+def _scan_row(conn: sqlite3.Connection, file_key: str) -> sqlite3.Row | None:
+    conn.row_factory = sqlite3.Row
+    try:
+        return conn.execute("SELECT * FROM scan_state WHERE file_key = ?", (file_key,)).fetchone()
+    finally:
+        conn.row_factory = None
+
+
 def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
          budget: Budget | None = None) -> ScanResult:
     now = int(time.time()) if now is None else now
@@ -748,6 +756,9 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                 totals, counters = Totals(device_id, now), Counters()
                 try:
                     with history._transaction(conn):
+                        # 拿到寫入鎖後重新讀這個檔案的進度：上面的整批讀取在交易外，另一個收集器（手動執行、
+                        # App 觸發）可能已經處理過同一段，沿用舊 offset 會讓 Codex 的累計差額再加一次
+                        row = _scan_row(conn, f.key)
                         offset = _process(conn, f, row, totals, budget, counters, cutoffs, switch)
                     break
                 except _SwitchToRecord:
