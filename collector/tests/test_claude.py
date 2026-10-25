@@ -120,6 +120,10 @@ class ClaudeParseTest(unittest.TestCase):
             (datetime(2027, 1, 1, 0, 30, tzinfo=timezone.utc), "Dec 31 at 11pm (UTC)", "2026-12-31T23:00:00Z"),
             (datetime(2026, 10, 21, 15, 25, tzinfo=timezone.utc), "Oct 28 at 1am (Asia/Taipei)", "2026-10-27T17:00:00Z"),
             (datetime(2027, 1, 3, 0, 0, tzinfo=timezone.utc), "Jan 2, 2028 at 1am (UTC)", "2028-01-02T01:00:00Z"),  # 有年份就照用
+            # 已經過了幾天的日期仍是今年，不會變成明年（審查 C-01）
+            (datetime(2026, 10, 26, 12, 0, tzinfo=timezone.utc), "Oct 24 at 1am (UTC)", "2026-10-24T01:00:00Z"),
+            (datetime(2027, 1, 2, 12, 0, tzinfo=timezone.utc), "Dec 31 at 1am (UTC)", "2026-12-31T01:00:00Z"),
+            (datetime(2028, 2, 27, 12, 0, tzinfo=timezone.utc), "Feb 29 at 1am (UTC)", "2028-02-29T01:00:00Z"),
         ]
         for now, text, expected in cases:
             with self.subTest(text=text, now=now):

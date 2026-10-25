@@ -13,7 +13,7 @@ import json
 import re
 import subprocess
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfoNotFoundError
 
@@ -89,17 +89,21 @@ def parse_reset(text: str, now: datetime) -> datetime:
     try:
         if m["year"]:
             return datetime(int(m["year"]), month, day, hour, minute, tzinfo=tz)
-        # 沒有年份：取離現在最近的合理年份（ADR-0014 LT-10）。重置最多在一週後，所以 12 月底看到「Jan 2」是明年、
-        # 1 月初看到「Dec 31」是去年；Claude Code 跨年時多半會印年份，這裡是沒印時的保護
-        year = now.astimezone(tz).year
-        resets = datetime(year, month, day, hour, minute, tzinfo=tz)
-        if resets < now - timedelta(days=1):
-            resets = datetime(year + 1, month, day, hour, minute, tzinfo=tz)
-        elif resets > now + timedelta(days=8):
-            resets = datetime(year - 1, month, day, hour, minute, tzinfo=tz)
-        return resets
     except ValueError:
         raise ProviderError(FORMAT_CHANGED) from None
+    # 沒有年份：前一年、今年、明年裡離現在最近的一個（ADR-0014 LT-10）。重置最多在一週後，所以 12 月底看到「Jan 2」
+    # 是明年、1 月初看到「Dec 31」是去年，已經過了幾天的日期仍是今年（審查 C-01）；Claude Code 跨年時多半會印年份，
+    # 這裡是沒印時的保護。2 月 29 日只在閏年有效
+    year = now.astimezone(tz).year
+    candidates = []
+    for y in (year - 1, year, year + 1):
+        try:
+            candidates.append(datetime(y, month, day, hour, minute, tzinfo=tz))
+        except ValueError:
+            continue
+    if not candidates:
+        raise ProviderError(FORMAT_CHANGED)
+    return min(candidates, key=lambda c: abs(c - now))
 
 
 # 模型名稱只會是字母、數字、空白、點與連字號（Fable、Sonnet 4.5、Opus）；其他字元或太長都視為格式改變。
