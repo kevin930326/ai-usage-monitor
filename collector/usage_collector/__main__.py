@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import history, local_store, paths, relay, service_status, token_stats, token_sync
-from .log import log
+from .log import log, rotate_if_large, rotate_inherited
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
 
@@ -71,16 +71,22 @@ def legacy_agent_installed(environ: Mapping[str, str] = os.environ,
     return job_loaded()
 
 
+def legacy_log_path() -> Path:
+    """install-launchd.sh 的收集器：launchd 把 stdout／stderr 附加到這個檔案（plist 的 StandardErrorPath）"""
+    return Path.home() / "Library" / "Logs" / "AIUsageMonitor" / "collector.log"
+
+
 def app_agent_log_path(environ: Mapping[str, str] = os.environ) -> Path:
     """App 內建的收集器自己寫日誌（LaunchAgent 的 plist 在 App 內，不能寫 ~ 開頭的路徑）：
     與舊安裝同一個檔案；`AI_USAGE_MONITOR_HOME` 有值（測試）時寫在那個資料夾裡"""
     if environ.get("AI_USAGE_MONITOR_HOME"):
         return paths.APP_SUPPORT_DIR / "logs" / "collector.log"
-    return Path.home() / "Library" / "Logs" / "AIUsageMonitor" / "collector.log"
+    return legacy_log_path()
 
 
 def redirect_stderr_to(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    rotate_if_large(path)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     os.dup2(fd, sys.stderr.fileno())
     os.close(fd)
@@ -98,8 +104,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="只統計本機 Token，不收集額度（Windows 排程的預設，ADR-0011 第 2 節）")
     parser.add_argument("--log-file", help="日誌附加到這個檔案（Windows 的 pythonw 沒有 stderr）")
     args = parser.parse_args(argv)
+    # 日誌每份最多 1 MB、留一份舊的（ADR-0014）：Windows 的 --log-file、App 內建收集器（redirect_stderr_to）
+    # 與 install-launchd.sh 的收集器（launchd 已開好 stderr）三種寫法各自在開始時輪替
     if args.log_file:
+        rotate_if_large(Path(args.log_file))
         sys.stderr = open(args.log_file, "a", encoding="utf-8", buffering=1)  # 用到程序結束
+    elif args.agent != "app":
+        rotate_inherited(legacy_log_path())
 
     if args.tokens_only:
         # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）。

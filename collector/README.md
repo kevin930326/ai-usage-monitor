@@ -96,7 +96,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | 額度歷史與 Token 統計 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3` | 見下方「額度歷史」「Token 統計」 |
 | 服務狀態 | `~/Library/Application Support/AIUsageMonitor/service-status.json` | 見下方「服務狀態」；只在本機、不上傳 |
 | 寫入密鑰 | macOS Keychain `AIUsageMonitor-relay-write` | 不存在任何檔案中 |
-| 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄 |
+| 日誌 | `~/Library/Logs/AIUsageMonitor/collector.log` | launchd 執行紀錄；超過 1 MB 時改名為 `collector.log.1`（只留一份舊的，Windows 的 `--log-file` 與 iPhone 自動重裝的 `reinstall.log` 相同；ADR-0014） |
 
 設定環境變數 `AI_USAGE_MONITOR_HOME` 可以改變快照、設定與額度歷史的資料夾（測試用）。
 
