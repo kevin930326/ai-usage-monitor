@@ -1156,6 +1156,34 @@ class SeenWindowTest(TokenStatsTestCase):
         self.assertEqual(self.cutoff(), "2026-06-25")
         self.assertEqual(self.counted(), {"claude": 3})
 
+    def test_clock_ahead_for_many_runs_moves_the_cutoff_one_day(self):
+        """時鐘被設到一年後、維持 8 小時（96 輪）：每個日期只前進一天（不是每輪）；改回後今天與之後的訊息照算（總檢查 F-01）。"""
+        self.prime(self.path)
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
+        self.scan()
+        for i in range(96):
+            self.scan(now=T0 + 400 * DAY + i * 300)
+        self.assertEqual(self.cutoff(), "2026-06-26")  # 21:33 開始的 8 小時跨過一次午夜：兩個日期各一天
+        self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=10, out=0))
+        self.scan(now=T0 + DAY + 3600)
+        for d in range(1, 4):
+            self.write(self.claude_file(), claude_assistant(f"c{d}", T0 + (d + 1) * DAY, inp=100, out=0))
+            self.scan(now=T0 + (d + 1) * DAY + 3600)
+        self.assertEqual(self.counted(), {"claude": 311})
+        self.assertEqual(self.cutoff(), "2026-06-27")  # 之後每天前進一天
+
+    def test_cutoff_in_the_future_goes_back_once_the_clock_is_fixed(self):
+        """升級那一輪時鐘剛好超前（D 一次設到一年後）：時鐘改回後 D 退回、記一行日誌，新訊息照算（總檢查 F-01）。"""
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
+        self.scan_before_seen_window()
+        self.scan(now=T0 + 400 * DAY)
+        self.assertEqual(self.cutoff(), "2027-07-28")
+        self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=10, out=0))
+        self.scan(now=T0 + DAY + 3600)
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        self.assertIn("略過界 2027-07-28 在今天（2026-09-22）之後", self.stderr.getvalue())
+        self.assertEqual(self.counted(), {"claude": 11})
+
     def test_codex_rewrite_across_the_window_keeps_old_days(self):
         self.write(self.codex_file(), codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0),
                    codex_count(T0, inp=1500, out=0))

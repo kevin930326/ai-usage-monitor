@@ -772,7 +772,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     days = history.retention_days(conn)
     cutoffs = (history.local_day(now - days * 86400) if days > 0 else "",
                history.local_day(now - min(days or history.HOURLY_TOKENS_DAYS, history.HOURLY_TOKENS_DAYS) * 86400))
-    _seen_cutoff(conn)  # 「清除並重新掃描」後刪掉舊的略過界；每個檔案在自己的交易內再讀目前的值
+    _seen_cutoff(conn, now)  # 「清除並重新掃描」後刪掉舊的略過界、在未來時退回；每個檔案在自己的交易內再讀目前的值
     conn.row_factory = sqlite3.Row
     rows = {r["file_key"]: r for r in conn.execute("SELECT * FROM scan_state")}
     conn.row_factory = None
@@ -846,10 +846,22 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     return result
 
 
-def _seen_cutoff(conn: sqlite3.Connection) -> str | None:
+def _seen_cutoff(conn: sqlite3.Connection, now: int) -> str | None:
     """這次掃描的略過界。「清除並重新掃描」（首次掃描未完成、去重表與掃描進度都是空的）時刪掉舊的略過界，
-    整個歷史重建（舊版 App 的重新掃描不會刪這個鍵）。"""
+    整個歷史重建（舊版 App 的重新掃描不會刪這個鍵）。
+    略過界在今天之後只可能是時鐘曾被設到未來（例如首次設定那一輪時鐘就錯了）：所有訊息都會被當成太舊而不計，
+    所以在讀任何檔案之前退回目標日期並記一行日誌（總檢查 F-01）。"""
     cutoff = history.meta(conn, "seen_cutoff_day")
+    today = history.local_day(now)
+    if cutoff is not None and cutoff > today:
+        with history._transaction(conn):
+            cutoff = history.meta(conn, "seen_cutoff_day")
+            if cutoff is not None and cutoff > today:
+                target = history.local_day(now - SEEN_DAYS * 86400)
+                log(f"去重的略過界 {cutoff} 在今天（{today}）之後，系統時鐘曾被設到未來；退回 {target}")
+                conn.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                                 (("seen_cutoff_day", target), ("seen_cutoff_stepped", today)))
+                cutoff = target
     if cutoff is None or history.meta(conn, "first_scan_done") == "1":
         return cutoff
     if any(conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone() for t in ("scan_state", "seen_ids", "seen_tasks")):
@@ -860,18 +872,23 @@ def _seen_cutoff(conn: sqlite3.Connection) -> str | None:
 
 
 def _advance_seen_window(conn: sqlite3.Connection, now: int) -> None:
-    """略過界只進不退、每次最多一天（時鐘被設到未來時，錯一次只縮一天，改回後就停）；再刪掉 D − 1 以前的去重列。
+    """略過界只進不退、每個本機日期最多前進一天：時鐘被設到未來時，不論那段時間跑了幾輪都只多縮一天
+    （以 `seen_cutoff_stepped` 記上次前進的日期；總檢查 F-01）。再刪掉 D − 1 以前的去重列。
     在交易內以資料庫目前的值為準：另一個收集器同時執行、已經前進過時不會被寫回較早的日期（審查 C-02）。"""
     if history.meta(conn, "first_scan_done") != "1":
         return
+    today = history.local_day(now)
     target = history.local_day(now - SEEN_DAYS * 86400)
     current = history.meta(conn, "seen_cutoff_day")
     if current is None:
-        cutoff = target  # 首次掃描剛完成，或升級前就完成了：一次到位
+        cutoff = target  # 首次掃描剛完成，或升級前就完成了：一次到位（時鐘錯了由 _seen_cutoff 之後退回）
+    elif history.meta(conn, "seen_cutoff_stepped") == today:
+        cutoff = current
     else:
         cutoff = max(current, min(target, (date.fromisoformat(current) + timedelta(days=1)).isoformat()))
     if cutoff != current:
-        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('seen_cutoff_day', ?)", (cutoff,))
+        conn.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+                         (("seen_cutoff_day", cutoff), ("seen_cutoff_stepped", today)))
     prune_before = (date.fromisoformat(cutoff) - timedelta(days=1)).isoformat()
     left = SEEN_PRUNE_ROWS
     for table in SEEN_TABLES:
