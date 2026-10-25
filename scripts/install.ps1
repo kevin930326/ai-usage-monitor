@@ -59,14 +59,23 @@ function Install-AIUsageCollector {
     if ($Uninstall) {
         $task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
         if ($task) {
+            # Same as installing: a running collector keeps app\collector open, so wait for it to stop first
             Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+            for ($i = 0; $i -lt 30; $i++) {
+                if ((Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName).State -ne 'Running') { break }
+                Start-Sleep -Seconds 1
+            }
             Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false
             Write-Host "Removed the scheduled task $TaskPath$TaskName"
         } else {
             Write-Host 'No scheduled task to remove.'
         }
         foreach ($dir in @($AppDir, $OldDir)) {
-            if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
+            $removed = -not (Test-Path $dir)
+            for ($i = 0; $i -lt 15 -and -not $removed; $i++) {
+                try { Remove-Item -Recurse -Force $dir -ErrorAction Stop; $removed = $true } catch { Start-Sleep -Seconds 1 }
+            }
+            if (-not $removed) { throw "Could not remove $dir (still in use). The scheduled task is gone; close any collector window and run -Uninstall again." }
         }
         Write-Host "Removed the program files. Your data is kept in $DataDir (delete it yourself if you no longer need it)."
         return
