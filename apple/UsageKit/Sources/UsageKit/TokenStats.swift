@@ -59,7 +59,8 @@ public struct TokenCounts: Equatable, Sendable {
     public static func += (a: inout TokenCounts, b: TokenCounts) { a = a + b }
 }
 
-/// `daily_tokens` 的一列（這台 Mac 的 device_id）。
+/// `daily_tokens` 的一列。`device` 是這台 Mac 時為空字串（`TokenDevices.local`），
+/// 第二層下載的其他電腦是中繼的 device_id（ADR-0011 第 2 節）。
 public struct TokenDayRow: Equatable, Sendable {
     public var day: String
     public var provider: String
@@ -68,9 +69,10 @@ public struct TokenDayRow: Equatable, Sendable {
     public var taskCount: Int
     public var taskSeconds: Int
     public var longestTaskSeconds: Int
+    public var device: String
 
     public init(day: String, provider: String, model: String, counts: TokenCounts,
-                taskCount: Int = 0, taskSeconds: Int = 0, longestTaskSeconds: Int = 0) {
+                taskCount: Int = 0, taskSeconds: Int = 0, longestTaskSeconds: Int = 0, device: String = TokenDevices.local) {
         self.day = day
         self.provider = provider
         self.model = model
@@ -78,6 +80,7 @@ public struct TokenDayRow: Equatable, Sendable {
         self.taskCount = taskCount
         self.taskSeconds = taskSeconds
         self.longestTaskSeconds = longestTaskSeconds
+        self.device = device
     }
 }
 
@@ -129,11 +132,13 @@ public struct TokenStatsData: Equatable, Sendable {
     /// 實際還有每日資料的第一天（`meta.token_days_from`，`YYYY-MM-DD`）：保留期間縮短或清除歷史後延長保留期間，
     /// 已刪除的日子不會回來，不能只看目前的保留期間；沒有記錄時為 nil
     public var dataFrom: String?
+    /// 第二層的裝置清單（沒有安裝第二層時為 `.none`）
+    public var devices: TokenDevices
 
     public init(days: [TokenDayRow] = [], hours: [TokenHourRow] = [], records: [String: TokenRecord] = [:],
                 recordDays: [String: [String: Int64]] = [:],
                 firstScanDone: Bool = false, firstScanProgress: Int? = nil, skippedLines: Int = 0, retentionDays: Int = 365,
-                dataFrom: String? = nil, formatSuspect: Bool = false) {
+                dataFrom: String? = nil, formatSuspect: Bool = false, devices: TokenDevices = .none) {
         self.days = days
         self.hours = hours
         self.records = records
@@ -144,6 +149,7 @@ public struct TokenStatsData: Equatable, Sendable {
         self.formatSuspect = formatSuspect
         self.retentionDays = retentionDays
         self.dataFrom = dataFrom
+        self.devices = devices
     }
 
     public static let empty = TokenStatsData()

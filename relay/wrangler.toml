@@ -11,3 +11,15 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 # READ_TOKEN / WRITE_TOKEN 用 secret 設定，不寫在這裡：
 #   npx wrangler secret put READ_TOKEN
 #   npx wrangler secret put WRITE_TOKEN
+
+# 第二層（多裝置 Token 合併，選用；ADR-0011 第 2 節、docs/tier2-setup.md）。
+# 沒有這個綁定時 /tokens/daily 與 /devices 回 503，/usage 照常。要啟用時：
+#   npx wrangler d1 create ai-usage-tokens          # 把輸出的 database_id 填到下面，取消註解
+#   npx wrangler d1 migrations apply ai-usage-tokens --remote
+#   npx wrangler secret put ADMIN_TOKEN             # 裝置管理用，和 READ_TOKEN／WRITE_TOKEN 不同
+# 預設保持註解：填了不存在的 database_id 會讓 wrangler deploy 失敗。
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "ai-usage-tokens"
+# database_id = "<wrangler d1 create 輸出的 id>"
+# migrations_dir = "migrations"

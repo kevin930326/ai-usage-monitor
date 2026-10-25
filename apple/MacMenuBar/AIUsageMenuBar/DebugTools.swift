@@ -183,12 +183,14 @@ enum DebugTools {
     // MARK: - 統計卡片與完整統計視窗（第三階段）
 
     /// 統計卡片單獨輸出（面板寬度），方便比較各種狀態
-    private static func statsCard(_ data: TokenStatsData, status: HistoryStore.Status = .ready, scope: TokenScope = .all,
-                                  range: TokenActivityRange = .days30, motion: PanelMotion = .settled) -> some View {
-        PanelCard(id: PanelSection.stats.rawValue, accessibilityTitle: PanelSection.stats.title, collapsed: .constant(false)) {
-            StatsCardHeader()
+    private static func statsCard(_ data: TokenStatsData, status: HistoryStore.Status = .ready, device: TokenDeviceScope? = nil,
+                                  scope: TokenScope = .all, range: TokenActivityRange = .days30, motion: PanelMotion = .settled) -> some View {
+        let device = data.devices.resolve(device)
+        return PanelCard(id: PanelSection.stats.rawValue, accessibilityTitle: PanelSection.stats.title, collapsed: .constant(false)) {
+            StatsCardHeader(devices: data.devices, scope: device, now: RenderClock.now)
         } content: {
-            StatsCardContent(data: data, status: status, scope: scope, range: range, now: RenderClock.now, selectScope: { _ in }, selectRange: { _ in })
+            StatsCardContent(data: data, status: status, device: device, scope: scope, range: range, now: RenderClock.now,
+                             selectScope: { _ in }, selectRange: { _ in })
         }
         .frame(width: 328)
         .padding(16)
@@ -229,6 +231,64 @@ enum DebugTools {
             if let full = HistoryStore.shared.loadFullTokenStats() {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
                       scheme: scheme, to: dir.appendingPathComponent("stats-window-\(n).png"))
+            }
+        }
+        renderTier2(data, to: dir)
+    }
+
+    // MARK: - 第二層：多裝置（ADR-0011 第 4 節）
+
+    /// 截圖用的兩台假電腦：本機每日資料的 60%（工作 PC）與 15%（筆電，3 天沒有上傳）
+    private static func tier2Sample(_ local: TokenStatsData, revoked: Bool = false) -> TokenStatsData {
+        let now = RenderClock.now
+        let pc = "0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
+        let laptop = "1a2b3c4d-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
+        let stale = TokenCalendar.key(now.addingTimeInterval(-3 * 86400), calendar: .current)
+        var data = local
+        let localRows = local.days.filter { $0.device == TokenDevices.local }
+        for (id, share) in [(pc, 0.6), (laptop, 0.15)] {
+            for row in localRows where id == pc || row.day <= stale {
+                var copy = row
+                copy.device = id
+                copy.counts = TokenCounts(input: Int64(Double(row.counts.input) * share), cacheWrite: Int64(Double(row.counts.cacheWrite) * share),
+                                          cacheRead: Int64(Double(row.counts.cacheRead) * share), output: Int64(Double(row.counts.output) * share),
+                                          reasoning: Int64(Double(row.counts.reasoning) * share))
+                copy.taskSeconds = Int(Double(row.taskSeconds) * share)
+                copy.longestTaskSeconds = Int(Double(row.longestTaskSeconds) * share)
+                data.days.append(copy)
+            }
+        }
+        data.devices = TokenDevices(devices: [
+            TokenDevice(id: "self-id", name: "Mac", lastUpload: now.addingTimeInterval(-600), isSelf: true),
+            TokenDevice(id: pc, name: "工作 PC", lastUpload: now.addingTimeInterval(-2 * 3600)),
+            TokenDevice(id: laptop, name: "筆電", lastUpload: now.addingTimeInterval(-3 * 86400 - 600)),
+        ], uploadRevoked: revoked)
+        return data
+    }
+
+    private static func renderTier2(_ local: TokenStatsData, to dir: URL) {
+        guard local.hasData else { return }
+        let data = tier2Sample(local)
+        let pc = TokenDeviceScope.device("0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b")
+        var noUpload = data
+        noUpload.devices.devices.append(TokenDevice(id: "2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", name: "新電腦"))
+        for scheme in [ColorScheme.light, .dark] {
+            let n = scheme.name
+            write(statsCard(data, device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-all-\(n).png"))
+            write(statsCard(data, device: .thisMac), scheme: scheme, to: dir.appendingPathComponent("tier2-card-this-mac-\(n).png"))
+            write(statsCard(data, device: pc), scheme: scheme, to: dir.appendingPathComponent("tier2-card-pc-\(n).png"))
+            write(statsCard(noUpload, device: .device("2b3c4d5e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")), scheme: scheme,
+                  to: dir.appendingPathComponent("tier2-card-no-upload-\(n).png"))
+            write(statsCard(tier2Sample(local, revoked: true), device: .all), scheme: scheme, to: dir.appendingPathComponent("tier2-card-revoked-\(n).png"))
+            if var full = HistoryStore.shared.loadFullTokenStats() {
+                full.days = data.days
+                full.devices = data.devices
+                for (device, name) in [(TokenDeviceScope.all, "all"), (pc, "pc")] {
+                    PanelSettings.shared.statsDevice = device
+                    write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
+                          scheme: scheme, to: dir.appendingPathComponent("tier2-window-\(name)-\(n).png"))
+                }
+                PanelSettings.shared.statsDevice = nil
             }
         }
     }
@@ -620,7 +680,7 @@ enum DebugTools {
     // MARK: - 輸出
 
     private static func cgImage(_ view: some View, scheme: ColorScheme) -> CGImage? {
-        let content = view.environment(\.colorScheme, scheme)
+        let content = view.environment(\.colorScheme, scheme).environment(\.panelStill, true)
         let renderer = ImageRenderer(content: content)
         renderer.scale = 2
         var image: CGImage?

@@ -26,7 +26,11 @@ struct StatsWindowView: View {
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
-    private var shown: TokenStatsData? { fixedData ?? data }
+    /// 所有裝置的資料；畫面用依裝置範圍篩選後的 `shown`
+    private var raw: TokenStatsData? { fixedData ?? data }
+    /// 第二層的裝置範圍與面板共用（PanelSettings）
+    private var device: TokenDeviceScope { (raw?.devices ?? .none).resolve(PanelSettings.shared.statsDevice) }
+    private var shown: TokenStatsData? { raw?.scoped(device) }
     private var animates: Bool { visible && !reduceMotion && fixedMotion == nil }
 
     var body: some View {
@@ -35,9 +39,10 @@ struct StatsWindowView: View {
                 content(shown)
             } else if let shown, !shown.firstScanDone {
                 message(shown.firstScanProgress.map { "正在整理過去的紀錄（\($0)%）" } ?? "正在整理過去的紀錄")
-            } else if let shown {
+            } else if let shown, let raw {
                 VStack(spacing: 8) {
-                    Text("這台 Mac 還沒有 Claude Code 或 Codex CLI 的紀錄")
+                    if raw.devices.enabled { deviceMenu(raw.devices) }
+                    Text(TokenStatsData.emptyText(device, devices: raw.devices))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     if shown.formatSuspect { FormatSuspectNotice() }
@@ -82,15 +87,20 @@ struct StatsWindowView: View {
             loading = false
             guard visible else { return }
             data = loaded
-            guard animates else {
-                motion = .settled
-                return
-            }
-            motion.statsBars = 0
-            motion.heatmap = 0
-            withAnimation(PanelTiming.statsBars) { motion.statsBars = 1 }
-            withAnimation(PanelTiming.heatmap) { motion.heatmap = 1 }
+            replayCharts()
         }
+    }
+
+    /// 長條與熱力圖再長一次（打開視窗、切換裝置）
+    private func replayCharts() {
+        guard animates else {
+            motion = .settled
+            return
+        }
+        motion.statsBars = 0
+        motion.heatmap = 0
+        withAnimation(PanelTiming.statsBars) { motion.statsBars = 1 }
+        withAnimation(PanelTiming.heatmap) { motion.heatmap = 1 }
     }
 
     /// 關閉視窗：釋放所有資料，下次打開再讀
@@ -103,14 +113,26 @@ struct StatsWindowView: View {
         }
     }
 
+    private func deviceMenu(_ devices: TokenDevices) -> some View {
+        TokenDeviceMenu(devices: devices, selected: device, now: now) { selected in
+            PanelSettings.shared.statsDevice = selected
+            replayCharts()
+        }
+    }
+
     private func content(_ data: TokenStatsData) -> some View {
+        let devices = data.devices
         let scopes = TokenScopeChips.scopes(data)
         let scope = scopes.contains(self.scope) ? self.scope : .all
         let summary = TokenSummary(data: data, scope: scope, now: now)
         let page = VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("完整統計").font(.title2.weight(.bold))
-                ThisMacBadge()
+                if devices.enabled {
+                    deviceMenu(devices)
+                } else {
+                    ThisMacBadge()
+                }
                 Spacer()
                 if !scopes.isEmpty {
                     TokenScopeChips(scopes: scopes, selected: scope) { self.scope = $0 }
@@ -129,9 +151,19 @@ struct StatsWindowView: View {
             HStack(alignment: .top, spacing: 24) {
                 section("各模型") { ModelList(models: TokenBreakdown.models(data: data, scope: scope)) }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                section("一天中的時段（最近 90 天）") { HourChart(hours: TokenBreakdown.hours(data: data, scope: scope)) }
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                // 每小時資料只有這台 Mac 的（其他電腦只上傳每日加總）
+                section(device == .thisMac || !devices.enabled ? "一天中的時段（最近 90 天）" : "一天中的時段（最近 90 天，只有這台 Mac）") {
+                    if case .device = device {
+                        Text("其他電腦只上傳每日加總，沒有時段資料")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HourChart(hours: TokenBreakdown.hours(data: data, scope: scope))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            if data.devices.uploadRevoked { UploadRevokedNotice() }
             Text(footnote(data))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -139,6 +171,7 @@ struct StatsWindowView: View {
         }
         .padding(24)
         .animation(animates ? PanelTiming.crossfade : nil, value: scope)
+        .animation(animates ? PanelTiming.crossfade : nil, value: device)
         return Group {
             if scrolls { ScrollView { page } } else { page }
         }
@@ -146,7 +179,9 @@ struct StatsWindowView: View {
 
     private func footnote(_ data: TokenStatsData) -> String {
         let retention = data.retentionDays == 0 ? "永久保留" : "保留 \(data.retentionDays) 天"
-        var text = "Token 不含快取讀取（滑鼠移到數字上可看明細）。每日資料\(retention)，個人紀錄與累計不受保留期間影響。"
+        var text = "Token 不含快取讀取（滑鼠移到數字上可看明細）。每日資料\(retention)，"
+        text += device == .thisMac ? "個人紀錄與累計不受保留期間影響。"
+            : "\(data.devices.title(device))的個人紀錄與累計只算最近一年的每日資料。其他電腦的數字是它們最後一次上傳的每日加總。"
         if data.formatSuspect { text += TokenStatsData.formatSuspectNotice + "。" }
         if data.skippedLines > 0 { text += "部分紀錄無法解析，已略過 \(data.skippedLines) 行。" }
         return text

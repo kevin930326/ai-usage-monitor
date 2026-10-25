@@ -5,7 +5,11 @@
  *   GET  /usage       Authorization: Bearer <READ_TOKEN>
  *   POST /pair        Authorization: Bearer <WRITE_TOKEN>   產生一次性短碼（ADR-0012）
  *   POST /pair/claim  不需要密鑰，{"code": "..."}            以短碼兌換讀取密鑰
+ *
+ * 第二層（多裝置 Token 合併，選用）的 /tokens/daily 與 /devices 在 tokens.ts。
  */
+
+import { handleTier2, type TokensEnv } from "./tokens.ts";
 
 export interface KV {
   get(key: string): Promise<string | null>;
@@ -13,7 +17,7 @@ export interface KV {
   delete(key: string): Promise<void>;
 }
 
-export interface Env {
+export interface Env extends TokensEnv {
   USAGE_KV: KV;
   READ_TOKEN: string;
   WRITE_TOKEN: string;
@@ -308,6 +312,9 @@ export default {
     if (!env.READ_TOKEN || !env.WRITE_TOKEN || env.READ_TOKEN === env.WRITE_TOKEN) {
       return error(500, "relay 密鑰設定錯誤");
     }
+
+    const tier2 = await handleTier2(request, env);
+    if (tier2) return tier2;
 
     const { pathname } = new URL(request.url);
     const route = Object.hasOwn(ROUTES, pathname) ? ROUTES[pathname] : undefined;

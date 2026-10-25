@@ -3,7 +3,7 @@
 Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，只用標準函式庫），以「工作排程器」每 5 分鐘統計這台電腦上 Claude Code 與 Codex CLI 的 Token。平台差異集中在 `collector/usage_collector/system.py`。
 
 - **預設只統計 Token、不收集額度、不上傳任何東西**。額度 % 是整個帳號的數字，Mac 已經在收集（ADR-0011 第 2 節）。
-- 統計結果在 `%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3`。要在 Mac 的面板看到這台 PC 的數字，需要第二層（多裝置合併，FR-49；另見第二層的部署說明）。
+- 統計結果在 `%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3`。要在 Mac 的面板看到這台 PC 的數字，需要第二層（多裝置合併，FR-49）：安裝排程後執行 `windows\set-tier2.ps1`，見 [docs/tier2-setup.md](tier2-setup.md)。
 - 不讀 `auth.json`、`.credentials.json`、瀏覽器 cookie；對話紀錄只透過白名單欄位讀取（和 Mac 相同，README「隱私與安全」）。
 
 ## 需要
@@ -42,7 +42,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 
    - 建立排程 `\AIUsageMonitor\Collector`：每 5 分鐘、登入時各執行一次，只在你登入時以你的身分執行，不存密碼、不提高權限。
    - 以 `pythonw.exe -X utf8 -m usage_collector --tokens-only` 執行（不跳出視窗；檔案一律 UTF-8），收集器把自己降到「低於正常」的優先順序。
-   - 日誌：`%LOCALAPPDATA%\AIUsageMonitor\collector.log`。
+   - 日誌：`%LOCALAPPDATA%\AIUsageMonitor\collector.log`（UTF-8）。Windows PowerShell 5.1 預設以系統字碼頁讀檔，中文會變亂碼，讀的時候加 `-Encoding UTF8`：`Get-Content $env:LOCALAPPDATA\AIUsageMonitor\collector.log -Tail 20 -Encoding UTF8`。
 3. 第一次會整理過去的紀錄，每次最多讀 64 MB 或 15 秒，紀錄多時要跑幾輪（每 5 分鐘一輪）。
 
 ### 選項
@@ -81,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File windows\uninstall-task.ps1
 | W-1 | 執行 `install-task.ps1` | 印出「已安裝排程」；沒有紅字錯誤 |
 | W-2 | 「工作排程器」→「工作排程器程式庫」→ `AIUsageMonitor` → `Collector` | 觸發程序：每 5 分鐘＋登入時；動作：`pythonw.exe`，引數含 `--tokens-only` |
 | W-3 | 等 5 分鐘，或在工作上按右鍵「執行」 | 「上次執行結果」為「作業順利完成 (0x0)」；執行時沒有跳出任何視窗 |
-| W-4 | 開 `%LOCALAPPDATA%\AIUsageMonitor` | 有 `history.sqlite3`；`collector.log` 沒有錯誤（可能是空的） |
+| W-4 | 開 `%LOCALAPPDATA%\AIUsageMonitor`；`Get-Content $env:LOCALAPPDATA\AIUsageMonitor\collector.log -Tail 20 -Encoding UTF8 -ErrorAction SilentlyContinue` | 有 `history.sqlite3`；`collector.log` 沒有錯誤（可能是空的） |
 | W-5 | 檢查統計（PowerShell）：`py -X utf8 -c "import sqlite3,os; c=sqlite3.connect(os.path.expandvars(r'%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3')); print(c.execute('select provider, sum(input_tokens+output_tokens) from daily_tokens group by provider').fetchall()); print(dict(c.execute('select key, value from meta where key like ?', ('first_scan%',)).fetchall()))"` | 用過的服務有數字；首次掃描完成後 `first_scan_done` 為 `1` |
 | W-6 | 用 Claude Code 或 Codex CLI 做一次對話，等下一輪 | W-5 的數字增加 |
 | W-7 | 「工作管理員」→「詳細資料」，排程執行時看 `pythonw.exe` | 「基本優先順序」為「低於正常」 |
