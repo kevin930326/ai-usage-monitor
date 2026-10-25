@@ -313,7 +313,33 @@ private struct ProviderQuota: View {
                 ForEach(provider.visibleWindows) { window in
                     QuotaRow(window: window, provider: key, stale: stale, now: now, showsMarker: showsMarker)
                 }
+                if let credits = provider.resetCredits {
+                    ResetCreditsLine(credits: credits, now: now)
+                }
             }
+        }
+    }
+}
+
+/// 重置次數卷（FR-58）：「重置卷 2 張 · 最早 11/20 到期」，0 張時不顯示；滑鼠移上去列出每張的到期時間。
+struct ResetCreditsLine: View {
+    let credits: ResetCredits
+    let now: Date
+
+    var body: some View {
+        if let summary = credits.summary(at: now) {
+            HStack(spacing: 5) {
+                Image(systemName: "ticket")
+                    .accessibilityHidden(true)
+                Text(summary)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+            .help(credits.detailLines(at: now).joined(separator: "\n"))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(credits.accessibilityLabel(at: now) ?? summary)
+            .accessibilityHint(credits.detailLines(at: now).joined(separator: "，"))
         }
     }
 }

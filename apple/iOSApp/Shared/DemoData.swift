@@ -43,7 +43,9 @@ enum DemoData {
             : ProviderUsage(plan: "Team", windows: [
                 UsageWindow(id: "five_hour", label: "5 小時", usedPct: scenario == .codex ? 81 : 12, resetsAt: at(240)),
                 UsageWindow(id: "weekly", label: "每週", usedPct: 48, resetsAt: at(5 * 24 * 60)),
-            ])
+            ], resetCredits: ResetCredits(available: 2, credits: [  // 重置卷 2 張，一張 2 天後到期
+                .init(expiresAt: at(2 * 24 * 60)), .init(expiresAt: at(30 * 24 * 60)),
+            ]))
         // 未啟用的服務不在 providers 裡（不是錯誤）
         let providers: [String: ProviderUsage] = switch scenario {
         case .claudeOnly: ["claude": claude]

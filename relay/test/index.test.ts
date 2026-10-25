@@ -77,7 +77,11 @@ describe("POST /usage", () => {
 
   it("LIMITS 允許的最大快照不會被 body 上限擋下", async () => {
     const window = (i: number) => ({ id: `weekly_model_${i}`, label: `每週 Model ${i}`, used_pct: 100, resets_at: "2026-10-21T05:00:00Z", hidden: true });
-    const provider = { plan: "Max", error: null, windows: Array.from({ length: 16 }, (_, i) => window(i)) };
+    const credits = Array.from({ length: 16 }, () => ({ expires_at: "2026-11-20T05:00:00Z", count: 1000 }));
+    const provider = {
+      plan: "Max", error: null, windows: Array.from({ length: 16 }, (_, i) => window(i)),
+      reset_credits: { available: 1000, credits },
+    };
     const full = { ...SNAPSHOT, providers: Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`provider_${i}`, provider])) };
     assert.equal((await call("POST", "write-secret", JSON.stringify(full))).status, 204);
   });
@@ -114,6 +118,23 @@ describe("POST /usage 欄位驗證（C-12）", () => {
     assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.windows, [old]);
   });
 
+  it("保存重置次數卷的張數與到期時間，卷的其他欄位被移除", async () => {
+    const resetCredits = { available: 3, credits: [{ expires_at: "2026-10-23T03:00:00Z", count: 2 }, { expires_at: null }] };
+    const body = snapshot({
+      reset_credits: { ...resetCredits, id: "leak", credits: [{ ...resetCredits.credits[0], id: "leak", title: "leak" }, {}] },
+    });
+    assert.equal((await post(body)).status, 204);
+    assert.ok(!kv.store.get("latest")!.includes("leak"));
+    assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.reset_credits, resetCredits);
+  });
+
+  it("沒有明細的重置卷存成空陣列；沒有或 null 的 reset_credits 不保存", async () => {
+    assert.equal((await post(snapshot({ reset_credits: { available: 2 } }))).status, 204);
+    assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.reset_credits, { available: 2, credits: [] });
+    assert.equal((await post(snapshot({ reset_credits: null }))).status, 204);
+    assert.ok(!("reset_credits" in (await (await call("GET", "read-secret")).json()).providers.claude));
+  });
+
   const invalid: [string, string][] = [
     ["providers 是陣列", JSON.stringify({ ...SNAPSHOT, providers: [] })],
     ["updated_at 不是日期", JSON.stringify({ ...SNAPSHOT, updated_at: "昨天" })],
@@ -132,6 +153,21 @@ describe("POST /usage 欄位驗證（C-12）", () => {
     ["錯誤訊息過長", snapshot({ error: "錯".repeat(501) })],
     ["plan 不是字串", snapshot({ plan: 3 })],
     ["額度過多", snapshot({ windows: Array.from({ length: 17 }, (_, i) => ({ ...WINDOW, id: `w${i}` })) })],
+    ["reset_credits 不是物件", snapshot({ reset_credits: 2 })],
+    ["重置卷張數缺少", snapshot({ reset_credits: { credits: [] } })],
+    ["重置卷張數是小數", snapshot({ reset_credits: { available: 1.5 } })],
+    ["重置卷張數是負數", snapshot({ reset_credits: { available: -1 } })],
+    ["重置卷張數過多", snapshot({ reset_credits: { available: 1001 } })],
+    ["重置卷明細不是陣列", snapshot({ reset_credits: { available: 1, credits: {} } })],
+    ["重置卷明細不是物件", snapshot({ reset_credits: { available: 1, credits: ["x"] } })],
+    ["重置卷到期時間不是日期", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: "soon" }] } })],
+    ["重置卷 count 是 0", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: 0 }] } })],
+    ["重置卷 count 是字串", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: "1" }] } })],
+    ["重置卷 count 過大", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: 1001 }] } })],
+    [
+      "重置卷明細過多",
+      snapshot({ reset_credits: { available: 17, credits: Array.from({ length: 17 }, () => ({ expires_at: null })) } }),
+    ],
     [
       "服務過多",
       JSON.stringify({

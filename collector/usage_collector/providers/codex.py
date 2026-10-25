@@ -2,7 +2,8 @@
 
 執行未修改的 Codex CLI：`codex app-server --listen stdio://` 是 Codex 給桌面 App、編輯器外掛使用的本機介面
 （標準輸入輸出上一行一個 JSON-RPC 訊息）。收集器只送 `initialize` 與 `account/rateLimits/read`：
-不開對話、不呼叫模型、不消耗額度。收集器不讀取 Codex 的登入檔、不持有 token、不直接呼叫用量端點；
+不開對話、不呼叫模型、不消耗額度，也不使用重置次數卷（只讀張數與到期時間；使用卷的方法不在程式裡，
+`tests/test_codex.py` 會掃描確認）。收集器不讀取 Codex 的登入檔、不持有 token、不直接呼叫用量端點；
 token 的讀取與續期都由 Codex CLI 自己完成。
 
 app-server 標示為 experimental，回應格式沒有保證：只取認得的欄位，格式不對時整個視為格式改變，
@@ -22,12 +23,13 @@ import sys
 import tempfile
 import threading
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, cast
 
 from .. import __version__, paths, system
-from ..models import ProviderError, ProviderUsage, Window, parse_pct
+from ..models import ProviderError, ProviderUsage, ResetCredits, Window, parse_pct
 
 APP_SERVER_ARGS = ("app-server", "--listen", "stdio://")
 # 安裝腳本沒寫入 codex_path 時（舊安裝、Windows）也找得到：macOS 為 ChatGPT.app 內附的 Codex CLI，
@@ -37,6 +39,10 @@ TIMEOUT = 30  # 秒，整段對話；正常約 0.7 秒
 MAX_WINDOW_MINUTES = 366 * 24 * 60  # 更長的額度長度視為格式改變（window id 也不會超過中繼的長度上限）
 CLOSE_TIMEOUT = 3  # 關閉 stdin 後等 app-server 自己結束的秒數，超過就強制結束
 MAX_OUTPUT = 1024 * 1024  # 讀取的位元組上限，避免異常輸出吃光記憶體
+# 與中繼的 LIMITS.resetCredits／resetCreditDetails 相同：張數超過視為格式不對；明細依到期時間分組，
+# 只留最早到期的幾組（同時到期的卷再多也只佔一組，到期後 App 才扣得掉，審查 C-02）
+MAX_RESET_CREDITS = 1000
+MAX_RESET_CREDIT_DETAILS = 16
 
 FORMAT_CHANGED = "Codex app-server 的回應格式已改變，請更新收集器"
 
@@ -258,19 +264,61 @@ def parse_window(w: object) -> Window:
     resets = w.get("resetsAt")
     if resets is None or resets == 0:
         resets_at = None  # 舊端點的 0 也是「沒有重置時間」
-    elif isinstance(resets, bool) or not isinstance(resets, int) or resets < 0:
-        raise ProviderError(FORMAT_CHANGED)
     else:
         try:
-            resets_at = datetime.fromtimestamp(resets, tz=timezone.utc)
-        except (OverflowError, OSError, ValueError):
+            resets_at = parse_timestamp(resets)
+        except ValueError:
             raise ProviderError(FORMAT_CHANGED) from None
     return Window(wid, label, parse_pct(w.get("usedPercent")), resets_at)
 
 
+def parse_timestamp(value: object) -> datetime:
+    """Unix 秒數 → UTC 時間；不是非負整數或超出範圍時丟 ValueError。"""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError
+    try:
+        return datetime.fromtimestamp(value, tz=timezone.utc)
+    except (OverflowError, OSError) as e:
+        raise ValueError from e
+
+
+def parse_reset_credits(summary: object) -> ResetCredits | None:
+    """`rateLimitResetCredits` → 可用張數與各張到期時間。只留這兩項，卷的 id、標題、取得時間不保留。
+    重置卷是額度之外的附加資訊：缺少（舊版 Codex CLI）或格式不對時回傳 None（不顯示），不影響額度。
+    `credits` 為 null 表示後端只給了張數；明細可能有上限，張數以 `availableCount` 為準。"""
+    if not isinstance(summary, dict):
+        return None
+    count = summary.get("availableCount")
+    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= MAX_RESET_CREDITS:
+        return None
+    details = summary.get("credits")
+    if details is None:
+        details = []
+    if not isinstance(details, list):
+        return None
+    expires: list[datetime | None] = []
+    for credit in details:
+        if not isinstance(credit, dict):
+            return None
+        if credit.get("status") != "available":
+            continue  # 兌換中、已使用的卷不算（明細應該只有可用的）
+        value = credit.get("expiresAt")
+        try:
+            expires.append(None if value is None else parse_timestamp(value))
+        except ValueError:
+            return None
+    if len(expires) > count:
+        return None  # 明細比張數多：前後不一致，不猜（也避免輸出中繼不收的張數，連帶整份快照被拒，第 2 輪審查 C-01）
+    # 依到期時間分組，最早到期的在前，不會到期的放最後
+    counts = Counter(expires)
+    order = sorted(counts, key=lambda e: (e is None, e or datetime.min.replace(tzinfo=timezone.utc)))
+    return ResetCredits(available=count, groups=[(e, counts[e]) for e in order][:MAX_RESET_CREDIT_DETAILS])
+
+
 def parse(result: dict) -> ProviderUsage:
     """`account/rateLimits/read` 的 result → ProviderUsage。只讀 `rateLimits`（Codex 的主要額度，
-    與舊的用量端點相同）的 primary／secondary 與 planType；accountId、credits 等欄位不讀取。"""
+    與舊的用量端點相同）的 primary／secondary 與 planType，以及重置次數卷的張數與到期時間；
+    accountId、credits（點數餘額）等欄位不讀取。"""
     snapshot = result.get("rateLimits")
     if not isinstance(snapshot, dict):
         raise ProviderError(FORMAT_CHANGED)
@@ -284,7 +332,8 @@ def parse(result: dict) -> ProviderUsage:
         windows.append(window)
     if not windows:
         raise ProviderError("Codex 回應中沒有用量資料")
-    return ProviderUsage(plan=plan_name(snapshot.get("planType")), windows=windows)
+    return ProviderUsage(plan=plan_name(snapshot.get("planType")), windows=windows,
+                         reset_credits=parse_reset_credits(result.get("rateLimitResetCredits")))
 
 
 def fetch() -> ProviderUsage:

@@ -157,7 +157,9 @@ enum DebugTools {
             "codex": ProviderUsage(plan: "Team", windows: [
                 UsageWindow(id: "five_hour", label: "5 小時", usedPct: 12, resetsAt: now.addingTimeInterval(14400)),
                 UsageWindow(id: "weekly", label: "每週", usedPct: 48, resetsAt: now.addingTimeInterval(5 * 86400)),
-            ]),
+            ], resetCredits: ResetCredits(available: 2, credits: [
+                .init(expiresAt: now.addingTimeInterval(2 * 86400)), .init(expiresAt: now.addingTimeInterval(30 * 86400)),
+            ])),
         ])
     }
 

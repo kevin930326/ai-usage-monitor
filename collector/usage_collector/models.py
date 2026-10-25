@@ -57,17 +57,37 @@ class Window:
 
 
 @dataclass
+class ResetCredits:
+    """可用的重置次數卷（目前只有 Codex）。`groups` 是有明細的卷依到期時間分組的（到期時間, 張數），
+    None＝不會到期；明細可能比 `available` 少（後端沒給或有上限），少的部分是到期日不明。"""
+    available: int
+    groups: list[tuple[datetime | None, int]] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "available": self.available,
+            "credits": [{"expires_at": iso_utc(e) if e else None, "count": n} for e, n in self.groups],
+        }
+
+
+@dataclass
 class ProviderUsage:
     plan: str | None = None
     windows: list[Window] = field(default_factory=list)
     error: str | None = None
+    reset_credits: ResetCredits | None = None
 
     def to_dict(self) -> dict:
-        return {
+        result: dict[str, object] = {
             "plan": self.plan,
             "error": self.error,
             "windows": [w.to_dict() for w in self.windows],
         }
+        # 選填欄位（同一個 schema_version 新增）：不知道時不輸出。舊版 App 略過不認得的欄位；
+        # 中繼以白名單重建快照，要一起更新（relay/src/index.ts 的 sanitizeResetCredits）
+        if self.reset_credits is not None:
+            result["reset_credits"] = self.reset_credits.to_dict()
+        return result
 
 
 class ProviderError(Exception):

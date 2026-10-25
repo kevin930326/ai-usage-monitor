@@ -20,7 +20,20 @@
           "resets_at": "2026-10-25T03:00:00Z",
           "hidden": false
         }
-      ]
+      ],
+      "reset_credits": {
+        "available": 3,
+        "credits": [
+          {
+            "expires_at": "2026-10-23T03:00:00Z",
+            "count": 1
+          },
+          {
+            "expires_at": null,
+            "count": 1
+          }
+        ]
+      }
     }
   }
 }
