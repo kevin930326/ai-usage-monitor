@@ -159,9 +159,17 @@ jobs:
           if ($task.Actions[0].WorkingDirectory -notlike "$env:LOCALAPPDATA\AIUsageMonitor\app\collector") { throw "working directory: $($task.Actions[0].WorkingDirectory)" }
           & $installer -Zip $zip -Sha256 $sha -NoTask
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app.old'))) { throw 'app.old missing' }
+          # a collector still holding a file in app\collector (as right after the task ran): -Uninstall waits and
+          # retries until the lock is released (ADR-0014 LT-27)
+          $locked = Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app\collector\usage_collector\__init__.py'
+          $holder = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "`$f = [IO.File]::Open('$locked', 'Open', 'Read', 'None'); Start-Sleep -Seconds 4; `$f.Close()"
+          Start-Sleep -Seconds 1
+          if ($holder.HasExited) { throw 'the lock holder exited before -Uninstall' }
+          & $installer -Uninstall
+          $holder.WaitForExit()
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'app was not removed after the lock was released' }
           # a fresh window under the Restricted policy (the Windows default): the in-memory installer still registers
           # the task, and the persistent policy is unchanged
-          & $installer -Uninstall
           $before = (Get-ExecutionPolicy -List | Out-String)
           powershell.exe -NoProfile -ExecutionPolicy Restricted -Command "& ([scriptblock]::Create((Get-Content -Raw '$installer'))) -Zip '$zip' -Sha256 '$sha'"
           if ($LASTEXITCODE -ne 0) { throw "install under Restricted failed: $LASTEXITCODE" }
