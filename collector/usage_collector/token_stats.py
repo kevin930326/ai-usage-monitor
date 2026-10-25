@@ -652,18 +652,25 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
             (row["device"], row["inode"]) != (f.device, f.inode) or size < row["offset"] or mtime < row["mtime"])
         if switch:
             _reset_codex(conn, totals, f.key, cutoffs)
-            st = FileState(source="record")
+            st = FileState(source="record", state={"cutoff": totals.seen_cutoff or ""})
         elif row is None or rewritten:
+            st = FileState()  # Claude 從頭重掃，以 seen_ids／seen_tasks 避免重複計入
             if f.provider == "codex":
                 # 新檔案也先扣：scan_state 已過期刪除、但帳本還在的檔案再出現時不重複計入
                 _reset_codex(conn, totals, f.key, cutoffs)
-            st = FileState()  # Claude 從頭重掃，以 seen_ids／seen_tasks 避免重複計入
+                st.state["cutoff"] = totals.seen_cutoff or ""
+        # Codex 重算把開始時的略過界凍結到讀到檔尾（"" 表示不設界）：扣帳本與重讀用同一個值，
+        # 分成幾輪讀、期間 D 前進（含升級那一輪從無到有）都和一次讀完相同（審查 C-01）
+        if "cutoff" in st.state:
+            totals.seen_cutoff = st.state["cutoff"] or None
+        at_end = False
         fh.seek(st.offset)
         while not budget.exhausted():
             if st.skipping:
                 # 丟棄過長的一行：每段都扣預算，到換行為止；預算用完時下次從這裡接著丟
                 chunk = fh.readline(SKIP_CHUNK_BYTES)
                 if not chunk:
+                    at_end = True
                     break
                 budget.bytes_left -= len(chunk)  # 不算進格式偵測的讀取量：貼上的圖片（base64）就會超過上限
                 st.offset = fh.tell()
@@ -673,9 +680,11 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                 continue
             line = fh.readline(MAX_LINE_BYTES + 1)
             if not line:
+                at_end = True
                 break
             if not line.endswith(b"\n"):
                 if len(line) <= MAX_LINE_BYTES:
+                    at_end = True
                     break  # 最後一行還沒寫完：下次再讀
                 # 超過 4 MB：開始丟棄這一行，只計次數
                 budget.bytes_left -= len(line)
@@ -690,6 +699,8 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
                 _codex_line(conn, totals, st, line, counters, f.key)  # 可能丟出 _SwitchToRecord
             del line
             st.offset = fh.tell()
+    if at_end:
+        st.state.pop("cutoff", None)  # 重算讀完了：之後附加的內容照目前的略過界
     totals.flush(conn, f.key if f.provider == "codex" else None, cutoffs)
     conn.execute(
         "INSERT OR REPLACE INTO scan_state (file_key, inode, device, size, mtime, offset, source, last_total, state, last_seen)"

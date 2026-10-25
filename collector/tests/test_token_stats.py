@@ -1220,11 +1220,78 @@ class SeenWindowTest(TokenStatsTestCase):
         with self.db() as c:
             self.assertEqual(c.execute("SELECT SUM(task_count), SUM(task_seconds) FROM daily_tokens").fetchone(), (1, 60))
 
-
-    # 審查 C-02：並行收集器
+    # 以下是審查 C-01～C-03：Codex 重算分成幾輪讀時略過界前進、並行收集器、改時區
     def on_cutoff_day(self):
         return int(datetime(2026, 6, 24, 12, tzinfo=TAIPEI).timestamp())  # 略過界 D 當天
 
+    def rewrite(self, *lines, mtime=T0 - DAY):
+        """改寫（mtime 倒退）：Codex 會扣掉這個檔案的帳本、從頭重算"""
+        self.write(self.codex_file(), *lines, mode="w")
+        os.utime(self.codex_file(), (mtime, mtime))
+
+    def file_state(self):
+        with self.db() as c:
+            row = c.execute("SELECT state FROM scan_state WHERE file_key LIKE 'codex%'").fetchone()  # 只有一個 Codex 檔
+        return json.loads(row[0]) if row and row[0] else {}
+
+    def test_codex_recount_split_across_runs_while_the_cutoff_advances(self):
+        """重算的第一輪只讀到 turn_context（帳本已扣、事件還沒重讀），兩輪之間 D 前進一天：
+        D 當天的事件仍要補回來（凍結重算開始時的 D，審查 C-01；舊版漏掉 1000）。"""
+        self.prime(self.path)
+        lines = (codex_turn(), codex_count(self.on_cutoff_day(), inp=1000, out=0), codex_count(T0, inp=1500, out=0))
+        self.write(self.codex_file(), *lines)
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 1500})
+        self.rewrite(*lines)
+        result = self.scan(budget=token_stats.Budget(bytes_left=len(lines[0]) + 1), now=T0 + 2 * DAY)
+        self.assertFalse(result.done)
+        self.assertEqual(self.cutoff(), "2026-06-25")
+        self.assertEqual(self.file_state().get("cutoff"), "2026-06-24")
+        for _ in range(2):
+            self.scan(now=T0 + 3 * DAY)
+        self.assertEqual(self.counted(), {"codex": 1500})
+        self.assertEqual(self.records()["total_tokens"][0], 1500)
+        self.assertNotIn("cutoff", self.file_state())  # 讀到檔尾就放開
+
+    def test_codex_recount_split_across_the_upgrade_run(self):
+        """升級前（沒有略過界）計入的舊事件：升級那一輪剛好在重算中途設定 D，舊事件仍照原樣補回（審查 C-01）。"""
+        lines = (codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0), codex_count(T0, inp=1500, out=0))
+        self.write(self.codex_file(), *lines)
+        self.scan_before_seen_window()
+        self.assertIsNone(self.cutoff())
+        self.assertEqual(self.counted(), {"codex": 1500})
+        self.rewrite(*lines)
+        self.scan(budget=token_stats.Budget(bytes_left=len(lines[0]) + 1), now=T0 + DAY)
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        self.assertEqual(self.file_state().get("cutoff"), "")  # 凍結為「不設界」
+        for _ in range(2):
+            self.scan(now=T0 + DAY)
+        self.assertEqual(self.counted(), {"codex": 1500})
+
+    def test_rewrite_again_during_a_split_recount(self):
+        """分輪重算還沒讀完又被改寫：以新的 D 重新凍結，結果和以目前的 D 一次讀完最後的內容相同。"""
+        self.prime(self.path)
+        on_d = self.on_cutoff_day()
+        self.write(self.codex_file(), codex_turn(), codex_count(on_d, inp=1000, out=0), codex_count(T0, inp=1500, out=0))
+        self.scan()
+        self.rewrite(codex_turn(), codex_count(on_d, inp=400, out=0), codex_count(T0, inp=900, out=0))
+        self.scan(budget=token_stats.Budget(bytes_left=len(codex_turn()) + 1), now=T0 + 2 * DAY)
+        self.rewrite(codex_turn(), codex_count(on_d, inp=300, out=0), codex_count(T0, inp=700, out=0), mtime=T0 - 2 * DAY)
+        for _ in range(2):
+            self.scan(now=T0 + 3 * DAY)
+        self.assertEqual(self.cutoff(), "2026-06-26")
+        # 第二次改寫時的 D（06-25）以前的 06-24 只接上累計值、不計入：T0 那筆是 700 − 300
+        self.assertEqual(self.counted(), {"codex": 400})
+        self.assertNotIn("cutoff", self.file_state())
+
+    def test_events_appended_after_a_recount_use_the_current_cutoff(self):
+        """凍結只到讀完為止：之後附加、日期早於目前 D 的事件照樣略過。"""
+        self.prime(self.path)
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=100, out=0))
+        self.scan()
+        self.write(self.codex_file(), codex_count(T0 - 100 * DAY, inp=300, out=0))
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 100})
 
     def test_concurrent_collector_advances_the_cutoff_twice(self):
         """A 開始掃描後，另一個收集器跑了兩輪（D 06-24 → 06-26，刪掉 day < 06-25 的去重列）：
@@ -1253,6 +1320,22 @@ class SeenWindowTest(TokenStatsTestCase):
         self.assertTrue(other_ran)
         self.assertEqual(self.counted(), {"claude": 100})
         self.assertEqual(self.cutoff(), "2026-06-26")
+
+    @unittest.expectedFailure
+    def test_timezone_change_then_codex_rewrite(self):
+        """已知限制（ADR-0014 第 1 節）：帳本只記當時時區的日期，改時區後重算一個含 D 附近事件的 Codex 檔，
+        那幾小時可能多算或少算。需要「改時區＋Codex 改寫 90 天前的紀錄」同時發生，Codex 不改寫舊的 rollout。"""
+        west = timezone(timedelta(hours=-7))
+        event = int(datetime(2026, 6, 24, 1, tzinfo=timezone.utc).timestamp())  # UTC−7 是 06-23，台北是 06-24
+        lines = (codex_turn(), codex_count(event, inp=100, out=0), codex_count(T0, inp=150, out=0))
+        self.write(self.codex_file(), *lines)
+        with mock.patch.object(system, "local_datetime", lambda ts: datetime.fromtimestamp(ts, west).replace(tzinfo=None)):
+            self.scan()
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        self.rewrite(*lines)
+        self.scan()
+        self.assertEqual(self.counted(), {"codex": 150})
+
 
 class FormatChangeTest(TokenStatsTestCase):
     """紀錄格式改變的偵測（ADR-0009 第 9 節）：門檻保守，證據不足時沿用上次的判斷。"""
