@@ -74,6 +74,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 - 不開對話、不呼叫模型、不消耗額度；每次約 0.7 秒。
 - 在暫存資料夾執行、30 秒逾時；結束時關閉 stdin（app-server 會自己結束），等不到就結束整個 process group，不留下背景程序。
 - 只取 `rateLimits` 的 5 小時、每週額度與方案名稱；回應中的帳號 ID、stderr 都不寫入日誌或快照。
+- 另取重置次數卷（`rateLimitResetCredits`）的可用張數與各張到期時間，寫進 `reset_credits`（FR-58）；卷的 id、標題與取得時間不保留，格式不對時省略、不影響額度。**只讀、不使用卷**：程式裡沒有使用卷的方法，`tests/test_codex.py` 會掃描收集器的程式碼確認。
 - codex 的完整路徑由 `scripts/install-launchd.sh` 偵測後寫進 `config.json` 的 `codex_path`；沒有設定時退回 PATH 與 ChatGPT.app 內附的 codex。
 - app-server 標示為 experimental，格式沒有保證。認不得時 Codex 會顯示「Codex app-server 的回應格式已改變，請更新收集器」，不會顯示錯的數字；fixture 在 `tests/fixtures/codex/`。
 

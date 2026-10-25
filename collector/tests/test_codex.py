@@ -121,11 +121,14 @@ class CodexParseTest(unittest.TestCase):
         self.assertEqual(usage, {"plan": "Team", "error": None, "windows": [
             {"id": "five_hour", "label": "5 小時", "used_pct": 0.0, "resets_at": "2026-10-21T22:48:15Z", "hidden": False},
             {"id": "weekly", "label": "每週", "used_pct": 8.0, "resets_at": "2026-10-27T09:45:10Z", "hidden": False},
-        ]})
+        ], "reset_credits": {"available": 0, "credits": []}})
 
     def test_personal_data_is_not_kept(self):
-        text = json.dumps(codex.parse(RATE_LIMITS).to_dict())
-        for field in ("00000000", "accountId", "credits", "balance"):
+        result = json.loads(json.dumps(RATE_LIMITS))
+        result["rateLimitResetCredits"] = {"availableCount": 1, "credits": [credit(1793000000)]}
+        text = json.dumps(codex.parse(result).to_dict())
+        # 點數餘額（rateLimits.credits）、重置卷的 id、標題、說明與取得時間都不保留
+        for field in ("00000000", "accountId", "balance", "hasCredits", "rc_secret", "標題", "說明", "granted", "1792000000"):
             self.assertNotIn(field, text)
 
     def test_missing_window_is_skipped(self):
@@ -179,6 +182,83 @@ class CodexParseTest(unittest.TestCase):
 
 # C-04：百分比缺少或格式不對時要報錯，不能變成「0% 已用」
 BAD_PERCENTS = [None, "12", float("nan"), float("inf"), -5, True, 10 ** 400, 1001]
+
+
+def credit(expires_at, status="available"):
+    return {"id": "rc_secret", "title": "標題", "description": "說明", "grantedAt": 1792000000,
+            "expiresAt": expires_at, "resetType": "codexRateLimits", "status": status}
+
+
+class ResetCreditsTest(unittest.TestCase):
+    def parse(self, summary):
+        result = json.loads(json.dumps(RATE_LIMITS))
+        if summary is ...:
+            del result["rateLimitResetCredits"]
+        else:
+            result["rateLimitResetCredits"] = summary
+        return codex.parse(result).to_dict()
+
+    def test_recorded_response_has_zero(self):
+        self.assertEqual(codex.parse(RATE_LIMITS).to_dict()["reset_credits"], {"available": 0, "credits": []})
+
+    def test_count_and_expiry_sorted_earliest_first(self):
+        usage = self.parse({"availableCount": 3, "credits": [credit(None), credit(1795000000), credit(1792800000)]})
+        self.assertEqual(usage["reset_credits"], {"available": 3, "credits": [
+            {"expires_at": "2026-10-24T00:00:00Z"}, {"expires_at": "2026-11-18T11:06:40Z"}, {"expires_at": None},
+        ]})
+
+    def test_only_count_known(self):
+        # credits 為 null：後端只給張數
+        self.assertEqual(self.parse({"availableCount": 2, "credits": None})["reset_credits"], {"available": 2, "credits": []})
+        self.assertEqual(self.parse({"availableCount": 2})["reset_credits"], {"available": 2, "credits": []})
+
+    def test_unavailable_credits_are_skipped(self):
+        usage = self.parse({"availableCount": 1, "credits": [credit(1792800000), credit(1792900000, "redeemed"),
+                                                              credit(1792900000, "redeeming")]})
+        self.assertEqual(usage["reset_credits"]["credits"], [{"expires_at": "2026-10-24T00:00:00Z"}])
+
+    def test_details_are_capped(self):
+        many = [credit(1792800000 + i) for i in range(40, 0, -1)]
+        details = self.parse({"availableCount": 40, "credits": many})["reset_credits"]["credits"]
+        self.assertEqual(len(details), codex.MAX_RESET_CREDIT_DETAILS)
+        self.assertEqual(details[0], {"expires_at": "2026-10-24T00:00:01Z"})
+
+    def test_missing_or_malformed_is_left_out_without_affecting_windows(self):
+        for summary in (..., None, [], "2", {}, {"availableCount": -1}, {"availableCount": True},
+                        {"availableCount": 1.0}, {"availableCount": codex.MAX_RESET_CREDITS + 1},
+                        {"availableCount": 1, "credits": {}}, {"availableCount": 1, "credits": ["x"]},
+                        {"availableCount": 1, "credits": [credit("2026-10-24")]},
+                        {"availableCount": 1, "credits": [credit(-1)]},
+                        {"availableCount": 1, "credits": [credit(10 ** 20)]}):
+            with self.subTest(summary=summary):
+                usage = self.parse(summary)
+                self.assertNotIn("reset_credits", usage)
+                self.assertEqual([w["id"] for w in usage["windows"]], ["five_hour", "weekly"])
+
+
+class NeverConsumeResetCreditsTest(unittest.TestCase):
+    """收集器只讀重置卷，絕不使用（`account/rateLimitResetCredit/consume` 會用掉使用者的卷）。
+    掃描收集器的所有程式碼，連字串拼接或改寫大小寫的寫法也擋下。"""
+
+    def test_collector_source_never_mentions_consume(self):
+        root = Path(codex.__file__).resolve().parents[1]
+        files = sorted(root.rglob("*.py"))
+        self.assertIn(Path(codex.__file__).resolve(), files)
+        for path in files:
+            text = path.read_text().lower()
+            with self.subTest(path=path.name):
+                self.assertNotIn("consume", text)
+                self.assertNotIn("ratelimitresetcredit/", text)
+
+    def test_only_read_methods_are_sent(self):
+        result = json.loads(json.dumps(RATE_LIMITS))
+        result["rateLimitResetCredits"] = {"availableCount": 2, "credits": [credit(1792800000)]}
+        with FakeCodex(result=result) as fake:
+            usage = codex.fetch()
+            records = fake.records()
+        self.assertEqual(usage.reset_credits.available, 2)
+        methods = [r["received"].get("method") for r in records if "received" in r]
+        self.assertEqual(methods, ["initialize", "initialized", "account/rateLimits/read"])
 
 
 class PercentValidationTest(unittest.TestCase):

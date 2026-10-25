@@ -45,13 +45,18 @@ class SharedFixtureTest(unittest.TestCase):
                 self.assertEqual(json.loads(json.dumps(fixture, ensure_ascii=False)), fixture)
 
     def test_collect_produces_codex_only_fixture(self):
-        # 只啟用 Codex；app-server 的 planType 不明（plan 為 null）、5 小時額度超過 100%（整合審查 D-i）
+        # 只啟用 Codex；app-server 的 planType 不明（plan 為 null）、5 小時額度超過 100%（整合審查 D-i）、
+        # 重置卷 3 張（一張不會到期、一張到期日不明）
         fixture = json.loads((FIXTURES / "usage-codex-only.json").read_text(encoding="utf-8"))
         result = {"rateLimits": {
             "primary": {"usedPercent": 112.5, "windowDurationMins": 300, "resetsAt": 1792555200},    # 04:00Z
             "secondary": {"usedPercent": 40, "windowDurationMins": 10080, "resetsAt": 1792897200},  # 10/25 03:00Z
             "planType": "unknown",
-        }}
+        }, "rateLimitResetCredits": {"availableCount": 3, "credits": [  # 3 張只有 2 張有明細（後端的上限）
+            {"id": "a", "grantedAt": 1792000000, "expiresAt": None, "resetType": "codexRateLimits", "status": "available"},
+            {"id": "b", "grantedAt": 1792000000, "expiresAt": 1792724400,  # 10/23 03:00Z
+             "resetType": "codexRateLimits", "status": "available"},
+        ]}}
         providers = {"codex": mock.Mock(fetch=mock.Mock(return_value=codex.parse(result)))}
         with mock.patch.dict(cli.PROVIDERS, providers, clear=True):
             snapshot = cli.collect(["codex"])
