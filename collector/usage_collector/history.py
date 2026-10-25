@@ -459,8 +459,16 @@ def maybe_vacuum(conn: sqlite3.Connection, now: int) -> bool:
         return False
     conn.execute("VACUUM")
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_vacuum_at', ?)", (str(now),))
-    # App 正在讀時截斷不了（回傳 busy），下次 checkpoint 照常；不影響 VACUUM 的結果
-    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    # App 正在讀時截斷不了：TRUNCATE 會用 busy handler 等讀取結束，所以暫時不等（busy_timeout 0，回傳 busy）；
+    # 下次 checkpoint 照常，不影響 VACUUM 的結果（審查 C-01）
+    timeout = int(conn.execute("PRAGMA busy_timeout").fetchone()[0])
+    conn.execute("PRAGMA busy_timeout = 0")
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        conn.execute(f"PRAGMA busy_timeout = {timeout}")
     after = conn.execute("PRAGMA page_count").fetchone()[0] * page_size
     if size - after >= VACUUM_MIN_RECLAIM:
         log(f"整理 history.sqlite3：{size / 1048576:.1f} MB → {after / 1048576:.1f} MB")

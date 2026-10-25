@@ -366,6 +366,27 @@ class VacuumTest(HistoryTestCase):
             reader.close()
             conn.close()
 
+    def test_wal_truncate_does_not_wait_for_an_open_read_transaction(self):
+        """讀取端正開著交易：截斷 WAL 不等它（不會多等 busy_timeout 的 5 秒），之後 timeout 還原（審查 C-01）。"""
+        conn = history.connect(self.path)
+        self.fill_and_delete(conn)
+        reader = sqlite3.connect(self.path, isolation_level=None)
+        try:
+            reader.execute("BEGIN")
+            reader.execute("SELECT COUNT(*) FROM collector_runs").fetchone()
+            start = time.monotonic()
+            with redirect_stderr(io.StringIO()):
+                self.assertTrue(history.maybe_vacuum(conn, T0))
+            self.assertLess(time.monotonic() - start, 2)
+            self.assertEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 5000)
+            reader.execute("COMMIT")
+        finally:
+            reader.close()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        self.assertEqual(os.path.getsize(str(self.path) + "-wal"), 0)  # 讀取結束後截斷得了
+        conn.close()
+
+
 class FailureIsolationTest(HistoryTestCase):
     """歷史寫不進去時，usage.json 與上傳照常，結束碼不變。"""
 
