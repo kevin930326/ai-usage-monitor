@@ -61,6 +61,7 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- 第二層：撤銷並刪除資料（`relay-device.sh revoke --delete-data`）的電腦不再列在裝置切換、不算在「所有電腦（N 台）」裡，只剩這台 Mac 時回到「這台 Mac」；只撤銷、保留資料的電腦仍列出並標「已撤銷」、數字照算。中繼的 `GET /tokens/daily` 裝置清單加上 `has_data`（不限 `from`），收集器據此排除，**中繼要重新部署**才生效（舊版中繼照常列出）。截圖比對加上兩種情況的統計卡片
 - 手錶 App 加上 App 圖示（與 iPhone 一般外觀相同的對角分色圖，`scripts/render-app-icon.sh` 一併產生）：錶面的即時動態提示與 App 列表原本顯示空白格子
 - 改用 App 內建的收集器時，確認舊的 launchd 工作真的停止（最多等 3 秒）才算遷移完成；停不下來時放回舊的、撤回內建的。內建收集器除了舊的 plist，也問 `launchctl` 舊的工作在不在，無法確認時這一輪不收集，兩個收集器不會同時執行（Fable F-02，#89）
 - 測試環境沒有指定 `AI_USAGE_MONITOR_HOME` 時，收集器、UsageKit 與 Mac App 的截圖／量測直接拒絕，不使用預設資料夾（#76、#78）

@@ -37,6 +37,8 @@ class FakeRelay:
         self.fail: list[Exception] = []
         self.apply_then_fail = False
         self.now: int | None = None
+        self.revoked: set[str] = set()
+        self.has_data_field = True  # False：舊版中繼，下載的裝置清單沒有 has_data
 
     def add(self, key: str, name: str) -> str:
         device_id = str(uuid.uuid4())
@@ -70,9 +72,13 @@ class FakeRelay:
             return {"device_id": device_id, "accepted": len(body["rows"])}
         if token != READ:
             raise HTTPStatusError("驗證失敗 (HTTP 401)，請重新登入", 401)
+        devices = [{"device_id": d, "name": n, "revoked": d in self.revoked, "last_upload_at": "2026-10-15T00:00:00Z"}
+                   for d, n in self.names.items()]
+        if self.has_data_field:
+            for d in devices:
+                d["has_data"] = any(k[0] == d["device_id"] for k in self.rows)
         return {
-            "devices": [{"device_id": d, "name": n, "revoked": False, "last_upload_at": "2026-10-15T00:00:00Z"}
-                        for d, n in self.names.items()],
+            "devices": devices,
             "rows": [{"device_id": k[0], "day": k[1], "provider": k[2], "model": k[3], **v} for k, v in self.rows.items()],
         }
 
@@ -426,6 +432,26 @@ class MergeTest(TokenSyncTestCase):
         self.mac.run(NOW + HOUR)
         self.assertEqual(self.mac.total_by_device(), {})
 
+    def test_revoked_device_is_listed_only_while_the_relay_keeps_its_data(self):
+        """撤銷並刪除資料：不再列出；只撤銷：照常列出、標撤銷，本機保留期間外的資料也算「還有資料」"""
+        self.pc.set_tokens(-30, 40)
+        self.pc.run(NOW)
+        self.relay.revoked.add(self.pc.relay_id)
+        self.mac.query("UPDATE meta SET value = '7' WHERE key = 'retention_days'")
+        self.mac.run(NOW)
+        self.assertEqual(self.mac.total_by_device(), {})  # 30 天前的資料在保留期間外，沒有下載
+        devices = "SELECT device_id, revoked FROM devices WHERE is_self = 0"
+        self.assertEqual(self.mac.query(devices), [(self.pc.relay_id, 1)])
+        self.relay.rows = {k: v for k, v in self.relay.rows.items() if k[0] != self.pc.relay_id}  # revoke --delete-data
+        self.mac.query("DELETE FROM meta WHERE key = 'sync_last_success'")
+        self.mac.run(NOW + 300)
+        self.assertEqual(self.mac.query(devices), [])
+        # 舊版中繼（沒有 has_data）：無法分辨，照常列出
+        self.relay.has_data_field = False
+        self.mac.query("DELETE FROM meta WHERE key = 'sync_last_success'")
+        self.mac.run(NOW + 600)
+        self.assertEqual(self.mac.query(devices), [(self.pc.relay_id, 1)])
+
     def test_no_download_before_the_own_relay_id_is_known(self):
         self.mac.set_tokens(0, 100)
         self.relay.fail = [ProviderError("網路錯誤")]
@@ -490,6 +516,32 @@ class MergeTest(TokenSyncTestCase):
         self.assertEqual(self.mac.total_by_device()[pc.relay_id], 30)
         self.assertEqual(self.mac.meta("sync_truncated"), "1")
         self.assertEqual(self.mac.log.getvalue().count("超過中繼的列數上限"), 1)
+
+    def test_deleted_device_rows_go_even_when_the_download_is_truncated(self):
+        """第 2 輪 C-01：截斷的下載不刪較舊的日子，但撤銷並刪除資料的電腦的舊資料要一併刪除"""
+        laptop = self.machine("laptop")
+        self.pc.set_tokens(-3, 100)
+        laptop.set_tokens(-3, 7)
+        laptop.set_tokens(0, 10)
+        self.pc.run(NOW)
+        laptop.run(NOW)
+        self.mac.run(NOW)
+        self.assertEqual(self.mac.total_by_device(), {self.pc.relay_id: 100, laptop.relay_id: 17})
+        self.relay.revoked.add(self.pc.relay_id)
+        self.relay.rows = {k: v for k, v in self.relay.rows.items() if k[0] != self.pc.relay_id}
+        real = self.relay.__call__
+
+        def truncated(url, headers, body=None, timeout=15):
+            data = real(url, headers, body, timeout)
+            if body is None:  # 中繼只回最新的一天
+                data["rows"] = [r for r in data["rows"] if r["day"] >= history.local_day(NOW)]
+                data["truncated"] = True
+            return data
+        self.mac.relay = truncated
+        self.mac.query("DELETE FROM meta WHERE key = 'sync_last_success'")
+        self.mac.run(NOW + 300)
+        self.assertEqual(self.mac.total_by_device(), {laptop.relay_id: 17})  # 筆電沒回傳的舊日子保留
+        self.assertEqual(self.mac.query("SELECT device_id FROM devices WHERE is_self = 0"), [(laptop.relay_id,)])
 
     def test_status_without_a_database_does_not_create_one(self):
         missing = self.root / "none" / "history.sqlite3"

@@ -71,6 +71,20 @@ import Testing
         #expect(revoked.title(.all) == "所有電腦（3 台）")
     }
 
+    /// 只撤銷、保留資料的電腦仍列出並標「已撤銷」、數字照算；撤銷並刪除資料的電腦收集器不寫進清單，
+    /// 唯一的其他電腦被刪除後回到「這台 Mac」
+    @Test func revokedComputersKeepTheirDataUntilDeleted() {
+        var kept = data
+        kept.devices.devices[2].revoked = true
+        #expect(kept.devices.scopes == [.all, .thisMac, .device(pcID), .device(laptopID)])
+        #expect(kept.devices.menuTitle(.device(laptopID), now: now) == "筆電（已撤銷）")
+        #expect(TokenSummary(data: kept.scoped(.all), scope: .all, now: now, calendar: cal).thisWeek.main == 147)
+
+        let alone = TokenDevices(devices: [devices.devices[0]])
+        #expect(!alone.enabled)
+        #expect(alone.title(alone.resolve(.device(laptopID))) == "這台 Mac")
+    }
+
     @Test func helpListsEveryComputerWithItsLastUpload() {
         let help = devices.help(.all, now: now)
         #expect(help.contains("這台 Mac（剛剛上傳）、工作 PC（2 小時前上傳）、筆電（3 天前上傳）"))

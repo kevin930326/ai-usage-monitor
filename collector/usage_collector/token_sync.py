@@ -240,7 +240,14 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
     local_id = history.meta(conn, "device_id") or ""
     rows = [v for v in (_remote_row(r, own | {local_id}, since) for r in response["rows"]) if v]
     devices = []
+    deleted = []
     for d in response["devices"]:
+        # 撤銷時一併刪除了資料（中繼回 has_data: false）：不再列出、不算台數，本機的舊資料不論日期一併刪除
+        # （截斷的下載不會刪掉較舊的日子）。舊版中繼沒有這個欄位時照常列出
+        if isinstance(d, dict) and d.get("revoked") is True and d.get("has_data") is False:
+            if isinstance(d.get("device_id"), str) and d["device_id"] not in own | {local_id}:
+                deleted.append((d["device_id"],))
+            continue
         if isinstance(d, dict) and isinstance(d.get("device_id"), str) and _DEVICE_RE.match(d["device_id"]):
             devices.append((d["device_id"], _clean_name(d.get("name")), _timestamp(d.get("last_upload_at")),
                             1 if d.get("revoked") is True else 0, 1 if d["device_id"] in own else 0))
@@ -257,6 +264,7 @@ def download(conn: sqlite3.Connection, url: str, read_key: str, now: int) -> int
     with history._transaction(conn):
         _set_meta(conn, sync_truncated=1 if truncated else 0)
         conn.execute(*delete)
+        conn.executemany("DELETE FROM daily_tokens WHERE device_id = ?", deleted)
         if oldest is not None:
             conn.execute("DELETE FROM daily_tokens WHERE device_id != ? AND day < ?", (local_id, oldest))
         conn.executemany(f"""INSERT OR REPLACE INTO daily_tokens

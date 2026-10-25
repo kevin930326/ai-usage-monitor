@@ -57,7 +57,8 @@ public struct TokenDevices: Equatable, Sendable {
     public static let staleAfter: TimeInterval = 48 * 3600
     public static let none = TokenDevices()
 
-    /// 中繼的裝置清單（含這台 Mac 自己）
+    /// 中繼的裝置清單（含這台 Mac 自己）。撤銷時一併刪除了資料的電腦收集器不寫入（中繼的 `has_data`），
+    /// 只撤銷、保留資料的電腦仍在清單裡（`revoked`）
     public var devices: [TokenDevice]
     /// 這台 Mac 的寫入密鑰失效，收集器已停止上傳（`meta.upload_status = revoked`）
     public var uploadRevoked: Bool
