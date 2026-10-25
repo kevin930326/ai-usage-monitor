@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import ssl
 import urllib.error
 import urllib.parse
@@ -16,6 +17,7 @@ from .models import ProviderError
 # 每個請求都帶（tests/test_http.py 檢查）：Cloudflare 會以 403 擋下 urllib 預設的「Python-urllib/3.x」
 USER_AGENT = f"ai-usage-monitor/{__version__}"
 CLOUDFLARE_HINT = "（可能被 Cloudflare 擋下）"
+_UNSAFE_REASON = re.compile(r"[/\\@]|bearer|aumd_", re.IGNORECASE)
 
 
 def _origin(url: str) -> tuple[str, str | None, int | None]:
@@ -56,6 +58,9 @@ def _reason(e: urllib.error.HTTPError) -> str:
     except (ValueError, AttributeError, OSError):
         return ""
     if not isinstance(reason, str) or not reason or len(reason) > 200 or "\n" in reason:
+        return ""
+    # 中繼的訊息都是固定的短句；像網址、路徑、email 或密鑰的不寫進日誌（伺服器可能把請求內容回傳回來）
+    if _UNSAFE_REASON.search(reason):
         return ""
     return f"：{reason}"
 

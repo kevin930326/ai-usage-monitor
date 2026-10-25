@@ -172,6 +172,18 @@ class ErrorReasonTest(unittest.TestCase):
         self.assertEqual(self.request(422, b'{"error": "two\nlines"}'), "HTTP 422")
         self.assertEqual(self.request(500, b'{"error": "internal"}'), "HTTP 500")
 
+    def test_reasons_that_look_like_secrets_or_paths_are_dropped(self):
+        # C-01：伺服器可能把請求內容（密鑰、email、路徑）放進 error，日誌只留狀態碼
+        for reason in ("Bearer aumd_abc123", "aumd_abc123 無效", "kevin@example.com 不存在",
+                       "C:\\Users\\kevin\\.claude 找不到", "/Users/kevin/.codex 找不到", "見 https://x.example"):
+            with self.subTest(reason=reason):
+                self.assertEqual(self.request(422, json.dumps({"error": reason}).encode()), "HTTP 422")
+                server = Server(errors={"/pair": (403, json.dumps({"error": reason}).encode())})
+                self.addCleanup(server.close)
+                with self.assertRaises(ProviderError) as ctx:
+                    request_json(f"{server.origin}/pair", {})
+                self.assertEqual(str(ctx.exception), "HTTP 403（可能被 Cloudflare 擋下）")
+
 
 class UserAgentTest(unittest.TestCase):
     """Cloudflare 以 403 擋下 urllib 預設的「Python-urllib/3.x」：每個請求都要帶收集器自己的 User-Agent。"""
