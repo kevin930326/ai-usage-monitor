@@ -1,4 +1,4 @@
-// 產生 iOS 與 Mac 的 App 圖示 PNG。由 scripts/render-app-icon.sh 編譯執行，不要直接跑。
+// 產生 iOS、手錶與 Mac 的 App 圖示 PNG。由 scripts/render-app-icon.sh 編譯執行，不要直接跑。
 // 八芒星與雲朵直接用 UsageKitUI 的 ClaudeIconShape、CodexIconShape，和 App 內的服務圖示一致。
 // 規格見 .claude/skills/ai-usage-monitor-design/SKILL.md 第 2 節「App 圖示」。
 
@@ -127,6 +127,11 @@ struct RenderAppIcon {
             try writePNG(AppIconView(style: style, side: 1024), pixels: 1024, opaque: true,
                          to: ios.appendingPathComponent("\(name).png"))
         }
+
+        // watchOS 只有一般外觀，單一 1024 圖、不透明
+        let watch = root.appendingPathComponent("apple/WatchApp/AIUsageWatch/Assets.xcassets/AppIcon.appiconset")
+        try writePNG(AppIconView(style: .normal, side: 1024), pixels: 1024, opaque: true,
+                     to: watch.appendingPathComponent("AppIcon.png"))
 
         let mac = root.appendingPathComponent("apple/MacMenuBar/AIUsageMenuBar/Assets.xcassets/AppIcon.appiconset")
         for pixels in [16, 32, 64, 128, 256, 512, 1024] {
