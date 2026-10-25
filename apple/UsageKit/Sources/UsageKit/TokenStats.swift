@@ -206,7 +206,7 @@ public struct TokenStatsData: Equatable, Sendable {
     }
 
     /// Token 數的個人紀錄（`best_day_tokens`、`total_tokens`，含 `:服務` 後綴）。收集器只記主數字（不含 cache_read），
-    /// 含快取讀取時為 nil，單日最高與累計改由已讀取的每日資料計算（最近一年，與所有電腦相同）
+    /// 含快取讀取時為 nil，單日最高與累計改由已讀取的每日資料計算（Mac 只讀最近一年，與所有電腦相同）
     func tokenRecord(_ key: String) -> TokenRecord? {
         measure == .main ? records[key] : nil
     }

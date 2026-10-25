@@ -198,8 +198,9 @@ struct StatsWindowView: View {
         if device != .thisMac {
             text += "\(data.devices.title(device))的個人紀錄與累計只算最近一年的每日資料。其他電腦的數字是它們最後一次上傳的每日加總。"
         } else if cached {
-            // 收集器的單日最高與累計只記不含快取讀取的數字（TokenStatsData.measured）
-            text += "含快取讀取時，單日最高與累計只算每日資料還在的期間；最長任務與連續天數不受保留期間影響。"
+            // 收集器的單日最高與累計只記不含快取讀取的數字（TokenStatsData.tokenRecord）；
+            // 面板與視窗只讀最近一年的每日資料（HistoryStore.tokenLookbackDays），永久保留時也一樣
+            text += "含快取讀取時，單日最高與累計只算最近一年的每日資料；最長任務與連續天數不受保留期間影響。"
         } else {
             text += "個人紀錄與累計不受保留期間影響。"
         }
