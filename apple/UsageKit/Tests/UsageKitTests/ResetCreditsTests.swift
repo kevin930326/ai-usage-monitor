@@ -113,12 +113,12 @@ import Testing
         #expect(alerts[0].title == "Codex 重置卷快到期")
         #expect(alerts[0].body.hasPrefix("1 張重置卷約 2天後到期（"))
         #expect(alerts[0].cardID == "quota")
-        #expect(alerts[0].key == "creditExpiring|codex|reset_credits|\(Int64(days(2).timeIntervalSince1970))")
+        #expect(alerts[0].key == "creditExpiring|codex|reset_credits:1|\(Int64(days(2).timeIntervalSince1970))")
         // 送過就不再送；30 天後到期的那張到了 3 天內才送
         let sent = Set(alerts.map(\.key))
         #expect(QuotaAlerts.detect(snapshot: s, now: now.addingTimeInterval(600), sent: sent).isEmpty)
         let later = QuotaAlerts.detect(snapshot: UsageSnapshot(updatedAt: days(27.5), providers: s.providers), now: days(27.5), sent: sent)
-        #expect(later.map(\.key) == ["creditExpiring|codex|reset_credits|\(Int64(days(30).timeIntervalSince1970))"])
+        #expect(later.map(\.key) == ["creditExpiring|codex|reset_credits:1|\(Int64(days(30).timeIntervalSince1970))"])
         // 到期時間還在未來：鍵不會在到期前被清掉
         #expect(QuotaAlerts.pruned(sent, now: days(1)) == sent)
     }
@@ -127,6 +127,21 @@ import Testing
         let alerts = QuotaAlerts.detect(snapshot: snapshot(credits(2, [days(1), days(1)])), now: now, sent: [])
         #expect(alerts.count == 1)
         #expect(alerts.first?.body.hasPrefix("2 張重置卷") == true)
+    }
+
+    @Test func moreCreditsAtANotifiedExpiryAreNotified() {
+        // 審查 C-01：同一個到期時間從 1 張變 2 張，多出的 1 張要通知；之後不變時不再通知
+        let first = QuotaAlerts.detect(snapshot: snapshot(credits(1, [days(2)])), now: now, sent: [])
+        var sent = Set(first.map(\.key))
+        let more = QuotaAlerts.detect(snapshot: snapshot(credits(2, [days(2), days(2)])), now: now, sent: sent)
+        #expect(more.count == 1)
+        #expect(more.first?.body.hasPrefix("1 張重置卷") == true)
+        sent.formUnion(more.map(\.key))
+        #expect(QuotaAlerts.detect(snapshot: snapshot(credits(2, [days(2), days(2)])), now: now, sent: sent).isEmpty)
+        // 用掉一張變回 1 張：不通知
+        #expect(QuotaAlerts.detect(snapshot: snapshot(credits(1, [days(2)])), now: now, sent: sent).isEmpty)
+        // 鍵在到期前不會被清掉
+        #expect(QuotaAlerts.pruned(sent, now: days(1)) == sent)
     }
 
     @Test func noAlertWhenNothingExpiresSoon() {

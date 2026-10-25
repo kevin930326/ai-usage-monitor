@@ -3,7 +3,8 @@ import Foundation
 // 額度通知的判斷（FR-19、ADR-0008 第 5 節「通知」）：剩不到 20%、用得太快、額度重置（從剩不到 20% 恢復），
 // 以及重置次數卷 3 天內到期（FR-59）。
 // 同一事件只通知一次：每個事件有一個鍵（種類｜服務｜額度｜這一輪的重置時間），送過的鍵由 App 保存；
-// 重置卷的鍵是「creditExpiring｜服務｜reset_credits｜到期時間」，同一張卷（同一個到期時間）只通知一次。
+// 重置卷的鍵是「creditExpiring｜服務｜reset_credits:已通知張數｜到期時間」：不保存卷的 id，以到期時間與張數
+// 區分，同一個到期時間後來多出的卷會再通知多出的張數（審查 C-01）。
 // 這裡只有純計算；送出通知、保存鍵與設定開關在 Mac App。
 
 public enum QuotaAlertKind: String, CaseIterable, Sendable {
@@ -82,9 +83,12 @@ public enum QuotaAlerts {
     /// 重置卷 3 天內到期：同一個到期時間（同一張卷，或同時到期的幾張）通知一次
     static func creditAlerts(provider: String, credits: ResetCredits?, now: Date, sent: Set<String>) -> [QuotaAlert] {
         guard let credits else { return [] }
-        return credits.expiring(at: now).compactMap { expiresAt, count in
-            let key = "\(QuotaAlertKind.creditExpiring.rawValue)|\(provider)|\(creditWindowID)|\(Int64(expiresAt.timeIntervalSince1970))"
-            guard !sent.contains(key) else { return nil }
+        return credits.expiring(at: now).compactMap { expiresAt, total in
+            let epoch = Int64(expiresAt.timeIntervalSince1970)
+            let notified = notifiedCredits(in: sent, provider: provider, epoch: epoch)
+            guard total > notified else { return nil }
+            let count = total - notified
+            let key = "\(QuotaAlertKind.creditExpiring.rawValue)|\(provider)|\(creditWindowID):\(total)|\(epoch)"
             let when = ResetCountdown.text(until: expiresAt, now: now) ?? "不到 1 分鐘"
             let date = "\(ResetCredits.day(expiresAt, calendar: .current)) \(ResetCredits.time(expiresAt, calendar: .current))"
             return QuotaAlert(kind: .creditExpiring, provider: provider, windowID: creditWindowID, key: key,
@@ -95,6 +99,15 @@ public enum QuotaAlerts {
 
     /// 重置卷事件的「額度 id」
     public static let creditWindowID = "reset_credits"
+
+    /// 記錄中這個到期時間已經通知過的張數（`reset_credits:<張數>` 的最大值）
+    static func notifiedCredits(in sent: Set<String>, provider: String, epoch: Int64) -> Int {
+        let prefix = "\(QuotaAlertKind.creditExpiring.rawValue)|\(provider)|\(creditWindowID):"
+        let suffix = "|\(epoch)"
+        return sent.filter { $0.hasPrefix(prefix) && $0.hasSuffix(suffix) }
+            .compactMap { Int($0.dropFirst(prefix.count).dropLast(suffix.count)) }
+            .max() ?? 0
+    }
 
     /// 去掉過期的鍵（重置時間早於 `keepDays` 以前）
     public static func pruned(_ sent: Set<String>, now: Date) -> Set<String> {
