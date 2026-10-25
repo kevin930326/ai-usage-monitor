@@ -207,6 +207,8 @@ struct ForecastLine: View {
                     Text("每週額度照目前速度可撐到 ") + Text(WeeklyForecast.dayPart(at)).fontWeight(.semibold).foregroundColor(UsageColors.notice)
                 case .lastsUntilReset:
                     Text("每週額度照目前速度撐得到重置")
+                case .notEnoughData:
+                    Text("每週額度剛重置，資料還不夠預測")
                 }
             }
             Text("· \(Self.resetText(forecast.resetsAt))").foregroundStyle(.secondary)
@@ -214,8 +216,15 @@ struct ForecastLine: View {
         .font(.caption)
         .lineLimit(1)
         .minimumScaleFactor(0.85)
-        .help(forecast.usesRecentRate ? "依最近 24 小時的速度估計" : "歷史資料還不夠，依本週開始至今的平均速度估計")
+        .help(Self.helpText(forecast))
         .accessibilityElement(children: .combine)
+    }
+
+    static func helpText(_ forecast: WeeklyForecast) -> String {
+        if forecast.outcome == .notEnoughData {
+            return "本輪剛開始，一次大量使用就會誤判；累積 12 小時的紀錄或本輪經過一成後開始預測"
+        }
+        return forecast.usesRecentRate ? "依最近 24 小時的速度估計" : "歷史資料還不夠，依本週開始至今的平均速度估計"
     }
 
     static func resetText(_ date: Date) -> String {

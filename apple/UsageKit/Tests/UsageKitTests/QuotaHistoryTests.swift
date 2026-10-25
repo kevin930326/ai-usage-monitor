@@ -329,13 +329,82 @@ import Testing
         #expect(UsagePace(window: weekly, provider: "claude", history: history, stale: false, now: now)?.isTooFast == false)
     }
 
+    /// 同一份資料當成 Claude 與 Codex 各算一次，兩者結果要相同（規則不分服務）
+    func forecastBoth(used: Double, resetsIn: TimeInterval, now: Date, samples: (String) -> [QuotaSample] = { _ in [] })
+        -> (claude: WeeklyForecast.Outcome?, codex: WeeklyForecast.Outcome?) {
+        let weekly = UsageWindow(id: "weekly", label: "每週", usedPct: used, resetsAt: now.addingTimeInterval(resetsIn))
+        let s = UsageSnapshot(updatedAt: now, providers: [
+            "claude": ProviderUsage(windows: [weekly]), "codex": ProviderUsage(windows: [weekly]),
+        ])
+        let list = WeeklyForecast.list(snapshot: s, history: QuotaHistory(samples: samples("claude") + samples("codex")), now: now)
+        return (list.first { $0.provider == "claude" }?.outcome, list.first { $0.provider == "codex" }?.outcome)
+    }
+
+    @Test func weeklyForecastRightAfterEarlyResetShowsALine() {
+        // 2026-10-25 的實例：Codex 每週額度提前重置，本輪 10.4 小時、用了 9%（13 筆樣本），還沒有近期速度（跨度 < 12 小時）、
+        // 也沒經過一成；照平均速度約 105 小時後用完、早於重置 → 「資料還不夠」，不再整行不列
+        let now = at(3 * 86400)
+        let elapsed = 10.4 * hour
+        let samples: (String) -> [QuotaSample] = { provider in
+            (0...12).map { i in
+                QuotaSample(ts: now.addingTimeInterval(-elapsed + Double(i) * elapsed / 12), provider: provider, windowID: "weekly",
+                            usedPct: Double(i) * 0.75, resetsAt: now.addingTimeInterval(7 * 86400 - elapsed))
+            }
+        }
+        let result = forecastBoth(used: 9, resetsIn: 7 * 86400 - elapsed, now: now, samples: samples)
+        #expect(result.codex == .notEnoughData)
+        #expect(result.claude == result.codex)
+    }
+
+    @Test func weeklyForecastRightAfterResetLastsWhenAverageLasts() {
+        // 剛重置 3 小時、還沒用（0%）或用得很少（10 小時 2%）：平均速度都撐得到重置 → 直接顯示「撐得到重置」
+        let now = at(3 * 86400)
+        let idle = forecastBoth(used: 0, resetsIn: 7 * 86400 - 3 * hour, now: now)
+        #expect(idle.claude == .lastsUntilReset)
+        #expect(idle.codex == .lastsUntilReset)
+        let light = forecastBoth(used: 2, resetsIn: 7 * 86400 - 10 * hour, now: now)
+        #expect(light.claude == .lastsUntilReset)
+        #expect(light.codex == .lastsUntilReset)
+    }
+
+    @Test func weeklyForecastIdleRecentlyLastsUntilReset() {
+        // 已用 60%、再 3 天重置；最近 24 小時沒有在用（近期速度 0）→ 撐得到重置（平均速度會說用完）
+        let now = at(4 * 86400)
+        let resetsIn = 3 * 86400.0
+        let samples: (String) -> [QuotaSample] = { provider in
+            (0...24).map { i in
+                QuotaSample(ts: now.addingTimeInterval(Double(i - 24) * self.hour), provider: provider, windowID: "weekly",
+                            usedPct: 60, resetsAt: now.addingTimeInterval(resetsIn))
+            }
+        }
+        let result = forecastBoth(used: 60, resetsIn: resetsIn, now: now, samples: samples)
+        #expect(result.claude == .lastsUntilReset)
+        #expect(result.codex == .lastsUntilReset)
+        // 沒有歷史時同樣的數字照平均速度（4 天 60%）會在重置前用完
+        let average = forecastBoth(used: 60, resetsIn: resetsIn, now: now)
+        guard case .runsOut = average.codex else { Issue.record("平均速度應預測用完"); return }
+        #expect(average.claude == average.codex)
+    }
+
+    @Test func weeklyForecastHiddenOnlyWhenStale() {
+        // 資料過期時兩個服務都不列（卡片另外標示過期）
+        let now = at(4 * 86400)
+        let weekly = UsageWindow(id: "weekly", label: "每週", usedPct: 30, resetsAt: now.addingTimeInterval(3 * 86400))
+        let s = UsageSnapshot(updatedAt: now.addingTimeInterval(-2 * hour), providers: [
+            "claude": ProviderUsage(windows: [weekly]), "codex": ProviderUsage(windows: [weekly]),
+        ])
+        #expect(s.isStale(now: now))
+        #expect(WeeklyForecast.list(snapshot: s, history: .empty, now: now).isEmpty)
+    }
+
     @Test func weeklyForecastWaitsLikeUsagePaceRightAfterReset() {
-        // 剛重置 10 分鐘、用了 1%，沒有近期速度：平均速度會說 16.5 小時後用完，但與「用得太快」同一規則先不預測
+        // 剛重置 10 分鐘、用了 1%，沒有近期速度：平均速度會說 16.5 小時後用完，但與「用得太快」同一規則先不預測，
+        // 顯示「資料還不夠」（不是整行不列）
         let resetsAt = at(7 * 86400)
         let now = resetsAt.addingTimeInterval(-(7 * 86400 - 600))
         let weekly = UsageWindow(id: "weekly", label: "每週", usedPct: 1, resetsAt: resetsAt)
         let s = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [weekly])])
-        #expect(WeeklyForecast.list(snapshot: s, history: .empty, now: now).isEmpty)
+        #expect(WeeklyForecast.list(snapshot: s, history: .empty, now: now).map(\.outcome) == [.notEnoughData])
         #expect(UsagePace(window: weekly, stale: false, now: now) == nil)
         // 經過 10% 以上且照平均速度會用完：兩者一致
         let later = resetsAt.addingTimeInterval(-0.8 * 7 * 86400)
