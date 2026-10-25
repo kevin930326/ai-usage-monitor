@@ -1007,7 +1007,8 @@ class ScanTest(TokenStatsTestCase):
         with self.db() as c:
             self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0], "2026-06-25")
             self.assertEqual(c.execute("SELECT COUNT(*) FROM seen_ids WHERE day < '2026-06-24'").fetchone()[0], 0)
-        self.assertLess(elapsed, 1.0)
+        # 本機約 0.4 秒（前進與刪除只佔 0.01 秒，其餘是一般掃描）；CI 的 Windows 機器曾跑到 1.1 秒，門檻放寬到 2 秒
+        self.assertLess(elapsed, 2.0)
 
 
 class SeenWindowTest(TokenStatsTestCase):

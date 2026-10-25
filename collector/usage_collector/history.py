@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sqlite3
 import uuid
 from collections.abc import Iterator
@@ -29,6 +30,13 @@ DOWNSAMPLE_AFTER_DAYS = 35
 HOURLY_TOKENS_DAYS = 90  # hourly_tokens 只留 90 天（daily_tokens 已有同樣的加總）
 SCAN_STATE_DAYS = 90  # 超過 90 天沒看到的紀錄檔刪掉掃描進度
 BUSY_TIMEOUT_MS = 5000
+# 定期 VACUUM（ADR-0014 LT-14）：刪除只把頁面放回 freelist，檔案不會變小、WAL 停在曾達到的大小。
+# 每 30 天，或可回收的空間超過全部的 20%（且至少 1 MB）時重建；VACUUM 要暫存一份資料庫，
+# 磁碟剩餘空間不到資料庫大小的 2 倍＋64 MB 時這次不做（隔天再看）
+VACUUM_INTERVAL_DAYS = 30
+VACUUM_FREE_RATIO = 0.2
+VACUUM_MIN_RECLAIM = 1024 * 1024
+VACUUM_DISK_MARGIN = 64 * 1024 * 1024
 DEFAULT_DEVICE_NAME = "這台 Mac"  # 不用電腦名稱，避免把使用者名稱帶進資料（ADR-0009 第 6 節）
 
 
@@ -424,6 +432,46 @@ def maybe_cleanup(conn: sqlite3.Connection, now: int, today: date) -> bool:
     cleanup(conn, now)
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup_day', ?)",
                  (today.isoformat(),))
+    maybe_vacuum(conn, now)
+    return True
+
+
+def maybe_vacuum(conn: sqlite3.Connection, now: int) -> bool:
+    """到期（30 天，或可回收的空間夠多）且磁碟空間足夠時 VACUUM 並截斷 WAL；回傳是否執行了。"""
+    page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+    pages = conn.execute("PRAGMA page_count").fetchone()[0]
+    free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+    try:
+        last = int(meta(conn, "last_vacuum_at") or 0)
+    except ValueError:
+        last = 0
+    # 上次的時間在未來（時鐘曾被設到未來）也視為到期，不然要等到那一天
+    due = not 0 <= now - last < VACUUM_INTERVAL_DAYS * 86400 \
+        or (free * page_size >= VACUUM_MIN_RECLAIM and free >= pages * VACUUM_FREE_RATIO)
+    if not due:
+        return False
+    size = pages * page_size
+    path = conn.execute("PRAGMA database_list").fetchone()[2]
+    try:
+        if shutil.disk_usage(os.path.dirname(path) or ".").free < 2 * size + VACUUM_DISK_MARGIN:
+            return False
+    except OSError:
+        return False
+    conn.execute("VACUUM")
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_vacuum_at', ?)", (str(now),))
+    # App 正在讀時截斷不了：TRUNCATE 會用 busy handler 等讀取結束，所以暫時不等（busy_timeout 0，回傳 busy）；
+    # 下次 checkpoint 照常，不影響 VACUUM 的結果（審查 C-01）
+    timeout = int(conn.execute("PRAGMA busy_timeout").fetchone()[0])
+    conn.execute("PRAGMA busy_timeout = 0")
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+    except sqlite3.OperationalError:
+        pass
+    finally:
+        conn.execute(f"PRAGMA busy_timeout = {timeout}")
+    after = conn.execute("PRAGMA page_count").fetchone()[0] * page_size
+    if size - after >= VACUUM_MIN_RECLAIM:
+        log(f"整理 history.sqlite3：{size / 1048576:.1f} MB → {after / 1048576:.1f} MB")
     return True
 
 

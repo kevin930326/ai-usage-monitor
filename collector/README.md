@@ -112,7 +112,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 
 - 只存數字、時間、服務與額度 id：不存方案名稱、錯誤訊息、額度顯示名稱。**不上傳。**
 - SQLite WAL 模式、`busy_timeout` 5 秒；資料庫與 `-wal`／`-shm` 權限 `0600`。
-- 每天（本機日期）第一次執行時清理：刪除超過保留期間的資料（`meta.retention_days`，預設 365，`0`＝永久，由 App 的設定修改）；35 天前的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆，`collector_runs` 合成一列並保留次數）。
+- 每天（本機日期）第一次執行時清理：刪除超過保留期間的資料（`meta.retention_days`，預設 365，`0`＝永久，由 App 的設定修改）；35 天前的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆，`collector_runs` 合成一列並保留次數）。每 30 天（或可回收的空間超過 20%）`VACUUM` 並截斷 WAL，讓刪掉的空間還給磁碟；剩餘空間不到資料庫大小的 2 倍＋64 MB 時隔天再試（ADR-0014 LT-14）。
 - **歷史是附加功能**：寫在 `usage.json` 與上傳之後；資料庫被鎖住、損毀、版本較新或資料夾不能寫入時，只在日誌記一行「略過額度歷史（例外類別）」，不影響 `usage.json`、上傳與結束碼。損毀的檔案不會被自動刪除或覆蓋。
 - 只有收集器執行 migration；App 只讀（清除歷史、縮短保留期間除外）。
 - 每次執行增加的時間：`python3 scripts/measure-history.py`（一年的資料量，一般執行約 1 ms，每天第一次含清理約 3 ms）。
