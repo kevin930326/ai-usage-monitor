@@ -41,6 +41,8 @@ TITLE="AI 用量"
 BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
 
 mkdir -p "$LOG_DIR" "$CONFIG_DIR" "$DERIVED"
+# reinstall.log 每份最多 1 MB、留一份舊的（與收集器的 collector.log 相同，ADR-0014）
+if [ -f "$LOG" ] && [ "$(stat -f %z "$LOG" 2>/dev/null || echo 0)" -gt 1000000 ]; then mv -f "$LOG" "$LOG.1"; fi
 touch "$DERIVED/.metadata_never_index"  # 不讓 Spotlight 索引建置產物
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >>"$LOG"; echo "$*"; }
 notify() {  # 用參數傳文字，避免引號被當成 AppleScript
