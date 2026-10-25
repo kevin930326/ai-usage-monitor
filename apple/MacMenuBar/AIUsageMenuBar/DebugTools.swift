@@ -15,6 +15,11 @@ import UsageKitUI
 /// - `AUM_RENDER_EXIT=1`：輸出完就結束。
 /// - `AUM_RENDER_NOW=<ISO 8601>`：畫面的「現在」固定成這個時間（`RenderClock`，截圖比對用，見 `scripts/snapshots.sh`）。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
+/// - `AUM_DEMO_WINDOWS=settings,stats,wizard`：啟動後以 SwiftUI 的 scene 打開這些視窗（與使用者打開的相同），
+///   檢查實際視窗的外觀（ImageRenderer 畫不出視窗背景）。
+/// - `AUM_DEMO_SWITCH=dark@4,system@8,sysdark@12`：在第 N 秒把外觀設定改成這個值（Debug 預覽用獨立的設定），
+///   `syslight`／`sysdark` 改模擬的系統外觀，檢查切換時視窗是否立即跟著換。
+/// - `AUM_DEMO_SYSTEM_APPEARANCE=light|dark`：把 `NSApp.appearance` 設成這個外觀，模擬系統的淺色／深色（不改系統設定）。
 @MainActor
 enum DebugTools {
     private static var panelWindow: NSWindow?
@@ -23,6 +28,11 @@ enum DebugTools {
 
     static func runIfRequested() {
         let env = ProcessInfo.processInfo.environment
+        switch env["AUM_DEMO_SYSTEM_APPEARANCE"] {
+        case "light": NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        case "dark": NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        default: break
+        }
         // 量測時先記錄面板開啟前的基準，10 秒後才打開
         if env["AUM_DEMO_PANEL"] == "1", env["AUM_DEMO_PERF"] != "1" { showPanelWindow() }
         if let dir = env["AUM_RENDER_DIR"], !dir.isEmpty {
@@ -44,6 +54,48 @@ enum DebugTools {
             if env["AUM_RENDER_EXIT"] == "1" { exit(0) }
         }
         if env["AUM_DEMO_PERF"] == "1" { runPerfSchedule() }
+        if let names = env["AUM_DEMO_WINDOWS"], !names.isEmpty { openSceneWindows(names.split(separator: ",").map(String.init)) }
+        for step in (env["AUM_DEMO_SWITCH"] ?? "").split(separator: ",") {
+            let parts = step.split(separator: "@")
+            guard parts.count == 2, let at = Double(parts[1]) else { continue }
+            let name = String(parts[0])
+            DispatchQueue.main.asyncAfter(deadline: .now() + at) {
+                MainActor.assumeIsolated {
+                    switch name {
+                    case "syslight": NSApplication.shared.appearance = NSAppearance(named: .aqua)
+                    case "sysdark": NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+                    default: if let choice = AppearanceChoice(rawValue: name) { PanelSettings.shared.appearance = choice }
+                    }
+                    UsageStore.log("demo appearance \(name)")
+                }
+            }
+        }
+    }
+
+    /// 選單列標籤出現後 `AppActions` 才有 openWindow／openSettings，所以稍等再打開
+    private static func openSceneWindows(_ names: [String]) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            MainActor.assumeIsolated {
+                for name in names {
+                    switch name {
+                    case "settings": AppActions.openSettings?()
+                    case "stats": AppActions.openStats?()
+                    case "wizard": AppActions.openWizard?()
+                    case "panel": AppActions.togglePanel()
+                    default: UsageStore.log("unknown demo window \(name)")
+                    }
+                }
+                NSApplication.shared.activate()
+            }
+        }
+        // 打開後列出每個視窗的外觀，確認實際套用的值（選單列面板無法截圖時也看得到）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            MainActor.assumeIsolated {
+                for window in NSApplication.shared.windows where window.isVisible {
+                    UsageStore.log("window \(type(of: window)) '\(window.title)' appearance=\(window.appearance?.name.rawValue ?? "nil") effective=\(window.effectiveAppearance.name.rawValue)")
+                }
+            }
+        }
     }
 
     private static func showPanelWindow() {
