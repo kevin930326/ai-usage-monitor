@@ -264,7 +264,7 @@ final class HistoryStore {
     /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
     /// 不重新掃描時 `file_tokens` 歸零而不刪除：對應的加總已清除，之後收集器重算該檔時只清空、不會扣到新的資料。
     nonisolated func clear(rescan: Bool, now: Date = RenderClock.now) throws {
-        var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days"]
+        var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached"]
         if rescan { tables += ["scan_state", "seen_ids", "seen_tasks", "file_tokens"] }
         try write(vacuum: true) { db in
             Self.existingTables(db, tables).allSatisfy { Self.exec(db, "DELETE FROM \($0)", []) }

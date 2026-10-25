@@ -50,8 +50,7 @@ struct TokenActivityChart: View {
         return switch range {
         case .days30: "最近 30 天，每根一天（\(cached ? "含" : "不含")快取讀取）"
         case .weeks: cached ? "最近 12 週，每根一週（星期一起，含快取讀取）" : "最近 12 週，每根一週（星期一起）"
-        // 收集器的累計只記主數字：含快取讀取時是已讀取的每日資料（最近一年）的合計
-        case .cumulative: cached ? "累計 Token（含快取讀取，只算最近一年）" : "累計 Token（含保留期間以前）"
+        case .cumulative: cached ? "累計 Token（含快取讀取，含保留期間以前）" : "累計 Token（含保留期間以前）"
         }
     }
 

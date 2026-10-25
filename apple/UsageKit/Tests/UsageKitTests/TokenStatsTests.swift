@@ -301,7 +301,7 @@ import Testing
         #expect(summary.thisWeek.main == 400)
         #expect(summary.lastWeekSamePeriod == 100)
         #expect(summary.changePct == 800)
-        // 收集器的單日最高與累計只記主數字：含快取時改由每日資料計算；最長任務與最長連續照舊
+        // 舊版收集器沒有含快取的紀錄：單日最高與累計改由每日資料計算；最長任務與最長連續照舊
         #expect(summary.bestDay == TokenRecord(value: 600, day: "2026-11-05"))
         #expect(summary.total?.value == 1000)
         #expect(summary.longestTaskSeconds?.value == 600)
@@ -333,17 +333,42 @@ import Testing
         #expect(cached.streakIsRecord == plain.streakIsRecord)
     }
 
-    @Test func includingCacheReadKeepsRecordOnlyData() {
-        // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），最長任務照舊
-        let data = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),
-                                            "longest_task_seconds": TokenRecord(value: 600, day: "2025-02-02")],
+    @Test func includingCacheReadUsesCollectorCachedRecords() {
+        // 收集器另外記的含快取紀錄（不受保留期間影響）優先；比每日資料算出的小時取每日資料
+        let data = TokenStatsData(days: [row("2026-11-05", main: 40, cacheRead: 400), row("2026-10-07", main: 10, cacheRead: 90)],
+                                  records: ["total_tokens": TokenRecord(value: 5000), "total_tokens_cached": TokenRecord(value: 90_000),
+                                            "total_tokens_cached:claude": TokenRecord(value: 80_000),
+                                            "best_day_tokens_cached": TokenRecord(value: 30_000, day: "2025-01-01"),
+                                            "best_day_tokens_cached:claude": TokenRecord(value: 100, day: "2025-01-01")],
                                   firstScanDone: true).measured(.includingCacheRead)
+        let all = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(all.total?.value == 90_000)
+        #expect(all.bestDay == TokenRecord(value: 30_000, day: "2025-01-01"))
+        let claude = TokenSummary(data: data, scope: .claude, now: now, calendar: cal)
+        #expect(claude.total?.value == 80_000)
+        #expect(claude.bestDay == TokenRecord(value: 440, day: "2026-11-05"))
+        // 累計圖：最後一天等於含快取的累計
+        let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
+        #expect(cumulative.last?.value == 90_000)
+        #expect(cumulative.first?.value == 89_560)  // 90,000 減去之後每天（11/5 的 440）
+        // 關掉時照舊用主數字的紀錄
+        #expect(TokenSummary(data: data.measured(.main), scope: .all, now: now, calendar: cal).total?.value == 5000)
+    }
+
+    @Test func includingCacheReadKeepsRecordOnlyData() {
+        // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），累計與最長任務照舊顯示
+        let base = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),
+                                            "longest_task_seconds": TokenRecord(value: 600, day: "2025-02-02")],
+                                  firstScanDone: true)
+        let data = base.measured(.includingCacheRead)
         #expect(data.hasData)
         let summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
-        #expect(summary.total == nil)
+        #expect(summary.total == nil)  // 舊版收集器：沒有含快取的累計
         #expect(summary.bestDay == nil)
         #expect(summary.longestTaskSeconds?.value == 600)
-        #expect(data.measured(.main).records["total_tokens"]?.value == 5000)
+        var withCached = base
+        withCached.records["total_tokens_cached"] = TokenRecord(value: 70_000)
+        #expect(TokenSummary(data: withCached.measured(.includingCacheRead), scope: .all, now: now, calendar: cal).total?.value == 70_000)
     }
 
     @Test func includingCacheReadWorksForEveryDeviceScope() {

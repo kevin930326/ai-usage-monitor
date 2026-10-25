@@ -90,7 +90,7 @@ def write_tokens(conn, now: int, scenario: str) -> None:
     device = history.meta(conn, "device_id") or ""
     today = datetime.fromtimestamp(now).astimezone().date()
     days = 3 if scenario == "few" else 365
-    daily, hourly, record_days = [], [], {}
+    daily, hourly, record_days, record_days_cached = [], [], {}, {}
     models = {"claude": ["claude-opus-5-5", "claude-sonnet-5-5"], "codex": ["gpt-6.1-sol", "gpt-6.1-sol-mini"]}
     for back in range(days):
         day = today - timedelta(days=back)
@@ -113,6 +113,7 @@ def write_tokens(conn, now: int, scenario: str) -> None:
                               longest * 3, longest, now))
                 record_days.setdefault((key, provider), 0)
                 record_days[(key, provider)] += inp + cw + out
+                record_days_cached[(key, provider)] = record_days_cached.get((key, provider), 0) + inp + cw + cr + out
                 if back < 90:
                     for hour in range(9, 24):
                         weight = 1 + math.sin((hour - 9) / 14 * math.pi) + (0.6 if hour >= 20 else 0)
@@ -122,18 +123,25 @@ def write_tokens(conn, now: int, scenario: str) -> None:
     conn.executemany(f"INSERT OR REPLACE INTO daily_tokens VALUES ({', '.join('?' * 13)})", daily)
     conn.executemany(f"INSERT OR REPLACE INTO hourly_tokens VALUES ({', '.join('?' * 14)})", hourly)
     conn.executemany("INSERT OR REPLACE INTO record_days VALUES (?, ?, ?)", [(d, p, v) for (d, p), v in record_days.items()])
+    conn.executemany("INSERT OR REPLACE INTO record_days_cached VALUES (?, ?, ?)",
+                     [(d, p, v) for (d, p), v in record_days_cached.items()])
     records = []
     for suffix, provs in (("", ("claude", "codex")), (":claude", ("claude",)), (":codex", ("codex",))):
-        per_day = {}
-        for (d, p), v in record_days.items():
-            if p in provs:
-                per_day[d] = per_day.get(d, 0) + v
-        if not per_day:
-            continue
-        best = max(per_day.items(), key=lambda kv: (kv[1], [-ord(c) for c in kv[0]]))
+        # 主數字與含快取讀取（FR-60）的單日最高與累計；累計另加保留期間以前的用量（含快取時約 7 倍）
+        for name, table, before in (("", record_days, 1_234_567), ("_cached", record_days_cached, 8_641_969)):
+            per_day = {}
+            for (d, p), v in table.items():
+                if p in provs:
+                    per_day[d] = per_day.get(d, 0) + v
+            if not per_day:
+                continue
+            best = max(per_day.items(), key=lambda kv: (kv[1], [-ord(c) for c in kv[0]]))
+            records += [(f"best_day_tokens{name}{suffix}", best[1], best[0]),
+                        (f"total_tokens{name}{suffix}", sum(per_day.values()) + before, None)]
         longest = max(((r[11], r[1]) for r in daily if r[2] in provs), default=(0, None))
-        records += [(f"best_day_tokens{suffix}", best[1], best[0]), (f"total_tokens{suffix}", sum(per_day.values()) + 1_234_567, None),
-                    (f"longest_task_seconds{suffix}", longest[0], longest[1]),
+        if longest[1] is None:
+            continue
+        records += [(f"longest_task_seconds{suffix}", longest[0], longest[1]),
                     (f"longest_streak_days{suffix}", 9 if scenario == "normal" else 3, today.isoformat())]
     conn.executemany("INSERT OR REPLACE INTO records VALUES (?, ?, ?)", records)
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
