@@ -13,11 +13,12 @@
 #   3. 不用的模擬器：runtime 已移除、無法使用的模擬器（xcrun simctl delete unavailable）
 #   4. 本機的 backup/* 分支（只刪本機，不碰遠端）
 #   5. ~/Documents/ai-usage-monitor-work/design/_trash/ 中超過 30 天的項目：移到垃圾桶（不是直接刪除）
-# 有 xcodebuild 正在執行時不清建置產物與 DerivedData（verify-all 或安裝進行中）。
+# 有 xcodebuild、swift-build 或 swift-test 正在執行時不清建置產物與 DerivedData（verify-all 或安裝進行中）；
+# 等待回答後、刪除前再確認一次。
 # 不碰收集器的資料（~/Library/Application Support/AIUsageMonitor）、launchd 設定、reviews/ 與 design/ 的其他檔案。
 #
 # 測試用的覆寫：CLEAN_DEV_WORK（工作資料夾）、CLEAN_DEV_DERIVED（DerivedData）、CLEAN_DEV_TRASH（垃圾桶）、
-# CLEAN_DEV_SIMCTL（取代 `xcrun simctl`）、CLEAN_DEV_DAYS（天數，預設 30）、CLEAN_DEV_BUSY_CHECK（取代 `pgrep -x xcodebuild`）。
+# CLEAN_DEV_SIMCTL（取代 `xcrun simctl`）、CLEAN_DEV_DAYS（天數，預設 30）、CLEAN_DEV_BUSY_CHECK（取代 `pgrep -x 'xcodebuild|swift-build|swift-test'`）。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -26,7 +27,8 @@ DERIVED=${CLEAN_DEV_DERIVED:-$HOME/Library/Developer/Xcode/DerivedData}
 TRASH=${CLEAN_DEV_TRASH:-$HOME/.Trash}
 DAYS=${CLEAN_DEV_DAYS:-30}
 read -r -a SIMCTL <<<"${CLEAN_DEV_SIMCTL:-xcrun simctl}"
-read -r -a BUSY_CHECK <<<"${CLEAN_DEV_BUSY_CHECK:-pgrep -x xcodebuild}"
+# swift build／swift test（verify-all 的第一段、單獨跑 UsageKit 測試）也會用到 .build，與 xcodebuild 一起看
+read -r -a BUSY_CHECK <<<"${CLEAN_DEV_BUSY_CHECK:-pgrep -x xcodebuild|swift-build|swift-test}"
 
 CLEAN=0
 YES=0
@@ -84,11 +86,11 @@ else
   total_found=1
   echo "  合計 $(size "${builds[@]}")"
   if [ $busy = 1 ]; then
-    [ $CLEAN = 1 ] && echo "  xcodebuild 正在執行，這次不清理建置產物"
+    [ $CLEAN = 1 ] && echo "  建置正在執行，這次不清理建置產物"
   elif confirm "建置產物"; then
     # 等待回答的期間可能開始建置或安裝：刪除前再確認一次
     if is_busy; then
-      echo "  xcodebuild 剛開始執行，這次不清理建置產物"
+      echo "  建置剛開始執行，這次不清理建置產物"
     else
       removed=0
       for dir in "${builds[@]}"; do
@@ -121,10 +123,10 @@ else
   total_found=1
   echo "  合計 $(size "${derived[@]}")"
   if [ $busy = 1 ]; then
-    [ $CLEAN = 1 ] && echo "  xcodebuild 正在執行，這次不清理 DerivedData"
+    [ $CLEAN = 1 ] && echo "  建置正在執行，這次不清理 DerivedData"
   elif confirm "舊的 DerivedData"; then
     if is_busy; then
-      echo "  xcodebuild 剛開始執行，這次不清理 DerivedData"
+      echo "  建置剛開始執行，這次不清理 DerivedData"
     else
       rm -rf "${derived[@]}"
       echo "  已刪除 ${#derived[@]} 個資料夾"

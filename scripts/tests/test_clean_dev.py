@@ -103,7 +103,7 @@ class CleanDevTests(unittest.TestCase):
     def test_busy_xcodebuild_keeps_build_products(self):
         result = self.run_script("--clean", "--yes", busy=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("xcodebuild 正在執行", result.stdout)
+        self.assertIn("建置正在執行", result.stdout)
         self.assertTrue((self.repo / "build").exists())
         self.assertTrue((self.derived / "AIUsageMenuBar-old").exists())
         # 其他類別照常
@@ -141,6 +141,13 @@ class CleanDevTests(unittest.TestCase):
         self.assertIn("略過", result.stdout)
         self.assertTrue((self.repo / "build" / "install.lock").exists())
         self.assertFalse((self.repo / "apple/MacMenuBar/build").exists())
+
+    def test_default_busy_check_covers_swift_package_builds(self):
+        """沒有 xcodebuild、只有 swift test 時也算建置中（審查 C-02）：預設的檢查包含 swift-build、swift-test。"""
+        text = (self.repo / "scripts" / "clean-dev.sh").read_text(encoding="utf-8")
+        self.assertIn("pgrep -x xcodebuild|swift-build|swift-test", text)
+        names = subprocess.run(["pgrep", "-x", "xcodebuild|swift-build|swift-test|zsh|bash"], capture_output=True, text=True)
+        self.assertEqual(names.returncode, 0)  # pgrep 接受以 | 分隔的名稱（這個測試本身在 bash 底下）
 
     def test_clean_without_terminal_needs_yes(self):
         result = self.run_script("--clean")
