@@ -17,7 +17,7 @@
 - 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
 
 ### Added
-- 設定「歷史資料」顯示資料庫大小與預估（ADR-0014）：「資料庫 1.9 MB，依最近的使用量，保留 1 年時約維持在 5.9 MB」；永久保留時改說每年約增加多少，資料不滿 7 天時不估算。依各表佔用（SQLite `dbstat`）與收集器的清理規則推算：額度歷史 35 天後降為每小時一筆、每日統計隨保留期間刪除、去重紀錄與每小時統計最多 90 天（`HistorySize`）。截圖基準更新設定（淺色、深色）
+- 設定「歷史資料」顯示資料庫大小與預估（ADR-0014）：「資料庫 1.9 MB，依最近的使用量，保留 1 年時約維持在 6.4 MB」；永久保留時改說每年約增加多少，資料不滿 7 天時不估算。依各表佔用（SQLite `dbstat`）與收集器的清理規則推算：額度歷史 35 天後降為每小時一筆、每日統計隨保留期間刪除、每小時統計留保留期間與 90 天較短的一個、去重紀錄在收集器有時間窗時最多 90 天；個人紀錄不受保留期間影響，算在每年增加的部分（每年超過 1 MB 才另外顯示）（`HistorySize`）。截圖基準更新設定（淺色、深色）
 - 含快取讀取的 Token 統計（v1.11，FR-60）：Mac 統計卡片與完整統計視窗在全部／Claude／Codex 旁加「含快取讀取」切換（預設關閉，記住選擇，面板與視窗共用）。打開時所有 Token 數字、Token 活動、熱力圖、各模型、時段與個人紀錄改用 input＋cache_write＋cache_read＋output，數字旁標「含快取」（滑鼠移上去說明）；這台 Mac、所有電腦與各電腦都適用。收集器另外記含快取讀取的單日最高與累計（`record_days_cached`、`best_day_tokens_cached`、`total_tokens_cached`，不受保留期間影響；同一個 schema 版本，升級時以 `seen_ids`／`file_tokens` 已計入的數值算出初始值，保留期間以前的快取讀取也算），舊版收集器沒有時 App 改由每日資料計算。VoiceOver 讀出切換狀態；截圖基準新增完整統計（含快取）與所有電腦（含快取）
 - Codex 重置次數卷（v1.10，FR-58、FR-59，#94）：收集器從 `account/rateLimits/read` 讀可用張數與各張到期時間，寫進 `usage.json` 的選填欄位 `reset_credits`（同一個 `schema_version`；只讀、不使用卷，測試掃描收集器的程式碼確認）；Mac 面板的 Codex 額度卡片與 iPhone 主畫面顯示「重置卷 2 張 · 最早 11/20 到期」（0 張不顯示，Mac 滑鼠移上去列出每張）；Mac 通知「重置卷快到期」（3 天內到期，每張一次，預設開）。中繼要重新部署 iPhone 才看得到
 - README 截圖：`scripts/update-readme-images.sh` 依 `docs/images/SOURCES.tsv` 以固定時間與示範資料重新產生（Mac 與動態島用 ImageRenderer，iPhone 主畫面、設定與手錶用模擬器截圖）；主要畫面有淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示；新增外觀設定的截圖，統計切換的 GIF 改為全部 → Claude → Codex → 全部。開頭一排是 Mac 面板的上半部（完整面板收在「看完整的 Mac 面板」）與 iPhone、下一排是動態島與手錶，同一排等高；統計 GIF 與完整統計視窗並排；畫面加上圓角與細邊框（`scripts/readme-image-post.swift`，SOURCES.tsv 第 5 欄）。`scripts/check-readme-images.py`（verify-all、CI）在 README 引用的圖不存在或沒有來源時失敗，比對應的截圖基準舊時提醒

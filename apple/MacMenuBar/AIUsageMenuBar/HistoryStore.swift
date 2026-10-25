@@ -227,10 +227,17 @@ final class HistoryStore {
         } ?? Info(status: .failed, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
     }
 
-    /// 各表在設定「歷史資料」預估裡的分類（`HistorySize`）；沒列出的算「其他」
-    private nonisolated static let quotaTables: Set<String> = ["quota_samples", "collector_runs"]
-    private nonisolated static let dailyTables: Set<String> = ["daily_tokens", "upload_state", "record_days", "record_days_cached"]
-    private nonisolated static let windowTables: Set<String> = ["seen_ids", "seen_tasks", "file_tokens", "hourly_tokens", "scan_state"]
+    /// 各表在設定「歷史資料」預估裡的分類（`HistorySize`）；沒列出的（meta、掃描進度等）算「其他」
+    private nonisolated static func sizeGroup(_ table: String) -> WritableKeyPath<HistorySize, Int64> {
+        switch table {
+        case "quota_samples", "collector_runs": \.quotaBytes
+        case "daily_tokens", "upload_state": \.dailyBytes
+        case "hourly_tokens": \.hourlyBytes
+        case "record_days", "record_days_cached": \.recordBytes
+        case "seen_ids", "seen_tasks", "file_tokens": \.seenBytes
+        default: \.otherBytes
+        }
+    }
 
     /// 檔案大小（主檔＋WAL）與各表佔用（`dbstat`，含索引）；`dbstat` 不能用時只有檔案大小，不估算
     private nonisolated func size(_ db: OpaquePointer, now: Date) -> HistorySize? {
@@ -248,13 +255,11 @@ final class HistoryStore {
         }
         guard let tables else { return size }
         for (name, pages) in tables {
-            if Self.quotaTables.contains(name) { size.quotaBytes += pages }
-            else if Self.dailyTables.contains(name) { size.dailyBytes += pages }
-            else if Self.windowTables.contains(name) { size.windowBytes += pages }
-            else { size.otherBytes += pages }
+            size[keyPath: Self.sizeGroup(name)] += pages
         }
         let nowTS = Int64(now.timeIntervalSince1970)
-        let present = Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "seen_ids"])
+        let present = Set(Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens",
+                                                   "record_days", "seen_ids"]))
         for table in ["quota_samples", "collector_runs"] where present.contains(table) {
             size.quotaRows += Self.scalar(db, "SELECT COUNT(*) FROM \(table)") ?? 0
             let recent = Self.rows(db, "SELECT COUNT(*) FROM \(table) WHERE ts >= ?", [.int(nowTS - 7 * 86400)]) { sqlite3_column_int64($0, 0) }
@@ -263,14 +268,17 @@ final class HistoryStore {
         if let oldest = Self.scalar(db, "SELECT MIN(ts) FROM quota_samples") {
             size.dataDays = Int(max(0, nowTS - oldest) / 86400)
         }
-        if present.contains("daily_tokens") {
-            size.dailyDays = Int(Self.scalar(db, "SELECT COUNT(DISTINCT day) FROM daily_tokens") ?? 0)
+        func days(_ sql: String, _ values: [Value] = []) -> Int {
+            Int(max(0, Self.rows(db, sql, values) { sqlite3_column_type($0, 0) == SQLITE_NULL ? nil : sqlite3_column_int64($0, 0) }?.first ?? 0))
         }
-        if present.contains("seen_ids"),
-           let span = Self.rows(db, "SELECT CAST(julianday(?) - julianday(MIN(day)) AS INTEGER) + 1 FROM seen_ids",
-                                [.text(Self.tokenDay(now))], { sqlite3_column_type($0, 0) == SQLITE_NULL ? nil : sqlite3_column_int64($0, 0) })?.first {
-            size.windowSpanDays = Int(max(1, span))
+        if present.contains("daily_tokens") { size.dailyDays = days("SELECT COUNT(DISTINCT day) FROM daily_tokens") }
+        if present.contains("hourly_tokens") { size.hourlyDays = days("SELECT COUNT(DISTINCT day) FROM hourly_tokens") }
+        if present.contains("record_days") { size.recordDays = days("SELECT COUNT(DISTINCT day) FROM record_days") }
+        if present.contains("seen_ids") {
+            // 最早一筆到今天（含）；沒有去重紀錄時是 0，不放大
+            size.seenSpanDays = days("SELECT CAST(julianday(?) - julianday(MIN(day)) AS INTEGER) + 1 FROM seen_ids", [.text(Self.tokenDay(now))])
         }
+        size.seenBounded = Self.meta(db, "seen_cutoff_day") != nil
         return size
     }
 
