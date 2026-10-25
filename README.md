@@ -10,7 +10,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-panel-top-dark.png">
-    <img src="docs/images/mac-panel-top-light.png" width="291" alt="Mac 選單列面板的上半部：剩餘最少的額度、建議接下來用、各服務各額度的進度條與預期標記">
+    <img src="docs/images/mac-panel-top-light.png" width="281" alt="Mac 選單列面板的上半部：剩餘最少的額度、建議接下來用、各服務各額度的進度條與預期標記、Codex 的重置卷張數與最早到期日">
   </picture>
   &nbsp;&nbsp;
   <picture>
@@ -43,9 +43,9 @@
 
 | 平台 | 功能 |
 |---|---|
-| iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）（未發版）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 %；外觀設定（跟隨系統、淺色、深色，只套用到 App）與掃描 Mac 上的 QR 碼配對（未發版） |
+| iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）（未發版）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 %；外觀設定（跟隨系統、淺色、深色，只套用到 App）與掃描 Mac 上的 QR 碼配對（未發版）；主畫面的 Codex 區塊顯示重置次數卷的張數與最早到期日（未發版，要重新部署中繼） |
 | Apple Watch | 手錶 App 與錶面複雜功能（圓形、矩形、單行）；智慧型堆疊顯示 iPhone 的 Live Activity；設定由 iPhone 傳過來，手錶不需要輸入 |
-| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；通知（剩不到 20%、用得太快、額度重置；「剩不到 20%」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
+| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；Codex 重置次數卷的張數與到期日（滑鼠移上去列出每張）；通知（剩不到 20%、用得太快、額度重置、重置卷 3 天內到期；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
 | 收集器 | 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼。由 App 內建的背景收集器（未發版）或 `install-launchd.sh` 裝的 launchd 工作執行，兩者不會同時跑 |
 
 Token 統計：面板的統計卡片可切換全部、Claude、Codex（左）；「完整統計」視窗看一整年、各模型與一天中的時段（右）。
@@ -224,7 +224,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 原則：
 
 - 收集器**不讀取任何服務的 token**，token 只由各自的 CLI 在 Mac 上使用（NFR-1）。
-- **離開這台 Mac 的使用者資料只有上傳到你自己中繼的用量快照**（方案名稱與各額度的百分比、重置時間）。額度歷史、Token 統計、對話紀錄的任何內容、服務狀態都只留在本機。
+- **離開這台 Mac 的使用者資料只有上傳到你自己中繼的用量快照**（方案名稱與各額度的百分比、重置時間，Codex 重置次數卷的張數與到期時間）。額度歷史、Token 統計、對話紀錄的任何內容、服務狀態都只留在本機。
   例外是你另外設定的[第二層](docs/tier2-setup.md)：每台電腦把每日 Token 加總（日期、服務、模型名稱、各種 Token 數、任務秒數）上傳到你自己中繼的 D1，Mac 再下載其他電腦的；不上傳每小時資料、任務次數、路徑、檔名、對話內容與 ID。沒有設定時不會上傳。
 - 中繼的讀取與寫入密鑰分開（NFR-2）。所有網路請求都是 HTTPS，各 App 沒有 ATS 例外。
 
@@ -233,7 +233,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | 讀取者 | 檔案或來源 | 取用的內容 | 不取用（舉例） |
 |---|---|---|---|
 | 收集器 | `claude -p /usage`、`claude auth status` 的輸出 | 各額度的已用 %、重置時間；方案名稱 | email 等其餘輸出直接丟棄 |
-| 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱 | 帳號 ID 等其餘欄位 |
+| 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱；重置次數卷的可用張數與各張到期時間 | 帳號 ID、點數餘額、重置卷的 id／標題／說明／取得時間等其餘欄位。收集器只讀、不使用重置卷（程式裡沒有使用卷的方法，測試會掃描確認） |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
 | 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
 | 收集器（只在設定第二層後） | Keychain `AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`（Windows：認證管理員 `AIUsageMonitor/device-key`） | 這台電腦的寫入密鑰；下載其他電腦資料用的讀取密鑰 | — |
@@ -294,7 +294,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
 | Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
-上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
+上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏，以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
 Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串；Swift 把 15 個位元組以內的字串直接編進指令、`strings` 看不到，所以另外以 `scripts/check-debug-env.py` 檢查原始碼：`"AUM_…"` 只能出現在 `#if DEBUG` 裡，`AUM_TESTING` 例外）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
 

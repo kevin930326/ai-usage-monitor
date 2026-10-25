@@ -5,9 +5,9 @@
 #       ios-screen:<home|settings>-<light|dark>＝iPhone 模擬器的截圖（App 主畫面、設定畫面）；watch-screen:app＝手錶模擬器的截圖
 # iPhone 的 Live Activity 卡片與小工具沒有放進 README：ImageRenderer 把 ProgressView 畫成黃色佔位符，只適合截圖比對。
 mac-panel-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-	frame=24
-mac-panel-top-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-	crop=0:1186 frame=24
+mac-panel-top-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-	crop=0:1232 frame=24
 mac-panel-dark.png	mac:panel-dark.png	apple/Snapshots/mac/panel-dark.png	-	frame=24
-mac-panel-top-dark.png	mac:panel-dark.png	apple/Snapshots/mac/panel-dark.png	-	crop=0:1186 frame=24
+mac-panel-top-dark.png	mac:panel-dark.png	apple/Snapshots/mac/panel-dark.png	-	crop=0:1232 frame=24
 mac-stats-switch-light.gif	mac:anim-stats-tour-light.gif	apple/Snapshots/mac/panel-light.png	-	frame=24
 mac-stats-switch-dark.gif	mac:anim-stats-tour-dark.gif	apple/Snapshots/mac/panel-dark.png	-	frame=24
 mac-stats-window-light.png	mac:stats-window-light.png	apple/Snapshots/mac/stats-window-light.png	-	frame=32

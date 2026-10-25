@@ -14,6 +14,7 @@
 - 通知「剩不到 20%」預設開，第一次打開 App 時要求權限；系統設定關閉通知時，設定顯示「通知已在系統設定中關閉」與「打開系統設定」
 
 ### Added
+- Codex 重置次數卷（v1.10，FR-58、FR-59）：收集器從 `account/rateLimits/read` 讀可用張數與各張到期時間，寫進 `usage.json` 的選填欄位 `reset_credits`（同一個 `schema_version`；只讀、不使用卷，測試掃描收集器的程式碼確認）；Mac 面板的 Codex 額度卡片與 iPhone 主畫面顯示「重置卷 2 張 · 最早 11/20 到期」（0 張不顯示，Mac 滑鼠移上去列出每張）；Mac 通知「重置卷快到期」（3 天內到期，每張一次，預設開）。中繼要重新部署 iPhone 才看得到
 - README 截圖：`scripts/update-readme-images.sh` 依 `docs/images/SOURCES.tsv` 以固定時間與示範資料重新產生（Mac 與動態島用 ImageRenderer，iPhone 主畫面、設定與手錶用模擬器截圖）；主要畫面有淺色、深色兩版，README 以 `<picture>` 依讀者的系統顯示；新增外觀設定的截圖，統計切換的 GIF 改為全部 → Claude → Codex → 全部。開頭一排是 Mac 面板的上半部（完整面板收在「看完整的 Mac 面板」）與 iPhone、下一排是動態島與手錶，同一排等高；統計 GIF 與完整統計視窗並排；畫面加上圓角與細邊框（`scripts/readme-image-post.swift`，SOURCES.tsv 第 5 欄）。`scripts/check-readme-images.py`（verify-all、CI）在 README 引用的圖不存在或沒有來源時失敗，比對應的截圖基準舊時提醒
 - 外觀設定（v1.9，FR-51、FR-52，#81）：Mac 設定「外觀」可選跟隨系統（預設）、淺色、深色，套用到面板、設定、完整統計與設定精靈的視窗，選單列圖示仍跟隨選單列；iPhone 設定「外觀」只套用到 App 本身，Live Activity、小工具與手錶跟隨系統。切換有 0.3 秒過渡，減少動態效果時直接換
 - Mac 一鍵安裝與內建收集器（v1.9，FR-53，ADR-0013，#83）：發布版 App 內嵌 Python（python-build-standalone 3.13 arm64，固定 SHA-256）與收集器，以 `SMAppService.agent` 註冊背景收集器；`scripts/build-release.sh` 產生 .zip、.dmg、寫好版本與 SHA-256 的一行安裝 `install.sh`（驗證 SHA-256、bundle ID、簽章；重跑即更新；`--uninstall`）；`.github/workflows/release.yml` 在 `v*` tag 只建立草稿 Release（附建置來源證明）。偵測到 `install-launchd.sh` 的舊收集器時**不註冊**，只提示，使用者按「改用內建收集器」才遷移；設定新增「背景收集器」

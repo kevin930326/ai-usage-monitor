@@ -16,6 +16,7 @@
 - 多裝置 Token 合併（FR-48、FR-49，v2.0，見 [ADR-0011](adr/0011-multi-device-usage.md)）
 - Mac 與 iPhone 的外觀設定（FR-51、FR-52）
 - 安裝與配對：Mac 一鍵安裝與內建收集器、首次設定精靈、iPhone 配對、一鍵部署中繼、Windows 一行安裝（FR-53～FR-57，見 [ADR-0012](adr/0012-iphone-pairing.md)、[ADR-0013](adr/0013-download-and-install.md)）
+- Codex 重置次數卷的張數與到期時間（FR-58、FR-59，只讀、不使用卷）
 
 **不包含**
 - Android（可列為未來擴充）
@@ -141,6 +142,16 @@ FR-19（額度通知）由 Mac 選單列 App 發出 macOS 通知（ADR-0009 回�
 | FR-56 | 一鍵部署中繼：`scripts/setup-relay.sh` 建立 KV、產生並設定密鑰、部署、寫收集器設定；可重跑（已設定過就停止）、`--dry-run`；偵測到既有部署時停止、不覆蓋（D1 目前用不到，沒有建立；見 [relay/README.md](../relay/README.md#一次完成fr-56)） | Should | v1.9 |
 | FR-57 | Windows 一行安裝：`install.ps1`（`irm … \| iex`）檢查並引導安裝 Python、安裝收集器與工作排程；可選加入第二層，以 `scripts/relay-device.sh`（#73）產生的裝置密鑰設定（以短碼加入之後再做） | Could | v2.0 |
 
+### 3.6.3 Codex 重置次數卷
+
+Codex 的「重置次數卷」（reset credits）可以讓額度提早重置，有到期時間。收集器只讀張數與到期時間，**不使用卷**：
+`codex app-server` 的使用卷方法不在收集器的程式裡，`collector/tests/test_codex.py` 會掃描收集器的程式碼確認。
+
+| ID | 需求 | 優先度 | 里程碑 |
+|---|---|---|---|
+| FR-58 | 收集器從 `account/rateLimits/read` 的 `rateLimitResetCredits` 讀可用張數與各張到期時間，寫進 `usage.json` 服務的選填欄位 `reset_credits`（`{"available": 2, "credits": [{"expires_at": "…"}]}`，同一個 `schema_version`，舊版 App 略過；卷的 id、標題、取得時間不保留；格式不對時省略，不影響額度）。中繼的白名單一起更新。Mac 面板的 Codex 額度卡片與 iPhone App 主畫面的 Codex 區塊顯示一行「重置卷 2 張 · 最早 11/20 到期」，0 張時不顯示；已過到期時間的卷不算；Mac 滑鼠移上去列出每張的到期時間。Live Activity、小工具與手錶不顯示 | Could | v1.10 |
+| FR-59 | Mac 通知：有重置卷將在 3 天內到期時通知一次（同一張卷、同一個到期時間只通知一次；同時到期的幾張合成一則）；設定「通知 › 重置卷快到期」，預設開 | Could | v1.10 |
+
 ### 3.7 里程碑（Mac 面板、統計與安裝）
 
 | 里程碑 | 內容 | 前置 | 狀態 |
@@ -151,6 +162,7 @@ FR-19（額度通知）由 Mac 選單列 App 發出 macOS 通知（ADR-0009 回�
 | v1.8 服務狀態與通知 | FR-19、FR-45、FR-47 | — | 已合併（#61），未發版；通知、右鍵選單與快捷鍵待實機確認 |
 | v1.9 安裝、配對與外觀 | FR-51～FR-56 | ADR-0012、ADR-0013 採用 | 已合併（#81、#83～#87、#89），未發版；待實機確認；短碼端點要重新部署中繼才有 |
 | v2.0 多裝置 | FR-48、FR-49、FR-57 | ADR-0011 第二層（D1） | PR 已開（#71、#73），待 PC 實機確認；PC 以短碼加入之後再做 |
+| v1.10 Codex 重置次數卷 | FR-58、FR-59 | — | PR 已開；iPhone 要重新部署中繼才有 |
 
 ## 4. 非功能需求
 
