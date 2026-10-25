@@ -179,6 +179,53 @@ struct TokenScopeChips: View {
     }
 }
 
+/// 含快取讀取的切換（FR-60）：放在全部／Claude／Codex 旁邊，外觀與它們一致；打開時有底色與勾
+struct CacheReadToggle: View {
+    let measure: TokenMeasure
+    let select: (TokenMeasure) -> Void
+
+    private var isOn: Bool { measure == .includingCacheRead }
+
+    var body: some View {
+        Button { select(isOn ? .main : .includingCacheRead) } label: {
+            HStack(spacing: 3) {
+                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                    .imageScale(.small)
+                    .foregroundStyle(isOn ? .primary : .secondary)
+                Text("含快取讀取")
+            }
+            .font(.caption)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.primary.opacity(isOn ? 0.1 : 0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(TokenMeasure.help)
+        .accessibilityLabel("含快取讀取")
+        .accessibilityHint(TokenMeasure.help)
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityValue(isOn ? "開啟" : "關閉")
+    }
+}
+
+/// 數字旁的「含快取」小字（FR-60）；滑鼠移上去說明
+struct CacheReadBadge: View {
+    var body: some View {
+        Text(TokenMeasure.badge)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(.quaternary, in: Capsule())
+            .help(TokenMeasure.help)
+            .accessibilityLabel("含快取讀取")
+    }
+}
+
 /// 卡片內容：第一次使用的骨架、沒有紀錄的提示，或四個數字＋Token 活動＋活動熱力圖。
 /// `data` 是所有裝置的資料，依 `device` 篩選後才畫（`TokenStatsData.scoped`）。
 struct StatsCardContent: View {
@@ -187,28 +234,33 @@ struct StatsCardContent: View {
     let device: TokenDeviceScope
     let scope: TokenScope
     let range: TokenActivityRange
+    let measure: TokenMeasure
     let now: Date
     let selectDevice: (TokenDeviceScope) -> Void
     let selectScope: (TokenScope) -> Void
     let selectRange: (TokenActivityRange) -> Void
+    let selectMeasure: (TokenMeasure) -> Void
 
     @Environment(\.panelAnimates) private var animates
 
     init(data: TokenStatsData, status: HistoryStore.Status, device: TokenDeviceScope = .thisMac, scope: TokenScope,
-         range: TokenActivityRange, now: Date, selectDevice: @escaping (TokenDeviceScope) -> Void = { _ in },
-         selectScope: @escaping (TokenScope) -> Void, selectRange: @escaping (TokenActivityRange) -> Void) {
+         range: TokenActivityRange, measure: TokenMeasure = .main, now: Date, selectDevice: @escaping (TokenDeviceScope) -> Void = { _ in },
+         selectScope: @escaping (TokenScope) -> Void, selectRange: @escaping (TokenActivityRange) -> Void,
+         selectMeasure: @escaping (TokenMeasure) -> Void = { _ in }) {
         all = data
         self.status = status
         self.device = data.devices.resolve(device)
         self.scope = scope
         self.range = range
+        self.measure = measure
         self.now = now
         self.selectDevice = selectDevice
         self.selectScope = selectScope
         self.selectRange = selectRange
+        self.selectMeasure = selectMeasure
     }
 
-    private var data: TokenStatsData { all.scoped(device) }
+    private var data: TokenStatsData { all.scoped(device).measured(measure) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -235,7 +287,8 @@ struct StatsCardContent: View {
                     if data.formatSuspect { FormatSuspectNotice() }
                 }
             } else {
-                StatsBody(data: data, scope: effectiveScope, range: range, now: now, selectScope: selectScope, selectRange: selectRange)
+                StatsBody(data: data, scope: effectiveScope, range: range, now: now, selectScope: selectScope, selectRange: selectRange,
+                          selectMeasure: selectMeasure)
                     .id(device)
                     .transition(.opacity)
             }
@@ -307,15 +360,20 @@ private struct StatsBody: View {
     let now: Date
     let selectScope: (TokenScope) -> Void
     let selectRange: (TokenActivityRange) -> Void
+    let selectMeasure: (TokenMeasure) -> Void
 
     @Environment(\.panelAnimates) private var animates
 
     var body: some View {
         let summary = TokenSummary(data: data, scope: scope, now: now)
         VStack(alignment: .leading, spacing: 12) {
-            let scopes = TokenScopeChips.scopes(data)
-            if !scopes.isEmpty {
-                TokenScopeChips(scopes: scopes, selected: scope, select: selectScope)
+            HStack(spacing: 6) {
+                let scopes = TokenScopeChips.scopes(data)
+                if !scopes.isEmpty {
+                    TokenScopeChips(scopes: scopes, selected: scope, select: selectScope)
+                }
+                Spacer(minLength: 0)
+                CacheReadToggle(measure: data.measure, select: selectMeasure)
             }
             StatNumbers(summary: summary, scope: scope)
             VStack(alignment: .leading, spacing: 6) {
@@ -324,14 +382,15 @@ private struct StatsBody: View {
                     Spacer(minLength: 4)
                     TokenRangeChips(selected: range, select: selectRange)
                 }
-                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: range, now: now), scope: scope, range: range)
-                    .id("\(scope.rawValue)-\(range.rawValue)")
+                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: range, now: now), scope: scope, range: range,
+                                   measure: data.measure)
+                    .id("\(scope.rawValue)-\(range.rawValue)-\(data.measure.rawValue)")
                     .transition(.opacity)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("活動熱力圖").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: now, weeks: 22), scope: scope)
-                    .id(scope)
+                    .id("\(scope.rawValue)-\(data.measure.rawValue)")
                     .transition(.opacity)
             }
             if data.formatSuspect { FormatSuspectNotice() }
@@ -343,6 +402,7 @@ private struct StatsBody: View {
         }
         .animation(animates ? PanelTiming.crossfade : nil, value: scope)
         .animation(animates ? PanelTiming.crossfade : nil, value: range)
+        .animation(animates ? PanelTiming.crossfade : nil, value: data.measure)
     }
 }
 
@@ -368,9 +428,9 @@ private struct StatNumbers: View {
     var body: some View {
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
-                tile("本週 Token", help: weekHelp) {
+                tile("本週 Token", help: weekHelp, badge: cached) {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(TokenFormat.short(summary.thisWeek.main)).contentTransition(.numericText())
+                        Text(TokenFormat.short(summary.thisWeekValue)).contentTransition(.numericText())
                         if let change = summary.changePct {
                             Text("\(change >= 0 ? "▲" : "▼")\(Int(abs(change).rounded()))%")
                                 .font(.caption2.weight(.semibold))
@@ -379,7 +439,9 @@ private struct StatNumbers: View {
                         }
                     }
                 }
-                tile("單日最高", detail: summary.bestDay?.day.map(Self.dayText), help: summary.bestDay.map { "\(TokenFormat.full($0.value)) Token" }) {
+                tile("單日最高", detail: summary.bestDay?.day.map(Self.dayText),
+                     help: summary.bestDay.map { "\(TokenFormat.full($0.value)) Token" + (cached ? "（含快取讀取）" : "") },
+                     badge: cached && summary.bestDay != nil) {
                     Text(summary.bestDay.map { TokenFormat.short($0.value) } ?? "–").contentTransition(.numericText())
                 }
             }
@@ -403,14 +465,16 @@ private struct StatNumbers: View {
         .animation(animates ? PanelTiming.statsNumbers : nil, value: summary)
     }
 
+    private var cached: Bool { summary.measure == .includingCacheRead }
+
     private var weekHelp: String {
         let c = summary.thisWeek
         return """
-        合計 \(TokenFormat.full(c.main)) Token
+        合計 \(TokenFormat.full(summary.thisWeekValue)) Token
         輸入 \(TokenFormat.full(c.input))
         快取寫入 \(TokenFormat.full(c.cacheWrite))
         輸出 \(TokenFormat.full(c.output))（含推理 \(TokenFormat.full(c.reasoning))）
-        快取讀取 \(TokenFormat.full(c.cacheRead))（不計入上方數字）
+        快取讀取 \(TokenFormat.full(c.cacheRead))（\(cached ? "已計入" : "不計入")上方數字）
         """
     }
 
@@ -419,7 +483,9 @@ private struct StatNumbers: View {
         return TokenDateText.string(date, "M/d")
     }
 
-    private func tile(_ title: String, detail: String? = nil, help: String? = nil, @ViewBuilder value: () -> some View) -> some View {
+    /// `badge`：含快取讀取的 Token 數字，數字下方那一行標「含快取」（放在數字旁會把數字擠小）
+    private func tile(_ title: String, detail: String? = nil, help: String? = nil, badge: Bool = false,
+                      @ViewBuilder value: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             value()
@@ -427,7 +493,14 @@ private struct StatNumbers: View {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(detail ?? " ").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            HStack(spacing: 4) {
+                if let detail { Text(detail) }
+                if badge { CacheReadBadge() }
+                if detail == nil && !badge { Text(" ") }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)

@@ -102,19 +102,19 @@ import Testing
         ], records: ["total_tokens": TokenRecord(value: 5000)])
         let days = TokenActivity.bars(data: data, scope: .all, range: .days30, now: now, calendar: cal)
         #expect(days.count == 30)
-        #expect(days.last?.main == 100)
+        #expect(days.last?.value == 100)
         #expect(days.last?.byProvider == ["claude": 40, "codex": 60])
-        #expect(days.first?.main == 7)
+        #expect(days.first?.value == 7)
         let weeks = TokenActivity.bars(data: data, scope: .all, range: .weeks, now: now, calendar: cal)
         #expect(weeks.count == 12)
         #expect(TokenCalendar.key(weeks.last!.start, calendar: cal) == "2026-11-02")
-        #expect(weeks.last?.main == 100)
+        #expect(weeks.last?.value == 100)
         // 累計：最後一天等於 records 的累計，往回扣掉之後每天的用量
         let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
-        #expect(cumulative.last?.main == 5000)
-        #expect(cumulative[28].main == 4900)
-        #expect(cumulative.first?.main == 4900)
-        #expect(cumulative.map(\.main) == cumulative.map(\.main).sorted())
+        #expect(cumulative.last?.value == 5000)
+        #expect(cumulative[28].value == 4900)
+        #expect(cumulative.first?.value == 4900)
+        #expect(cumulative.map(\.value) == cumulative.map(\.value).sorted())
     }
 
     @Test func heatmapShapeLevelsAndFuture() {
@@ -241,8 +241,8 @@ import Testing
         #expect(days.filter(\.available).count == 8)
         #expect(!days[0].available)
         let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
-        #expect(cumulative.first(where: \.available)?.main == 4960)
-        #expect(cumulative.last?.main == 5000)
+        #expect(cumulative.first(where: \.available)?.value == 4960)
+        #expect(cumulative.last?.value == 5000)
         // 週長條：10/26 那週的 10/26～10/28 已刪除，不算完整的一週；11/2 那週完整
         let weeks = TokenActivity.bars(data: data, scope: .all, range: .weeks, now: now, calendar: cal)
         #expect(TokenCalendar.key(weeks[weeks.count - 2].start, calendar: cal) == "2026-10-26")
@@ -275,6 +275,134 @@ import Testing
         #expect(TokenCalendar.key(older.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-10-29")
         // 沒有刪除過、永久保留：全部可用
         #expect(TokenStatsData(retentionDays: 0).firstAvailableDay(now: now, calendar: cal) == nil)
+    }
+
+    @Test func includingCacheReadCountsEverywhere() {
+        let data = TokenStatsData(days: [
+            row("2026-11-05", main: 40, cacheRead: 400), row("2026-11-05", "codex", main: 60, cacheRead: 100, model: "gpt-6.1-sol"),
+            row("2026-11-04", "codex", main: 300, model: "gpt-6.1-sol"),
+            row("2026-10-29", main: 10, cacheRead: 90),  // 上週同期
+        ], hours: [TokenHourRow(day: "2026-11-05", hour: 9, provider: "claude", model: "claude-opus-5-5",
+                                counts: TokenCounts(input: 40, cacheRead: 400))],
+           records: ["total_tokens": TokenRecord(value: 5000), "best_day_tokens": TokenRecord(value: 4000, day: "2026-01-01"),
+                     "best_day_tokens:claude": TokenRecord(value: 4000, day: "2026-01-01"),
+                     "longest_task_seconds": TokenRecord(value: 600, day: "2026-02-02"),
+                     "longest_streak_days": TokenRecord(value: 9, day: "2026-03-03")],
+           firstScanDone: true)
+        // 預設不含：與之前完全相同
+        let plain = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(plain.thisWeekValue == 400)
+        #expect(plain.bestDay?.value == 4000)
+        #expect(plain.total?.value == 5000)
+
+        let cached = data.measured(.includingCacheRead)
+        let summary = TokenSummary(data: cached, scope: .all, now: now, calendar: cal)
+        #expect(summary.thisWeekValue == 900)
+        #expect(summary.thisWeek.main == 400)
+        #expect(summary.lastWeekSamePeriod == 100)
+        #expect(summary.changePct == 800)
+        // 舊版收集器沒有含快取的紀錄：單日最高與累計改由每日資料計算；最長任務與最長連續照舊
+        #expect(summary.bestDay == TokenRecord(value: 600, day: "2026-11-05"))
+        #expect(summary.total?.value == 1000)
+        #expect(summary.longestTaskSeconds?.value == 600)
+        #expect(summary.longestStreak?.value == 9)
+        #expect(TokenSummary(data: cached, scope: .claude, now: now, calendar: cal).bestDay == TokenRecord(value: 440, day: "2026-11-05"))
+
+        let days = TokenActivity.bars(data: cached, scope: .all, range: .days30, now: now, calendar: cal)
+        #expect(days.last?.value == 600)
+        #expect(days.last?.byProvider == ["claude": 440, "codex": 160])
+        let cumulative = TokenActivity.bars(data: cached, scope: .all, range: .cumulative, now: now, calendar: cal)
+        #expect(cumulative.last?.value == 1000)
+        let map = TokenHeatmap(data: cached, scope: .all, now: now, weeks: 22, calendar: cal)
+        #expect(map.cells.compactMap { $0 }.max() == 600)
+        // 各模型的排序跟著改變：含快取時 claude-opus-5-5（540）超過 gpt-6.1-sol（460）
+        #expect(TokenBreakdown.models(data: data, scope: .all).first?.model == "gpt-6.1-sol")
+        #expect(TokenBreakdown.models(data: cached, scope: .all).first?.model == "claude-opus-5-5")
+        #expect(TokenBreakdown.hours(data: cached, scope: .all)[9] == 440)
+    }
+
+    @Test func includingCacheReadDoesNotChangeStreaks() {
+        // 昨天只有快取讀取（主數字 0）：兩種計算方式的連續天數相同
+        let data = TokenStatsData(days: [row("2026-11-05", main: 10), row("2026-11-04", main: 0, cacheRead: 500),
+                                         row("2026-11-03", main: 10)], firstScanDone: true)
+        let plain = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        let cached = TokenSummary(data: data.measured(.includingCacheRead), scope: .all, now: now, calendar: cal)
+        #expect(plain.currentStreak == 1)
+        #expect(cached.currentStreak == plain.currentStreak)
+        #expect(cached.longestStreak == plain.longestStreak)
+        #expect(cached.streakIsRecord == plain.streakIsRecord)
+    }
+
+    @Test func includingCacheReadUsesCollectorCachedRecords() {
+        // 收集器另外記的含快取紀錄（不受保留期間影響）優先；比每日資料算出的小時取每日資料
+        let data = TokenStatsData(days: [row("2026-11-05", main: 40, cacheRead: 400), row("2026-10-07", main: 10, cacheRead: 90)],
+                                  records: ["total_tokens": TokenRecord(value: 5000), "total_tokens_cached": TokenRecord(value: 90_000),
+                                            "total_tokens_cached:claude": TokenRecord(value: 80_000),
+                                            "best_day_tokens_cached": TokenRecord(value: 30_000, day: "2025-01-01"),
+                                            "best_day_tokens_cached:claude": TokenRecord(value: 100, day: "2025-01-01")],
+                                  firstScanDone: true).measured(.includingCacheRead)
+        let all = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(all.total?.value == 90_000)
+        #expect(all.bestDay == TokenRecord(value: 30_000, day: "2025-01-01"))
+        let claude = TokenSummary(data: data, scope: .claude, now: now, calendar: cal)
+        #expect(claude.total?.value == 80_000)
+        #expect(claude.bestDay == TokenRecord(value: 440, day: "2026-11-05"))
+        // 累計圖：最後一天等於含快取的累計
+        let cumulative = TokenActivity.bars(data: data, scope: .all, range: .cumulative, now: now, calendar: cal)
+        #expect(cumulative.last?.value == 90_000)
+        #expect(cumulative.first?.value == 89_560)  // 90,000 減去之後每天（11/5 的 440）
+        // 關掉時照舊用主數字的紀錄
+        #expect(TokenSummary(data: data.measured(.main), scope: .all, now: now, calendar: cal).total?.value == 5000)
+    }
+
+    @Test func cacheOnlyDataCountsAsData() {
+        // 只有快取讀取的資料、只有含快取的個人紀錄：兩種計算方式都算有資料，服務也可以選（審查 C-02）
+        let cacheOnly = TokenStatsData(days: [row("2026-11-05", main: 40), row("2026-11-05", "codex", main: 0, cacheRead: 500, model: "gpt-6.1-sol")],
+                                       firstScanDone: true)
+        for measure in [TokenMeasure.main, .includingCacheRead] {
+            #expect(cacheOnly.measured(measure).hasData)
+            #expect(cacheOnly.measured(measure).providers == ["claude", "codex"])
+        }
+        let recordOnly = TokenStatsData(records: ["total_tokens_cached:codex": TokenRecord(value: 70), "total_tokens_cached": TokenRecord(value: 70)],
+                                        firstScanDone: true)
+        #expect(recordOnly.hasData)
+        #expect(recordOnly.providers == ["codex"])
+        // 切換的資料仍只算一次（主數字：codex 為 0）
+        #expect(TokenSummary(data: cacheOnly, scope: .all, now: now, calendar: cal).thisWeekValue == 40)
+        #expect(TokenSummary(data: cacheOnly.measured(.includingCacheRead), scope: .all, now: now, calendar: cal).thisWeekValue == 540)
+    }
+
+    @Test func includingCacheReadKeepsRecordOnlyData() {
+        // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），累計與最長任務照舊顯示
+        let base = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),
+                                            "longest_task_seconds": TokenRecord(value: 600, day: "2025-02-02")],
+                                  firstScanDone: true)
+        let data = base.measured(.includingCacheRead)
+        #expect(data.hasData)
+        let summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(summary.total == nil)  // 舊版收集器：沒有含快取的累計
+        #expect(summary.bestDay == nil)
+        #expect(summary.longestTaskSeconds?.value == 600)
+        var withCached = base
+        withCached.records["total_tokens_cached"] = TokenRecord(value: 70_000)
+        #expect(TokenSummary(data: withCached.measured(.includingCacheRead), scope: .all, now: now, calendar: cal).total?.value == 70_000)
+    }
+
+    @Test func includingCacheReadWorksForEveryDeviceScope() {
+        let pc = "0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
+        var data = TokenStatsData(days: [row("2026-11-05", main: 40, cacheRead: 400)],
+                                  records: ["total_tokens": TokenRecord(value: 5000)], firstScanDone: true)
+        var remote = row("2026-11-05", main: 100, cacheRead: 900)
+        remote.device = pc
+        data.days.append(remote)
+        data.devices = TokenDevices(devices: [TokenDevice(id: "me", name: "Mac", isSelf: true), TokenDevice(id: pc, name: "PC")])
+        func week(_ scope: TokenDeviceScope) -> Int64 {
+            TokenSummary(data: data.scoped(scope).measured(.includingCacheRead), scope: .all, now: now, calendar: cal).thisWeekValue
+        }
+        #expect(week(.thisMac) == 440)
+        #expect(week(.all) == 1440)
+        #expect(week(.device(pc)) == 1000)
+        #expect(TokenSummary(data: data.scoped(.thisMac).measured(.includingCacheRead), scope: .all, now: now, calendar: cal).total?.value == 440)
     }
 
     @Test func dayKeysRoundTrip() {

@@ -45,10 +45,10 @@
 |---|---|
 | iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）（未發版）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 %；外觀設定（跟隨系統、淺色、深色，只套用到 App）與掃描 Mac 上的 QR 碼配對（未發版）；主畫面的 Codex 區塊顯示重置次數卷的張數與最早到期日（未發版，要重新部署中繼） |
 | Apple Watch | 手錶 App 與錶面複雜功能（圓形、矩形、單行）；智慧型堆疊顯示 iPhone 的 Live Activity；設定由 iPhone 傳過來，手錶不需要輸入 |
-| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；Codex 重置次數卷的張數與到期日（滑鼠移上去列出每張）；通知（剩不到 20%、用得太快、額度重置、重置卷 3 天內到期；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
+| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖；可切換是否含快取讀取）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；Codex 重置次數卷的張數與到期日（滑鼠移上去列出每張）；通知（剩不到 20%、用得太快、額度重置、重置卷 3 天內到期；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
 | 收集器 | 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼。由 App 內建的背景收集器（未發版）或 `install-launchd.sh` 裝的 launchd 工作執行，兩者不會同時跑 |
 
-Token 統計：面板的統計卡片可切換全部、Claude、Codex（左）；「完整統計」視窗看一整年、各模型與一天中的時段（右）。
+Token 統計：面板的統計卡片可切換全部、Claude、Codex，以及是否「含快取讀取」（預設不含；快取讀取是 AI 重複讀取的對話，通常佔總量的大部分）（左）；「完整統計」視窗看一整年、各模型與一天中的時段（右）。
 
 <p align="center">
   <picture>
@@ -260,7 +260,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | `setup-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json`、`relay/wrangler.local.toml`（不進版控） | 中繼寫入密鑰；中繼網址；KV 的 id 與 Worker 名稱 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
 | 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容） |
-| Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）、啟動時是否已詢問過通知權限（`notify.askedAtLaunch`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`）、外觀（`app.appearance`）、設定精靈是否已完成（`wizard.completed`） |
+| Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍、統計是否含快取讀取）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）、啟動時是否已詢問過通知權限（`notify.askedAtLaunch`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`）、外觀（`app.appearance`）、設定精靈是否已完成（`wizard.completed`） |
 | Mac 選單列 App | `history.sqlite3` | 只在設定的「清除歷史」「縮短保留期間」「清除並重新掃描」確認後寫入 |
 | Mac 選單列 App | 你選擇的位置 | 「匯出額度 CSV」：每小時的額度歷史；「匯出 Token CSV」：每日 Token（日期、服務、模型、四種 Token、任務數與秒數） |
 | Mac 選單列 App | 通知中心 | 通知內容（服務、額度名稱與剩餘 %）。「剩不到 20%」預設開，第一次打開 App 時由系統詢問是否允許；另外兩種只在你打開開關後 |

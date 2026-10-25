@@ -32,7 +32,8 @@ LAST_SEEN_REFRESH = 86400  # 沒有變化的檔案一天更新一次 last_seen
 PROVIDERS = ("claude", "codex")
 # 向量順序：input、cache_write、cache_read、output、reasoning（與資料表欄位相同）
 TOKEN_FIELDS = ("input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens", "reasoning_tokens")
-RECORD_KEYS = ("total_tokens", "best_day_tokens", "longest_task_seconds", "longest_streak_days")
+RECORD_KEYS = ("total_tokens", "best_day_tokens", "longest_task_seconds", "longest_streak_days",
+               "total_tokens_cached", "best_day_tokens_cached")
 
 _MODEL_RE = re.compile(r"^(claude-|gpt-|codex-|o[0-9])[a-z0-9._-]*$")
 _UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -50,6 +51,11 @@ _CODEX_NEEDLES = (b'"token_usage_record"', b'"token_count"', b'"task_started"', 
 def main_tokens(vec) -> int:
     """顯示用的「Token」主數字 = input + cache_write + output（不含 cache_read、不另加 reasoning）。"""
     return vec[0] + vec[1] + vec[3]
+
+
+def cached_tokens(vec) -> int:
+    """含快取讀取的數字 = input + cache_write + cache_read + output（FR-60，個人紀錄的 *_cached 用）。"""
+    return vec[0] + vec[1] + vec[2] + vec[3]
 
 
 def normalize_model(value) -> str:
@@ -236,6 +242,7 @@ class Totals:
     buckets: dict = field(default_factory=dict)  # (provider, day, hour, model) → [5 tokens, tasks, seconds, longest]
     ledger: dict = field(default_factory=dict)  # Codex：(day, hour, model) → 5 tokens
     total: dict = field(default_factory=dict)  # provider → 主數字的變化（records.total_tokens）
+    total_cached: dict = field(default_factory=dict)  # provider → 含快取讀取的變化（records.total_tokens_cached）
     longest: dict = field(default_factory=dict)  # provider → (seconds, day)
 
     def add(self, provider: str, day: str, hour: int, model: str, vec=(0, 0, 0, 0, 0),
@@ -251,24 +258,26 @@ class Totals:
             for i, v in enumerate(vec):
                 led[i] += v
         self.total[provider] = self.total.get(provider, 0) + main_tokens(vec)
+        self.total_cached[provider] = self.total_cached.get(provider, 0) + cached_tokens(vec)
         if longest > self.longest.get(provider, (0, None))[0]:
             self.longest[provider] = (longest, day)
 
     def flush(self, conn: sqlite3.Connection, file_key: str | None, cutoffs: tuple[str, str]) -> None:
         daily_cutoff, hourly_cutoff = cutoffs
         cols = ", ".join(TOKEN_FIELDS)
-        # 個人紀錄用的每日主數字：不套用保留期間（超過保留期間的舊紀錄也算進單日最高與連續天數）
-        record_days: dict[tuple[str, str], int] = {}
-        for (provider, day, _, _), b in self.buckets.items():
-            record_days[(day, provider)] = record_days.get((day, provider), 0) + main_tokens(b)
-        for (day, provider), delta in record_days.items():
-            if delta > 0:
-                conn.execute("INSERT INTO record_days (day, provider, tokens) VALUES (?, ?, ?)"
-                             " ON CONFLICT (day, provider) DO UPDATE SET tokens = tokens + excluded.tokens",
-                             (day, provider, delta))
-            elif delta < 0:
-                conn.execute("UPDATE record_days SET tokens = max(0, tokens + ?) WHERE day = ? AND provider = ?",
-                             (delta, day, provider))
+        # 個人紀錄用的每日數字（主數字、含快取讀取）：不套用保留期間（超過保留期間的舊紀錄也算進單日最高與連續天數）
+        for table, measure in (("record_days", main_tokens), ("record_days_cached", cached_tokens)):
+            record_days: dict[tuple[str, str], int] = {}
+            for (provider, day, _, _), b in self.buckets.items():
+                record_days[(day, provider)] = record_days.get((day, provider), 0) + measure(b)
+            for (day, provider), delta in record_days.items():
+                if delta > 0:
+                    conn.execute(f"INSERT INTO {table} (day, provider, tokens) VALUES (?, ?, ?)"
+                                 " ON CONFLICT (day, provider) DO UPDATE SET tokens = tokens + excluded.tokens",
+                                 (day, provider, delta))
+                elif delta < 0:
+                    conn.execute(f"UPDATE {table} SET tokens = max(0, tokens + ?) WHERE day = ? AND provider = ?",
+                                 (delta, day, provider))
         sets = ", ".join(f"{c} = max(0, {c} + excluded.{c})" for c in TOKEN_FIELDS + ("task_count", "task_seconds"))
         for (provider, day, hour, model), b in self.buckets.items():
             values = [max(0, v) for v in b[:7]] + [b[7], self.now]
@@ -300,9 +309,11 @@ class Totals:
                     f" ON CONFLICT (file_key, day, hour, model) DO UPDATE SET "
                     + ", ".join(f"{c} = {c} + excluded.{c}" for c in TOKEN_FIELDS),
                     [file_key, day, hour, model, *led])
-        for provider, delta in self.total.items():
-            if delta:
-                for key in ("total_tokens", f"total_tokens:{provider}"):
+        for base, totals in (("total_tokens", self.total), ("total_tokens_cached", self.total_cached)):
+            for provider, delta in totals.items():
+                if not delta:
+                    continue
+                for key in (base, f"{base}:{provider}"):
                     conn.execute("INSERT INTO records (key, value, day) VALUES (?, max(0, ?), NULL)"
                                  " ON CONFLICT (key) DO UPDATE SET value = max(0, value + excluded.value)"
                                  if delta > 0 else
@@ -314,6 +325,7 @@ class Totals:
         self.buckets.clear()
         self.ledger.clear()
         self.total.clear()
+        self.total_cached.clear()
         self.longest.clear()
 
 
@@ -670,10 +682,15 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
 
 
 def _update_records(conn: sqlite3.Connection) -> None:
-    """單日最高與最長連續天數：從 record_days（不套用保留期間）重算，只在變大時更新。"""
+    """單日最高與最長連續天數：從 record_days（不套用保留期間）重算，只在變大時更新。
+    含快取讀取的單日最高從 record_days_cached 算；連續天數只看主數字。"""
     for provider in (None, *PROVIDERS):
         suffix = f":{provider}" if provider else ""
         where, args = ("WHERE provider = ?", (provider,)) if provider else ("", ())
+        cached = conn.execute(f"SELECT day, SUM(tokens) AS t FROM record_days_cached {where}"
+                              " GROUP BY day HAVING t > 0 ORDER BY t DESC, day LIMIT 1", args).fetchone()
+        if cached:
+            _raise_record(conn, "best_day_tokens_cached" + suffix, cached[1], cached[0])
         days = conn.execute(
             f"SELECT day, SUM(tokens) AS t FROM record_days {where} GROUP BY day HAVING t > 0 ORDER BY day", args).fetchall()
         if not days:

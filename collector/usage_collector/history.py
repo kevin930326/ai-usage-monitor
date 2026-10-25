@@ -159,6 +159,59 @@ def _repair_v2(conn: sqlite3.Connection) -> None:
             FROM daily_tokens WHERE device_id = ? GROUP BY day, provider""", (meta(conn, "device_id") or "",))
 
 
+# 含快取讀取的個人紀錄（FR-60）：同一個 schema 版本新增，舊版 App 不讀、舊版收集器不寫（App 找不到時改由每日資料計算）
+# - record_days_cached：同 record_days，但數字是 input＋cache_write＋cache_read＋output；單日最高（含快取）以它計算
+# - records 的 total_tokens_cached、best_day_tokens_cached（各加 :claude／:codex）
+_CACHED_RECORD_DAYS = """CREATE TABLE IF NOT EXISTS record_days_cached (
+         day      TEXT    NOT NULL,
+         provider TEXT    NOT NULL,
+         tokens   INTEGER NOT NULL,
+         PRIMARY KEY (day, provider))"""
+
+
+def _add_cached_records(conn: sqlite3.Connection) -> None:
+    """還沒有 record_days_cached 時建立，並以目前的資料算出初始值。每天的數字是 record_days（主數字，不受保留期間影響）
+    加上那天已計入的 cache_read，來源與重算時扣除的一致（不用會過期的每日資料）：
+    - Claude：seen_ids 記著每則訊息計入的數值（永久保留）。只加 record_days 有的日子：「清除歷史」（不重新掃描）會清空
+      record_days 卻留下 seen_ids，那些日子的主數字已不在累計裡，快取讀取也不該算進來
+    - Codex：file_tokens 是各檔案已計入的數值，改寫時就是扣這份（「清除歷史」時歸零）
+    累計是 total_tokens 加上這些 cache_read；單日最高取最大的一天。已經有這張表時什麼都不做（之後的掃描照常累加）。"""
+    if _table_exists(conn, "record_days_cached") or not _table_exists(conn, "record_days"):
+        return  # 已經有了，或是還沒有 Token 統計的版本 1 檔案
+    with _transaction(conn):
+        conn.execute(_CACHED_RECORD_DAYS)
+        conn.execute("""
+            WITH extra (day, provider, c) AS (
+              SELECT s.day, 'claude', SUM(s.cache_read_tokens) FROM seen_ids s
+              WHERE s.provider = 'claude'
+                AND EXISTS (SELECT 1 FROM record_days r WHERE r.day = s.day AND r.provider = 'claude')
+              GROUP BY s.day
+              UNION ALL
+              SELECT day, 'codex', SUM(cache_read_tokens) FROM file_tokens GROUP BY day
+            )
+            INSERT INTO record_days_cached (day, provider, tokens)
+            SELECT day, provider, SUM(t) FROM (
+              SELECT day, provider, tokens AS t FROM record_days
+              UNION ALL
+              SELECT day, provider, c FROM extra
+            ) GROUP BY day, provider HAVING SUM(t) > 0""")
+        for provider in (None, "claude", "codex"):
+            suffix = f":{provider}" if provider else ""
+            where, args = (" WHERE provider = ?", (provider,)) if provider else ("", ())
+            base = conn.execute("SELECT value FROM records WHERE key = ?", ("total_tokens" + suffix,)).fetchone()
+            cache = (conn.execute(f"SELECT COALESCE(SUM(tokens), 0) FROM record_days_cached{where}", args).fetchone()[0]
+                     - conn.execute(f"SELECT COALESCE(SUM(tokens), 0) FROM record_days{where}", args).fetchone()[0])
+            total = (base[0] if base else 0) + max(cache, 0)
+            if total > 0:
+                conn.execute("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, ?, NULL)",
+                             ("total_tokens_cached" + suffix, total))
+            best = conn.execute(f"SELECT day, SUM(tokens) AS t FROM record_days_cached{where}"
+                                " GROUP BY day HAVING t > 0 ORDER BY t DESC, day LIMIT 1", args).fetchone()
+            if best:
+                conn.execute("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, ?, ?)",
+                             ("best_day_tokens_cached" + suffix, best[1], best[0]))
+
+
 # 第二層（ADR-0011 第 2 節，schema 3）：
 # - upload_state：這台電腦每一列上次成功上傳時的數值雜湊與時間（只有本機 device_id 的列會上傳）
 # - devices：從中繼下載的裝置清單（面板的裝置切換與最後上傳時間）；is_self＝這台電腦在中繼上的 device_id
@@ -216,6 +269,7 @@ def migrate(conn: sqlite3.Connection) -> None:
                          (str(version + 1),))
     if current >= 2:
         _repair_v2(conn)
+    _add_cached_records(conn)
 
 
 @contextmanager

@@ -216,6 +216,78 @@ class SchemaTest(TokenStatsTestCase):
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM upload_state").fetchone()[0], 0)
         conn.close()
 
+    def test_upgrade_backfills_cached_records_from_daily_data(self):
+        """還沒有 record_days_cached 的檔案（之前的收集器）：以 record_days 加每日資料的 cache_read 算出初始值，只做一次。"""
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("d1", T0 + 10, inp=100, cr=10_000, out=0),
+                   claude_user(T0 + DAY), claude_assistant("d2", T0 + DAY + 5, inp=300, cr=5, out=0))
+        self.write(self.codex_file(), codex_record("r1", T0, inp=50, cached=20, out=0))
+        self.scan()
+        expected = self.records()
+        days = self.table("record_days_cached")
+        self.simulate_before_cached_records()
+        history.connect(self.path).close()
+        self.assertEqual(self.table("record_days_cached"), days)
+        self.assertEqual(self.records(), expected)
+        self.assertEqual(self.records()["best_day_tokens_cached"], (10_150, "2026-09-21"))
+        self.assertEqual(self.records()["total_tokens_cached:codex"], (50, None))
+        # 已經有這張表：之後連線不再重算（不會重複加上 cache_read）
+        history.connect(self.path).close()
+        self.assertEqual(self.records(), expected)
+
+    def simulate_before_cached_records(self):
+        """模擬升級前的檔案：拿掉含快取的表與紀錄"""
+        with self.db() as c:
+            c.execute("DROP TABLE record_days_cached")
+            c.execute("DELETE FROM records WHERE key LIKE '%_cached%'")
+            c.commit()
+
+    def test_upgrade_counts_cache_reads_of_expired_days(self):
+        """每日資料已超過保留期間：初始值仍包含那些日子的快取讀取（來自 seen_ids／file_tokens），與沒有升級過的一樣。"""
+        self.write(self.claude_file(), claude_user(T0 - 400 * DAY),
+                   claude_assistant("old", T0 - 400 * DAY + 5, inp=100, cr=900, out=0),
+                   claude_assistant("new", T0, inp=50, cr=50, out=0))
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 400 * DAY, inp=1000, cached=600, out=0))
+        self.scan()
+        expected = self.records()
+        self.assertEqual(expected["total_tokens_cached"][0], 1000 + 100 + 1000)
+        self.simulate_before_cached_records()
+        history.connect(self.path).close()
+        self.assertEqual(self.records(), expected)
+
+    def test_upgrade_then_rewriting_an_expired_codex_file_stays_consistent(self):
+        """升級後改寫只剩扣除帳本（file_tokens）的舊 Codex 檔：先扣再加不會誤扣其他日子（審查 C-01）。"""
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 400 * DAY, inp=1000, cached=900, out=0))
+        self.write(self.claude_file(), claude_assistant("new", T0, inp=50, cr=50, out=0))
+        self.scan()
+        self.simulate_before_cached_records()
+        history.connect(self.path).close()
+        self.assertEqual(self.records()["total_tokens_cached"][0], 1000 + 100)
+        # 同樣的數量改寫（mtime 變了、內容較短 → 重算）
+        self.write(self.codex_file(), codex_turn(), codex_count(T0 - 400 * DAY, inp=1000, cached=900, out=0), mode="w")
+        os.utime(self.codex_file(), (T0 + DAY, T0 + DAY))
+        self.scan()
+        self.scan()
+        records = self.records()
+        self.assertEqual(records["total_tokens_cached"][0], 1100)
+        self.assertEqual(records["total_tokens_cached:codex"][0], 1000)
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT SUM(tokens) FROM record_days_cached").fetchone()[0], 1100)
+
+    def test_upgrade_skips_claude_days_cleared_from_history(self):
+        """「清除歷史」（不重新掃描）後 record_days 已空、seen_ids 還在：那些日子的快取讀取不算進初始值。"""
+        self.write(self.claude_file(), claude_assistant("old", T0, inp=100, cr=900, out=0))
+        self.scan()
+        with self.db() as c:
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached"):
+                c.execute(f"DELETE FROM {table}")
+            c.commit()
+        self.write(self.claude_file(), claude_assistant("new", T0 + DAY, inp=10, cr=20, out=0))
+        self.scan()
+        self.simulate_before_cached_records()
+        history.connect(self.path).close()
+        self.assertEqual(self.records()["total_tokens_cached"][0], 30)
+
     def test_failed_v2_migration_keeps_v1(self):
         with mock.patch.object(history, "SCHEMA_VERSION", 1), mock.patch.object(history, "MIGRATIONS", [history._v1]):
             history.connect(self.path).close()
@@ -643,6 +715,21 @@ class CodexTest(TokenStatsTestCase):
         self.scan()
         self.assertEqual(self.totals("codex")[:4], (50 + 0, 0, 0, 5))
 
+    def test_rewrite_subtracts_then_adds_cached_records(self):
+        # 含快取讀取的紀錄（FR-60）與主數字一樣：Codex 改寫時先扣掉該檔的貢獻再重算，結果與一次讀完相同
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=100, cached=60, out=10),
+                   codex_count(T0 + 1, inp=500, cached=300, out=50))
+        self.scan()
+        self.assertEqual(self.records()["total_tokens_cached"][0], 550)
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=40, cached=20, out=4), mode="w")
+        self.scan()
+        fresh = self.fresh((self.codex_file(), "codex"))
+        for key in ("total_tokens_cached", "total_tokens_cached:codex"):
+            self.assertEqual(self.records()[key], (44, None))
+            self.assertEqual(self.records()[key], self.records(fresh)[key])
+        self.assertEqual(self.table("record_days_cached"), [("2026-09-21", "codex", 44)])
+        self.assertEqual(self.table("record_days_cached"), self.table("record_days_cached", fresh))
+
     def test_tasks(self):
         self.write(self.codex_file(), codex_turn(),
                    codex_task("t1", T0, T0 + 30, duration_ms=29_500),
@@ -714,6 +801,30 @@ class ScanTest(TokenStatsTestCase):
         self.assertEqual(self.records()["best_day_tokens"], (5000, "2026-09-24"))
         self.assertEqual(self.records()["longest_streak_days"], (4, "2026-09-24"))
         self.assertEqual(self.records()["total_tokens"][0], 5122)
+
+    def test_cached_records(self):
+        # 含快取讀取的單日最高與累計（FR-60）：快取讀取多的那天變成最高；連續天數不變；保留期間刪掉每日資料後不變
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("d1", T0 + 10, inp=100, cr=10_000, out=0),
+                   claude_user(T0 + DAY), claude_assistant("d2", T0 + DAY + 5, inp=10, cr=5, out=0))
+        self.write(self.codex_file(), codex_record("r1", T0 + 3 * DAY, inp=5000, cached=1000, out=0))
+        self.scan(now=T0 + 4 * DAY)
+        records = self.records()
+        self.assertEqual(records["total_tokens"][0], 100 + 10 + 4000)
+        self.assertEqual(records["total_tokens_cached"][0], 10_100 + 15 + 5000)
+        self.assertEqual(records["total_tokens_cached:claude"][0], 10_115)
+        self.assertEqual(records["total_tokens_cached:codex"][0], 5000)
+        self.assertEqual(records["best_day_tokens"], (4000, "2026-09-24"))
+        self.assertEqual(records["best_day_tokens_cached"], (10_100, "2026-09-21"))
+        self.assertEqual(records["best_day_tokens_cached:codex"], (5000, "2026-09-24"))
+        self.assertNotIn("longest_streak_days_cached", records)
+        with self.db() as c:
+            c.execute("DELETE FROM daily_tokens")
+            c.commit()
+        self.write(self.claude_file(), claude_assistant("d5", T0 + 4 * DAY + 5, inp=1, cr=1, out=0))
+        self.scan(now=T0 + 5 * DAY)
+        self.assertEqual(self.records()["best_day_tokens_cached"], (10_100, "2026-09-21"))
+        self.assertEqual(self.records()["total_tokens_cached"][0], 15_117)
 
     def test_retention_skips_old_rows_but_counts_records(self):
         self.write(self.claude_file(), claude_assistant("old", T0 - 400 * DAY, inp=10, out=0),

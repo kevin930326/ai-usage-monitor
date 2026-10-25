@@ -30,7 +30,14 @@ struct StatsWindowView: View {
     private var raw: TokenStatsData? { fixedData ?? data }
     /// 第二層的裝置範圍與面板共用（PanelSettings）
     private var device: TokenDeviceScope { (raw?.devices ?? .none).resolve(PanelSettings.shared.statsDevice) }
-    private var shown: TokenStatsData? { raw?.scoped(device) }
+    /// 含快取讀取（FR-60）與面板共用（PanelSettings）
+    private var measure: TokenMeasure { PanelSettings.shared.statsMeasure }
+    private var shown: TokenStatsData? { raw?.scoped(device).measured(measure) }
+    /// 只看一台其他電腦（沒有時段資料）
+    private var showsOtherDevice: Bool {
+        if case .device = device { return true }
+        return false
+    }
     private var animates: Bool { visible && !reduceMotion && fixedMotion == nil }
 
     var body: some View {
@@ -137,22 +144,27 @@ struct StatsWindowView: View {
                 if !scopes.isEmpty {
                     TokenScopeChips(scopes: scopes, selected: scope) { self.scope = $0 }
                 }
+                CacheReadToggle(measure: measure) { selected in
+                    PanelSettings.shared.statsMeasure = selected
+                    replayCharts()
+                }
             }
             RecordsRow(summary: summary)
             section("活動熱力圖（一年）") {
                 TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: now, weeks: 53), scope: scope)
-                    .id(scope)
+                    .id("\(scope.rawValue)-\(measure.rawValue)")
             }
             section("最近 30 天") {
                 TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: .days30, now: now),
-                                   scope: scope, range: .days30, height: 140)
-                    .id(scope)
+                                   scope: scope, range: .days30, measure: measure, height: 140)
+                    .id("\(scope.rawValue)-\(measure.rawValue)")
             }
             HStack(alignment: .top, spacing: 24) {
-                section("各模型") { ModelList(models: TokenBreakdown.models(data: data, scope: scope)) }
+                section("各模型", cached: true) { ModelList(models: TokenBreakdown.models(data: data, scope: scope), measure: measure) }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 // 每小時資料只有這台 Mac 的（其他電腦只上傳每日加總）
-                section(device == .thisMac || !devices.enabled ? "一天中的時段（最近 90 天）" : "一天中的時段（最近 90 天，只有這台 Mac）") {
+                section(device == .thisMac || !devices.enabled ? "一天中的時段（最近 90 天）" : "一天中的時段（最近 90 天，只有這台 Mac）",
+                        cached: !showsOtherDevice) {
                     if case .device = device {
                         Text("其他電腦只上傳每日加總，沒有時段資料")
                             .font(.callout)
@@ -172,6 +184,7 @@ struct StatsWindowView: View {
         .padding(24)
         .animation(animates ? PanelTiming.crossfade : nil, value: scope)
         .animation(animates ? PanelTiming.crossfade : nil, value: device)
+        .animation(animates ? PanelTiming.crossfade : nil, value: measure)
         return Group {
             if scrolls { ScrollView { page } } else { page }
         }
@@ -179,7 +192,9 @@ struct StatsWindowView: View {
 
     private func footnote(_ data: TokenStatsData) -> String {
         let retention = data.retentionDays == 0 ? "永久保留" : "保留 \(data.retentionDays) 天"
-        var text = "Token 不含快取讀取（滑鼠移到數字上可看明細）。每日資料\(retention)，"
+        let cached = data.measure == .includingCacheRead
+        var text = cached ? "Token 含快取讀取（\(TokenMeasure.help)）。" : "Token 不含快取讀取（滑鼠移到數字上可看明細）。"
+        text += "每日資料\(retention)，"
         text += device == .thisMac ? "個人紀錄與累計不受保留期間影響。"
             : "\(data.devices.title(device))的個人紀錄與累計只算最近一年的每日資料。其他電腦的數字是它們最後一次上傳的每日加總。"
         if data.formatSuspect { text += TokenStatsData.formatSuspectNotice + "。" }
@@ -187,9 +202,13 @@ struct StatsWindowView: View {
         return text
     }
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    /// `cached`：這一段的數字跟著含快取讀取的切換，打開時標題旁標「含快取」
+    private func section(_ title: String, cached: Bool = false, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(title).font(.headline)
+                if cached, measure == .includingCacheRead { CacheReadBadge() }
+            }
             content()
         }
     }
@@ -201,29 +220,34 @@ private struct RecordsRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            tile("本週 Token", TokenFormat.short(summary.thisWeek.main),
+            tile("本週 Token", TokenFormat.short(summary.thisWeekValue),
                  summary.changePct.map { "\($0 >= 0 ? "▲" : "▼")\(Int(abs($0).rounded()))% 與上週同期" },
-                 help: TokenFormat.full(summary.thisWeek.main))
+                 help: TokenFormat.full(summary.thisWeekValue), cached: true)
             tile("單日最高", summary.bestDay.map { TokenFormat.short($0.value) } ?? "–", summary.bestDay?.day.map(StatNumbersText.day),
-                 help: summary.bestDay.map { TokenFormat.full($0.value) })
+                 help: summary.bestDay.map { TokenFormat.full($0.value) }, cached: summary.bestDay != nil)
             tile("最長任務", summary.longestTaskSeconds.map { TokenFormat.duration($0.value) } ?? "–",
                  summary.longestTaskSeconds?.day.map(StatNumbersText.day))
             tile("最長連續", summary.longestStreak.map { "\($0.value) 天" } ?? "–", "目前 \(summary.currentStreak) 天")
             tile("累計 Token", summary.total.map { TokenFormat.short($0.value) } ?? "–", summary.total.map { TokenFormat.full($0.value) },
-                 help: summary.total.map { TokenFormat.full($0.value) })
+                 help: summary.total.map { TokenFormat.full($0.value) }, cached: summary.total != nil)
         }
     }
 
-    private func tile(_ title: String, _ value: String, _ detail: String?, help: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    /// `cached`：Token 數字；含快取讀取時數字旁標「含快取」
+    private func tile(_ title: String, _ value: String, _ detail: String?, help: String? = nil, cached: Bool = false) -> some View {
+        let tagged = cached && summary.measure == .includingCacheRead
+        return VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.title2.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value).font(.title2.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
+                if tagged { CacheReadBadge() }
+            }
             Text(detail ?? " ").font(.caption2).foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .help(help.map { "\($0) Token" } ?? "")
+        .help(help.map { "\($0) Token" + (tagged ? "（含快取讀取）" : "") } ?? "")
         .accessibilityElement(children: .combine)
     }
 }
@@ -238,9 +262,10 @@ enum StatNumbersText {
 /// 各模型：橫條（相對最多的模型），右邊是主數字；滑鼠移上去看四種 Token。
 private struct ModelList: View {
     let models: [TokenModelTotal]
+    var measure = TokenMeasure.main
 
     var body: some View {
-        let peak = Double(max(models.first?.counts.main ?? 1, 1))
+        let peak = Double(max(models.first?.counts.value(measure) ?? 1, 1))
         VStack(alignment: .leading, spacing: 6) {
             if models.isEmpty {
                 Text("沒有資料").font(.callout).foregroundStyle(.secondary)
@@ -251,12 +276,13 @@ private struct ModelList: View {
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(UsageColors.provider(item.provider))
-                            .frame(width: max(geo.size.width * CGFloat(Double(item.counts.main) / peak), 2))
+                            .frame(width: max(geo.size.width * CGFloat(Double(item.counts.value(measure)) / peak), 2))
                     }
                     .frame(height: 8)
-                    Text(TokenFormat.short(item.counts.main)).font(.callout).monospacedDigit().frame(width: 56, alignment: .trailing)
+                    Text(TokenFormat.short(item.counts.value(measure))).font(.callout).monospacedDigit().frame(width: 56, alignment: .trailing)
+                        .accessibilityLabel(TokenFormat.short(item.counts.value(measure)) + (measure == .includingCacheRead ? "，含快取讀取" : ""))
                 }
-                .help("合計 \(TokenFormat.full(item.counts.main))：輸入 \(TokenFormat.full(item.counts.input))、快取寫入 \(TokenFormat.full(item.counts.cacheWrite))、輸出 \(TokenFormat.full(item.counts.output))、快取讀取 \(TokenFormat.full(item.counts.cacheRead))")
+                .help("合計 \(TokenFormat.full(item.counts.value(measure)))\(measure == .includingCacheRead ? "（含快取讀取）" : "")：輸入 \(TokenFormat.full(item.counts.input))、快取寫入 \(TokenFormat.full(item.counts.cacheWrite))、輸出 \(TokenFormat.full(item.counts.output))、快取讀取 \(TokenFormat.full(item.counts.cacheRead))")
                 .accessibilityElement(children: .combine)
             }
         }

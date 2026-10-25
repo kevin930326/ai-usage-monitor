@@ -134,7 +134,8 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 |---|---|
 | `daily_tokens`／`hourly_tokens` | 每天（每小時）× 服務 × 模型的 `input`、`cache_write`、`cache_read`、`output`（含推理）、`reasoning`（明細）、任務數、任務時間、最長任務。日期與小時用掃描當下的本機時區 |
 | `record_days` | 每天每個服務的主數字，不套用保留期間（單日最高與連續天數以它計算） |
-| `records` | 個人紀錄（不隨保留期間刪除）：`total_tokens`、`best_day_tokens`、`longest_task_seconds`、`longest_streak_days`，以及加上 `:claude`／`:codex` 的各服務版本 |
+| `record_days_cached` | 同 `record_days`，但數字含快取讀取（FR-60，單日最高（含快取）以它計算） |
+| `records` | 個人紀錄（不隨保留期間刪除）：`total_tokens`、`best_day_tokens`、`longest_task_seconds`、`longest_streak_days`、含快取讀取的 `total_tokens_cached`、`best_day_tokens_cached`，以及加上 `:claude`／`:codex` 的各服務版本 |
 | `scan_state` | 每個紀錄檔讀到哪裡（inode、大小、mtime、offset、Codex 的來源與上一筆累計值、跨次掃描的任務狀態） |
 | `seen_ids`／`seen_tasks` | 已計入的訊息、回應與任務 ID 與當時的數值（去重與補差額），永久保留 |
 | `file_tokens` | 每個 Codex 紀錄檔對加總的貢獻；檔案被改寫或改用 `token_usage_record` 時先扣掉再重算 |

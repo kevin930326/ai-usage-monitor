@@ -68,11 +68,14 @@ CREATE TABLE hourly_tokens (...);
 -- 個人紀錄：不隨保留期間刪除（第 5 節）
 CREATE TABLE records (key TEXT PRIMARY KEY, value INTEGER NOT NULL, day TEXT);
 -- key：total_tokens（累計）、best_day_tokens、longest_task_seconds、longest_streak_days，
+--      total_tokens_cached、best_day_tokens_cached（含 cache_read，FR-60），
 -- 另有各服務的版本（鍵加上 :claude／:codex，給面板的「全部／Claude／Codex」切換）。同樣大時記最早的那天
 
 -- 每天每個服務的主數字（第 4 節）：**不套用保留期間**（一年約 730 列）。單日最高與最長連續天數以它計算，
 -- 保留期間較短、或首次掃描讀到超過保留期間的舊紀錄時，個人紀錄仍然正確；App 的目前連續天數也讀它
 CREATE TABLE record_days (day TEXT NOT NULL, provider TEXT NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (day, provider));
+-- 同上，tokens 含 cache_read（FR-60；單日最高（含快取）以它計算）
+CREATE TABLE record_days_cached (day TEXT NOT NULL, provider TEXT NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (day, provider));
 
 -- 掃描進度：每個紀錄檔讀到哪裡
 CREATE TABLE scan_state (
@@ -163,6 +166,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 - **四個欄位分開存**：資料庫（`daily_tokens`、`hourly_tokens`、`seen_ids`、`file_tokens`、`records`）與第二層的上傳格式都分別保存 `input`、`cache_write`、`cache_read`、`output`（另有 `reasoning` 明細），不預先加總，之後改顯示方式不必重算。
 - **顯示的「Token」主數字 = `input + cache_write + output`**（不含 `cache_read`、不加 `reasoning`）。快取讀取是重複送出的上下文，數量常是其他三項的數十倍，算進主數字會蓋過實際的用量變化。滑鼠移上去的說明顯示四項明細，其中 `cache_read` 單獨一行（「快取讀取 N（不計入上方數字）」）。單日最高、Token 活動、熱力圖與個人紀錄的「累計 Token」都用同一個主數字定義。
+  - 補充（FR-60）：統計卡片與完整統計視窗可切換「含快取讀取」（預設關閉），打開時以上全部改用 `input + cache_write + cache_read + output`。收集器另外記含快取的 `record_days_cached` 與 `records` 的 `best_day_tokens_cached`、`total_tokens_cached`（各加 `:claude`／`:codex`），累加、取最大、改寫時先扣再加的方式與主數字相同，也不套用保留期間；schema 版本不變（舊版 App 不讀）。既有檔案在收集器第一次連線時算出初始值（只做一次）：`record_days` 加上已計入的 `cache_read`——Claude 取 `seen_ids`（只算 `record_days` 有的日子，排除「清除歷史」後留下的）、Codex 取 `file_tokens`（與改寫時扣除的帳本一致），不用會過期的每日資料。連續天數仍只看主數字。App 找不到含快取的紀錄（舊版收集器）時，單日最高與累計改由面板讀取的每日資料（最近一年）計算。
 - 以測試驗證 Codex 的 `input + cache_write + cache_read + output == total_tokens`（確認正規化正確）；`cache_write_input_tokens` 是否包含在 `input_tokens` 內要在實作時以實際紀錄再確認（本機 363 筆中 362 筆 `total == input + output`）。
 - **Claude 去重**：串流時同一則回應會寫成多行（每個內容區塊一行），以 `message.id`（沒有時用 `requestId`）去重，取同一 ID 最後一行的 `usage`；`--resume`、分支與舊副本會在別的檔案出現相同的 ID，以 `seen_ids` 跨檔去重（永久保留，所以舊副本超過任何期限後重掃也不會重算）。收集器每 5 分鐘執行，串流中的回應可能被切在兩次掃描之間，所以 `seen_ids` 保存**已計入的數值**：之後（同一次或之後的掃描、其他檔案）再看到同一 ID 時，若每個欄位都不小於已計入值，就把差額加到第一次計入的日期、小時與模型，並更新 `seen_ids`；任一欄位較小的（舊副本或較早的串流行）忽略。以測試驗證：同一 ID 的多行分散在不同掃描批次與不同檔案時，最終加總與一次讀完相同，重掃不增加。
 - **Codex 來源**：每個檔案只採用一種來源，記在 `scan_state.source`。檔案中出現過 `token_usage_record` 就只用它（以 `response_id` 去重，忽略同檔的 `token_count`）；否則用 `token_count`，以**同檔相鄰兩筆 `total_token_usage` 的正差值**計算（自動吸收重送的相同事件；差值為負時視為 compaction，以新值重新起算、不計入）。第一次看到某檔時若還沒有任何 token 事件，延到下次執行再決定。
@@ -179,13 +183,13 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 | 項目 | 規則 |
 |---|---|
-| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`（個人紀錄）與 `seen_ids`、`seen_tasks`。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
+| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`、`record_days_cached`（個人紀錄）與 `seen_ids`、`seen_tasks`。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
 | 延長保留期間 | 已刪除的日子不能畫成 0：App 寫入 `meta.token_days_from`（`YYYY-MM-DD`，實際還有每日 Token 的第一天），取舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）；只往後移。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界 |
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
 | 匯出 CSV | 設定中按「匯出額度 CSV」或「匯出 Token CSV」→ 系統儲存對話框，由使用者選位置。額度：每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`）；Token：這台電腦的 `daily_tokens`（`day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds`，四種 Token 分開，`day` 是本機日期）。不含 `device_id`、`scan_state`、`seen_ids`、`file_tokens`、`meta` |
-| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建 |
+| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建 |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
 估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 每年數十萬列；整個檔案預期 < 50 MB。

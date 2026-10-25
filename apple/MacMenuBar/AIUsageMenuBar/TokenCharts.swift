@@ -10,6 +10,7 @@ struct TokenActivityChart: View {
     let bars: [TokenBar]
     let scope: TokenScope
     let range: TokenActivityRange
+    var measure = TokenMeasure.main
     var height: CGFloat = 56
 
     @Environment(\.panelMotion) private var motion
@@ -45,10 +46,11 @@ struct TokenActivityChart: View {
 
     private var caption: String {
         if bars.contains(where: { !$0.available }) { return "保留期間以前的日子沒有資料，不畫" }
+        let cached = measure == .includingCacheRead
         return switch range {
-        case .days30: "最近 30 天，每根一天（不含快取讀取）"
-        case .weeks: "最近 12 週，每根一週（星期一起）"
-        case .cumulative: "累計 Token（含保留期間以前）"
+        case .days30: "最近 30 天，每根一天（\(cached ? "含" : "不含")快取讀取）"
+        case .weeks: cached ? "最近 12 週，每根一週（星期一起，含快取讀取）" : "最近 12 週，每根一週（星期一起）"
+        case .cumulative: cached ? "累計 Token（含快取讀取，含保留期間以前）" : "累計 Token（含保留期間以前）"
         }
     }
 
@@ -58,18 +60,20 @@ struct TokenActivityChart: View {
         let day = TokenDateText.string(bar.start, "M/d")
         let when = range == .weeks ? "\(day) 那週" : day
         guard bar.available else { return "\(when)：超過保留期間，沒有資料" }
-        if range == .cumulative { return "\(when)：累計 \(TokenFormat.short(bar.main))" }
-        var text = "\(when)：\(TokenFormat.short(bar.main))"
+        if range == .cumulative { return "\(when)：累計 \(TokenFormat.short(bar.value))" }
+        var text = "\(when)：\(TokenFormat.short(bar.value))"
         if scope == .all, bar.byProvider.count > 1 {
             text += "（" + ["claude", "codex"].compactMap { p in bar.byProvider[p].map { "\(ProviderInfo.displayName(p)) \(TokenFormat.short($0))" } }
                 .joined(separator: "、") + "）"
         }
-        if bar.counts.cacheRead > 0 { text += " · 快取讀取 \(TokenFormat.short(bar.counts.cacheRead))" }
+        if bar.counts.cacheRead > 0 {
+            text += " · \(measure == .includingCacheRead ? "其中" : "")快取讀取 \(TokenFormat.short(bar.counts.cacheRead))"
+        }
         return text
     }
 
     private var accessibilityText: String {
-        let total = range == .cumulative ? (bars.last?.main ?? 0) : bars.reduce(0) { $0 + $1.main }
+        let total = range == .cumulative ? (bars.last?.value ?? 0) : bars.reduce(0) { $0 + $1.value }
         return "Token 活動，\(caption)：合計 \(TokenFormat.short(total))"
     }
 }
@@ -102,7 +106,7 @@ struct TokenBarsCanvas: View, Animatable {
 
     var body: some View {
         Canvas { context, size in
-            let peak = Double(max(bars.map(\.main).max() ?? 0, 1))
+            let peak = Double(max(bars.map(\.value).max() ?? 0, 1))
             let slot = size.width / CGFloat(max(bars.count, 1))
             let barWidth = max(slot - (bars.count > 20 ? 2 : 4), 1)
             context.stroke(Path { p in p.move(to: CGPoint(x: 0, y: size.height - 0.5)); p.addLine(to: CGPoint(x: size.width, y: size.height - 0.5)) },
@@ -111,11 +115,11 @@ struct TokenBarsCanvas: View, Animatable {
                 // 累計：面積圖，由左往右描繪
                 // 只畫保留期間內（算得出當天累計）的日子
                 guard let firstIndex = bars.firstIndex(where: \.available), bars.count - firstIndex > 1 else { return }
-                let low = Double(bars[firstIndex].main) * 0.9
+                let low = Double(bars[firstIndex].value) * 0.9
                 func y(_ v: Int64) -> CGFloat { size.height - CGFloat((Double(v) - low) / max(peak - low, 1)) * (size.height - 4) }
                 var line = Path(), area = Path()
                 for (i, bar) in bars.enumerated() where i >= firstIndex {
-                    let p = CGPoint(x: slot * (CGFloat(i) + 0.5), y: y(bar.main))
+                    let p = CGPoint(x: slot * (CGFloat(i) + 0.5), y: y(bar.value))
                     if i == firstIndex { line.move(to: p); area.move(to: CGPoint(x: p.x, y: size.height)); area.addLine(to: p) } else { line.addLine(to: p); area.addLine(to: p) }
                 }
                 area.addLine(to: CGPoint(x: slot * (CGFloat(bars.count) - 0.5), y: size.height))
