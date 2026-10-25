@@ -321,6 +321,18 @@ import Testing
         #expect(TokenBreakdown.hours(data: cached, scope: .all)[9] == 440)
     }
 
+    @Test func includingCacheReadDoesNotChangeStreaks() {
+        // 昨天只有快取讀取（主數字 0）：兩種計算方式的連續天數相同
+        let data = TokenStatsData(days: [row("2026-11-05", main: 10), row("2026-11-04", main: 0, cacheRead: 500),
+                                         row("2026-11-03", main: 10)], firstScanDone: true)
+        let plain = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        let cached = TokenSummary(data: data.measured(.includingCacheRead), scope: .all, now: now, calendar: cal)
+        #expect(plain.currentStreak == 1)
+        #expect(cached.currentStreak == plain.currentStreak)
+        #expect(cached.longestStreak == plain.longestStreak)
+        #expect(cached.streakIsRecord == plain.streakIsRecord)
+    }
+
     @Test func includingCacheReadKeepsRecordOnlyData() {
         // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），最長任務照舊
         let data = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),

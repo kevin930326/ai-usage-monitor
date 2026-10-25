@@ -317,14 +317,15 @@ public struct TokenSummary: Equatable, Sendable {
         longestTaskSeconds = [record("longest_task_seconds"), computedLongest].compactMap { $0 }.max { $0.value < $1.value }
         total = data.tokenRecord(scope.recordKey("total_tokens")) ?? (totals.isEmpty ? nil : TokenRecord(value: totals.values.reduce(0) { $0 + $1.value(m) }))
 
-        // 有 record_days 時以它為準（不受保留期間影響），否則用每日資料
+        // 有 record_days 時以它為準（不受保留期間影響），否則用每日資料。
+        // 一律用主數字（與 record_days、longest_streak_days 一致）：含快取讀取不改變連續天數
         func used(_ date: Date) -> Bool {
             let key = TokenCalendar.key(date, calendar: calendar)
             if !data.recordDays.isEmpty {
                 return (data.recordDays[key] ?? [:]).contains { scope.includes($0.key) && $0.value > 0 }
-                    || (totals[key]?.value(m) ?? 0) > 0
+                    || (totals[key]?.main ?? 0) > 0
             }
-            return (totals[key]?.value(m) ?? 0) > 0
+            return (totals[key]?.main ?? 0) > 0
         }
         var streak = 0
         var cursor = used(today) ? today : TokenCalendar.adding(-1, to: today, calendar: calendar)
