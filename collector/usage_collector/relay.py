@@ -29,11 +29,20 @@ def load_relay_url(path: Path = CONFIG_PATH) -> str:
     return url.rstrip("/")
 
 
+KEYCHAIN_TIMEOUT = 10
+
+
 def read_write_token() -> str:
-    result = subprocess.run(
-        ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
-        capture_output=True, text=True,
-    )
+    # Keychain 沒有回應（鎖住、等待授權對話框）時不能讓整輪卡住：launchd 在這一輪結束前不會啟動下一輪（ADR-0014 LT-09）
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
+            capture_output=True, text=True, timeout=KEYCHAIN_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        raise ProviderError("讀取 Keychain 的中繼寫入密鑰逾時（Keychain 可能已鎖定），這次不上傳") from None
+    except OSError:
+        raise RelayNotConfigured("找不到 security 指令，無法讀取中繼寫入密鑰") from None
     if result.returncode != 0 or not result.stdout.strip():
         raise RelayNotConfigured("Keychain 中找不到中繼寫入密鑰")
     return result.stdout.strip()
