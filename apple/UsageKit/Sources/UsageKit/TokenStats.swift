@@ -174,14 +174,21 @@ public struct TokenStatsData: Equatable, Sendable {
     /// 統計卡片與完整統計視窗的提示
     public static let formatSuspectNotice = "紀錄格式可能已改變，統計可能不完整"
 
-    /// 有任何 Token 資料（含已超過保留期間、只剩個人紀錄的）
+    /// 有任何 Token 資料（含已超過保留期間、只剩個人紀錄的）。包含只有快取讀取的資料（FR-60）：
+    /// 與計算方式無關，切換含快取讀取不會讓卡片或服務切換出現、消失
     public var hasData: Bool {
-        days.contains { $0.counts.main > 0 } || (records["total_tokens"]?.value ?? 0) > 0
+        days.contains { $0.counts.value(.includingCacheRead) > 0 } || hasRecord("")
     }
 
     /// 這個範圍有資料的服務（給切換列決定要不要顯示）
     public var providers: [String] {
-        ["claude", "codex"].filter { p in days.contains { $0.provider == p && $0.counts.main > 0 } || (records["total_tokens:\(p)"]?.value ?? 0) > 0 }
+        ["claude", "codex"].filter { p in
+            days.contains { $0.provider == p && $0.counts.value(.includingCacheRead) > 0 } || hasRecord(":\(p)")
+        }
+    }
+
+    private func hasRecord(_ suffix: String) -> Bool {
+        ["total_tokens", "total_tokens_cached"].contains { (records[$0 + suffix]?.value ?? 0) > 0 }
     }
 
     /// 每日資料最早還保留的那一天（保留期間以前的已刪除，不能當成「沒有使用」）：目前保留期間的起點與

@@ -355,6 +355,23 @@ import Testing
         #expect(TokenSummary(data: data.measured(.main), scope: .all, now: now, calendar: cal).total?.value == 5000)
     }
 
+    @Test func cacheOnlyDataCountsAsData() {
+        // 只有快取讀取的資料、只有含快取的個人紀錄：兩種計算方式都算有資料，服務也可以選（審查 C-02）
+        let cacheOnly = TokenStatsData(days: [row("2026-11-05", main: 40), row("2026-11-05", "codex", main: 0, cacheRead: 500, model: "gpt-6.1-sol")],
+                                       firstScanDone: true)
+        for measure in [TokenMeasure.main, .includingCacheRead] {
+            #expect(cacheOnly.measured(measure).hasData)
+            #expect(cacheOnly.measured(measure).providers == ["claude", "codex"])
+        }
+        let recordOnly = TokenStatsData(records: ["total_tokens_cached:codex": TokenRecord(value: 70), "total_tokens_cached": TokenRecord(value: 70)],
+                                        firstScanDone: true)
+        #expect(recordOnly.hasData)
+        #expect(recordOnly.providers == ["codex"])
+        // 切換的資料仍只算一次（主數字：codex 為 0）
+        #expect(TokenSummary(data: cacheOnly, scope: .all, now: now, calendar: cal).thisWeekValue == 40)
+        #expect(TokenSummary(data: cacheOnly.measured(.includingCacheRead), scope: .all, now: now, calendar: cal).thisWeekValue == 540)
+    }
+
     @Test func includingCacheReadKeepsRecordOnlyData() {
         // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），累計與最長任務照舊顯示
         let base = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),
