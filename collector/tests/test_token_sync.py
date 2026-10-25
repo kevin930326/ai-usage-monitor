@@ -517,6 +517,32 @@ class MergeTest(TokenSyncTestCase):
         self.assertEqual(self.mac.meta("sync_truncated"), "1")
         self.assertEqual(self.mac.log.getvalue().count("超過中繼的列數上限"), 1)
 
+    def test_deleted_device_rows_go_even_when_the_download_is_truncated(self):
+        """第 2 輪 C-01：截斷的下載不刪較舊的日子，但撤銷並刪除資料的電腦的舊資料要一併刪除"""
+        laptop = self.machine("laptop")
+        self.pc.set_tokens(-3, 100)
+        laptop.set_tokens(-3, 7)
+        laptop.set_tokens(0, 10)
+        self.pc.run(NOW)
+        laptop.run(NOW)
+        self.mac.run(NOW)
+        self.assertEqual(self.mac.total_by_device(), {self.pc.relay_id: 100, laptop.relay_id: 17})
+        self.relay.revoked.add(self.pc.relay_id)
+        self.relay.rows = {k: v for k, v in self.relay.rows.items() if k[0] != self.pc.relay_id}
+        real = self.relay.__call__
+
+        def truncated(url, headers, body=None, timeout=15):
+            data = real(url, headers, body, timeout)
+            if body is None:  # 中繼只回最新的一天
+                data["rows"] = [r for r in data["rows"] if r["day"] >= history.local_day(NOW)]
+                data["truncated"] = True
+            return data
+        self.mac.relay = truncated
+        self.mac.query("DELETE FROM meta WHERE key = 'sync_last_success'")
+        self.mac.run(NOW + 300)
+        self.assertEqual(self.mac.total_by_device(), {laptop.relay_id: 17})  # 筆電沒回傳的舊日子保留
+        self.assertEqual(self.mac.query("SELECT device_id FROM devices WHERE is_self = 0"), [(laptop.relay_id,)])
+
     def test_status_without_a_database_does_not_create_one(self):
         missing = self.root / "none" / "history.sqlite3"
         missing.parent.mkdir()
