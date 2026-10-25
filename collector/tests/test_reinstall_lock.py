@@ -11,6 +11,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+if sys.platform == "win32":
+    raise unittest.SkipTest("重裝腳本是 bash（macOS）")
+
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "reinstall-ios.sh"
 HELPER = SCRIPT.with_name("reinstall_ios_helper.py")
 

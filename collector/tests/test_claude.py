@@ -2,12 +2,14 @@ import io
 import json
 import os
 import stat
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
+from zoneinfo import available_timezones
 
 from usage_collector import __main__ as cli
 from usage_collector.models import ProviderError
@@ -26,6 +28,7 @@ def window_dicts(usage) -> list[tuple]:
     return [(w["id"], w["label"], w["used_pct"], w["resets_at"], w["hidden"]) for w in usage.to_dict()["windows"]]
 
 
+@unittest.skipUnless(available_timezones(), "解析重置時間需要時區資料庫（Windows 要裝 tzdata，見 docs/windows.md）")
 class ClaudeParseTest(unittest.TestCase):
     """以錄下的真實輸出（已遮蔽）與依 Claude Code 格式化程式手寫的輸出解析。"""
 
@@ -189,6 +192,7 @@ class FakeClaude:
         self.dir.cleanup()
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 claude 是 bash 腳本")
 class ClaudeFetchTest(unittest.TestCase):
     def test_fetch_runs_claude_and_reads_plan(self):
         with FakeClaude(script="[ \"$NO_COLOR\" = 1 ] || exit 96; [ -z \"$FORCE_COLOR\" ] || exit 95") as fake, \
@@ -200,6 +204,18 @@ class ClaudeFetchTest(unittest.TestCase):
         # 在暫存資料夾執行，不載入任何專案的 CLAUDE.md
         self.assertNotEqual(Path(cwd).resolve(), Path.cwd().resolve())
         self.assertIn("aum-claude-", cwd)
+
+    def test_config_dir_from_config_reaches_the_cli(self):
+        # 工作排程器／launchd 不繼承安裝視窗的 CLAUDE_CONFIG_DIR：以 config.json 為準（Codex C-02）
+        with FakeClaude(script="[ \"$CLAUDE_CONFIG_DIR\" = /custom/claude ] || exit 94") as fake, \
+             mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "/other"}):
+            config = json.loads(fake.config.read_text())
+            fake.config.write_text(json.dumps({**config, "claude_config_dir": "/custom/claude"}))
+            self.assertEqual(claude.fetch().plan, "Max")
+        # 沒有設定時不加這個變數
+        with FakeClaude(script="[ -z \"${CLAUDE_CONFIG_DIR+x}\" ] || exit 93"), mock.patch.dict(os.environ):
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+            self.assertEqual(claude.fetch().plan, "Max")
 
     def test_personal_data_stays_out_of_snapshot(self):
         with FakeClaude():
@@ -269,6 +285,7 @@ class ClaudeFetchTest(unittest.TestCase):
         self.assertNotIn("@", str(ctx.exception))
 
 
+@unittest.skipIf(sys.platform == "win32", "假的 claude 是 shell 腳本")
 class ResolveClaudePathTest(unittest.TestCase):
     def test_reads_config_and_falls_back_to_path(self):
         with tempfile.TemporaryDirectory() as d:

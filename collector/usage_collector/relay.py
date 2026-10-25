@@ -23,7 +23,7 @@ class RelayNotConfigured(Exception):
 
 def load_relay_url(path: Path = CONFIG_PATH) -> str:
     try:
-        url = json.loads(path.read_text())["relay_url"]
+        url = json.loads(path.read_text(encoding="utf-8"))["relay_url"]
     except (FileNotFoundError, KeyError, json.JSONDecodeError):
         raise RelayNotConfigured(f"未設定中繼 API（{path}）") from None
     return url.rstrip("/")

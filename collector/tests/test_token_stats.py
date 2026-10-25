@@ -8,11 +8,13 @@ import tempfile
 import time
 import unittest
 from contextlib import contextmanager, redirect_stderr
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from usage_collector import history, token_stats
+from usage_collector import history, system, token_stats
+
+TAIPEI = timezone(timedelta(hours=8))
 
 T0 = 1_790_000_000  # 2026-09-21 13:33:20 UTC
 HOUR = 3600
@@ -104,17 +106,24 @@ class TokenStatsTestCase(unittest.TestCase):
         self.sessions = self.codex / "sessions" / "2026" / "09" / "21"
         self.sessions.mkdir(parents=True)
         self.stderr = io.StringIO()
-        # 日期以掃描當下的本機時區計算：固定成台北時間
+        # 日期以掃描當下的本機時區計算：固定成台北時間（UTC+8、沒有日光節約）。
+        # Windows 沒有 time.tzset，改 patch system.local_datetime；macOS 另外設 TZ，其他用到本機時間的地方也一致
+        self._local = mock.patch.object(system, "local_datetime",
+                                        lambda ts: datetime.fromtimestamp(ts, TAIPEI).replace(tzinfo=None))
+        self._local.start()
         self._tz = os.environ.get("TZ")
-        os.environ["TZ"] = "Asia/Taipei"
-        time.tzset()
+        if hasattr(time, "tzset"):
+            os.environ["TZ"] = "Asia/Taipei"
+            time.tzset()
 
     def tearDown(self):
-        if self._tz is None:
-            os.environ.pop("TZ", None)
-        else:
-            os.environ["TZ"] = self._tz
-        time.tzset()
+        self._local.stop()
+        if hasattr(time, "tzset"):
+            if self._tz is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = self._tz
+            time.tzset()
         self.dir.cleanup()
 
     @property
@@ -744,6 +753,22 @@ class ScanTest(TokenStatsTestCase):
             result = self.scan()
         self.assertEqual(result.processed, 0)
 
+    def test_volume_serial_above_signed_64_bits_is_counted(self):
+        # Windows 的 st_dev 可能 ≥ 2⁶³：要能存進 scan_state，第二次掃描也認得是同一個檔案
+        def big(st):
+            t = list(st[:10])
+            t[2] = 11962255239693178705
+            return os.stat_result(t)
+        entry_stat, fstat = system.entry_stat, token_stats.os.fstat
+        with mock.patch.object(system, "entry_stat", lambda e: big(entry_stat(e))), \
+                mock.patch.object(token_stats.os, "fstat", lambda fd: big(fstat(fd))):
+            self.write(self.claude_file(), claude_assistant("a", T0, inp=3, out=4))
+            self.scan()
+            self.write(self.claude_file(), claude_assistant("b", T0 + 1, inp=3, out=4))
+            self.scan()
+        self.assertEqual(self.totals("claude")[:4], (6, 0, 0, 8))
+        self.assertNotIn("OverflowError", self.stderr.getvalue())
+
     def test_locked_database_gives_up_once(self):
         for i in range(5):
             self.write(self.claude_file(f"{SESSION[:-1]}{i}"), claude_assistant(f"a{i}", T0, inp=1, out=1))
@@ -751,7 +776,7 @@ class ScanTest(TokenStatsTestCase):
         holder = sqlite3.connect(self.path, isolation_level=None)
         holder.execute("BEGIN IMMEDIATE")
         try:
-            with mock.patch.object(history, "BUSY_TIMEOUT_MS", 100), mock.patch.object(token_stats.os, "nice"), \
+            with mock.patch.object(history, "BUSY_TIMEOUT_MS", 100), mock.patch.object(token_stats.system, "lower_priority"), \
                  redirect_stderr(self.stderr):
                 started = time.monotonic()
                 with mock.patch.object(token_stats, "log_dirs", return_value=self.dirs):
@@ -765,7 +790,7 @@ class ScanTest(TokenStatsTestCase):
 
     def test_run_safely_never_raises(self):
         with mock.patch.object(token_stats, "run", side_effect=sqlite3.OperationalError("database is locked /Users/fake")), \
-             mock.patch.object(token_stats.os, "nice"), redirect_stderr(self.stderr):
+             mock.patch.object(token_stats.system, "lower_priority"), redirect_stderr(self.stderr):
             self.assertFalse(token_stats.run_safely(self.path))
         self.assertNotIn("/Users/fake", self.stderr.getvalue())
         self.assertIn("OperationalError", self.stderr.getvalue())

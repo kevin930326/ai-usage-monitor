@@ -13,22 +13,26 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import selectors
 import signal
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, cast
 
-from .. import __version__, paths
+from .. import __version__, paths, system
 from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 APP_SERVER_ARGS = ("app-server", "--listen", "stdio://")
-# ChatGPT.app 內附的 Codex CLI：安裝腳本沒寫入 codex_path 時（舊安裝）也找得到
-FALLBACK_PATHS = ("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",)
+# 安裝腳本沒寫入 codex_path 時（舊安裝、Windows）也找得到：macOS 為 ChatGPT.app 內附的 Codex CLI，
+# Windows 為 npm 全域安裝的 codex.cmd 等（system.executable_fallbacks）
+FALLBACK_PATHS = system.executable_fallbacks("codex")
 TIMEOUT = 30  # 秒，整段對話；正常約 0.7 秒
 MAX_WINDOW_MINUTES = 366 * 24 * 60  # 更長的額度長度視為格式改變（window id 也不會超過中繼的長度上限）
 CLOSE_TIMEOUT = 3  # 關閉 stdin 後等 app-server 自己結束的秒數，超過就強制結束
@@ -59,18 +63,26 @@ class AppServer:
         self.cwd = tempfile.TemporaryDirectory(prefix="aum-codex-")
         # npm 安裝的 codex 是 `#!/usr/bin/env node` 腳本，launchd 的 PATH 只有系統目錄：
         # 把 codex 所在的資料夾（Homebrew 的 node 也在這）放到最前面
-        env = {**os.environ, "PATH": os.pathsep.join(filter(None, (os.path.dirname(path), os.environ.get("PATH"))))}
+        base = paths.cli_environ()  # config.json 的 codex_home 也要傳下去（Codex C-02）
+        env = {**base, "PATH": os.pathsep.join(filter(None, (os.path.dirname(path), base.get("PATH"))))}
         try:
             # 自己的 process group：逾時時連同 app-server 可能啟動的子程序一起結束
             self.proc = subprocess.Popen([path, *APP_SERVER_ARGS], cwd=self.cwd.name, env=env,
                                          stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                         stderr=subprocess.DEVNULL, start_new_session=True)
+                                         stderr=subprocess.DEVNULL, **system.isolated_popen_kwargs())
         except OSError:
             self.cwd.cleanup()
             raise ProviderError("無法執行 codex，重新執行 scripts/install-launchd.sh") from None
         try:
-            self.selector = selectors.DefaultSelector()
-            self.selector.register(self._stdout, selectors.EVENT_READ)
+            if system.IS_WINDOWS:
+                # Windows 的 select 不支援管線：由背景執行緒讀 stdout，主執行緒等待佇列
+                self.chunks: queue.Queue[bytes] = queue.Queue()
+                self.pumped = 0
+                self.reader = threading.Thread(target=self._pump, daemon=True)
+                self.reader.start()
+            else:
+                self.selector = selectors.DefaultSelector()
+                self.selector.register(self._stdout, selectors.EVENT_READ)
         except BaseException:
             self.proc.kill()
             self.proc.wait()
@@ -117,12 +129,37 @@ class AppServer:
     def _stdout(self) -> IO[bytes]:
         return cast("IO[bytes]", self.proc.stdout)
 
+    def _pump(self) -> None:
+        """Windows：持續讀 stdout 放進佇列；讀到結尾（或管線關閉）時放空位元組。
+        超過 MAX_OUTPUT 就不再讀（主執行緒累計同樣的位元組，還在等回應時會以 FORMAT_CHANGED 結束），
+        佇列不會無限長大；app-server 之後寫滿管線就會停住，由 close() 結束。"""
+        try:
+            while chunk := os.read(self._stdout.fileno(), 65536):
+                self.chunks.put(chunk)
+                self.pumped += len(chunk)
+                if self.pumped > MAX_OUTPUT:
+                    return
+        except OSError:
+            pass
+        self.chunks.put(b"")
+
+    def _next_chunk(self, remaining: float) -> bytes | None:
+        """等最多 `remaining` 秒讀到下一段輸出；逾時回傳 None，結束時回傳空位元組。"""
+        if system.IS_WINDOWS:
+            try:
+                return self.chunks.get(timeout=remaining)
+            except queue.Empty:
+                return None
+        if not self.selector.select(remaining):
+            return None
+        return os.read(self._stdout.fileno(), 65536)
+
     def read_message(self) -> dict:
         while b"\n" not in self.buffer:
             remaining = self.deadline - time.monotonic()
-            if remaining <= 0 or not self.selector.select(remaining):
+            chunk = self._next_chunk(remaining) if remaining > 0 else None
+            if chunk is None:
                 raise ProviderError(f"Codex app-server 回應逾時（{TIMEOUT:g} 秒）")
-            chunk = os.read(self._stdout.fileno(), 65536)
             if not chunk:
                 raise ProviderError("Codex app-server 意外結束")
             self.received += len(chunk)
@@ -142,26 +179,41 @@ class AppServer:
         """關閉 stdin，app-server 收到 EOF 會自己結束（約 0.05 秒）；等不到就結束整個 process group，
         不留下背景程序。"""
         try:
-            self.selector.close()
+            if not system.IS_WINDOWS:
+                self.selector.close()
             try:
                 self._stdin.close()
             except OSError:
                 pass
-            for sig in (None, signal.SIGTERM, signal.SIGKILL):
-                if sig is not None:
-                    try:
-                        os.killpg(self.proc.pid, sig)
-                    except OSError:
-                        # 已經結束：沒有這個 group 是 ESRCH；macOS 對只剩殭屍的 group 回 EPERM。照樣 wait 收掉
-                        pass
+            if system.IS_WINDOWS:
                 try:
                     self.proc.wait(CLOSE_TIMEOUT)
-                    break
                 except subprocess.TimeoutExpired:
-                    continue
+                    system.kill_tree(self.proc)
+                    self.proc.wait(CLOSE_TIMEOUT)
+                self.reader.join(CLOSE_TIMEOUT)  # 程序結束後管線關閉，讀取執行緒隨即結束
+                return
+            self._terminate_group()
         finally:
             self._stdout.close()
             self.cwd.cleanup()
+
+    def _terminate_group(self) -> None:
+        """macOS：等 app-server 自己結束，等不到就依序送 SIGTERM、SIGKILL 給整個 process group。"""
+        if sys.platform == "win32":  # Windows 在 close() 以 kill_tree 結束；這裡讓型別檢查知道
+            return
+        for sig in (None, signal.SIGTERM, signal.SIGKILL):
+            if sig is not None:
+                try:
+                    os.killpg(self.proc.pid, sig)
+                except OSError:
+                    # 已經結束：沒有這個 group 是 ESRCH；macOS 對只剩殭屍的 group 回 EPERM。照樣 wait 收掉
+                    pass
+            try:
+                self.proc.wait(CLOSE_TIMEOUT)
+                break
+            except subprocess.TimeoutExpired:
+                continue
 
 
 def result_of(response: dict, failure: str) -> dict:

@@ -32,6 +32,14 @@ class UpdateConfigTest(unittest.TestCase):
             "development_team": "ABCDE12345",
         })
 
+    def test_list_writes_each_argument_as_a_string(self):
+        """Windows PowerShell 5.1 傳不了含雙引號的 JSON 參數：--list 逐項傳入（C-02）。"""
+        for items in ([], ["codex"], ["claude", "codex"]):
+            result = subprocess.run([sys.executable, str(SCRIPT), "--list", str(self.path), "enabled_providers", *items],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(self.path.read_text())["enabled_providers"], items)
+
     def test_creates_missing_file(self):
         self.assertEqual(run(self.path, "iphone_udid", "0000-1111").returncode, 0)
         self.assertEqual(json.loads(self.path.read_text()), {"iphone_udid": "0000-1111"})

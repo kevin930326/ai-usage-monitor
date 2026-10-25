@@ -10,15 +10,14 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfoNotFoundError
 
-from .. import paths
+from .. import paths, system
 from ..models import ProviderError, ProviderUsage, Window, parse_pct
 
 # --safe-mode 略過 hooks、外掛、MCP 與自訂指令；--no-session-persistence 不在 `claude --resume` 留下紀錄
@@ -50,7 +49,7 @@ def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:
     with tempfile.TemporaryDirectory(prefix="aum-claude-") as cwd:
         try:
             # NO_COLOR：輸出不帶色碼，解析才不會把被色碼包住的額度行當成一般文字略過
-            env = {**os.environ, "NO_COLOR": "1"}
+            env = {**paths.cli_environ(), "NO_COLOR": "1"}
             env.pop("FORCE_COLOR", None)
             return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
                                   capture_output=True, text=True, timeout=TIMEOUT)
@@ -79,7 +78,8 @@ def parse_reset(text: str, now: datetime) -> datetime:
         raise ProviderError(FORMAT_CHANGED)
     try:
         # Claude Code 以系統時區顯示並附上時區名稱；沒有附上時同樣用本機時區
-        tz = ZoneInfo(m["tz"]) if m["tz"] else now.astimezone().tzinfo
+        local = now.astimezone().tzinfo
+        tz = system.zone(m["tz"], local) if m["tz"] else local
     except (ZoneInfoNotFoundError, ValueError):
         raise ProviderError(FORMAT_CHANGED) from None
     if not 1 <= int(m["hour"]) <= 12:

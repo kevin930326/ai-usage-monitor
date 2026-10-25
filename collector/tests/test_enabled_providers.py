@@ -15,6 +15,9 @@ from usage_collector import __main__ as cli
 from usage_collector.models import ProviderError, ProviderUsage
 from usage_collector.providers import enabled_providers
 
+if sys.platform == "win32":
+    raise unittest.SkipTest("安裝腳本與 detect-providers.sh 是 bash（macOS）")
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 

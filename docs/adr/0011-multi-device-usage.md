@@ -41,11 +41,11 @@
 
 | 項目 | 做法 |
 |---|---|
-| 排程 | 工作排程器，每 5 分鐘，使用者登入時執行（`schtasks` 由 PowerShell 安裝腳本建立） |
-| 資料夾 | `%LOCALAPPDATA%\AIUsageMonitor\`（`history.sqlite3`、`config.json`）；`paths` 模組依平台選擇 |
+| 排程 | 工作排程器，每 5 分鐘＋登入時，只在使用者登入時以本人身分執行（`collector/windows/install-task.ps1` 以 ScheduledTasks 指令建立，避開 `schtasks /TR` 的 261 字元上限）；`pythonw.exe -X utf8` 不開視窗、檔案一律 UTF-8 |
+| 資料夾 | `%LOCALAPPDATA%\AIUsageMonitor\`（`history.sqlite3`、`config.json`、`collector.log`）；平台差異集中在 `system` 模組 |
 | 紀錄資料夾 | `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`，`config.json` 的 `claude_config_dir`／`codex_home` 優先（同 ADR-0009 第 3 節） |
 | 寫入密鑰 | Windows 認證管理員（Credential Manager），以標準函式庫的 `ctypes` 呼叫 `CredReadW`／`CredWriteW`；不存明文檔（NFR-1） |
-| 共用 | `token_stats`、`history`、上傳模組與 Mac 相同；不執行 `claude -p /usage`、`codex app-server`（不收集額度） |
+| 共用 | `token_stats`、`history`、上傳模組與 Mac 相同；排程預設 `--tokens-only`，不執行 `claude -p /usage`、`codex app-server`（不收集額度）。程式本身在 Windows 也能收集額度（`install-task.ps1 -WithQuota`，只寫本機 `usage.json`、不上傳），供需要時使用 |
 | 低優先序 | 以 `BELOW_NORMAL_PRIORITY_CLASS` 執行（相當於 macOS 的 `nice`） |
 
 #### 中繼
