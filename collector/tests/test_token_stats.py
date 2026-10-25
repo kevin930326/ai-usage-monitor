@@ -9,7 +9,7 @@ import tempfile
 import time
 import unittest
 from contextlib import contextmanager, redirect_stderr
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -1144,46 +1144,61 @@ class SeenWindowTest(TokenStatsTestCase):
         self.prime(self.path)
         self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
         self.scan()
-        # 時鐘被設到一年後：D 只前進一天
+        # 時鐘被設到一年後：D 最多前進兩天
         self.scan(now=T0 + 400 * DAY)
-        self.assertEqual(self.cutoff(), "2026-06-25")
+        self.assertEqual(self.cutoff(), "2026-06-26")
         # 改回來（比 D 對應的時間早）：D 不動、不刪；今天的新訊息照算
         self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=2, out=0))
         self.scan(now=T0 + DAY + 60)
-        self.assertEqual(self.cutoff(), "2026-06-25")
+        self.assertEqual(self.cutoff(), "2026-06-26")
         # 倒退 10 天：D 不動，副本不重算
         self.write(self.claude_file(OTHER), claude_assistant("a", T0, inp=1, out=0))
         self.scan(now=T0 - 10 * DAY)
-        self.assertEqual(self.cutoff(), "2026-06-25")
+        self.assertEqual(self.cutoff(), "2026-06-26")
         self.assertEqual(self.counted(), {"claude": 3})
 
-    def test_clock_ahead_for_many_runs_moves_the_cutoff_one_day(self):
-        """時鐘被設到一年後、維持 8 小時（96 輪）：每個日期只前進一天（不是每輪）；改回後今天與之後的訊息照算（總檢查 F-01）。"""
+    def test_clock_ahead_for_many_runs_moves_the_cutoff_a_few_days(self):
+        """時鐘被設到一年後、維持 8 小時（96 輪）：每個日期最多前進兩天（不是每輪）；改回後新訊息照算（總檢查 F-01）。"""
         self.prime(self.path)
         self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
         self.scan()
         for i in range(96):
             self.scan(now=T0 + 400 * DAY + i * 300)
-        self.assertEqual(self.cutoff(), "2026-06-26")  # 21:33 開始的 8 小時跨過一次午夜：兩個日期各一天
+        self.assertEqual(self.cutoff(), "2026-06-28")  # 21:33 開始的 8 小時跨過一次午夜：兩個日期各兩天
         self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=10, out=0))
         self.scan(now=T0 + DAY + 3600)
         for d in range(1, 4):
             self.write(self.claude_file(), claude_assistant(f"c{d}", T0 + (d + 1) * DAY, inp=100, out=0))
             self.scan(now=T0 + (d + 1) * DAY + 3600)
         self.assertEqual(self.counted(), {"claude": 311})
-        self.assertEqual(self.cutoff(), "2026-06-27")  # 之後每天前進一天
+        self.assertEqual(self.cutoff(), "2026-06-28")  # 只進不退，等目標追上
 
-    def test_cutoff_in_the_future_goes_back_once_the_clock_is_fixed(self):
-        """升級那一輪時鐘剛好超前（D 一次設到一年後）：時鐘改回後 D 退回、記一行日誌，新訊息照算（總檢查 F-01）。"""
+    def test_cutoff_never_passes_the_newest_message(self):
+        """升級那一輪時鐘剛好超前一年：D 不超過去重表裡最新的日期，不會跑到未來；時鐘改回後新訊息照算、
+        舊訊息的副本不重複計入（總檢查 F-01、審查 C-01）。"""
         self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
         self.scan_before_seen_window()
         self.scan(now=T0 + 400 * DAY)
-        self.assertEqual(self.cutoff(), "2027-07-28")
+        self.assertEqual(self.cutoff(), "2026-09-21")
         self.write(self.claude_file(), claude_assistant("b", T0 + DAY, inp=10, out=0))
+        self.write(self.claude_file(OTHER), claude_assistant("a", T0, inp=1, out=0))  # --resume 的副本
         self.scan(now=T0 + DAY + 3600)
-        self.assertEqual(self.cutoff(), "2026-06-24")
-        self.assertIn("略過界 2027-07-28 在今天（2026-09-22）之後", self.stderr.getvalue())
         self.assertEqual(self.counted(), {"claude": 11})
+        self.assertEqual(self.cutoff(), "2026-09-21")
+
+    def test_cutoff_catches_up_after_the_collector_stopped(self):
+        """收集器停了 30 天：恢復後每天前進兩天，落差每天縮小一天，30 天後回到「今天往前 90 天」（審查 C-02）。"""
+        self.write(self.claude_file(), claude_assistant("a", T0, inp=1, out=0))
+        self.scan()
+        self.assertEqual(self.cutoff(), "2026-06-24")
+        for d in range(31, 62):
+            self.write(self.claude_file(), claude_assistant(f"m{d}", T0 + d * DAY, inp=1, out=0))
+            self.scan(now=T0 + d * DAY + 3600)
+        with self.db() as c:
+            self.assertEqual(self.cutoff(), history.local_day(T0 + 61 * DAY + 3600 - token_stats.SEEN_DAYS * DAY))
+            prune_before = (date.fromisoformat(self.cutoff()) - timedelta(days=1)).isoformat()
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM seen_ids WHERE day < ?", (prune_before,)).fetchone()[0], 0)
+        self.assertEqual(self.counted(), {"claude": 32})
 
     def test_codex_rewrite_across_the_window_keeps_old_days(self):
         self.write(self.codex_file(), codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0),
