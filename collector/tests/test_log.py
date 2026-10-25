@@ -73,6 +73,7 @@ class RotateIfLargeTest(unittest.TestCase):
         self.assertEqual(self.path.read_text(), "new\n")
 
 
+@unittest.skipIf(sys.platform == "win32", "launchd 只在 macOS；Windows 不能改名開著的檔案，改用 --log-file")
 class RotateInheritedTest(unittest.TestCase):
     """install-launchd.sh 的收集器：launchd 先把 stdout／stderr 開成附加到 collector.log 才啟動"""
 
