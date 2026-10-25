@@ -307,6 +307,8 @@ def parse_reset_credits(summary: object) -> ResetCredits | None:
             expires.append(None if value is None else parse_timestamp(value))
         except ValueError:
             return None
+    if len(expires) > count:
+        return None  # 明細比張數多：前後不一致，不猜（也避免輸出中繼不收的張數，連帶整份快照被拒，第 2 輪審查 C-01）
     # 依到期時間分組，最早到期的在前，不會到期的放最後
     counts = Counter(expires)
     order = sorted(counts, key=lambda e: (e is None, e or datetime.min.replace(tzinfo=timezone.utc)))

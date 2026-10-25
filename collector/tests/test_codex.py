@@ -218,6 +218,14 @@ class ResetCreditsTest(unittest.TestCase):
                                                               credit(1792900000, "redeeming")]})
         self.assertEqual(usage["reset_credits"]["credits"], [{"expires_at": "2026-10-24T00:00:00Z", "count": 1}])
 
+    def test_output_passes_relay_limits(self):
+        # 合法範圍的最大情況：張數上限、每組張數不超過張數，中繼的 LIMITS 都收得下
+        details = [credit(1792800000 + i % 20) for i in range(codex.MAX_RESET_CREDITS)]
+        usage = self.parse({"availableCount": codex.MAX_RESET_CREDITS, "credits": details})["reset_credits"]
+        self.assertEqual(usage["available"], codex.MAX_RESET_CREDITS)
+        self.assertLessEqual(len(usage["credits"]), codex.MAX_RESET_CREDIT_DETAILS)
+        self.assertTrue(all(1 <= g["count"] <= codex.MAX_RESET_CREDITS for g in usage["credits"]))
+
     def test_details_are_capped(self):
         many = [credit(1792800000 + i) for i in range(40, 0, -1)]
         details = self.parse({"availableCount": 40, "credits": many})["reset_credits"]["credits"]
@@ -226,7 +234,7 @@ class ResetCreditsTest(unittest.TestCase):
 
     def test_same_expiry_is_one_group(self):
         # 審查 C-02：17 張同時到期不能被截成 16 張，否則到期後 App 只扣得掉 16 張
-        same = [credit(1792800000) for _ in range(17)] + [credit(None), credit(None)]
+        same = [credit(1792800000) for _ in range(17)] + [credit(None), credit(None)]  # 明細與張數相同
         usage = self.parse({"availableCount": 19, "credits": same})
         self.assertEqual(usage["reset_credits"]["credits"], [
             {"expires_at": "2026-10-24T00:00:00Z", "count": 17}, {"expires_at": None, "count": 2},
@@ -238,7 +246,10 @@ class ResetCreditsTest(unittest.TestCase):
                         {"availableCount": 1, "credits": {}}, {"availableCount": 1, "credits": ["x"]},
                         {"availableCount": 1, "credits": [credit("2026-10-24")]},
                         {"availableCount": 1, "credits": [credit(-1)]},
-                        {"availableCount": 1, "credits": [credit(10 ** 20)]}):
+                        {"availableCount": 1, "credits": [credit(10 ** 20)]},
+                        # 明細比張數多（第 2 輪審查 C-01）：不一致就省略，不輸出中繼不收的 count
+                        {"availableCount": 1, "credits": [credit(1792800000)] * 2},
+                        {"availableCount": 1, "credits": [credit(1792800000)] * 1001}):
             with self.subTest(summary=summary):
                 usage = self.parse(summary)
                 self.assertNotIn("reset_credits", usage)
