@@ -104,10 +104,10 @@ def _failed(conn: sqlite3.Connection, kind: str, now: int, message: str) -> None
 
 def _describe(e: Exception) -> str:
     if isinstance(e, HTTPStatusError):
-        # 401／403 以外帶上中繼的原因（http._reason：固定的驗證訊息，不含資料），看得出哪個欄位被拒
-        return f"HTTP {e.status}" if e.status in (401, 403) else str(e)
+        # 401 以外帶上原因（http._reason：中繼固定的驗證訊息；403 沒有時是「可能被 Cloudflare 擋下」），不含資料
+        return f"HTTP {e.status}" if e.status == 401 else str(e)
     if isinstance(e, ProviderError):
-        return "網路錯誤或回應格式不對"
+        return str(e)  # http.py 與這裡的固定訊息（網路錯誤、憑證、狀態碼），不含網址、密鑰與內容
     return type(e).__name__
 
 

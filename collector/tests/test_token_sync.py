@@ -271,6 +271,17 @@ class FailureTest(TokenSyncTestCase):
         self.assertEqual(self.relay.total(mac.relay_id), 100)
         self.assertEqual(mac.meta("upload_failures"), "0")
         self.assertEqual(mac.log.getvalue().count("第二層上傳失敗"), 1)  # 狀態沒變時不重複記錄
+        self.assertIn("第二層上傳失敗（網路錯誤）", mac.log.getvalue())  # 失敗的種類要看得出來
+
+    def test_failure_kind_is_logged(self):
+        # 不能都寫成同一句「網路錯誤或回應格式不對」：Windows 上分不出是憑證、標頭還是 Cloudflare
+        for error in (ProviderError("網路錯誤（HTTPS 憑證驗證失敗）"), ProviderError("請求標頭含有無效字元，密鑰可能貼錯"),
+                      ProviderError("回應不是 JSON（HTTP 200），可能被 Cloudflare 擋下或 API 已變更")):
+            mac = self.machine(f"mac-{len(self.relay.calls)}")
+            mac.set_tokens(0, 100)
+            self.relay.fail = [error]
+            mac.run(NOW)
+            self.assertIn(f"第二層上傳失敗（{error}）", mac.log.getvalue())
 
     def test_two_consecutive_401_stop_until_reset(self):
         mac = self.machine()
@@ -307,11 +318,12 @@ class FailureTest(TokenSyncTestCase):
         # 中繼自己不回 403：Cloudflare 邊緣的拒絕（WAF、Bot Fight Mode）可能持續好幾輪，不是密鑰失效
         mac = self.machine()
         mac.set_tokens(0, 100)
-        self.relay.fail = [HTTPStatusError("驗證失敗 (HTTP 403)，請重新登入", 403)] * 3
+        self.relay.fail = [HTTPStatusError("HTTP 403（可能被 Cloudflare 擋下）", 403)] * 3
         mac.run(NOW)
         mac.run(NOW + 300)
         mac.run(NOW + 1200)
         self.assertEqual(mac.meta("upload_status"), "error")
+        self.assertIn("第二層上傳失敗（HTTP 403（可能被 Cloudflare 擋下））", mac.log.getvalue())
         mac.run(NOW + 1200 + 3600)
         self.assertEqual(mac.meta("upload_status"), "ok")
         self.assertEqual(self.relay.total(mac.relay_id), 100)

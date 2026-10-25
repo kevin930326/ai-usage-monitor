@@ -6,18 +6,20 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
-from usage_collector.http import post_json, request_json
+from usage_collector.http import USER_AGENT, post_json, request_json
 from usage_collector.models import ProviderError
 
 
 class Server:
-    """本機 HTTP 伺服器：記錄收到的 Authorization，依 routes 回應或重新導向。"""
+    """本機 HTTP 伺服器：記錄收到的 Authorization 與 User-Agent，依 routes 回應或重新導向。"""
 
     def __init__(self, routes: dict[str, str] | None = None, errors: dict[str, tuple[int, bytes]] | None = None):
         self.routes = routes or {}
         self.errors = errors or {}
         self.seen: list[tuple[str, str | None]] = []
+        self.agents: list[str | None] = []
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -26,6 +28,7 @@ class Server:
 
             def respond(self):
                 outer.seen.append((self.path, self.headers.get("Authorization")))
+                outer.agents.append(self.headers.get("User-Agent"))
                 if self.path in outer.routes:
                     self.send_response(302)
                     self.send_header("Location", outer.routes[self.path])
@@ -168,6 +171,69 @@ class ErrorReasonTest(unittest.TestCase):
         self.assertEqual(self.request(422, json.dumps({"error": "x" * 201}).encode()), "HTTP 422")
         self.assertEqual(self.request(422, b'{"error": "two\nlines"}'), "HTTP 422")
         self.assertEqual(self.request(500, b'{"error": "internal"}'), "HTTP 500")
+
+
+class UserAgentTest(unittest.TestCase):
+    """Cloudflare 以 403 擋下 urllib 預設的「Python-urllib/3.x」：每個請求都要帶收集器自己的 User-Agent。"""
+
+    def test_every_request_sends_the_collector_user_agent(self):
+        server = Server()
+        self.addCleanup(server.close)
+        request_json(f"{server.origin}/tokens/daily?from=2026-01-01", {"Authorization": "Bearer r"})
+        request_json(f"{server.origin}/tokens/daily", {"Authorization": "Bearer w"}, body={"rows": []})
+        post_json(f"{server.origin}/usage", {"Authorization": "Bearer w"}, {"schema_version": 1})
+        request_json(f"{server.origin}/api/v2/summary.json", {})
+        self.assertEqual(server.agents, [USER_AGENT] * 4)
+        self.assertRegex(USER_AGENT, r"^ai-usage-monitor/\d+\.\d+")
+
+    def test_same_origin_redirect_keeps_the_user_agent(self):
+        server = Server(routes={"/usage": "/usage/"})
+        self.addCleanup(server.close)
+        request_json(f"{server.origin}/usage", {"Authorization": "Bearer w"})
+        self.assertEqual(server.agents, [USER_AGENT] * 2)
+
+    def test_only_http_py_makes_requests(self):
+        # 其他模組都經過 request_json（才會帶 User-Agent、只跟隨同源的重新導向）；providers 透過 CLI，不直接連網
+        package = Path(__file__).resolve().parent.parent / "usage_collector"
+        offenders = [str(f.relative_to(package)) for f in sorted(package.rglob("*.py")) if f.name != "http.py"
+                     and any(m in f.read_text(encoding="utf-8")
+                             for m in ("urllib.request", "http.client", "urlopen", "import socket", "import requests"))]
+        self.assertEqual(offenders, [])
+
+
+class EdgeResponseTest(unittest.TestCase):
+    """Cloudflare 邊緣的 403 或非 JSON 回應：日誌要看得出狀態碼與可能的原因，不帶內容、網址與密鑰。"""
+
+    def error(self, path: str, status: int, body: bytes, headers: dict | None = None) -> str:
+        server = Server(errors={path: (status, body)})
+        self.addCleanup(server.close)
+        with self.assertRaises(ProviderError) as ctx:
+            request_json(f"{server.origin}{path}", headers or {"Authorization": "Bearer secret-token"})
+        text = str(ctx.exception)
+        self.assertNotIn("secret-token", text)
+        self.assertNotIn("127.0.0.1", text)
+        return text
+
+    def test_403_without_a_relay_reason_points_at_cloudflare(self):
+        self.assertEqual(self.error("/tokens/daily", 403, b"error code: 1010"), "HTTP 403（可能被 Cloudflare 擋下）")
+
+    def test_403_from_the_relay_keeps_its_reason(self):
+        self.assertEqual(self.error("/pair", 403, '{"error": "配對失敗"}'.encode()), "HTTP 403：配對失敗")
+
+    def test_non_json_success_includes_the_status(self):
+        text = self.error("/usage", 200, b"<html>Just a moment...</html>")
+        self.assertEqual(text, "回應不是 JSON（HTTP 200），可能被 Cloudflare 擋下或 API 已變更")
+        self.assertNotIn("Just a moment", text)
+
+    def test_invalid_header_is_not_reported_as_a_bad_response(self):
+        # 密鑰貼進了換行或全形字：http.client 在送出前就拒絕，不能被說成「回應不是 JSON」
+        for key in ("aumd_abc\ndef", "aumd_ａｂｃ"):
+            server = Server()
+            self.addCleanup(server.close)
+            with self.assertRaises(ProviderError) as ctx:
+                request_json(f"{server.origin}/tokens/daily", {"Authorization": f"Bearer {key}"})
+            self.assertEqual(str(ctx.exception), "請求標頭含有無效字元，密鑰可能貼錯")
+            self.assertEqual(server.seen, [])
 
 
 if __name__ == "__main__":

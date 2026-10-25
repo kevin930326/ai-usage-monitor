@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,7 +13,9 @@ import urllib.request
 from . import __version__
 from .models import ProviderError
 
+# 每個請求都帶（tests/test_http.py 檢查）：Cloudflare 會以 403 擋下 urllib 預設的「Python-urllib/3.x」
 USER_AGENT = f"ai-usage-monitor/{__version__}"
+CLOUDFLARE_HINT = "（可能被 Cloudflare 擋下）"
 
 
 def _origin(url: str) -> tuple[str, str | None, int | None]:
@@ -66,21 +69,30 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
     try:
         with _opener.open(req, timeout=timeout) as resp:
-            raw = resp.read()
-            return json.loads(raw) if raw else {}
+            status, raw = resp.status, resp.read()
     except urllib.error.HTTPError as e:
         if 300 <= e.code < 400:
             raise ProviderError(f"伺服器要求重新導向（HTTP {e.code}），已停止") from None
-        if e.code in (401, 403):
+        if e.code == 401:
             raise HTTPStatusError(f"驗證失敗 (HTTP {e.code})，請重新登入", e.code) from None
+        if e.code == 403:
+            # 中繼自己只有 /pair 回 403（帶 {"error": …}）；其他 403 來自 Cloudflare 邊緣（WAF、Bot Fight Mode）
+            raise HTTPStatusError(f"HTTP 403{_reason(e) or CLOUDFLARE_HINT}", e.code) from None
         raise HTTPStatusError(f"HTTP {e.code}{_reason(e)}", e.code) from None
-    except urllib.error.URLError:
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, ssl.SSLCertVerificationError):
+            raise ProviderError("網路錯誤（HTTPS 憑證驗證失敗）") from None
         raise ProviderError("網路錯誤") from None
-    except ValueError:  # JSONDecodeError，以及不是 UTF-8 的回應（UnicodeDecodeError）
-        raise ProviderError("回應不是 JSON，API 可能已變更") from None
+    # 送出前被 http.client 拒絕：標頭含有換行或 Latin-1 以外的字元（例如貼錯的密鑰）
+    except ValueError:
+        raise ProviderError("請求標頭含有無效字元，密鑰可能貼錯") from None
     # 連上之後讀取回應時逾時（TimeoutError）、連線被中斷或回應不完整：urllib 不會包成 URLError
     except (OSError, http.client.HTTPException):
         raise ProviderError("網路錯誤（連線逾時或中斷）") from None
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:  # JSONDecodeError，以及不是 UTF-8 的回應（UnicodeDecodeError）
+        raise ProviderError(f"回應不是 JSON（HTTP {status}），可能被 Cloudflare 擋下或 API 已變更") from None
 
 
 def post_json(url: str, headers: dict[str, str], body: dict, timeout: float = 15) -> dict:
