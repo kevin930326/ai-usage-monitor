@@ -53,6 +53,25 @@ class RotateIfLargeTest(unittest.TestCase):
             self.assertFalse(log_module.rotate_if_large(self.path, limit=100))
         self.assertEqual(self.path.read_text(), "c" * 200)
 
+    def test_another_collector_rotating_in_between_keeps_the_full_old_copy(self):
+        """量完大小、改名之前另一個收集器先輪替了（審查 C-02）：不能拿它新建的短檔蓋掉剛存好的 .1。"""
+        self.path.write_text("full log\n" * 30)
+        old = self.path.with_name("collector.log.1")
+        real_stat = Path.stat
+        raced = []
+
+        def racing_stat(p, *args, **kwargs):
+            st = real_stat(p, *args, **kwargs)
+            if p == self.path and not raced:
+                raced.append(True)
+                os.replace(self.path, old)  # 另一個收集器輪替
+                self.path.write_text("new\n")
+            return st
+        with mock.patch.object(Path, "stat", racing_stat):
+            self.assertFalse(log_module.rotate_if_large(self.path, limit=100))
+        self.assertTrue(old.read_text().startswith("full log"))
+        self.assertEqual(self.path.read_text(), "new\n")
+
 
 class RotateInheritedTest(unittest.TestCase):
     """install-launchd.sh 的收集器：launchd 先把 stdout／stderr 開成附加到 collector.log 才啟動"""
