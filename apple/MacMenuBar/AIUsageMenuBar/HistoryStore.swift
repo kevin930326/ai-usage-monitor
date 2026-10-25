@@ -204,10 +204,12 @@ final class HistoryStore {
         var retentionDays: Int
         var sampleCount: Int
         var oldest: Date?
+        /// 資料庫大小與各表佔用；讀不到檔案大小時為 nil
+        var size: HistorySize? = nil
     }
 
     /// 設定視窗顯示的資訊：每次另開一個短暫的連線，用完就關。
-    nonisolated func info() -> Info {
+    nonisolated func info(now: Date = RenderClock.now) -> Info {
         guard FileManager.default.fileExists(atPath: url.path) else {
             return Info(status: .missing, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
         }
@@ -220,8 +222,64 @@ final class HistoryStore {
             let retention = Self.meta(db, "retention_days").flatMap(Int.init).flatMap { $0 >= 0 ? $0 : nil } ?? Self.defaultRetentionDays
             let count = Self.scalar(db, "SELECT COUNT(*) FROM quota_samples") ?? 0
             let oldest = Self.scalar(db, "SELECT MIN(ts) FROM quota_samples").map { Date(timeIntervalSince1970: TimeInterval($0)) }
-            return Info(status: status, retentionDays: retention, sampleCount: Int(count), oldest: count > 0 ? oldest : nil)
+            return Info(status: status, retentionDays: retention, sampleCount: Int(count), oldest: count > 0 ? oldest : nil,
+                        size: size(db, now: now))
         } ?? Info(status: .failed, retentionDays: Self.defaultRetentionDays, sampleCount: 0, oldest: nil)
+    }
+
+    /// 各表在設定「歷史資料」預估裡的分類（`HistorySize`）；沒列出的（meta、掃描進度等）算「其他」
+    private nonisolated static func sizeGroup(_ table: String) -> WritableKeyPath<HistorySize, Int64> {
+        switch table {
+        case "quota_samples", "collector_runs": \.quotaBytes
+        case "daily_tokens", "upload_state": \.dailyBytes
+        case "hourly_tokens": \.hourlyBytes
+        case "record_days", "record_days_cached": \.recordBytes
+        case "seen_ids", "seen_tasks", "file_tokens": \.seenBytes
+        default: \.otherBytes
+        }
+    }
+
+    /// 檔案大小（主檔＋WAL）與各表佔用（`dbstat`，含索引）；`dbstat` 不能用時只有檔案大小，不估算
+    private nonisolated func size(_ db: OpaquePointer, now: Date) -> HistorySize? {
+        func bytes(_ url: URL) -> Int64 {
+            ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+        }
+        let fileBytes = bytes(url) + bytes(URL(fileURLWithPath: url.path + "-wal"))
+        guard fileBytes > 0 else { return nil }
+        var size = HistorySize(fileBytes: fileBytes)
+        let tables = Self.rows(db, """
+            SELECT m.tbl_name, SUM(d.pgsize) FROM dbstat d JOIN sqlite_master m ON m.name = d.name
+            WHERE d.aggregate = 1 GROUP BY m.tbl_name
+            """, []) { stmt -> (String, Int64)? in
+            Self.text(stmt, 0).map { ($0, sqlite3_column_int64(stmt, 1)) }
+        }
+        guard let tables else { return size }
+        for (name, pages) in tables {
+            size[keyPath: Self.sizeGroup(name)] += pages
+        }
+        let nowTS = Int64(now.timeIntervalSince1970)
+        let present = Set(Self.existingTables(db, ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens",
+                                                   "record_days", "seen_ids"]))
+        for table in ["quota_samples", "collector_runs"] where present.contains(table) {
+            size.quotaRows += Self.scalar(db, "SELECT COUNT(*) FROM \(table)") ?? 0
+            let recent = Self.rows(db, "SELECT COUNT(*) FROM \(table) WHERE ts >= ?", [.int(nowTS - 7 * 86400)]) { sqlite3_column_int64($0, 0) }
+            size.quotaRowsPerDay += Double(recent?.first ?? 0) / 7
+        }
+        if let oldest = Self.scalar(db, "SELECT MIN(ts) FROM quota_samples") {
+            size.dataDays = Int(max(0, nowTS - oldest) / 86400)
+        }
+        func days(_ sql: String, _ values: [Value] = []) -> Int {
+            Int(max(0, Self.rows(db, sql, values) { sqlite3_column_type($0, 0) == SQLITE_NULL ? nil : sqlite3_column_int64($0, 0) }?.first ?? 0))
+        }
+        if present.contains("daily_tokens") { size.dailyDays = days("SELECT COUNT(DISTINCT day) FROM daily_tokens") }
+        if present.contains("hourly_tokens") { size.hourlyDays = days("SELECT COUNT(DISTINCT day) FROM hourly_tokens") }
+        if present.contains("record_days") { size.recordDays = days("SELECT COUNT(DISTINCT day) FROM record_days") }
+        if present.contains("seen_ids") {
+            // 最早一筆到今天（含）；沒有去重紀錄時是 0，不放大
+            size.seenSpanDays = days("SELECT CAST(julianday(?) - julianday(MIN(day)) AS INTEGER) + 1 FROM seen_ids", [.text(Self.tokenDay(now))])
+        }
+        size.seenBounded = Self.meta(db, "seen_cutoff_day") != nil
+        return size
     }
 
     enum WriteError: Error, Equatable {

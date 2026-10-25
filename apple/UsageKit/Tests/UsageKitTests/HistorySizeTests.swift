@@ -1,0 +1,100 @@
+import XCTest
+@testable import UsageKit
+
+final class HistorySizeTests: XCTestCase {
+    /// 30 天的資料：額度每筆 100 B、每天 600 筆；每日統計每天 1 KB；每小時統計每天 2 KB；
+    /// 個人紀錄 3 年、每天 100 B；去重紀錄 30 天 3 MB（收集器有時間窗）；其他 50 KB
+    private func sample() -> HistorySize {
+        var size = HistorySize(fileBytes: 6_000_000)
+        size.quotaBytes = 1_800_000
+        size.quotaRows = 18_000
+        size.quotaRowsPerDay = 600
+        size.dailyBytes = 30_000
+        size.dailyDays = 30
+        size.hourlyBytes = 60_000
+        size.hourlyDays = 30
+        size.recordBytes = 109_500
+        size.recordDays = 1095
+        size.seenBytes = 3_000_000
+        size.seenSpanDays = 30
+        size.seenBounded = true
+        size.otherBytes = 50_000
+        size.dataDays = 30
+        return size
+    }
+
+    // 預期值拆成明確標註型別的常數：Linux 的 Swift 推斷不出長算式（Float16 溢位、`*` 不明確）
+    /// 額度：每天 60 KB
+    private let quotaPerDay: Double = 60_000
+    /// 個人紀錄與其他：不跟保留期間走
+    private let fixedBytes: Int64 = 109_500 + 50_000
+    /// 去重紀錄放大到 90 天：3 MB × 90 / 30
+    private let seenWindow: Double = 9_000_000
+
+    func testSteadySizeFollowsTheCleanupRules() {
+        // 額度：60 KB/天 × (35 + 330 / 12) 天；每日統計 1 KB × 365；每小時統計 2 KB × 90；去重紀錄放大到 90 天；
+        // 個人紀錄目前的大小，之後每年 100 B × 365
+        let quotaDays: Double = 35 + 330.0 / 12
+        let quota: Double = quotaPerDay * quotaDays
+        let daily: Double = 1_000 * 365
+        let hourly: Double = 2_000 * 90
+        let steady: Int64 = Int64(quota + daily + hourly + seenWindow) + fixedBytes
+        XCTAssertEqual(sample().estimate(retentionDays: 365), .init(steady: steady, perYear: 36_500))
+    }
+
+    func testShortRetentionKeepsEveryQuotaSampleAndFewerHours() {
+        // 7 天都還沒降採樣；每小時統計跟著保留期間只留 7 天；去重紀錄不跟保留期間走，仍以 90 天估算
+        let steady: Int64 = Int64(sevenDays + seenWindow) + fixedBytes
+        XCTAssertEqual(sample().estimate(retentionDays: 7)?.steady, steady)
+    }
+
+    func testForeverReportsYearlyGrowth() {
+        // 降採樣後的額度、每日統計與個人紀錄一直增加；每小時統計、時間窗內的去重紀錄與其他不再變大
+        let perDay: Double = quotaPerDay / 12 + 1_000 + 100
+        let perYear: Int64 = Int64(perDay * 365)
+        XCTAssertEqual(sample().estimate(retentionDays: 0), .init(steady: nil, perYear: perYear))
+    }
+
+    func testCollectorWithoutTheWindowKeepsGrowingSeenRows() {
+        var size = sample()
+        size.seenBounded = false  // 舊版收集器：去重紀錄一直增加（100 KB/天）
+        let estimate = size.estimate(retentionDays: 365)
+        let quotaDays: Double = 35 + 330.0 / 12
+        let quota: Double = quotaPerDay * quotaDays
+        let rest: Double = 1_000 * 365 + 2_000 * 90 + 3_000_000
+        XCTAssertEqual(estimate?.steady, Int64(quota + rest) + fixedBytes)
+        let growth: Double = 100 * 365 + 100_000 * 365
+        XCTAssertEqual(estimate?.perYear, Int64(growth))
+    }
+
+    func testSeenRowsOlderThanTheWindowAreNotScaledDown() {
+        var size = sample()
+        size.seenSpanDays = 200  // 時間窗之前留下的去重紀錄，會由收集器慢慢刪掉，保守地不縮小
+        let steady: Int64 = Int64(sevenDays + 3_000_000) + fixedBytes
+        XCTAssertEqual(size.estimate(retentionDays: 7)?.steady, steady)
+    }
+
+    func testNoSeenRowsMeansNoScaling() {
+        var size = sample()
+        size.seenSpanDays = 0
+        let steady: Int64 = Int64(sevenDays + 3_000_000) + fixedBytes
+        XCTAssertEqual(size.estimate(retentionDays: 7)?.steady, steady)
+    }
+
+    /// 保留 7 天時的額度、每日統計與每小時統計
+    private var sevenDays: Double {
+        let quota: Double = quotaPerDay * 7
+        let daily: Double = 1_000 * 7
+        let hourly: Double = 2_000 * 7
+        return quota + daily + hourly
+    }
+
+    func testTooLittleDataGivesNoEstimate() {
+        var size = sample()
+        size.dataDays = HistorySize.minimumDays - 1
+        XCTAssertNil(size.estimate(retentionDays: 365))
+        size = HistorySize(fileBytes: 4096)  // 讀不到各表大小
+        size.dataDays = 30
+        XCTAssertNil(size.estimate(retentionDays: 365))
+    }
+}

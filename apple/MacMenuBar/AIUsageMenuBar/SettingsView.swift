@@ -365,6 +365,12 @@ private struct HistorySettingsSection: View {
             if let info, info.sampleCount > 0 {
                 Text(summary(info)).font(.caption).foregroundStyle(.secondary)
             }
+            if let info, let size = info.size {
+                Text(sizeSummary(size, retentionDays: info.retentionDays))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 8) {
                 Button("匯出額度 CSV…") { export(.quota) }
@@ -429,6 +435,28 @@ private struct HistorySettingsSection: View {
             text += "，最早 " + oldest.formatted(.dateTime.year().month().day())
         }
         return text
+    }
+
+    /// 資料庫大小與預估（ADR-0014）：保留期間內會穩定下來的大小，永久保留時改說每年增加多少；
+    /// 有保留期間時仍會一直增加的部分（個人紀錄、舊版收集器的去重紀錄）每年超過 1 MB 才另外說
+    private func sizeSummary(_ size: HistorySize, retentionDays: Int) -> String {
+        let text = "資料庫 " + Self.bytes(size.fileBytes)
+        guard let estimate = size.estimate(retentionDays: retentionDays) else {
+            return text + "，資料滿 \(HistorySize.minimumDays) 天後估算成長"
+        }
+        guard let steady = estimate.steady else {
+            return text + "，依最近的使用量，永久保留時每年約增加 " + Self.bytes(estimate.perYear)
+        }
+        let title = HistoryStore.retentionChoices.first { $0.days == retentionDays }?.title ?? "\(retentionDays) 天"
+        var result = text + "，依最近的使用量，保留 \(title)時約維持在 " + Self.bytes(steady)
+        if estimate.perYear >= 1_000_000 {
+            result += "，之後每年約增加 " + Self.bytes(estimate.perYear)
+        }
+        return result
+    }
+
+    private static func bytes(_ count: Int64) -> String {
+        count.formatted(.byteCount(style: .file))
     }
 
     private func refresh() {
