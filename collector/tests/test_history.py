@@ -268,6 +268,20 @@ class CleanupTest(HistoryTestCase):
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
         conn.close()
 
+    def test_clock_jumping_ahead_right_after_upgrading_does_not_wipe_history(self):
+        """升級前的資料庫沒有 cleanup_clock：以 last_cleanup_day 當基準，第一次清理遇到時鐘超前兩年也不刪光（審查 C-02）。"""
+        conn = self.fill(T0 - 300 * DAY, T0, step=DAY)
+        history.cleanup(conn, T0)
+        before = conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0]
+        conn.execute("DELETE FROM meta WHERE key = 'cleanup_clock'")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup_day', ?)", (history.local_day(T0),))
+        history.cleanup(conn, T0 + 730 * DAY)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        self.assertLessEqual(int(history.meta(conn, "cleanup_clock")), T0 + 3 * DAY)
+        history.cleanup(conn, T0 + DAY)  # 改回來
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        conn.close()
+
     def test_daily_cleanups_catch_up_after_a_long_pause(self):
         conn = self.fill(T0, T0 + HOUR)
         history.cleanup(conn, T0)

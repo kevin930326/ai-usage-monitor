@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import system
@@ -386,6 +386,14 @@ def _cleanup_clock(conn: sqlite3.Connection, now: int) -> int:
         last = int(meta(conn, "cleanup_clock") or 0)
     except ValueError:
         last = 0
+    if last <= 0:
+        # 升級後第一次（還沒有 cleanup_clock）：以上次清理那天結束時當基準，時鐘剛好超前也不會刪光（審查 C-02）。
+        # 都沒有時是新的資料庫，沒有東西可刪
+        try:
+            day = date.fromisoformat(meta(conn, "last_cleanup_day") or "")
+            last = int(datetime.combine(day + timedelta(days=1), datetime.min.time()).timestamp())
+        except (ValueError, OverflowError):
+            last = 0
     clock = now if last <= 0 or now <= last else min(now, last + CLEANUP_CLOCK_STEP)
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('cleanup_clock', ?)", (str(clock),))
     return clock
