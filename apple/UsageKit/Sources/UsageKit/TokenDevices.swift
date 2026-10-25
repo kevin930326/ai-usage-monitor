@@ -144,6 +144,8 @@ extension TokenStatsData {
     /// 依裝置範圍篩選。個人紀錄（`records`、`record_days`）與每小時資料只有這台 Mac 有：
     /// 所有電腦時個人紀錄改由每日資料計算（範圍是每日資料還在的期間）、每小時資料仍是這台 Mac 的；
     /// 其他電腦沒有每小時資料，也沒有首次掃描的進度。
+    /// `dataFrom`（清除或延長保留期間留下的邊界）只描述這台 Mac 的資料：其他電腦的列清除後會重新下載
+    /// （下載時已依保留期間刪除），所以只看一台其他電腦時不套用；所有電腦時本機那段確實沒有資料，維持邊界。
     public func scoped(_ scope: TokenDeviceScope) -> TokenStatsData {
         var result = self
         switch scope {
@@ -161,6 +163,7 @@ extension TokenStatsData {
             result.firstScanProgress = nil
             result.skippedLines = 0
             result.formatSuspect = false
+            result.dataFrom = nil
         }
         return result
     }

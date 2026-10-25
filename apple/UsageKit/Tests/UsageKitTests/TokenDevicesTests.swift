@@ -103,6 +103,23 @@ import Testing
         #expect(TokenSummary(data: pc, scope: .all, now: now, calendar: cal).thisWeek.main == 40)
     }
 
+    /// C-02：這台 Mac 今天清除了歷史（不重新掃描），其他電腦的舊資料下一輪重新下載回來
+    @Test func clearingLocalHistoryDoesNotHideOtherComputers() {
+        var cleared = data
+        cleared.days.append(row("2026-11-03", 25, device: pcID))
+        cleared.retentionDays = 365
+        cleared.dataFrom = "2026-11-05"
+        let pc = cleared.scoped(.device(pcID))
+        #expect(pc.dataFrom == nil)
+        #expect(TokenCalendar.key(pc.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2025-11-05")
+        #expect(pc.dailyTotals(scope: .all)["2026-11-03"]?.main == 25)
+        // 這台 Mac 與所有電腦：清除前那段本機確實沒有資料，維持邊界
+        for scope in [TokenDeviceScope.thisMac, .all] {
+            let scopedData = cleared.scoped(scope)
+            #expect(TokenCalendar.key(scopedData.firstAvailableDay(now: now, calendar: cal)!, calendar: cal) == "2026-11-05")
+        }
+    }
+
     @Test func scopeRawValueRoundTrips() {
         for scope in [TokenDeviceScope.thisMac, .all, .device(pcID)] {
             #expect(TokenDeviceScope(rawValue: scope.rawValue) == scope)
