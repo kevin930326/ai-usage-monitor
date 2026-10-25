@@ -321,6 +321,19 @@ import Testing
         #expect(TokenBreakdown.hours(data: cached, scope: .all)[9] == 440)
     }
 
+    @Test func includingCacheReadKeepsRecordOnlyData() {
+        // 每日資料都超過保留期間、只剩個人紀錄：打開含快取讀取後仍有資料（切換不會消失），最長任務照舊
+        let data = TokenStatsData(records: ["total_tokens": TokenRecord(value: 5000),
+                                            "longest_task_seconds": TokenRecord(value: 600, day: "2025-02-02")],
+                                  firstScanDone: true).measured(.includingCacheRead)
+        #expect(data.hasData)
+        let summary = TokenSummary(data: data, scope: .all, now: now, calendar: cal)
+        #expect(summary.total == nil)
+        #expect(summary.bestDay == nil)
+        #expect(summary.longestTaskSeconds?.value == 600)
+        #expect(data.measured(.main).records["total_tokens"]?.value == 5000)
+    }
+
     @Test func includingCacheReadWorksForEveryDeviceScope() {
         let pc = "0f8e2a3c-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
         var data = TokenStatsData(days: [row("2026-11-05", main: 40, cacheRead: 400)],

@@ -197,16 +197,18 @@ public struct TokenStatsData: Equatable, Sendable {
         }
     }
 
-    /// 改用另一種計算方式。收集器的 `best_day_tokens`、`total_tokens` 只記主數字（不含 cache_read），
-    /// 含快取讀取時拿掉，單日最高與累計改由每日資料計算（範圍是每日資料還在的期間，與所有電腦相同）；
-    /// 最長任務與連續天數與計算方式無關，照舊
+    /// 改用另一種計算方式。`records` 不動（`hasData` 仍看得到只剩個人紀錄的資料）：
+    /// 單日最高與累計見 `tokenRecord`；最長任務與連續天數與計算方式無關，照舊
     public func measured(_ measure: TokenMeasure) -> TokenStatsData {
         var result = self
         result.measure = measure
-        if measure == .includingCacheRead {
-            result.records = records.filter { !$0.key.hasPrefix("best_day_tokens") && !$0.key.hasPrefix("total_tokens") }
-        }
         return result
+    }
+
+    /// Token 數的個人紀錄（`best_day_tokens`、`total_tokens`，含 `:服務` 後綴）。收集器只記主數字（不含 cache_read），
+    /// 含快取讀取時為 nil，單日最高與累計改由已讀取的每日資料計算（最近一年，與所有電腦相同）
+    func tokenRecord(_ key: String) -> TokenRecord? {
+        measure == .main ? records[key] : nil
     }
 
     /// 每天（依範圍）的合計
@@ -308,12 +310,12 @@ public struct TokenSummary: Equatable, Sendable {
         func record(_ base: String) -> TokenRecord? { data.records[scope.recordKey(base)] }
         let computedBest = totals.filter { $0.value.value(m) > 0 }.max { ($0.value.value(m), $1.key) < ($1.value.value(m), $0.key) }
             .map { TokenRecord(value: $0.value.value(m), day: $0.key) }
-        bestDay = [record("best_day_tokens"), computedBest].compactMap { $0 }.max { $0.value < $1.value }
+        bestDay = [data.tokenRecord(scope.recordKey("best_day_tokens")), computedBest].compactMap { $0 }.max { $0.value < $1.value }
         let computedLongest = data.days.filter { scope.includes($0.provider) && $0.longestTaskSeconds > 0 }
             .max { $0.longestTaskSeconds < $1.longestTaskSeconds }
             .map { TokenRecord(value: Int64($0.longestTaskSeconds), day: $0.day) }
         longestTaskSeconds = [record("longest_task_seconds"), computedLongest].compactMap { $0 }.max { $0.value < $1.value }
-        total = record("total_tokens") ?? (totals.isEmpty ? nil : TokenRecord(value: totals.values.reduce(0) { $0 + $1.value(m) }))
+        total = data.tokenRecord(scope.recordKey("total_tokens")) ?? (totals.isEmpty ? nil : TokenRecord(value: totals.values.reduce(0) { $0 + $1.value(m) }))
 
         // 有 record_days 時以它為準（不受保留期間影響），否則用每日資料
         func used(_ date: Date) -> Bool {
@@ -417,7 +419,7 @@ public enum TokenActivity {
             let daily = (0..<dayCount).map { i in day(TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)) }
             let windowTotal = daily.reduce(Int64(0)) { $0 + $1.0.value(m) }
             let allTotals = data.dailyTotals(scope: scope).values.reduce(Int64(0)) { $0 + $1.value(m) }
-            var running = max((data.records[scope.recordKey("total_tokens")]?.value ?? allTotals) - windowTotal, 0)
+            var running = max((data.tokenRecord(scope.recordKey("total_tokens"))?.value ?? allTotals) - windowTotal, 0)
             return daily.enumerated().map { i, value in
                 running += value.0.value(m)
                 let date = TokenCalendar.adding(i - dayCount + 1, to: today, calendar: calendar)
