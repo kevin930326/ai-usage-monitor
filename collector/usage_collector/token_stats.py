@@ -628,9 +628,11 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         opened = os.fstat(fh.fileno())
         if system.file_identity(opened) != (f.device, f.inode):
             return st.offset
-        size = opened.st_size
+        # 大小與時間都用開檔後的 fstat：列舉在交易外，另一個收集器之後處理過新內容時，
+        # 列舉時的 mtime 會比它寫下的舊，拿來比會把正常的附加誤判成改寫、整檔重算（審查 C-01）
+        size, mtime = opened.st_size, int(opened.st_mtime)
         rewritten = row is not None and (
-            (row["device"], row["inode"]) != (f.device, f.inode) or size < row["offset"] or f.mtime < row["mtime"])
+            (row["device"], row["inode"]) != (f.device, f.inode) or size < row["offset"] or mtime < row["mtime"])
         if switch:
             _reset_codex(conn, totals, f.key, cutoffs)
             st = FileState(source="record")
@@ -675,7 +677,7 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     conn.execute(
         "INSERT OR REPLACE INTO scan_state (file_key, inode, device, size, mtime, offset, source, last_total, state, last_seen)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (f.key, f.inode, f.device, size, f.mtime, st.offset, st.source,
+        (f.key, f.inode, f.device, size, mtime, st.offset, st.source,
          json.dumps(st.last_total) if st.last_total is not None else None,
          st.state_json(), totals.now))
     return st.offset
@@ -716,6 +718,14 @@ class ScanResult:
     counters: Counters = field(default_factory=Counters)
 
 
+def _scan_row(conn: sqlite3.Connection, file_key: str) -> sqlite3.Row | None:
+    conn.row_factory = sqlite3.Row
+    try:
+        return conn.execute("SELECT * FROM scan_state WHERE file_key = ?", (file_key,)).fetchone()
+    finally:
+        conn.row_factory = None
+
+
 def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
          budget: Budget | None = None) -> ScanResult:
     now = int(time.time()) if now is None else now
@@ -748,6 +758,9 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                 totals, counters = Totals(device_id, now), Counters()
                 try:
                     with history._transaction(conn):
+                        # 拿到寫入鎖後重新讀這個檔案的進度：上面的整批讀取在交易外，另一個收集器（手動執行、
+                        # App 觸發）可能已經處理過同一段，沿用舊 offset 會讓 Codex 的累計差額再加一次
+                        row = _scan_row(conn, f.key)
                         offset = _process(conn, f, row, totals, budget, counters, cutoffs, switch)
                     break
                 except _SwitchToRecord:

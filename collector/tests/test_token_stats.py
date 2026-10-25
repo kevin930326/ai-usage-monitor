@@ -604,6 +604,56 @@ class CodexTest(TokenStatsTestCase):
         fresh = self.fresh((self.codex_file(), "codex"))
         self.assertEqual(self.table("daily_tokens"), self.table("daily_tokens", fresh))
 
+    def test_concurrent_collector_does_not_add_codex_deltas_twice(self):
+        """兩個收集器同時執行（launchd 一輪＋手動執行）：第一個在交易外讀了掃描進度後，
+        第二個先拿到寫入鎖並處理完同一段新內容；第一個拿到鎖後不能沿用舊 offset 再累加一次。"""
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=100, out=10))
+        self.scan()
+        self.write(self.codex_file(), codex_count(T0 + 1, inp=300, out=30))
+        original = history._transaction
+        other_ran = []
+
+        @contextmanager
+        def racing(conn):
+            if not other_ran:
+                other_ran.append(True)
+                self.scan()  # 另一個收集器（另一條連線）先完成
+            with original(conn):
+                yield
+
+        with mock.patch.object(history, "_transaction", racing):
+            self.scan()
+        self.assertTrue(other_ran)
+        self.assertEqual(self.totals("codex")[:4], (300, 0, 0, 30))
+        fresh = self.fresh((self.codex_file(), "codex"))
+        self.assertEqual(self.table("daily_tokens"), self.table("daily_tokens", fresh))
+
+    def test_concurrent_collector_append_is_not_mistaken_for_a_rewrite(self):
+        """A 列舉後紀錄又附加、B 先處理完並寫下較新的 mtime：A 不能拿列舉時較舊的 mtime 判成改寫、整檔重算（審查 C-01）。"""
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=100, out=10))
+        self.scan()
+        self.write(self.codex_file(), codex_count(T0 + 1, inp=300, out=30))
+        original = history._transaction
+        other_ran = []
+
+        @contextmanager
+        def racing(conn):
+            if not other_ran:
+                other_ran.append(True)
+                self.write(self.codex_file(), codex_count(T0 + 2, inp=600, out=60))
+                later = time.time() + 100
+                os.utime(self.codex_file(), (later, later))
+                self.scan()  # B
+            with original(conn):
+                yield
+
+        with mock.patch.object(history, "_transaction", racing), \
+             mock.patch.object(token_stats, "_reset_codex", wraps=token_stats._reset_codex) as reset:
+            self.scan()  # A
+        self.assertTrue(other_ran)
+        reset.assert_not_called()
+        self.assertEqual(self.totals("codex")[:4], (600, 0, 0, 60))
+
     def test_copied_codex_rollout_counts_once(self):
         # 同一個 rollout 被複製（不是搬移）到 archived_sessions：token_count 沒有跨檔 ID，只算一份
         lines = (codex_turn(), codex_count(T0, inp=100, out=10), codex_count(T0 + 1, inp=300, out=30))
