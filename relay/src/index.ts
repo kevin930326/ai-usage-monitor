@@ -62,7 +62,7 @@ async function authorized(request: Request, expected: string): Promise<boolean> 
 // 上限遠大於實際用量（目前 2 個服務、每個最多約 6 個額度），只為擋下明顯錯誤的內容
 export const LIMITS = {
   providers: 8, windows: 16, plan: 64, error: 500, id: 64, label: 64, maxPct: 1000,
-  // 重置次數卷：張數上限與明細（到期時間）筆數上限，和收集器的 MAX_RESET_CREDITS／MAX_RESET_CREDIT_DETAILS 相同
+  // 重置次數卷：張數上限與明細（依到期時間分組）筆數上限，和收集器的 MAX_RESET_CREDITS／MAX_RESET_CREDIT_DETAILS 相同
   resetCredits: 1000, resetCreditDetails: 16,
 };
 const PROVIDER_KEY = /^[a-z0-9_-]{1,32}$/;
@@ -104,7 +104,8 @@ function sanitizeWindow(w: unknown): Result<Fields> {
   return { ok: true, value: window };
 }
 
-/** 選填的重置次數卷：`{available, credits: [{expires_at}]}`，只保留張數與到期時間。 */
+/** 選填的重置次數卷：`{available, credits: [{expires_at, count}]}`（依到期時間分組；沒有 count 的舊格式當 1 張），
+ *  只保留張數與到期時間。 */
 function sanitizeResetCredits(r: unknown): Result<Fields> {
   if (!isObject(r)) return fail("reset_credits 必須是物件");
   const available = r.available;
@@ -119,7 +120,14 @@ function sanitizeResetCredits(r: unknown): Result<Fields> {
   for (const c of credits) {
     if (!isObject(c)) return fail("重置卷必須是物件");
     if (c.expires_at !== null && c.expires_at !== undefined && !isDate(c.expires_at)) return fail("expires_at 不是日期");
-    details.push({ expires_at: c.expires_at ?? null });
+    const detail: Fields = { expires_at: c.expires_at ?? null };
+    if ("count" in c) {
+      if (!Number.isInteger(c.count) || (c.count as number) < 1 || (c.count as number) > LIMITS.resetCredits) {
+        return fail("重置卷的 count 不合法");
+      }
+      detail.count = c.count;
+    }
+    details.push(detail);
   }
   return { ok: true, value: { available, credits: details } };
 }

@@ -204,7 +204,8 @@ class ResetCreditsTest(unittest.TestCase):
     def test_count_and_expiry_sorted_earliest_first(self):
         usage = self.parse({"availableCount": 3, "credits": [credit(None), credit(1795000000), credit(1792800000)]})
         self.assertEqual(usage["reset_credits"], {"available": 3, "credits": [
-            {"expires_at": "2026-10-24T00:00:00Z"}, {"expires_at": "2026-11-18T11:06:40Z"}, {"expires_at": None},
+            {"expires_at": "2026-10-24T00:00:00Z", "count": 1}, {"expires_at": "2026-11-18T11:06:40Z", "count": 1},
+            {"expires_at": None, "count": 1},
         ]})
 
     def test_only_count_known(self):
@@ -215,13 +216,21 @@ class ResetCreditsTest(unittest.TestCase):
     def test_unavailable_credits_are_skipped(self):
         usage = self.parse({"availableCount": 1, "credits": [credit(1792800000), credit(1792900000, "redeemed"),
                                                               credit(1792900000, "redeeming")]})
-        self.assertEqual(usage["reset_credits"]["credits"], [{"expires_at": "2026-10-24T00:00:00Z"}])
+        self.assertEqual(usage["reset_credits"]["credits"], [{"expires_at": "2026-10-24T00:00:00Z", "count": 1}])
 
     def test_details_are_capped(self):
         many = [credit(1792800000 + i) for i in range(40, 0, -1)]
         details = self.parse({"availableCount": 40, "credits": many})["reset_credits"]["credits"]
         self.assertEqual(len(details), codex.MAX_RESET_CREDIT_DETAILS)
-        self.assertEqual(details[0], {"expires_at": "2026-10-24T00:00:01Z"})
+        self.assertEqual(details[0], {"expires_at": "2026-10-24T00:00:01Z", "count": 1})
+
+    def test_same_expiry_is_one_group(self):
+        # 審查 C-02：17 張同時到期不能被截成 16 張，否則到期後 App 只扣得掉 16 張
+        same = [credit(1792800000) for _ in range(17)] + [credit(None), credit(None)]
+        usage = self.parse({"availableCount": 19, "credits": same})
+        self.assertEqual(usage["reset_credits"]["credits"], [
+            {"expires_at": "2026-10-24T00:00:00Z", "count": 17}, {"expires_at": None, "count": 2},
+        ])
 
     def test_missing_or_malformed_is_left_out_without_affecting_windows(self):
         for summary in (..., None, [], "2", {}, {"availableCount": -1}, {"availableCount": True},

@@ -14,7 +14,7 @@ import Testing
     func days(_ n: Double) -> Date { now.addingTimeInterval(n * 86400) }
 
     func credits(_ available: Int, _ expiries: [Date?]) -> ResetCredits {
-        ResetCredits(available: available, credits: expiries.map(ResetCredits.ResetCredit.init))
+        ResetCredits(available: available, credits: expiries.map { .init(expiresAt: $0) })
     }
 
     // MARK: - 解碼
@@ -74,6 +74,20 @@ import Testing
         #expect(c.usableCount(at: now) == 1)
         #expect(c.summary(at: now, calendar: calendar) == "重置卷 1 張 · 10/23 到期")
         #expect(credits(1, [days(-1)]).summary(at: now, calendar: calendar) == nil)
+    }
+
+    @Test func creditsExpiringTogetherAreOneGroup() throws {
+        // 審查 C-02：17 張同時到期是一組，到期後全部扣掉、不再顯示
+        let c = ResetCredits(available: 19, credits: [.init(expiresAt: days(1), count: 17), .init(expiresAt: nil, count: 2)])
+        #expect(c.summary(at: now, calendar: calendar) == "重置卷 19 張 · 最早 10/22 到期")
+        #expect(c.detailLines(at: now, calendar: calendar) == ["10/22 12:00 到期（17 張）", "不會到期（2 張）"])
+        #expect(c.expiring(at: now).map(\.count) == [17])
+        #expect(c.usableCount(at: days(2)) == 2)
+        #expect(credits(17, [days(1)]).usableCount(at: days(2)) == 16)  // 舊格式（沒有 count）一筆算 1 張
+        #expect(ResetCredits(available: 17, credits: [.init(expiresAt: days(1), count: 17)]).summary(at: days(2), calendar: calendar) == nil)
+        // 解碼：count 沒給時是 1
+        let codex = try decode(#"{"windows":[],"reset_credits":{"available":3,"credits":[{"expires_at":null,"count":2},{"expires_at":null}]}}"#)
+        #expect(codex?.resetCredits?.credits.map(\.count) == [2, 1])
     }
 
     @Test func detailLinesListEachCredit() {

@@ -23,6 +23,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, cast
@@ -38,7 +39,8 @@ TIMEOUT = 30  # 秒，整段對話；正常約 0.7 秒
 MAX_WINDOW_MINUTES = 366 * 24 * 60  # 更長的額度長度視為格式改變（window id 也不會超過中繼的長度上限）
 CLOSE_TIMEOUT = 3  # 關閉 stdin 後等 app-server 自己結束的秒數，超過就強制結束
 MAX_OUTPUT = 1024 * 1024  # 讀取的位元組上限，避免異常輸出吃光記憶體
-# 與中繼的 LIMITS.resetCredits／resetCreditDetails 相同：張數超過視為格式不對；明細只留最早到期的幾張
+# 與中繼的 LIMITS.resetCredits／resetCreditDetails 相同：張數超過視為格式不對；明細依到期時間分組，
+# 只留最早到期的幾組（同時到期的卷再多也只佔一組，到期後 App 才扣得掉，審查 C-02）
 MAX_RESET_CREDITS = 1000
 MAX_RESET_CREDIT_DETAILS = 16
 
@@ -305,9 +307,10 @@ def parse_reset_credits(summary: object) -> ResetCredits | None:
             expires.append(None if value is None else parse_timestamp(value))
         except ValueError:
             return None
-    # 最早到期的在前，不會到期的放最後
-    expires.sort(key=lambda e: (e is None, e or datetime.min.replace(tzinfo=timezone.utc)))
-    return ResetCredits(available=count, expires_at=expires[:MAX_RESET_CREDIT_DETAILS])
+    # 依到期時間分組，最早到期的在前，不會到期的放最後
+    counts = Counter(expires)
+    order = sorted(counts, key=lambda e: (e is None, e or datetime.min.replace(tzinfo=timezone.utc)))
+    return ResetCredits(available=count, groups=[(e, counts[e]) for e in order][:MAX_RESET_CREDIT_DETAILS])
 
 
 def parse(result: dict) -> ProviderUsage:

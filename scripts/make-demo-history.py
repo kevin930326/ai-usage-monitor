@@ -197,8 +197,8 @@ def main() -> None:
         "claude": {"plan": "Max", "error": None, "windows": []},
         "codex": {"plan": "Team", "error": None, "windows": [],
                   # 重置卷 2 張：一張 2 天後到期（3 天內，會通知）、一張 30 天後
-                  "reset_credits": {"available": 2, "credits": [{"expires_at": iso(now + 2 * 86400)},
-                                                                {"expires_at": iso(now + 30 * 86400)}]}},
+                  "reset_credits": {"available": 2, "credits": [{"expires_at": iso(now + 2 * 86400), "count": 1},
+                                                                {"expires_at": iso(now + 30 * 86400), "count": 1}]}},
     }}
     for (provider, wid), (label, reset, _) in windows.items():
         snapshot["providers"][provider]["windows"].append(

@@ -112,7 +112,7 @@ apple/
         { "id": "five_hour", "label": "5 小時", "used_pct": 0,  "resets_at": "2026-10-20T14:00:00Z", "hidden": false },
         { "id": "weekly",    "label": "每週",   "used_pct": 41, "resets_at": "2026-10-27T01:00:00Z", "hidden": false }
       ],
-      "reset_credits": { "available": 2, "credits": [{ "expires_at": "2026-10-22T09:30:00Z" }, { "expires_at": null }] }
+      "reset_credits": { "available": 3, "credits": [{ "expires_at": "2026-10-22T09:30:00Z", "count": 2 }, { "expires_at": null, "count": 1 }] }
     }
   }
 }
@@ -122,7 +122,7 @@ apple/
 - `resets_at` 存絕對時間（UTC ISO 8601），iOS 端用 `Text(date, style: .relative)` 自動倒數。
 - `hidden`：次要額度（如各模型的每週上限），iOS／Mac 端預設不顯示（FR-14）。
 - 失敗的 provider：`windows` 為空陣列、`error` 為簡短訊息。
-- `reset_credits`（選填，目前只有 Codex，FR-58）：可用的重置次數卷張數與各張到期時間（`null`＝不會到期），最早到期的在前、最多 16 筆；明細可能比 `available` 少（後端沒給或有上限）。舊版收集器沒有這個欄位、讀不到時也不輸出；同一個 `schema_version` 新增，舊版 App 略過不認得的欄位。中繼以白名單重建快照，新增這類欄位時要先更新中繼並重新部署，否則欄位會被移除（iPhone 看不到，Mac 讀本機快照不受影響）。
+- `reset_credits`（選填，目前只有 Codex，FR-58）：可用的重置次數卷張數與到期時間，依到期時間分組（`count` 張同時到期，沒有 `count` 時當 1 張；`null`＝不會到期），最早到期的在前、最多 16 組；明細可能比 `available` 少（後端沒給或有上限）。舊版收集器沒有這個欄位、讀不到時也不輸出；同一個 `schema_version` 新增，舊版 App 略過不認得的欄位。中繼以白名單重建快照，新增這類欄位時要先更新中繼並重新部署，否則欄位會被移除（iPhone 看不到，Mac 讀本機快照不受影響）。
 - `providers` 只包含收集器啟用的服務，可能只有一個或是空物件；這不是錯誤，也不是格式變更，`schema_version` 不變。各平台照常顯示現有的服務，不為缺少的服務留空位；`providers` 為空時顯示「沒有啟用任何服務」的提示。
 
 ## 4. 失敗處理

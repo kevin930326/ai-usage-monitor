@@ -149,7 +149,7 @@ Codex 的「重置次數卷」（reset credits）可以讓額度提早重置，�
 
 | ID | 需求 | 優先度 | 里程碑 |
 |---|---|---|---|
-| FR-58 | 收集器從 `account/rateLimits/read` 的 `rateLimitResetCredits` 讀可用張數與各張到期時間，寫進 `usage.json` 服務的選填欄位 `reset_credits`（`{"available": 2, "credits": [{"expires_at": "…"}]}`，同一個 `schema_version`，舊版 App 略過；卷的 id、標題、取得時間不保留；格式不對時省略，不影響額度）。中繼的白名單一起更新。Mac 面板的 Codex 額度卡片與 iPhone App 主畫面的 Codex 區塊顯示一行「重置卷 2 張 · 最早 11/20 到期」，0 張時不顯示；已過到期時間的卷不算；Mac 滑鼠移上去列出每張的到期時間。Live Activity、小工具與手錶不顯示 | Could | v1.10 |
+| FR-58 | 收集器從 `account/rateLimits/read` 的 `rateLimitResetCredits` 讀可用張數與各張到期時間，寫進 `usage.json` 服務的選填欄位 `reset_credits`（`{"available": 2, "credits": [{"expires_at": "…", "count": 2}]}`，依到期時間分組，同一個 `schema_version`，舊版 App 略過；卷的 id、標題、取得時間不保留；格式不對時省略，不影響額度）。中繼的白名單一起更新。Mac 面板的 Codex 額度卡片與 iPhone App 主畫面的 Codex 區塊顯示一行「重置卷 2 張 · 最早 11/20 到期」，0 張時不顯示；已過到期時間的卷不算；Mac 滑鼠移上去列出每張的到期時間。Live Activity、小工具與手錶不顯示 | Could | v1.10 |
 | FR-59 | Mac 通知：有重置卷將在 3 天內到期時通知一次（同一張卷、同一個到期時間只通知一次；同時到期的幾張合成一則）；設定「通知 › 重置卷快到期」，預設開 | Could | v1.10 |
 
 ### 3.7 里程碑（Mac 面板、統計與安裝）

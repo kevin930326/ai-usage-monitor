@@ -77,7 +77,7 @@ describe("POST /usage", () => {
 
   it("LIMITS 允許的最大快照不會被 body 上限擋下", async () => {
     const window = (i: number) => ({ id: `weekly_model_${i}`, label: `每週 Model ${i}`, used_pct: 100, resets_at: "2026-10-21T05:00:00Z", hidden: true });
-    const credits = Array.from({ length: 16 }, () => ({ expires_at: "2026-11-20T05:00:00Z" }));
+    const credits = Array.from({ length: 16 }, () => ({ expires_at: "2026-11-20T05:00:00Z", count: 1000 }));
     const provider = {
       plan: "Max", error: null, windows: Array.from({ length: 16 }, (_, i) => window(i)),
       reset_credits: { available: 1000, credits },
@@ -119,7 +119,7 @@ describe("POST /usage 欄位驗證（C-12）", () => {
   });
 
   it("保存重置次數卷的張數與到期時間，卷的其他欄位被移除", async () => {
-    const resetCredits = { available: 3, credits: [{ expires_at: "2026-10-23T03:00:00Z" }, { expires_at: null }] };
+    const resetCredits = { available: 3, credits: [{ expires_at: "2026-10-23T03:00:00Z", count: 2 }, { expires_at: null }] };
     const body = snapshot({
       reset_credits: { ...resetCredits, id: "leak", credits: [{ ...resetCredits.credits[0], id: "leak", title: "leak" }, {}] },
     });
@@ -161,6 +161,9 @@ describe("POST /usage 欄位驗證（C-12）", () => {
     ["重置卷明細不是陣列", snapshot({ reset_credits: { available: 1, credits: {} } })],
     ["重置卷明細不是物件", snapshot({ reset_credits: { available: 1, credits: ["x"] } })],
     ["重置卷到期時間不是日期", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: "soon" }] } })],
+    ["重置卷 count 是 0", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: 0 }] } })],
+    ["重置卷 count 是字串", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: "1" }] } })],
+    ["重置卷 count 過大", snapshot({ reset_credits: { available: 1, credits: [{ expires_at: null, count: 1001 }] } })],
     [
       "重置卷明細過多",
       snapshot({ reset_credits: { available: 17, credits: Array.from({ length: 17 }, () => ({ expires_at: null })) } }),

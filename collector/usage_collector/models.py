@@ -58,15 +58,15 @@ class Window:
 
 @dataclass
 class ResetCredits:
-    """可用的重置次數卷（目前只有 Codex）。`expires_at` 是有明細的各張到期時間（None＝不會到期），
-    明細可能比 `available` 少（後端沒給或有上限），少的部分是到期日不明。"""
+    """可用的重置次數卷（目前只有 Codex）。`groups` 是有明細的卷依到期時間分組的（到期時間, 張數），
+    None＝不會到期；明細可能比 `available` 少（後端沒給或有上限），少的部分是到期日不明。"""
     available: int
-    expires_at: list[datetime | None] = field(default_factory=list)
+    groups: list[tuple[datetime | None, int]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "available": self.available,
-            "credits": [{"expires_at": iso_utc(e) if e else None} for e in self.expires_at],
+            "credits": [{"expires_at": iso_utc(e) if e else None, "count": n} for e, n in self.groups],
         }
 
 
