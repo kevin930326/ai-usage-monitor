@@ -712,21 +712,23 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
 
 
 def _update_records(conn: sqlite3.Connection) -> None:
-    """單日最高與最長連續天數：從 record_days（不套用保留期間）重算，只在變大時更新。
-    含快取讀取的單日最高從 record_days_cached 算；連續天數只看主數字。"""
+    """單日最高與最長連續天數：從 record_days（不套用保留期間）重算後直接寫入。
+    record_days 包含所有計入過的日子，所以重算值只會在 Codex 重算扣除時變小，這時紀錄也跟著下修（ADR-0014 LT-18）；
+    同樣大時取最早的那天。含快取讀取的單日最高從 record_days_cached 算；連續天數只看主數字。"""
     for provider in (None, *PROVIDERS):
         suffix = f":{provider}" if provider else ""
         where, args = ("WHERE provider = ?", (provider,)) if provider else ("", ())
         cached = conn.execute(f"SELECT day, SUM(tokens) AS t FROM record_days_cached {where}"
                               " GROUP BY day HAVING t > 0 ORDER BY t DESC, day LIMIT 1", args).fetchone()
-        if cached:
-            _raise_record(conn, "best_day_tokens_cached" + suffix, cached[1], cached[0])
+        _set_record(conn, "best_day_tokens_cached" + suffix, cached)
         days = conn.execute(
             f"SELECT day, SUM(tokens) AS t FROM record_days {where} GROUP BY day HAVING t > 0 ORDER BY day", args).fetchall()
         if not days:
+            _set_record(conn, "best_day_tokens" + suffix, None)
+            _set_record(conn, "longest_streak_days" + suffix, None)
             continue
         best = min(days, key=lambda r: (-r[1], r[0]))
-        _raise_record(conn, "best_day_tokens" + suffix, best[1], best[0])
+        _set_record(conn, "best_day_tokens" + suffix, (best[0], best[1]))
         longest, run, prev, end = 0, 0, None, None
         for day, _ in days:
             d = datetime.fromisoformat(day).date()
@@ -734,7 +736,15 @@ def _update_records(conn: sqlite3.Connection) -> None:
             prev = d
             if run > longest:
                 longest, end = run, day
-        _raise_record(conn, "longest_streak_days" + suffix, longest, end)
+        _set_record(conn, "longest_streak_days" + suffix, (end, longest))
+
+
+def _set_record(conn: sqlite3.Connection, key: str, best) -> None:
+    """`best` 是 (day, value)；None（全部扣到 0）時刪掉這項紀錄。"""
+    if best is None:
+        conn.execute("DELETE FROM records WHERE key = ?", (key,))
+    else:
+        conn.execute("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, ?, ?)", (key, best[1], best[0]))
 
 
 @dataclass
