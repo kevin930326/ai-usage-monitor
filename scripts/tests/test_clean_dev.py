@@ -149,6 +149,21 @@ class CleanDevTests(unittest.TestCase):
         names = subprocess.run(["pgrep", "-x", "xcodebuild|swift-build|swift-test|zsh|bash"], capture_output=True, text=True)
         self.assertEqual(names.returncode, 0)  # pgrep 接受以 | 分隔的名稱（這個測試本身在 bash 底下）
 
+    def test_derived_data_with_recent_files_inside_is_kept(self):
+        """最外層資料夾是 40 天前、裡面今天更新過的 DerivedData 不算舊的（審查 C-03）。"""
+        busy = self.derived / "AIUsageWatch-busy"
+        (busy / "Build" / "Intermediates").mkdir(parents=True)
+        (busy / "Build" / "Intermediates" / "today.o").write_text("x")
+        for p in (busy / "Build" / "Intermediates", busy / "Build", busy):
+            os.utime(p, (OLD, OLD))
+        listed = self.run_script()
+        self.assertNotIn("AIUsageWatch-busy", listed.stdout)
+        self.assertIn("AIUsageMenuBar-old", listed.stdout)
+        result = self.run_script("--clean", "--yes")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(busy.exists())
+        self.assertFalse((self.derived / "AIUsageMenuBar-old").exists())
+
     def test_clean_without_terminal_needs_yes(self):
         result = self.run_script("--clean")
         self.assertEqual(result.returncode, 2)

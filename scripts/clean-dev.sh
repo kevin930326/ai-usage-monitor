@@ -8,7 +8,7 @@
 # 清理的範圍（都能重新產生，或已經是要丟的東西）：
 #   1. 建置產物：主資料夾與每個 worktree 的 build/、apple/*/build/、apple/UsageKit/.build/
 #      （有 build/install.lock 時略過那個資料夾：install-mac-app.sh 正在執行）
-#   2. 這個專案超過 30 天沒更新的 Xcode DerivedData（AIUsageMenuBar-*、AIUsageMonitor-*、AIUsageWatch-*、UsageKit-*）。
+#   2. 這個專案整個資料夾（含裡面的檔案）超過 30 天沒更新的 Xcode DerivedData（AIUsageMenuBar-*、AIUsageMonitor-*、AIUsageWatch-*、UsageKit-*）。
 #      iPhone 自動重裝用的 ~/Library/Caches/AIUsageMonitor/DerivedData 不在範圍內
 #   3. 不用的模擬器：runtime 已移除、無法使用的模擬器（xcrun simctl delete unavailable）
 #   4. 本機的 backup/* 分支（只刪本機，不碰遠端）
@@ -111,6 +111,8 @@ section "超過 ${DAYS} 天沒更新的 DerivedData（${DERIVED}）"
 derived=()
 if [ -d "$DERIVED" ]; then
   while IFS= read -r dir; do
+    # 最外層資料夾的時間不會因為裡面的檔案更新而改變：整棵樹都超過天數才算舊的
+    [ -z "$(find "$dir" -mtime -"$DAYS" -print -quit 2>/dev/null)" ] || continue
     derived+=("$dir")
     printf '  %-8s %s\n' "$(size "$dir")" "$(basename "$dir")"
   done < <(find "$DERIVED" -mindepth 1 -maxdepth 1 -type d \
