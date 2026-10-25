@@ -659,6 +659,24 @@ class CodexTest(TokenStatsTestCase):
         reset.assert_not_called()
         self.assertEqual(self.totals("codex")[:4], (600, 0, 0, 60))
 
+    def test_records_go_down_when_a_codex_recount_subtracts(self):
+        """Codex 重算扣除後，單日最高與連續天數跟著下修，與一次讀完相同（ADR-0014 LT-18）。"""
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=1_000_000, out=0),
+                   codex_count(T0 + DAY, inp=1_000_100, out=0))
+        self.scan(now=T0 + 2 * DAY)
+        self.assertEqual(self.records()["best_day_tokens"][0], 1_000_000)
+        self.assertEqual(self.records()["longest_streak_days"][0], 2)
+        # 改寫成較小的內容（只剩第一天、數字小很多）→ 先扣再加
+        self.write(self.codex_file(), codex_turn(), codex_count(T0, inp=500, out=0), mode="w")
+        os.utime(self.codex_file(), (T0 - DAY, T0 - DAY))
+        self.scan(now=T0 + 2 * DAY)
+        records = self.records()
+        self.assertEqual(records["best_day_tokens"][0], 500)
+        self.assertEqual(records["longest_streak_days"][0], 1)
+        fresh = self.fresh((self.codex_file(), "codex"))
+        for key in ("best_day_tokens", "best_day_tokens:codex", "longest_streak_days", "total_tokens"):
+            self.assertEqual(records[key], self.records(fresh)[key], key)
+
     def test_copied_codex_rollout_counts_once(self):
         # 同一個 rollout 被複製（不是搬移）到 archived_sessions：token_count 沒有跨檔 ID，只算一份
         lines = (codex_turn(), codex_count(T0, inp=100, out=10), codex_count(T0 + 1, inp=300, out=30))

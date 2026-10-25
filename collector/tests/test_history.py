@@ -254,6 +254,55 @@ class CleanupTest(HistoryTestCase):
         self.assertEqual(conn.execute("SELECT SUM(runs) FROM collector_runs WHERE ts < ?", (now - 35 * DAY,)).fetchone()[0], 36)
         conn.close()
 
+    def test_clock_jumping_ahead_does_not_wipe_history(self):
+        """時鐘被設到兩年後（ADR-0014 LT-11）：一次清理只前進 2 天，保留期間（1 年）內的資料不會被刪光；
+        改回正確時間後照常。"""
+        conn = self.fill(T0 - 300 * DAY, T0, step=DAY)
+        history.cleanup(conn, T0)
+        before = conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0]
+        history.cleanup(conn, T0 + 730 * DAY)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        self.assertEqual(history.meta(conn, "cleanup_clock"), str(T0 + 2 * DAY))
+        history.cleanup(conn, T0 + DAY)  # 改回來：用現在的時間
+        self.assertEqual(history.meta(conn, "cleanup_clock"), str(T0 + DAY))
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        conn.close()
+
+    def test_clock_jumping_ahead_right_after_upgrading_does_not_wipe_history(self):
+        """升級前的資料庫沒有 cleanup_clock：以 last_cleanup_day 當基準，第一次清理遇到時鐘超前兩年也不刪光（審查 C-02）。"""
+        conn = self.fill(T0 - 300 * DAY, T0, step=DAY)
+        history.cleanup(conn, T0)
+        before = conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0]
+        conn.execute("DELETE FROM meta WHERE key = 'cleanup_clock'")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup_day', ?)", (history.local_day(T0),))
+        history.cleanup(conn, T0 + 730 * DAY)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        self.assertLessEqual(int(history.meta(conn, "cleanup_clock")), T0 + 3 * DAY)
+        history.cleanup(conn, T0 + DAY)  # 改回來
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples").fetchone()[0], before)
+        conn.close()
+
+    def test_daily_cleanups_catch_up_after_a_long_pause(self):
+        conn = self.fill(T0, T0 + HOUR)
+        history.cleanup(conn, T0)
+        later = T0 + 400 * DAY  # 收集器停了 400 天：每天的清理各前進 2 天，最後追上
+        for day in range(400):
+            history.cleanup(conn, later + day * DAY)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples WHERE ts < ?", (T0 + HOUR,)).fetchone()[0], 0)
+        self.assertEqual(history.meta(conn, "cleanup_clock"), str(later + 399 * DAY))
+        conn.close()
+
+    def test_downsampling_watermark_in_the_future_is_reset(self):
+        now = T0 + 40 * DAY
+        hour0 = (T0 // HOUR + 1) * HOUR
+        conn = self.fill(hour0, hour0 + 2 * HOUR)
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('downsampled_before', ?)", (str(now + 3650 * DAY),))
+        history.cleanup(conn, now)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM quota_samples WHERE provider = 'claude'"
+                                      " AND window_id = 'five_hour'").fetchone()[0], 2)
+        self.assertLessEqual(int(history.meta(conn, "downsampled_before")), now)
+        conn.close()
+
     def test_retention_deletes_old_rows(self):
         now = T0 + 400 * DAY
         conn = self.fill(T0, T0 + HOUR)                       # 400 天前

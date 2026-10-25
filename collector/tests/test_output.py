@@ -1,5 +1,6 @@
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -60,6 +61,21 @@ class RelayUploadTest(unittest.TestCase):
     def test_missing_config_raises_not_configured(self):
         with self.assertRaises(relay.RelayNotConfigured):
             relay.load_relay_url(Path("/nonexistent/config.json"))
+
+
+class KeychainTimeoutTest(unittest.TestCase):
+    """讀 Keychain 沒有回應時限時結束（ADR-0014 LT-09），不能讓整輪卡住。"""
+
+    def test_timeout_is_a_provider_error(self):
+        with mock.patch.object(relay.subprocess, "run", side_effect=subprocess.TimeoutExpired("security", 10)) as run:
+            with self.assertRaisesRegex(ProviderError, "逾時"):
+                relay.read_write_token()
+        self.assertEqual(run.call_args.kwargs["timeout"], relay.KEYCHAIN_TIMEOUT)
+
+    def test_missing_security_command_is_not_configured(self):
+        with mock.patch.object(relay.subprocess, "run", side_effect=FileNotFoundError):
+            with self.assertRaises(relay.RelayNotConfigured):
+                relay.read_write_token()
 
 
 class MainTest(unittest.TestCase):

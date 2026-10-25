@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import system
@@ -37,6 +37,9 @@ VACUUM_INTERVAL_DAYS = 30
 VACUUM_FREE_RATIO = 0.2
 VACUUM_MIN_RECLAIM = 1024 * 1024
 VACUUM_DISK_MARGIN = 64 * 1024 * 1024
+# 清理用的時間比上次清理最多前進 2 天（ADR-0014 LT-11）：時鐘被設到未來時，一次清理不會把保留期間內的資料全部刪掉；
+# 正常每天清理一次只前進約 1 天，收集器停了一陣子時晚幾天刪（多留一點），每天追上 1 天
+CLEANUP_CLOCK_STEP = 2 * 86400
 DEFAULT_DEVICE_NAME = "這台 Mac"  # 不用電腦名稱，避免把使用者名稱帶進資料（ADR-0009 第 6 節）
 
 
@@ -377,8 +380,28 @@ def write_samples(conn: sqlite3.Connection, snapshot: dict) -> int:
     return len(rows)
 
 
+def _cleanup_clock(conn: sqlite3.Connection, now: int) -> int:
+    """清理用的時間：時鐘往回走時用現在的時間（刪得比較少，不會多刪），往前跳時最多比上次前進 CLEANUP_CLOCK_STEP。"""
+    try:
+        last = int(meta(conn, "cleanup_clock") or 0)
+    except ValueError:
+        last = 0
+    if last <= 0:
+        # 升級後第一次（還沒有 cleanup_clock）：以上次清理那天結束時當基準，時鐘剛好超前也不會刪光（審查 C-02）。
+        # 都沒有時是新的資料庫，沒有東西可刪
+        try:
+            day = date.fromisoformat(meta(conn, "last_cleanup_day") or "")
+            last = int(datetime.combine(day + timedelta(days=1), datetime.min.time()).timestamp())
+        except (ValueError, OverflowError):
+            last = 0
+    clock = now if last <= 0 or now <= last else min(now, last + CLEANUP_CLOCK_STEP)
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('cleanup_clock', ?)", (str(clock),))
+    return clock
+
+
 def cleanup(conn: sqlite3.Connection, now: int) -> None:
     """依保留期間刪除，並把 35 天前的資料降為每小時一筆（ADR-0009 第 5 節）。"""
+    now = _cleanup_clock(conn, now)
     days = retention_days(conn)
     # 只處理完整的小時，避免同一小時被分兩次降採樣
     cutoff = (now - DOWNSAMPLE_AFTER_DAYS * 86400) // 3600 * 3600
@@ -397,6 +420,8 @@ def cleanup(conn: sqlite3.Connection, now: int) -> None:
             lower = int(meta(conn, "downsampled_before") or 0)
         except ValueError:
             lower = 0
+        if lower > cutoff + 86400:
+            lower = 0  # 時鐘曾被設到未來時寫下的水位線：從頭重看一次（一年的資料約 0.7 秒），不然降採樣會停到那一天
         if lower >= cutoff:
             return
         # quota_samples：每個額度每小時保留最後一筆

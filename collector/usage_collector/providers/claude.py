@@ -85,12 +85,25 @@ def parse_reset(text: str, now: datetime) -> datetime:
     if not 1 <= int(m["hour"]) <= 12:
         raise ProviderError(FORMAT_CHANGED)  # 12 小時制沒有 0am／13pm
     hour = int(m["hour"]) % 12 + (12 if m["ampm"].lower() == "pm" else 0)
-    year = int(m["year"]) if m["year"] else now.astimezone(tz).year
+    month, day, minute = MONTHS.index(m["month"].lower()) + 1, int(m["day"]), int(m["minute"] or 0)
     try:
-        return datetime(year, MONTHS.index(m["month"].lower()) + 1, int(m["day"]), hour,
-                        int(m["minute"] or 0), tzinfo=tz)
+        if m["year"]:
+            return datetime(int(m["year"]), month, day, hour, minute, tzinfo=tz)
     except ValueError:
         raise ProviderError(FORMAT_CHANGED) from None
+    # 沒有年份：前一年、今年、明年裡離現在最近的一個（ADR-0014 LT-10）。重置最多在一週後，所以 12 月底看到「Jan 2」
+    # 是明年、1 月初看到「Dec 31」是去年，已經過了幾天的日期仍是今年（審查 C-01）；Claude Code 跨年時多半會印年份，
+    # 這裡是沒印時的保護。2 月 29 日只在閏年有效
+    year = now.astimezone(tz).year
+    candidates = []
+    for y in (year - 1, year, year + 1):
+        try:
+            candidates.append(datetime(y, month, day, hour, minute, tzinfo=tz))
+        except ValueError:
+            continue
+    if not candidates:
+        raise ProviderError(FORMAT_CHANGED)
+    return min(candidates, key=lambda c: abs(c - now))
 
 
 # 模型名稱只會是字母、數字、空白、點與連字號（Fable、Sonnet 4.5、Opus）；其他字元或太長都視為格式改變。
