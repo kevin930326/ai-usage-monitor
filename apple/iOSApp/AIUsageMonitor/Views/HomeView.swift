@@ -197,6 +197,14 @@ private struct ProviderSection: View {
                     UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed, now: now)
                         .padding(.vertical, 2)
                 }
+                // 重置次數卷（FR-58）：0 張時不顯示
+                if let credits = provider.resetCredits, let summary = credits.summary(at: now) {
+                    Label(summary, systemImage: "ticket")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(credits.accessibilityLabel(at: now) ?? summary)
+                        .accessibilityHint(credits.detailLines(at: now).joined(separator: "，"))
+                }
             }
         } header: {
             HStack {
