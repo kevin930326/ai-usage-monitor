@@ -264,6 +264,28 @@ class LimitRepeatsTest(unittest.TestCase):
         self.run_round(*many)
         self.assertEqual(len(json.loads(self.state.read_text(encoding="utf-8"))), log_module.REPEAT_MAX_TRACKED)
 
+    def test_two_rounds_finishing_together_do_not_take_each_others_temp_file(self):
+        # 兩個程序（手動執行與排程用同一個 --log-file）各自寫暫存檔再替換：都成功，後寫的留下
+        rounds = []
+        for message in ("a", "b"):
+            r = log_module._Repeats(self.state)
+            r.filter(message, self.now)
+            rounds.append(r)
+        replaced = []
+        real_replace = os.replace
+
+        def replace(a, b):
+            replaced.append(Path(a).name)
+            real_replace(a, b)
+
+        with mock.patch.object(log_module.os, "replace", side_effect=replace), \
+                mock.patch.object(log_module.os, "getpid", side_effect=[101, 202]):
+            for r in rounds:
+                r.finish(self.now)
+        self.assertEqual(len(set(replaced)), 2)
+        self.assertEqual(list(json.loads(self.state.read_text(encoding="utf-8"))), ["b"])
+        self.assertEqual([p.name for p in self.state.parent.glob("*.tmp")], [])
+
     @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限")
     def test_state_file_is_private(self):
         old = os.umask(0o022)

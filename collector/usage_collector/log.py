@@ -95,7 +95,9 @@ class _Repeats:
         keep = sorted(self.entries.items(), key=lambda item: item[1]["last"], reverse=True)[:REPEAT_MAX_TRACKED]
         try:
             if keep:
-                tmp = self.path.with_name(self.path.name + ".tmp")
+                # 每個程序自己的暫存檔：同時結束的兩輪（手動執行與排程用同一個 --log-file）不會互相搬走對方的檔案。
+                # 兩輪的狀態後寫的蓋掉先寫的，最多讓下一輪多記一行，不另外加鎖（審查 C-02）
+                tmp = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
                 # 內容是日誌的訊息：只有使用者自己能讀（與 App 內建收集器的日誌相同，審查 C-01）
                 fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -105,7 +107,9 @@ class _Repeats:
             else:
                 self.path.unlink(missing_ok=True)
         except OSError:
-            pass  # 寫不進去（磁碟滿、權限）：下一輪當成第一次出現，照常記錄
+            # 寫不進去（磁碟滿、權限）：下一輪當成第一次出現，照常記錄
+            if keep:
+                tmp.unlink(missing_ok=True)
 
 
 def repeats_path(log_path: Path, owner: str = "") -> Path:
