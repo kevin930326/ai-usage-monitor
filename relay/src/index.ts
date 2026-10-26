@@ -9,7 +9,7 @@
  * 第二層（多裝置 Token 合併，選用）的 /tokens/daily 與 /devices 在 tokens.ts。
  */
 
-import { handleTier2, type TokensEnv } from "./tokens.ts";
+import { handleTier2, OLDEST_DAYS, pruneOldDays, type TokensEnv } from "./tokens.ts";
 
 export interface KV {
   get(key: string): Promise<string | null>;
@@ -344,6 +344,13 @@ const ROUTES: Record<string, Partial<Record<string, (request: Request, env: Env)
 };
 
 export default {
+  /** 每月排程（wrangler.toml 的 crons）：刪除第二層 400 天以前的每日加總；沒有 D1 綁定時什麼都不做 */
+  async scheduled(_controller: unknown, env: Env): Promise<void> {
+    if (!env.DB) return;
+    const deleted = await pruneOldDays(env.DB, Date.now());
+    console.log(`第二層：刪除 ${deleted} 列 ${OLDEST_DAYS} 天以前的每日加總`);
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     // 兩把密鑰都要設定且不同，否則拒絕服務，避免讀取密鑰也能寫入
     if (!env.READ_TOKEN || !env.WRITE_TOKEN || env.READ_TOKEN === env.WRITE_TOKEN) {

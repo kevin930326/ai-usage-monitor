@@ -42,6 +42,7 @@ npm run deploy
 - 管理密鑰只用在 `scripts/relay-device.sh`（新增、列出、換新、撤銷裝置），不要存進任何電腦的設定。建議存在密碼管理器。
 - 沒有 D1 綁定時 `/tokens/daily` 與 `/devices` 回 `503`，`/usage`（iPhone）照常。
 - 不想讓 `wrangler.toml` 的改動出現在 git：`git update-index --skip-worktree relay/wrangler.toml`。
+- 中繼只保留 400 天：每月排程刪除更早的每日加總（ADR-0014 D-4）。部署設定要加 `[triggers]`，見 [relay/README.md](../relay/README.md)「每月清理的排程」。Mac 已下載的其他電腦數字依 Mac 自己的保留期間保存，不會因為中繼刪除而消失（收集器只取代最近 399 天）。
 
 ## 2. 為每台電腦產生寫入密鑰
 

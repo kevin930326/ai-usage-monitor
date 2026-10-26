@@ -7,6 +7,7 @@
  *   POST /devices                    Authorization: Bearer <ADMIN_TOKEN>  新增裝置，回傳一次密鑰
  *   POST /devices/<id>/rotate        Authorization: Bearer <ADMIN_TOKEN>  換新密鑰（device_id 不變）
  *   POST /devices/<id>/revoke        Authorization: Bearer <ADMIN_TOKEN>  撤銷；{"delete_data": true} 一併刪除資料
+ *   每月排程（wrangler.toml 的 crons）                                 刪除 400 天以前的每日加總（pruneOldDays）
  *
  * - 裝置密鑰只存 SHA-256；device_id 由密鑰決定，上傳內容中的裝置欄位一律忽略。
  * - 裝置密鑰只能寫 /tokens/daily，不能寫 /usage；READ_TOKEN／WRITE_TOKEN／ADMIN_TOKEN 都不能上傳每日加總。
@@ -333,4 +334,33 @@ export async function handleTier2(request: Request, env: TokensEnv, now = Date.n
     default:
       return new Response(null, { status: 405, headers: { Allow: "GET, POST" } });
   }
+}
+
+/** 每月排程一次刪除的上限：每批 5,000 列、最多 20 批（3 台電腦一個月約 1,000 列，平常一批就結束） */
+export const PRUNE_BATCH_ROWS = 5_000;
+export const PRUNE_MAX_BATCHES = 20;
+
+/**
+ * 刪除 400 天以前（UTC，與上傳接受的範圍相同）的每日加總（ADR-0014 D-4），回傳刪除的列數。
+ * 每台裝置最新的那一天不刪：下載的 has_data（中繼上還有沒有它的資料）才能分辨「撤銷時一併刪除了資料」
+ * 與「太久沒上傳、資料過了保留期間」，後者在 Mac 不會被當成要刪掉的裝置。留下的列早於下載的範圍，不會回傳。
+ */
+export async function pruneOldDays(db: D1Database, now: number): Promise<number> {
+  const cutoff = utcDay(now, -OLDEST_DAYS);
+  const statement = db
+    .prepare(
+      `DELETE FROM daily_tokens WHERE rowid IN (
+         SELECT rowid FROM daily_tokens t WHERE day < ?
+           AND day < (SELECT MAX(day) FROM daily_tokens n WHERE n.device_id = t.device_id)
+         LIMIT ?)`,
+    )
+    .bind(cutoff, PRUNE_BATCH_ROWS);
+  let deleted = 0;
+  for (let i = 0; i < PRUNE_MAX_BATCHES; i++) {
+    const [result] = await db.batch([statement]);
+    const changes = result?.meta?.changes ?? 0;
+    deleted += changes;
+    if (changes < PRUNE_BATCH_ROWS) break;
+  }
+  return deleted;
 }

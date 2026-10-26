@@ -119,6 +119,7 @@ class SetupRelayTests(unittest.TestCase):
         toml = (self.relay / "wrangler.local.toml").read_text()
         self.assertIn(f'id = "{KV_ID}"', toml)
         self.assertIn('name = "ai-usage-relay"', toml)
+        self.assertIn('crons = ["0 19 1 * *"]', toml)  # 第二層的每月清理（ADR-0014 D-4）
         # repo 的 wrangler.toml 沒有被改
         self.assertEqual((self.relay / "wrangler.toml").read_text(), (ROOT / "relay" / "wrangler.toml").read_text())
         # 兩把不同的密鑰，只經由標準輸入；程序參數與輸出都看不到

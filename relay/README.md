@@ -26,6 +26,7 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 - 每列只收白名單欄位：`day`（400 天前到明天，UTC）、`provider`（`claude`／`codex`）、`model`（`claude-`、`gpt-`、`codex-`、`o`＋數字開頭，或 `other`，最長 64 字）、五種 Token、`task_seconds`、`longest_task_seconds`（0～10¹² 的整數）；每批最多 400 列、同一批不能有重複的列。
 - 沒有 D1 綁定時這些端點回 `503`；`ADMIN_TOKEN` 未設定或與其他密鑰相同時 `/devices` 回 `503`。`/usage` 不受影響。
 - 管理指令用 `scripts/relay-device.sh`（`add`／`list`／`rotate`／`revoke [--delete-data]`）。
+- **每月清理**（ADR-0014 D-4）：排程（每月 1 日 19:00 UTC）刪除 400 天以前的每日加總，和上傳接受的日期範圍相同；每次最多 10 萬列，分批刪除。每台裝置最新的那一天不刪（留下的列早於下載範圍、不會回傳），`has_data` 才不會把「太久沒上傳」誤當成「撤銷時一併刪除了資料」。要在部署設定加 `[triggers]`，見下面的「每月清理的排程」。
 
 - 驗證失敗一律回 `401`；兩把密鑰未設定或相同時回 `500`，拒絕服務。
 - 只接受 `schema_version` 為支援版本的內容；KV 只保存最新一筆。
@@ -82,6 +83,20 @@ npm run deploy                              # 會印出 https://ai-usage-relay.<
 ```
 
 `READ_TOKEN` 之後要填進 iOS App；`WRITE_TOKEN` 只存在 Mac 的 Keychain。
+
+### 每月清理的排程（第二層，ADR-0014 D-4）
+
+用了第二層（D1）時，在部署用的設定檔（`wrangler.toml`，用 `setup-relay.sh` 部署的是 `wrangler.local.toml`）加上這兩行再部署：
+
+```toml
+[triggers]
+crons = ["0 19 1 * *"]   # 每月 1 日 19:00 UTC（台北 2 日 03:00）
+```
+
+- `setup-relay.sh` 新產生的 `wrangler.local.toml` 已經有這兩行。repo 的 `wrangler.toml` 不放：很多人以 `git update-index --skip-worktree` 保留自己填的 id，上游改這個檔會讓 `git pull` 失敗。
+- 沒有 D1 綁定時排程照跑、什麼都不做。
+- 部署後在 Cloudflare 主控台 Workers → `ai-usage-relay` → Settings → Triggers 看得到這個排程；執行紀錄在 Logs（「第二層：刪除 N 列 400 天以前的每日加總」）。
+- 本機試跑：`npx wrangler dev --test-scheduled`，另一個終端機 `curl "http://localhost:8787/__scheduled?cron=0+19+1+*+*"`（本機的 D1，不動正式資料）。
 
 ## 驗證
 
