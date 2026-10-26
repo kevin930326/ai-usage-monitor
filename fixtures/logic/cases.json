@@ -1,0 +1,1270 @@
+{
+ "comment": "Swift（UsageKit 的 LogicGoldenTests）與 C#（windows/tests/UsageCore.Tests）讀同一份輸入，各自算出 golden.json 的欄位（ADR-0015 第 4 節）",
+ "cases": [
+  {
+   "name": "normal",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "too-fast-average",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 70,
+        "resets_at": "2026-10-26T12:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 40,
+        "resets_at": "2026-10-29T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "critical",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 85,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "stale",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T08:45:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "stale-boundary",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:00:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "future-updated-at",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T10:01:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "reset-passed",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 90,
+        "resets_at": "2026-10-26T09:29:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 50,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "tie-earlier-reset-wins",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 60,
+        "resets_at": "2026-10-26T13:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 60,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 60,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 10,
+        "resets_at": "2026-11-01T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "provider-error",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": null,
+      "error": "未登入",
+      "windows": []
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 55,
+        "resets_at": "2026-10-30T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "hidden-window-ignored",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly_fable",
+        "label": "每週 Fable",
+        "used_pct": 99,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": true
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "no-providers",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {}
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "codex-only-over-100",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "codex": {
+      "plan": null,
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 112.5,
+        "resets_at": "2026-10-26T10:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 41,
+        "resets_at": "2026-10-30T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "other-durations",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "24h",
+        "label": "24 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T15:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "90m",
+        "label": "90 分鐘",
+        "used_pct": 50,
+        "resets_at": "2026-10-26T10:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "monthly",
+        "label": "每月",
+        "used_pct": 95,
+        "resets_at": "2026-11-05T09:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 5,
+        "resets_at": null,
+        "hidden": false
+       }
+      ]
+     },
+     "gemini": {
+      "plan": null,
+      "error": null,
+      "windows": [
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 48,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "choice-specific",
+   "choice": "codex/weekly",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "choice-missing-falls-back",
+   "choice": "codex/monthly",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "choice-hidden-falls-back",
+   "choice": "claude/weekly_fable",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly_fable",
+        "label": "每週 Fable",
+        "used_pct": 5,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": true
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "early-in-window",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 50,
+        "resets_at": "2026-10-26T14:06:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 10,
+        "resets_at": "2026-11-01T21:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "used-up",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 100,
+        "resets_at": "2026-10-26T10:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "elapsed-clamped",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 0,
+        "resets_at": "2026-10-26T15:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 0,
+        "resets_at": "2026-11-03T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "half-percent-rounding",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 62.5,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 21.5,
+        "resets_at": "2026-10-30T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 0.5,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 80.5,
+        "resets_at": "2026-10-29T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "history-recent-faster",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 40,
+        "resets_at": "2026-10-26T12:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "samples": [
+    {
+     "ts": "2026-10-26T08:35:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 20,
+     "resets_at": "2026-10-26T12:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:50:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 26,
+     "resets_at": "2026-10-26T12:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:05:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 32,
+     "resets_at": "2026-10-26T12:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:20:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 38,
+     "resets_at": "2026-10-26T12:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:29:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 40,
+     "resets_at": "2026-10-26T12:00:00Z"
+    }
+   ],
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "history-idle-recently",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 70,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "samples": [
+    {
+     "ts": "2026-10-26T08:40:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-26T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:55:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-26T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:10:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-26T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:25:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-26T11:30:00Z"
+    }
+   ],
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "history-too-few-samples",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 70,
+        "resets_at": "2026-10-26T12:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "samples": [
+    {
+     "ts": "2026-10-26T08:50:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 60,
+     "resets_at": "2026-10-26T12:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:25:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-26T12:00:00Z"
+    }
+   ],
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "history-reset-and-correction",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T14:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 52,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "samples": [
+    {
+     "ts": "2026-10-26T08:40:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 90,
+     "resets_at": "2026-10-26T09:10:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:45:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 5,
+     "resets_at": "2026-10-26T14:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:55:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 20,
+     "resets_at": "2026-10-26T14:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:05:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 18,
+     "resets_at": "2026-10-26T14:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:18:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 26,
+     "resets_at": "2026-10-26T14:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:29:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 30,
+     "resets_at": "2026-10-26T14:00:00Z"
+    }
+   ],
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "history-weekly-span",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 60,
+        "resets_at": "2026-10-29T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "samples": [
+    {
+     "ts": "2026-10-25T13:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 40,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T19:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 48,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T01:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 54,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T07:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 60,
+     "resets_at": "2026-10-29T09:30:00Z"
+    }
+   ],
+   "now": "2026-10-26T09:30:00Z"
+  }
+ ],
+ "token_format": [
+  0,
+  1,
+  -1,
+  9999,
+  10000,
+  -12345,
+  12345,
+  99949,
+  99950,
+  123456,
+  1470000,
+  14700000,
+  99994999,
+  99995000,
+  99999999,
+  100000000,
+  385000000,
+  999949999,
+  999950000,
+  1234567890123,
+  9223372036854775807
+ ],
+ "countdown_seconds": [
+  -60,
+  0,
+  30,
+  59,
+  60,
+  61,
+  3599,
+  3600,
+  3660,
+  5400,
+  86399,
+  86400,
+  90000,
+  255600,
+  604800
+ ],
+ "updated_seconds": [
+  0,
+  30,
+  59,
+  60,
+  125,
+  3600,
+  3720,
+  90000
+ ]
+}

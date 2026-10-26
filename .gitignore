@@ -34,3 +34,8 @@ build/
 
 # macOS
 .DS_Store
+
+# .NET（windows/，ADR-0015）
+windows/**/bin/
+windows/**/obj/
+windows/**/TestResults/

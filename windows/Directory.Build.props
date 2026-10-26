@@ -1,0 +1,15 @@
+<Project>
+  <!-- windows/ 底下所有專案共用（ADR-0015） -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- 隱含的 using 不帶網路（App 與 UsageCore 不連網，ADR-0015 第 2 節） -->
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
+</Project>

@@ -322,3 +322,83 @@ jobs:
       - name: Extension is embedded
         if: matrix.appex != ''
         run: test -d "$RUNNER_TEMP/dd/Build/Products/${{ matrix.appex }}"
+
+  usagecore:
+    name: UsageCore (C#)
+    # Windows App 的純邏輯（ADR-0015 第 4 節）：和 UsageKit 共用 fixtures/logic 的 golden；另做不連網的靜態檢查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test windows/tests/UsageCore.Tests
+      - run: python3 windows/tools/check-no-network.py
+
+  windows-app:
+    name: Windows App
+    # 建置 x64 與 ARM64 的 Release、確認 Release 不含 Debug 專用字串，以 Debug 版產生截圖、以 Release 版量測效能，
+    # 再實際跑一次 install-windows-app.ps1（安裝、更新、移除）。截圖與效能結果放在 artifact（ADR-0015 第 7、8 節）
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test windows/tests/UsageCore.Tests
+      - name: Build Release (x64, ARM64) without Debug strings
+        run: |
+          foreach ($rid in 'win-x64', 'win-arm64') {
+            dotnet publish windows/src/AIUsageMonitor.Windows -c Release -r $rid --self-contained false -o "$env:RUNNER_TEMP\rel-$rid"
+            if ($LASTEXITCODE) { exit 1 }
+            python windows/tools/check-no-network.py --release "$env:RUNNER_TEMP\rel-$rid"
+            if ($LASTEXITCODE) { exit 1 }
+          }
+      - name: Screenshots (Debug build, fixed time)
+        run: |
+          dotnet build windows/src/AIUsageMonitor.Windows -c Debug -r win-x64 -o "$env:RUNNER_TEMP\dbg"
+          if ($LASTEXITCODE) { exit 1 }
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\dbg\AIUsageMonitor.exe" -ArgumentList '--render', 'build\win-screens', '--now', '2026-10-26T09:30:00Z' `
+            -PassThru -Wait -RedirectStandardOutput "$env:RUNNER_TEMP\render.out" -RedirectStandardError "$env:RUNNER_TEMP\render.err"
+          Get-Content "$env:RUNNER_TEMP\render.out", "$env:RUNNER_TEMP\render.err"
+          if ($p.ExitCode -ne 0) { exit 1 }
+          Get-ChildItem build\win-screens | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-screens
+          path: build/win-screens/
+          if-no-files-found: ignore
+      - name: Performance (Release x64)
+        run: |
+          windows/tools/measure-perf.ps1 -Exe "$env:RUNNER_TEMP\rel-win-x64\AIUsageMonitor.exe" -Output build\perf.md -Ci
+          $code = $LASTEXITCODE
+          Get-Content build\perf.md | Add-Content $env:GITHUB_STEP_SUMMARY
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-perf
+          path: build/perf.md
+          if-no-files-found: ignore
+      - name: install-windows-app.ps1 (install, update, uninstall)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\WindowsApp'
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          & .\scripts\install-windows-app.ps1 -NoStart
+          if (-not (Test-Path "$app\AIUsageMonitor.exe")) { throw 'not installed' }
+          if ((Get-ItemProperty $run).AIUsageMonitor -ne "`"$app\AIUsageMonitor.exe`"") { throw 'autostart missing' }
+          # 設定關掉開機自動啟動後再跑一次（更新）：依設定移除登錄值，舊版改名 WindowsApp.old
+          Set-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\windows-app.json') '{"launch_at_login": false}' -Encoding UTF8
+          & .\scripts\install-windows-app.ps1 -NoStart
+          if ((Get-ItemProperty $run).PSObject.Properties.Name -contains 'AIUsageMonitor') { throw 'autostart should be off' }
+          if (-not (Test-Path "$app.old\AIUsageMonitor.exe")) { throw 'old version not kept' }
+          & .\scripts\install-windows-app.ps1 -Uninstall
+          if (Test-Path $app) { throw 'not removed' }
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\windows-app.json'))) { throw 'settings should be kept' }
