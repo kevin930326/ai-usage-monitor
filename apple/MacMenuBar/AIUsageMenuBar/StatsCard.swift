@@ -139,6 +139,19 @@ struct UploadRevokedNotice: View {
     }
 }
 
+/// 資料庫從別台電腦搬來，收集器暫停第二層上傳（ADR-0014 D-2）
+struct UploadCopiedNotice: View {
+    static let text = "這台電腦的歷史資料是從另一台電腦搬來的，已暫停上傳，避免兩台用同一個身分互相覆蓋"
+
+    var body: some View {
+        Label(Self.text, systemImage: "exclamationmark.triangle")
+            .font(.caption)
+            .foregroundStyle(UsageColors.notice)
+            .fixedSize(horizontal: false, vertical: true)
+            .help("照 docs/runbook.md「換電腦」處理：沿用同一個身分時以 scripts/relay-device.sh rotate 換新密鑰，再在這台執行 collector/scripts/set-tier2.sh。本機的統計不受影響。")
+    }
+}
+
 /// 全部／Claude／Codex
 struct TokenScopeChips: View {
     let scopes: [TokenScope]
@@ -268,6 +281,7 @@ struct StatsCardContent: View {
                 TokenDeviceMenu(devices: all.devices, selected: device, now: now, select: selectDevice)
             }
             if all.devices.uploadRevoked, status.canRead { UploadRevokedNotice() }
+            if all.devices.uploadCopied, status.canRead { UploadCopiedNotice() }
             content
         }
     }

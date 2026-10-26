@@ -10,6 +10,10 @@
 - 有讀取密鑰（Mac）時下載所有裝置的每日加總：這台電腦在中繼上的 device_id（中繼依密鑰決定，和本機
   meta.device_id 不同）一律略過，本機的數字以本機統計為準；其他裝置的列整批取代寫進本機 daily_tokens。
   上傳只選本機 device_id 的列，所以下載到的列永遠不會再上傳。
+- 換電腦（ADR-0014 D-2）：第一次上傳時把這台電腦的硬體指紋（`machine.fingerprint`，只存雜湊）記在
+  `meta.machine_fingerprint`。之後指紋不同＝資料庫連同密鑰從別台電腦搬來：暫停上傳（`upload_status = copied`，
+  兩台用同一個身分會互相覆蓋），App 提示照 docs/runbook.md 處理；重新執行設定腳本（`reset`）時改記這台的指紋。
+  下載照常。讀不到指紋時不檢查。
 - 日誌只記錄狀態碼與錯誤類別，不記錄密鑰、網址與資料內容；狀態沒變時不重複記錄。任何失敗都不影響收集器的
   其他工作與結束碼。
 """
@@ -24,7 +28,7 @@ import time
 from collections.abc import Iterable
 from pathlib import Path
 
-from . import credentials, history, token_stats
+from . import credentials, history, machine, token_stats
 from .http import HTTPStatusError, request_json
 from .log import log
 from .models import ProviderError, parse_iso
@@ -287,8 +291,27 @@ def _due(conn: sqlite3.Connection, kind: str, interval: int, now: int) -> bool:
             or history.meta(conn, f"{kind}_more") == "1")
 
 
+def _same_machine(conn: sqlite3.Connection) -> bool:
+    """資料庫是不是在這台電腦建立（或已在這台重新設定過）的；第一次檢查時記下這台的指紋。"""
+    current = machine.fingerprint()
+    if current is None:
+        return True
+    stored = history.meta(conn, "machine_fingerprint")
+    if stored is None:
+        _set_meta(conn, machine_fingerprint=current)
+        return True
+    if stored == current:
+        return True
+    _report(conn, "upload", "copied", "第二層上傳暫停：history.sqlite3 是從另一台電腦搬來的，兩台用同一個身分上傳會互相覆蓋；"
+            "照 docs/runbook.md「換電腦」處理，重新執行第二層的設定後恢復")
+    return False
+
+
 def _sync_upload(conn: sqlite3.Connection, url: str, now: int) -> None:
-    if history.meta(conn, "upload_status") == "revoked" or not _due(conn, "upload", UPLOAD_INTERVAL, now):
+    # 「密鑰失效」與「從別台搬來」只由設定腳本（reset）清除：之後讀不到指紋也不恢復上傳
+    if history.meta(conn, "upload_status") in ("revoked", "copied") or not _due(conn, "upload", UPLOAD_INTERVAL, now):
+        return
+    if not _same_machine(conn):
         return
     key = credentials.read(credentials.DEVICE_KEY)
     if not key:
@@ -360,7 +383,8 @@ def run_safely(path: Path | None = None) -> None:
 
 
 def reset(path: Path | None = None) -> None:
-    """設定腳本換新密鑰後呼叫：清除失敗與「密鑰失效」狀態，下一輪立即上傳（保留上傳進度）。"""
+    """設定腳本換新密鑰後呼叫：清除失敗、「密鑰失效」與「從別台搬來」的狀態，下一輪立即上傳（保留上傳進度）。
+    在這台電腦執行，所以改記這台的硬體指紋（ADR-0014 D-2）。"""
     path = path or history.HISTORY_PATH
     with history._private_files():
         conn = history.connect(path)
@@ -368,7 +392,10 @@ def reset(path: Path | None = None) -> None:
             with history._transaction(conn):
                 conn.execute("DELETE FROM meta WHERE key IN ('upload_status', 'upload_failures', 'upload_next_at',"
                              " 'upload_auth_failures', 'upload_last_success', 'sync_status', 'sync_failures',"
-                             " 'sync_next_at', 'sync_last_success')")
+                             " 'sync_next_at', 'sync_last_success', 'machine_fingerprint')")
+                current = machine.fingerprint()
+                if current is not None:
+                    _set_meta(conn, machine_fingerprint=current)
         finally:
             conn.close()
         history._tighten_permissions(path)

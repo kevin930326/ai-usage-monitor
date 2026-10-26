@@ -44,8 +44,14 @@ struct StatsWindowView: View {
         Group {
             if let shown, shown.hasData {
                 content(shown)
-            } else if let shown, !shown.firstScanDone {
-                message(shown.firstScanProgress.map { "正在整理過去的紀錄（\($0)%）" } ?? "正在整理過去的紀錄")
+            } else if let shown, let raw, !shown.firstScanDone {
+                VStack(spacing: 8) {
+                    Text(shown.firstScanProgress.map { "正在整理過去的紀錄（\($0)%）" } ?? "正在整理過去的紀錄")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    if raw.devices.uploadCopied { UploadCopiedNotice() }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let shown, let raw {
                 VStack(spacing: 8) {
                     if raw.devices.enabled { deviceMenu(raw.devices) }
@@ -53,6 +59,8 @@ struct StatsWindowView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     if shown.formatSuspect { FormatSuspectNotice() }
+                    // 暫停上傳是這台電腦的狀態，和選了哪台電腦、有沒有統計無關
+                    if raw.devices.uploadCopied { UploadCopiedNotice() }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if loading {
@@ -176,6 +184,7 @@ struct StatsWindowView: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             if data.devices.uploadRevoked { UploadRevokedNotice() }
+            if data.devices.uploadCopied { UploadCopiedNotice() }
             Text(footnote(data))
                 .font(.caption)
                 .foregroundStyle(.secondary)

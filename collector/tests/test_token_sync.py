@@ -2,6 +2,7 @@
 （device_id 由密鑰決定、以（裝置、日期、服務、模型）覆蓋寫入），密鑰以 mock 取代 Keychain／認證管理員。"""
 import io
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -100,6 +101,7 @@ class Machine:
         self.key = f"aumd_{name}"
         self.relay_id = relay.add(self.key, name)
         self.secrets = {credentials.DEVICE_KEY: self.key, credentials.READ_KEY: read_key}
+        self.fingerprint: str | None = f"fp-{name}"  # 硬體指紋（ADR-0014 D-2）
         conn = history.connect(self.path)
         self.device_id = history.meta(conn, "device_id")
         conn.close()
@@ -119,8 +121,13 @@ class Machine:
         self.relay.now = now
         with mock.patch.object(token_sync, "request_json", self.relay), \
                 mock.patch.object(token_sync.credentials, "read", side_effect=lambda n: self.secrets.get(n)), \
+                mock.patch.object(token_sync.machine, "fingerprint", return_value=self.fingerprint), \
                 redirect_stderr(self.log):
             token_sync.run(self.path, now=now, config_path=self.config)
+
+    def reset(self):
+        with mock.patch.object(token_sync.machine, "fingerprint", return_value=self.fingerprint):
+            token_sync.reset(self.path)
 
     def query(self, sql: str, args=()):
         with sqlite3.connect(self.path) as conn:
@@ -315,8 +322,7 @@ class FailureTest(TokenSyncTestCase):
         # 換新密鑰、重新執行設定
         mac.key = mac.secrets[credentials.DEVICE_KEY] = "aumd_new"
         self.relay.keys["aumd_new"] = mac.relay_id
-        with mock.patch.object(history, "HISTORY_PATH", mac.path):
-            token_sync.reset()
+        mac.reset()
         mac.run(NOW + DAY + 60)
         self.assertEqual(mac.meta("upload_status"), "ok")
         self.assertEqual(self.relay.total(mac.relay_id), 100)
@@ -575,6 +581,112 @@ class MergeTest(TokenSyncTestCase):
                 self.assertEqual(token_sync.download(conn, URL, READ, NOW), 0)
         finally:
             conn.close()
+
+
+class CopiedDatabaseTest(TokenSyncTestCase):
+    """換電腦：資料庫連同密鑰從別台搬來時暫停上傳（ADR-0014 D-2）。"""
+
+    def copy_to_new_mac(self, old: Machine) -> Machine:
+        new = self.machine("new-mac")
+        shutil.copy(old.path, new.path)  # 移轉輔助程式：資料庫與 Keychain 的密鑰一起搬過去
+        new.device_id = old.device_id
+        new.secrets = dict(old.secrets)
+        new.relay_id = old.relay_id
+        return new
+
+    def test_first_upload_records_the_fingerprint(self):
+        mac = self.machine()
+        mac.set_tokens(0, 100)
+        mac.run(NOW)
+        self.assertEqual(mac.meta("machine_fingerprint"), "fp-mac")
+        self.assertEqual(self.relay.total(mac.relay_id), 100)
+
+    def test_copied_database_pauses_uploads_until_set_up_again(self):
+        old = self.machine()
+        old.set_tokens(0, 100)
+        old.run(NOW)
+        new = self.copy_to_new_mac(old)
+        new.set_tokens(0, 250)
+        for t in (NOW + 3600, NOW + 7200):
+            new.run(t)
+        self.assertEqual(self.relay.total(old.relay_id), 100)  # 新電腦沒有用舊身分覆蓋
+        self.assertEqual(new.meta("upload_status"), "copied")
+        self.assertEqual(new.log.getvalue().count("history.sqlite3 是從另一台電腦搬來的"), 1)
+        # 舊電腦照常
+        old.set_tokens(0, 120)
+        old.run(NOW + 3600)
+        self.assertEqual(self.relay.total(old.relay_id), 120)
+        # 照 runbook：rotate 後在新電腦重新設定（set-tier2.sh 呼叫 reset）
+        new.reset()
+        self.assertEqual(new.meta("machine_fingerprint"), "fp-new-mac")
+        new.run(NOW + 3 * 3600)
+        self.assertEqual(new.meta("upload_status"), "ok")
+        self.assertEqual(self.relay.total(old.relay_id), 250)
+
+    def test_downloads_continue_while_uploads_are_paused(self):
+        old = self.machine(read_key=READ)
+        old.run(NOW)
+        pc = self.machine("pc")
+        pc.set_tokens(0, 40)
+        pc.run(NOW)
+        new = self.copy_to_new_mac(old)
+        new.run(NOW + 3600)
+        self.assertEqual(new.meta("upload_status"), "copied")
+        self.assertEqual(new.total_by_device().get(pc.relay_id), 40)
+
+    def test_unreadable_fingerprint_does_not_lift_the_pause(self):
+        old = self.machine()
+        old.set_tokens(0, 100)
+        old.run(NOW)
+        new = self.copy_to_new_mac(old)
+        new.run(NOW + 3600)
+        self.assertEqual(new.meta("upload_status"), "copied")
+        new.fingerprint = None  # ioreg 逾時或讀取失敗
+        new.set_tokens(0, 250)
+        new.run(NOW + 2 * 86400)
+        self.assertEqual(new.meta("upload_status"), "copied")
+        self.assertEqual(self.relay.total(old.relay_id), 100)
+        new.fingerprint = "fp-new-mac"
+        new.reset()
+        new.run(NOW + 3 * 86400)
+        self.assertEqual(self.relay.total(old.relay_id), 250)
+
+    def test_no_fingerprint_means_no_check(self):
+        old = self.machine()
+        old.fingerprint = None
+        old.run(NOW)
+        self.assertIsNone(old.meta("machine_fingerprint"))
+        new = self.copy_to_new_mac(old)
+        new.fingerprint = None
+        new.set_tokens(0, 70)
+        new.run(NOW + 3600)
+        self.assertEqual(self.relay.total(old.relay_id), 70)
+
+
+class FingerprintTest(unittest.TestCase):
+    def test_mac_uuid_is_hashed(self):
+        out = '  "IOPlatformUUID" = "12345678-ABCD-4EF0-9123-456789ABCDEF"\n'
+        with mock.patch.object(token_sync.machine.sys, "platform", "darwin"), \
+             mock.patch.object(token_sync.machine.subprocess, "run",
+                               return_value=mock.Mock(stdout=out)) as run:
+            fp = token_sync.machine.fingerprint()
+        self.assertEqual(run.call_args.args[0][0], "/usr/sbin/ioreg")
+        self.assertRegex(fp, r"^[0-9a-f]{32}$")
+        self.assertNotIn("12345678", fp)
+        with mock.patch.object(token_sync.machine, "_raw_id", return_value="12345678-abcd-4ef0-9123-456789abcdef"):
+            self.assertEqual(token_sync.machine.fingerprint(), fp)  # 大小寫不影響
+
+    def test_unreadable_id_is_none(self):
+        with mock.patch.object(token_sync.machine.sys, "platform", "darwin"), \
+             mock.patch.object(token_sync.machine.subprocess, "run", side_effect=OSError):
+            self.assertIsNone(token_sync.machine.fingerprint())
+        with mock.patch.object(token_sync.machine.sys, "platform", "darwin"), \
+             mock.patch.object(token_sync.machine.subprocess, "run", return_value=mock.Mock(stdout="nothing")):
+            self.assertIsNone(token_sync.machine.fingerprint())
+
+    @unittest.skipUnless(sys.platform in ("darwin", "linux"), "實際讀取這台電腦")
+    def test_this_computer_is_stable(self):
+        self.assertEqual(token_sync.machine.fingerprint(), token_sync.machine.fingerprint())
 
 
 class MainTest(unittest.TestCase):

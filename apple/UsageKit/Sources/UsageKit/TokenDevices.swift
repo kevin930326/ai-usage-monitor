@@ -62,10 +62,13 @@ public struct TokenDevices: Equatable, Sendable {
     public var devices: [TokenDevice]
     /// 這台 Mac 的寫入密鑰失效，收集器已停止上傳（`meta.upload_status = revoked`）
     public var uploadRevoked: Bool
+    /// history.sqlite3 是從別台電腦搬來的，收集器暫停上傳（`meta.upload_status = copied`，ADR-0014 D-2）
+    public var uploadCopied: Bool
 
-    public init(devices: [TokenDevice] = [], uploadRevoked: Bool = false) {
+    public init(devices: [TokenDevice] = [], uploadRevoked: Bool = false, uploadCopied: Bool = false) {
         self.devices = devices
         self.uploadRevoked = uploadRevoked
+        self.uploadCopied = uploadCopied
     }
 
     public var others: [TokenDevice] { devices.filter { !$0.isSelf } }

@@ -570,8 +570,9 @@ extension HistoryStore {
 
     /// 中繼的裝置清單（收集器下載時整批取代）與這台 Mac 的上傳狀態；沒有第二層時是空的
     private nonisolated static func tokenDevices(_ db: OpaquePointer) -> TokenDevices {
-        let revoked = meta(db, "upload_status") == "revoked"
-        guard existingTables(db, ["devices"]).count == 1 else { return TokenDevices(uploadRevoked: revoked) }
+        let upload = meta(db, "upload_status")
+        let revoked = upload == "revoked", copied = upload == "copied"
+        guard existingTables(db, ["devices"]).count == 1 else { return TokenDevices(uploadRevoked: revoked, uploadCopied: copied) }
         let list = rows(db, "SELECT device_id, name, last_upload_at, revoked, is_self FROM devices ORDER BY rowid", []) { stmt -> TokenDevice? in
             guard let id = text(stmt, 0), let name = text(stmt, 1) else { return nil }
             let last = sqlite3_column_type(stmt, 2) == SQLITE_NULL ? nil
@@ -579,7 +580,7 @@ extension HistoryStore {
             return TokenDevice(id: id, name: name, lastUpload: last, revoked: sqlite3_column_int64(stmt, 3) != 0,
                                isSelf: sqlite3_column_int64(stmt, 4) != 0)
         }
-        return TokenDevices(devices: list ?? [], uploadRevoked: revoked)
+        return TokenDevices(devices: list ?? [], uploadRevoked: revoked, uploadCopied: copied)
     }
 
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。
