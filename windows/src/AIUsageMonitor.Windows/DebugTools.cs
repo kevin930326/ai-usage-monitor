@@ -177,7 +177,10 @@ internal static class DebugTools
         window.Show();
         window.UpdateLayout();
         var content = (FrameworkElement)window.Content;
-        var bitmap = Bitmap(content, content.ActualWidth, content.ActualHeight, new Palette(dark).Solid);
+        // RenderTargetBitmap 依元素的位移（Margin）畫：大小要含邊距，否則右邊與下面被裁掉
+        var margin = content.Margin;
+        var bitmap = Bitmap(content, content.ActualWidth + margin.Left + margin.Right, content.ActualHeight + margin.Top + margin.Bottom,
+                            new Palette(dark).Solid);
         window.Close();
         return bitmap;
     }
