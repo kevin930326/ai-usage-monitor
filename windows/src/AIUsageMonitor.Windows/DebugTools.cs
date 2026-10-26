@@ -157,7 +157,10 @@ internal static class DebugTools
         return Bitmap(element, element.ActualWidth, element.ActualHeight);
     }
 
-    /// <summary>設定視窗要套 Fluent 主題（視窗的 ThemeMode）：在畫面外顯示、不啟用，畫下內容後關閉</summary>
+    /// <summary>
+    /// 設定視窗要套 Fluent 主題（視窗的 ThemeMode）：在畫面外顯示、不啟用，畫下內容後關閉。
+    /// Fluent 主題的視窗背景是透明的（給 Mica），截圖改墊沒有 Mica 時的純色
+    /// </summary>
     private static BitmapSource SettingsShot(bool dark, DateTimeOffset now)
     {
         var settings = new AppSettings { Appearance = dark ? Appearance.Dark : Appearance.Light };
@@ -172,7 +175,7 @@ internal static class DebugTools
         window.Show();
         window.UpdateLayout();
         var content = (FrameworkElement)window.Content;
-        var bitmap = Bitmap(content, content.ActualWidth, content.ActualHeight, window.Background ?? Brushes.White);
+        var bitmap = Bitmap(content, content.ActualWidth, content.ActualHeight, new Palette(dark).Solid);
         window.Close();
         return bitmap;
     }
