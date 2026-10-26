@@ -259,16 +259,16 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 
 | 寫入者 | 位置 | 內容 |
 |---|---|---|
-| 收集器 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（與上傳的內容相同） |
+| 收集器 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新快照（與上傳的內容相同，另有 `local_status`：只在本機顯示的提醒，例如損壞的歷史檔已改名、磁碟空間不足） |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（含 `-wal`、`-shm`，權限 `0600`） | 額度歷史：每 5 分鐘每個額度一筆「時間、服務、額度 id、已用 %、重置時間」與每次收集是否成功；Token 統計：每天／每小時 × 服務 × 模型的四種 Token 數（Codex 另有推理明細）、任務數與任務時間、個人紀錄、各紀錄檔讀到哪裡（以 UUID 識別）、已計入的訊息與任務 ID；隨機裝置 ID、裝置名稱固定為「這台 Mac」、保留期間。**不存**方案名稱、錯誤訊息、帳號資訊、對話內容、路徑或專案名稱。預設保留 1 年，35 天前的額度歷史降為每小時一筆 |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/service-status.json`（`0600`） | 兩家狀態頁的精簡結果（見上表） |
 | 收集器的安裝腳本 | `config.json`、`~/Library/LaunchAgents/io.github.kevin930326.ai-usage-monitor.plist` | 設定；launchd 排程 |
 | App 內建的收集器（`usage_collector.setup`） | `config.json` | `claude`／`codex` 路徑、啟用的服務；在 App 註冊收集器或設定精靈按「重新檢查」時（內建收集器執行中）寫入，保留其他欄位 |
 | `setup-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json`、`relay/wrangler.local.toml`（不進版控） | 中繼寫入密鑰；中繼網址；KV 的 id 與 Worker 名稱 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
-| 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log`、`collector.log*.repeats.json` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容）；`.repeats.json` 是同樣的訊息與時間，用來讓重複的錯誤每小時只記一行 |
+| 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log`、`collector.log*.repeats.json`（Windows：`%LOCALAPPDATA%\AIUsageMonitor\collector.log`、`collector.log.repeats.json`） | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容）；`.repeats.json` 是同樣的訊息與時間，用來讓重複的錯誤每小時只記一行 |
 | Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍、統計是否含快取讀取）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）、啟動時是否已詢問過通知權限（`notify.askedAtLaunch`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`）、外觀（`app.appearance`）、設定精靈是否已完成（`wizard.completed`） |
-| Mac 選單列 App | `history.sqlite3` | 只在設定的「清除歷史」「縮短保留期間」「清除並重新掃描」確認後寫入 |
+| Mac 選單列 App | `history.sqlite3` | 只在設定中改保留期間（`meta.retention_days`；延長時另記 `meta.token_days_from`，即還有每日 Token 的第一天），或確認「清除歷史」「縮短保留期間」「清除並重新掃描」後寫入；開啟資料庫時把檔案與 `-wal`、`-shm` 改回 `0600` |
 | Mac 選單列 App | 你選擇的位置 | 「匯出額度 CSV」：每小時的額度歷史；「匯出 Token CSV」：每日 Token（日期、服務、模型、四種 Token、任務數與秒數） |
 | Mac 選單列 App | 通知中心 | 通知內容（服務、額度名稱與剩餘 %）。「剩不到 20%」預設開，第一次打開 App 時由系統詢問是否允許；另外兩種只在你打開開關後 |
 | Mac 選單列 App | 系統的登入項目（`SMAppService`） | 只在你打開「登入時自動打開」後；關掉開關即移除 |
