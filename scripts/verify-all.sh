@@ -3,6 +3,7 @@
 #
 #   scripts/verify-all.sh            # 全部
 #   SKIP_LINUX=1 scripts/verify-all.sh   # 沒有 Docker 時略過 Linux 的 UsageKit 測試
+#   SKIP_WINDOWS=1 scripts/verify-all.sh # 沒有 .NET SDK 時略過 Windows App（brew install dotnet）
 #
 # 建置產物放在 build/verify（已在 .gitignore），完整輸出在 build/verify/logs/。
 # 不連網、不讀 Keychain、不碰真實的 usage.json：收集器測試以臨時資料夾當 AI_USAGE_MONITOR_HOME。
@@ -61,6 +62,16 @@ if [ "${SKIP_LINUX:-0}" != 1 ]; then
   # 掛載整個 repo：UsageKit 測試會讀 repo 根目錄的 fixtures/
   run usagekit-linux docker run --rm -v "$ROOT":/repo -w /repo/apple/UsageKit swift:6.2 \
     bash -c 'swift test --scratch-path /tmp/build'
+fi
+# Windows App（ADR-0015）：Mac 上只能編譯與跑純邏輯測試；畫面、截圖與效能在 CI 的 Windows runner
+if [ "${SKIP_WINDOWS:-0}" != 1 ]; then
+  run usagecore-tests   dotnet test windows/tests/UsageCore.Tests
+  run windows-no-network python3 windows/tools/check-no-network.py
+  for rid in win-x64 win-arm64; do
+    run "windows-$rid" dotnet publish windows/src/AIUsageMonitor.Windows -c Release -r "$rid" --self-contained false \
+      -o "$OUT/windows/$rid"
+    run "windows-$rid-clean" python3 windows/tools/check-no-network.py --release "$OUT/windows/$rid"
+  done
 fi
 
 IOS_DEST='generic/platform=iOS Simulator'
