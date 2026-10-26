@@ -101,9 +101,10 @@ struct StatsWindowView: View {
             guard !Task.isCancelled, visible, data != nil, !loading else { continue }
             let current = store.changeStamp()
             guard current != stamp else { continue }
-            stamp = current
             let loaded = await Task.detached(priority: .utility) { store.loadFullTokenStats() }.value
             guard !Task.isCancelled, visible, let loaded else { continue }
+            // 讀到才記下這次的檔案狀態：讀不到（例如收集器正在整理資料庫）時下一分鐘再試（審查 C-01）
+            stamp = current
             data = loaded
         }
     }
