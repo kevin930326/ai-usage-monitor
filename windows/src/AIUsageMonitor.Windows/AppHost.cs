@@ -338,12 +338,14 @@ internal sealed class AppHost : IDisposable
         if (disposed) return;
         disposed = true;
         minute.Stop();
-        fullscreen.Dispose();
-        store.Dispose();
-        tray.Dispose();
+        // 先關圓環再停全螢幕偵測：停止時「不是全螢幕」的通知不會把隱藏中的圓環再顯示一下
+        fullscreen.Changed -= ApplyVisibility;
         panel?.SafeClose();
         settingsWindow?.Close();
         ring?.Close();
         ring = null;
+        fullscreen.Dispose();
+        store.Dispose();
+        tray.Dispose();
     }
 }
