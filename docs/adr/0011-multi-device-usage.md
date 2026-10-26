@@ -45,7 +45,7 @@
 | 資料夾 | `%LOCALAPPDATA%\AIUsageMonitor\`（`history.sqlite3`、`config.json`、`collector.log`）；平台差異集中在 `system` 模組 |
 | 紀錄資料夾 | `%USERPROFILE%\.claude`、`%USERPROFILE%\.codex`，`config.json` 的 `claude_config_dir`／`codex_home` 優先（同 ADR-0009 第 3 節） |
 | 寫入密鑰 | Windows 認證管理員（Credential Manager），以標準函式庫的 `ctypes` 呼叫 `CredReadW`／`CredWriteW`；不存明文檔（NFR-1） |
-| 共用 | `token_stats`、`history`、上傳模組與 Mac 相同；排程預設 `--tokens-only`，不執行 `claude -p /usage`、`codex app-server`（不收集額度）。程式本身在 Windows 也能收集額度（`install-task.ps1 -WithQuota`，只寫本機 `usage.json`、不上傳），供需要時使用 |
+| 共用 | `token_stats`、`history`、上傳模組與 Mac 相同；排程預設 `--tokens-only`，不執行 `claude -p /usage`、`codex app-server`（不收集額度）。程式本身在 Windows 也能收集額度（`install-task.ps1 -WithQuota`，只寫本機 `usage.json`、不上傳），供需要時使用；Windows 桌面 App 讀這份檔案（[ADR-0015](0015-windows-desktop-app.md)） |
 | 低優先序 | 以 `BELOW_NORMAL_PRIORITY_CLASS` 執行（相當於 macOS 的 `nice`） |
 
 #### 中繼
@@ -53,7 +53,7 @@
 | 項目 | 決定 |
 |---|---|
 | 端點 | `POST /tokens/daily`（寫入）、`GET /tokens/daily?from=YYYY-MM-DD`（讀取，用現有的讀取密鑰） |
-| 寫入密鑰 | **每台電腦一把**，可單獨撤銷；中繼只存雜湊（SHA-256），`device_id` 由中繼依密鑰決定，**不信任內容中的裝置欄位**。裝置密鑰**只能**寫 `/tokens/daily`，不能寫 `/usage`（額度快照仍只由 Mac 以現有的寫入密鑰上傳，Windows 收集器不收集額度） |
+| 寫入密鑰 | **每台電腦一把**，可單獨撤銷；中繼只存雜湊（SHA-256），`device_id` 由中繼依密鑰決定，**不信任內容中的裝置欄位**。裝置密鑰**只能**寫 `/tokens/daily`，不能寫 `/usage`（額度快照仍只由 Mac 以現有的寫入密鑰上傳，Windows 收集器預設不收集額度；以 `-WithQuota` 收集時也只寫本機，ADR-0015 第 3 節） |
 | 覆蓋寫入 | 以（`device_id`、`day`、`provider`、`model`）為主鍵 upsert，重送同一列不會重複計算 |
 | 驗證 | 日期格式與範圍（不早於 400 天前、不晚於明天）、服務只允許 `claude`／`codex`、模型名稱依 ADR-0009 第 4 節的白名單格式、數值為 0～10¹² 的整數、每批列數上限 |
 | 讀取 | Mac 收集器以讀取密鑰下載每日加總，**略過本機 `device_id` 的列**（本機的數字以本機統計為準，避免以中繼的舊值蓋掉較新的本機值），其他裝置的列以（`device_id`、`day`、`provider`、`model`）覆蓋寫進本機 `daily_tokens`；本機統計只寫本機 `device_id` 的列，兩者不會互相覆蓋。以測試驗證延遲上傳、下載到自己的舊值與重試時，各裝置與合計都不倒退、不重複、歸屬不變。**選單列 App 仍然不連網、不持有密鑰** |
@@ -101,7 +101,7 @@ KV 的替代做法（每台裝置一個鍵 `daily:<device_id>`，值為最近 40
 - **密鑰失效的判斷**：連續 **兩次** 401 才停止上傳（`REVOKE_AFTER = 2`），一次可能是中繼暫時設定錯誤；中繼自己不回 403，403 只會來自 Cloudflare 邊緣（WAF、Bot Fight Mode），照一般失敗退避重試，不當成密鑰失效；本機資料不刪除，重新執行設定腳本（`token_sync reset`）後恢復。
 - **自己在中繼上的 `device_id`**：由中繼依密鑰決定，收集器從上傳的回應取得並記在 `meta.relay_device_id`，所有用過的 id 記在 `meta.relay_device_ids`；下載時略過全部。還不知道自己的 id 時不下載。換成另一台裝置的密鑰時清除 `upload_state`，全部重新上傳到新的 id。
 - **上傳欄位**：不含任務次數（`task_count` 只用在本機的 CSV）；下載的列 `task_count` 為 0。中繼會拒絕的列（日期晚於明天（UTC）、數值超過 10¹²，例如本機時鐘曾經設錯）不上傳，避免一列讓整批一直被拒。
-- **下載**：從 399 天前（本機日期）與本機保留期間的邊界中較晚的一天起（已過期的日子不會因下載而回來），整批取代本機的其他裝置列與 `devices` 表；超過中繼的下載上限（5 萬列）時中繼只回最新的日子並標 `truncated`，收集器只取代回傳範圍內的日子；只有 Mac 存了讀取密鑰時才下載（Windows 只上傳）。
+- **下載**：從 399 天前（本機日期）與本機保留期間的邊界中較晚的一天起（已過期的日子不會因下載而回來），整批取代本機的其他裝置列與 `devices` 表；超過中繼的下載上限（5 萬列）時中繼只回最新的日子並標 `truncated`，收集器只取代回傳範圍內的日子；存了讀取密鑰的電腦才下載：Mac 由 `set-tier2.sh` 預設存入；Windows 預設只上傳，`set-tier2.ps1 -ReadKey` 存入後也下載（ADR-0015 第 3 節修訂，原為「只有 Mac 下載」）。
 - **App 的範圍**：每小時資料與個人紀錄（`records`、`record_days`）只有這台 Mac 有。「所有電腦」與單一電腦的個人紀錄與累計由面板讀到的每日資料（最近一年）計算；「一天中的時段」只有這台 Mac。
 - **關閉上傳**（第 3 節）以 `set-tier2.sh --disable`／`set-tier2.ps1 -Disable` 實作，不是 App 的設定（App 不寫 `config.json`、不持有密鑰）；Mac 關閉時一併刪除本機的其他電腦資料。
 - **磁碟空間不足**（ADR-0014 第 3 節）：收集器暫停寫 `history.sqlite3` 時，第二層的上傳與下載也暫停（上傳要記 `upload_state`）；其他電腦看到這台的 Token 停在暫停前，空間恢復後下一輪補傳。`/usage` 照常上傳。
