@@ -237,7 +237,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱；重置次數卷的可用張數與各張到期時間 | 帳號 ID、點數餘額、重置卷的 id／標題／說明／取得時間等其餘欄位。收集器只讀、不使用重置卷（程式裡沒有使用卷的方法，測試會掃描確認） |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
 | 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
-| 收集器（只在設定第二層後） | Keychain `AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`（Windows：認證管理員 `AIUsageMonitor/device-key`） | 這台電腦的寫入密鑰；下載其他電腦資料用的讀取密鑰 | — |
+| 收集器（只在設定第二層後） | Keychain `AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`（Windows：認證管理員 `AIUsageMonitor/device-key`，`set-tier2.ps1 -ReadKey` 時另有 `AIUsageMonitor/relay-read`） | 這台電腦的寫入密鑰；下載其他電腦資料用的讀取密鑰 | — |
 | 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
 | 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 | 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字） | 事件內文、連結 |
@@ -284,7 +284,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Claude Code（由收集器執行） | Anthropic | Claude Code 自己處理，收集器不讀取、不持有 token | 取得 Claude 額度與方案名稱 | launchd 每 5 分鐘 |
 | Codex CLI（由收集器執行） | OpenAI | Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json` | 取得 Codex 額度與方案名稱 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
-| Mac／PC 收集器（只在設定第二層後） | 你的 Worker `POST /tokens/daily`、`GET /tokens/daily`（只有 Mac） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每日 Token 加總；下載其他電腦的（見 [docs/tier2-setup.md](docs/tier2-setup.md)） | 有變動時每小時一次＋日期改變後的第一輪；下載每小時一次 |
+| Mac／PC 收集器（只在設定第二層後） | 你的 Worker `POST /tokens/daily`、`GET /tokens/daily`（只在存了讀取密鑰的電腦：Mac，或以 `set-tier2.ps1 -ReadKey` 設定的 PC） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每日 Token 加總；下載其他電腦的（見 [docs/tier2-setup.md](docs/tier2-setup.md)） | 有變動時每小時一次＋日期改變後的第一輪；下載每小時一次 |
 | Mac 收集器 | `status.claude.com`、`status.openai.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
