@@ -1,0 +1,14 @@
+# 圖片	產生時的基準	基準的 SHA-256（scripts/update-readme-images.sh 寫入，不要手改）
+iphone-island.png	apple/Snapshots/ios/island-normal.png	4725ec6b7bf7f5353d9421397ce807d6cf41bab01141de70cd0bc19322c77a9a
+mac-panel-dark.png	apple/Snapshots/mac/panel-dark.png	33bf436161728dfa1b0213c9fdccef46411f03d50e4c3642c0cb1449fd650627
+mac-panel-light.png	apple/Snapshots/mac/panel-light.png	a548c7d69d1756ab533d3f432b7348c7de3fa9ae9020dc724a4efc0eb5bf5e20
+mac-panel-top-dark.png	apple/Snapshots/mac/panel-dark.png	33bf436161728dfa1b0213c9fdccef46411f03d50e4c3642c0cb1449fd650627
+mac-panel-top-light.png	apple/Snapshots/mac/panel-light.png	a548c7d69d1756ab533d3f432b7348c7de3fa9ae9020dc724a4efc0eb5bf5e20
+mac-settings-appearance-dark.png	apple/Snapshots/mac/settings-dark.png	4717db7979c09fe496aeb67acd59add55790b7154e0d462ff3d02f250842414b
+mac-settings-appearance-light.png	apple/Snapshots/mac/settings-light.png	d5e0d086ac43ab172bf7af3f6f56f67b61f78c29c8c44f67048924211b069571
+mac-stats-switch-dark.gif	apple/Snapshots/mac/panel-dark.png	33bf436161728dfa1b0213c9fdccef46411f03d50e4c3642c0cb1449fd650627
+mac-stats-switch-light.gif	apple/Snapshots/mac/panel-light.png	a548c7d69d1756ab533d3f432b7348c7de3fa9ae9020dc724a4efc0eb5bf5e20
+mac-stats-window-dark.png	apple/Snapshots/mac/stats-window-dark.png	28d84a190dbb04525d48f89c6ce1de8e082b4f18fd875d6ead871c9b566c0e48
+mac-stats-window-light.png	apple/Snapshots/mac/stats-window-light.png	0f2fc634c4920baf061f43147538d45456a97042d5b62f2b391704d30fd934d5
+mac-wizard-dark.png	apple/Snapshots/mac/wizard-dark.png	035a9584bfdfb14ed367ffe311bc755eb87351cc779c0062b78a578cd9cd9a82
+mac-wizard-light.png	apple/Snapshots/mac/wizard-light.png	571762ec5815c684724a83426dd37249bc94fc1e5ebdd4e357e602116e07fca4
