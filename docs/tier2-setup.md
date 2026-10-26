@@ -102,7 +102,7 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | 只撤銷、保留它過去的數字 | `scripts/relay-device.sh revoke <device_id>`（不加 `--delete-data`）：仍列在裝置切換、標「已撤銷」，數字照算 |
 
 - 被撤銷或換掉的電腦收到兩次 401 後停止上傳（`upload_status = revoked`），面板顯示「這台電腦的寫入密鑰已失效」；本機資料保留。重新執行設定腳本後恢復。
-- **換新電腦**（移轉輔助程式或 Time Machine 會把 Keychain 的寫入密鑰與 `history.sqlite3` 一起搬過去）：新電腦沿用同一個 `device_id`，不需要重新設定；舊電腦若還會繼續使用，在舊電腦執行 `set-tier2.sh --disable`（停止上傳）。同一把密鑰在兩台電腦上傳時，兩台會互相覆蓋同一個 `device_id` 的數字，其他電腦看到的合計會來回跳。
+- **換新電腦**（移轉輔助程式或 Time Machine 會把 Keychain 的寫入密鑰與 `history.sqlite3` 一起搬過去）：沿用同一個身分時在新電腦以 `rotate` 換新密鑰、舊電腦停止上傳；另立新身分時才 `revoke` 舊的。步驟見 [runbook.md](runbook.md)「換電腦」。同一把密鑰在兩台電腦上傳時，兩台會互相覆蓋同一個 `device_id` 的數字，其他電腦看到的合計會來回跳。
 - **同一台電腦不要用 `add` 重新註冊**（請用 `rotate`）：新的 `device_id` 會把所有資料重新上傳一次，舊 `device_id` 的資料若沒有以 `revoke --delete-data` 刪除，其他 Mac 會把它們算兩次。
 
 ## 中繼的用量（免費方案）

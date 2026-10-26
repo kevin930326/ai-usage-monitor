@@ -95,6 +95,7 @@ Mac 收集器 (Python)     ──POST──▶ Cloudflare Worker (KV) ◀──G
 | [解除安裝](docs/uninstall.md) | 各部分怎麼移除、哪些資料會留下 |
 | [Windows 收集器](docs/windows.md) | Windows PC 的 Token 統計：安裝、移除、手動確認 |
 | [第二層：多台電腦的 Token 合併](docs/tier2-setup.md) | 選用：D1、裝置密鑰、Mac 與 PC 的設定、換新與撤銷 |
+| [維運 runbook](docs/runbook.md) | 換電腦、手機或手錶遺失時照順序做的步驟 |
 | [架構決策紀錄 (ADR)](docs/adr/) | 重要技術選擇的理由 |
 | [CHANGELOG](CHANGELOG.md) | 各版本的變更 |
 
