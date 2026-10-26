@@ -1215,6 +1215,216 @@
     }
    ],
    "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "negative-used",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": -5,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "reset-exactly-now",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 90,
+        "resets_at": "2026-10-26T09:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "exactly-20-remaining",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 80,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "min-elapsed-boundary",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T14:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 10,
+        "resets_at": "2026-11-01T22:42:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T09:30:00Z"
+  },
+  {
+   "name": "offset-timezones",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T17:26:00+08:00",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 60,
+        "resets_at": "2026-10-26T21:00:00+08:00",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-30T19:30:00+08:00",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   },
+   "now": "2026-10-26T17:30:00+08:00"
   }
  ],
  "token_format": [

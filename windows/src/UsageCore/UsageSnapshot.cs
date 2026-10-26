@@ -226,7 +226,8 @@ public static class UsageDecoder
         return date;
     }
 
-    private static readonly string[] IsoFormats = ["yyyy-MM-dd'T'HH:mm:ssK", "yyyy-MM-dd'T'HH:mm:ss'Z'"];
+    // 一定要帶時區（Z 或 ±hh:mm），同 Swift 的 .iso8601：沒有時區的時間兩邊都視為格式錯誤
+    private static readonly string[] IsoFormats = ["yyyy-MM-dd'T'HH:mm:ss'Z'", "yyyy-MM-dd'T'HH:mm:sszzz"];
 
     public static bool TryParseIso(string text, out DateTimeOffset date) =>
         DateTimeOffset.TryParseExact(text, IsoFormats, CultureInfo.InvariantCulture,

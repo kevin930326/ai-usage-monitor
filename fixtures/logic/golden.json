@@ -2522,6 +2522,503 @@
           "time_remaining_fraction" : 0.714285714
         }
       ]
+    },
+    {
+      "chosen" : "claude/weekly",
+      "chosen_state" : "normal",
+      "has_no_providers" : false,
+      "least_label" : "剩餘最少的額度：Claude 每週，剩 63%",
+      "name" : "negative-used",
+      "ordered_providers" : [
+        "claude",
+        "codex"
+      ],
+      "stale" : false,
+      "tightest" : "claude/weekly",
+      "windows" : [
+        {
+          "countdown" : "2小時",
+          "display_name" : "Claude 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 100,
+          "effective_used_pct" : 0,
+          "elapsed_fraction" : 0.6,
+          "expected_description" : "照時間比例，現在應剩 40%",
+          "expected_remaining_pct" : 40,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/five_hour",
+          "pace" : {
+            "ahead_by" : -60,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -60,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 100,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.4
+        },
+        {
+          "countdown" : "4天 2小時",
+          "display_name" : "Claude 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 63,
+          "effective_used_pct" : 37,
+          "elapsed_fraction" : 0.416666667,
+          "expected_description" : "照時間比例，現在應剩 58%",
+          "expected_remaining_pct" : 58.333333333,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/weekly",
+          "pace" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 63,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.583333333
+        },
+        {
+          "countdown" : "3小時",
+          "display_name" : "Codex 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 90,
+          "effective_used_pct" : 10,
+          "elapsed_fraction" : 0.4,
+          "expected_description" : "照時間比例，現在應剩 60%",
+          "expected_remaining_pct" : 60,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/five_hour",
+          "pace" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 90,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.6
+        },
+        {
+          "countdown" : "5天",
+          "display_name" : "Codex 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 80,
+          "effective_used_pct" : 20,
+          "elapsed_fraction" : 0.285714286,
+          "expected_description" : "照時間比例，現在應剩 71%",
+          "expected_remaining_pct" : 71.428571429,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/weekly",
+          "pace" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 80,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.714285714
+        }
+      ]
+    },
+    {
+      "chosen" : "claude/weekly",
+      "chosen_state" : "normal",
+      "has_no_providers" : false,
+      "least_label" : "剩餘最少的額度：Claude 每週，剩 63%",
+      "name" : "reset-exactly-now",
+      "ordered_providers" : [
+        "claude",
+        "codex"
+      ],
+      "stale" : false,
+      "tightest" : "claude/weekly",
+      "windows" : [
+        {
+          "countdown" : null,
+          "display_name" : "Claude 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 100,
+          "effective_used_pct" : 0,
+          "elapsed_fraction" : null,
+          "expected_description" : null,
+          "expected_remaining_pct" : null,
+          "hidden" : false,
+          "is_reset" : true,
+          "key" : "claude/five_hour",
+          "pace" : null,
+          "pace_history" : null,
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 100,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : null
+        },
+        {
+          "countdown" : "4天 2小時",
+          "display_name" : "Claude 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 63,
+          "effective_used_pct" : 37,
+          "elapsed_fraction" : 0.416666667,
+          "expected_description" : "照時間比例，現在應剩 58%",
+          "expected_remaining_pct" : 58.333333333,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/weekly",
+          "pace" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 63,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.583333333
+        },
+        {
+          "countdown" : "3小時",
+          "display_name" : "Codex 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 90,
+          "effective_used_pct" : 10,
+          "elapsed_fraction" : 0.4,
+          "expected_description" : "照時間比例，現在應剩 60%",
+          "expected_remaining_pct" : 60,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/five_hour",
+          "pace" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 90,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.6
+        },
+        {
+          "countdown" : "5天",
+          "display_name" : "Codex 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 80,
+          "effective_used_pct" : 20,
+          "elapsed_fraction" : 0.285714286,
+          "expected_description" : "照時間比例，現在應剩 71%",
+          "expected_remaining_pct" : 71.428571429,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/weekly",
+          "pace" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 80,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.714285714
+        }
+      ]
+    },
+    {
+      "chosen" : "claude/five_hour",
+      "chosen_state" : "too_fast",
+      "has_no_providers" : false,
+      "least_label" : "剩餘最少的額度：Claude 5 小時，剩 20%",
+      "name" : "exactly-20-remaining",
+      "ordered_providers" : [
+        "claude"
+      ],
+      "stale" : false,
+      "tightest" : "claude/five_hour",
+      "windows" : [
+        {
+          "countdown" : "2小時",
+          "display_name" : "Claude 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 20,
+          "effective_used_pct" : 80,
+          "elapsed_fraction" : 0.6,
+          "expected_description" : "照時間比例，現在應剩 40%",
+          "expected_remaining_pct" : 40,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/five_hour",
+          "pace" : {
+            "ahead_by" : 20,
+            "exhausts_at" : 1793009700,
+            "too_fast" : true
+          },
+          "pace_history" : {
+            "ahead_by" : 20,
+            "exhausts_at" : 1793009700,
+            "too_fast" : true
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 20,
+          "severity" : "normal",
+          "state" : "too_fast",
+          "time_remaining_fraction" : 0.4
+        },
+        {
+          "countdown" : "4天 2小時",
+          "display_name" : "Claude 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 63,
+          "effective_used_pct" : 37,
+          "elapsed_fraction" : 0.416666667,
+          "expected_description" : "照時間比例，現在應剩 58%",
+          "expected_remaining_pct" : 58.333333333,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/weekly",
+          "pace" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 63,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.583333333
+        }
+      ]
+    },
+    {
+      "chosen" : "claude/five_hour",
+      "chosen_state" : "normal",
+      "has_no_providers" : false,
+      "least_label" : "剩餘最少的額度：Claude 5 小時，剩 70%",
+      "name" : "min-elapsed-boundary",
+      "ordered_providers" : [
+        "claude"
+      ],
+      "stale" : false,
+      "tightest" : "claude/five_hour",
+      "windows" : [
+        {
+          "countdown" : "4小時 30分鐘",
+          "display_name" : "Claude 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 70,
+          "effective_used_pct" : 30,
+          "elapsed_fraction" : 0.1,
+          "expected_description" : "照時間比例，現在應剩 90%",
+          "expected_remaining_pct" : 90,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/five_hour",
+          "pace" : null,
+          "pace_history" : null,
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 70,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.9
+        },
+        {
+          "countdown" : "6天 13小時",
+          "display_name" : "Claude 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 90,
+          "effective_used_pct" : 10,
+          "elapsed_fraction" : 0.064285714,
+          "expected_description" : "照時間比例，現在應剩 94%",
+          "expected_remaining_pct" : 93.571428571,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/weekly",
+          "pace" : null,
+          "pace_history" : null,
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 90,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.935714286
+        }
+      ]
+    },
+    {
+      "chosen" : "claude/five_hour",
+      "chosen_state" : "too_fast",
+      "has_no_providers" : false,
+      "least_label" : "剩餘最少的額度：Claude 5 小時，剩 40%",
+      "name" : "offset-timezones",
+      "ordered_providers" : [
+        "claude",
+        "codex"
+      ],
+      "stale" : false,
+      "tightest" : "claude/five_hour",
+      "windows" : [
+        {
+          "countdown" : "3小時 30分鐘",
+          "display_name" : "Claude 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 40,
+          "effective_used_pct" : 60,
+          "elapsed_fraction" : 0.3,
+          "expected_description" : "照時間比例，現在應剩 70%",
+          "expected_remaining_pct" : 70,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/five_hour",
+          "pace" : {
+            "ahead_by" : 30,
+            "exhausts_at" : 1793010600,
+            "too_fast" : true
+          },
+          "pace_history" : {
+            "ahead_by" : 30,
+            "exhausts_at" : 1793010600,
+            "too_fast" : true
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 40,
+          "severity" : "normal",
+          "state" : "too_fast",
+          "time_remaining_fraction" : 0.7
+        },
+        {
+          "countdown" : "4天 2小時",
+          "display_name" : "Claude 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 63,
+          "effective_used_pct" : 37,
+          "elapsed_fraction" : 0.416666667,
+          "expected_description" : "照時間比例，現在應剩 58%",
+          "expected_remaining_pct" : 58.333333333,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "claude/weekly",
+          "pace" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -4.666666667,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 63,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.583333333
+        },
+        {
+          "countdown" : "3小時",
+          "display_name" : "Codex 5 小時",
+          "duration" : 18000,
+          "effective_remaining_pct" : 90,
+          "effective_used_pct" : 10,
+          "elapsed_fraction" : 0.4,
+          "expected_description" : "照時間比例，現在應剩 60%",
+          "expected_remaining_pct" : 60,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/five_hour",
+          "pace" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -30,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 90,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.6
+        },
+        {
+          "countdown" : "5天",
+          "display_name" : "Codex 每週",
+          "duration" : 604800,
+          "effective_remaining_pct" : 80,
+          "effective_used_pct" : 20,
+          "elapsed_fraction" : 0.285714286,
+          "expected_description" : "照時間比例，現在應剩 71%",
+          "expected_remaining_pct" : 71.428571429,
+          "hidden" : false,
+          "is_reset" : false,
+          "key" : "codex/weekly",
+          "pace" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "pace_history" : {
+            "ahead_by" : -8.571428571,
+            "exhausts_at" : null,
+            "too_fast" : false
+          },
+          "recent_rate_per_hour" : null,
+          "remaining_rounded" : 80,
+          "severity" : "normal",
+          "state" : "normal",
+          "time_remaining_fraction" : 0.714285714
+        }
+      ]
     }
   ],
   "countdown" : [

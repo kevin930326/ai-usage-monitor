@@ -261,3 +261,16 @@ public class AppSettingsTests
         Assert.Equal(DisplayMode.Both, AppSettings.Parse("{\"display_mode\": \"2\"}").DisplayMode);
     }
 }
+
+public class IsoParsingTests
+{
+    [Fact]
+    public void RequiresATimeZoneLikeSwift()
+    {
+        Assert.True(UsageDecoder.TryParseIso("2026-10-26T09:30:00Z", out var utc));
+        Assert.True(UsageDecoder.TryParseIso("2026-10-26T17:30:00+08:00", out var taipei));
+        Assert.Equal(utc, taipei);
+        Assert.False(UsageDecoder.TryParseIso("2026-10-26T09:30:00", out _));
+        Assert.False(UsageDecoder.TryParseIso("2026-10-26", out _));
+    }
+}
