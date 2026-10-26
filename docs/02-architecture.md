@@ -90,6 +90,17 @@ apple/
 └── MacMenuBar/    # Mac 選單列 App
 ```
 
+### 2.8 Windows 桌面 App (`windows/`，v2.1，[ADR-0015](adr/0015-windows-desktop-app.md)，提議中)
+| 部分 | 作用 |
+|---|---|
+| 懸浮圓環 | 桌面上的雙圓環（外圈剩餘額度、內圈距離重置的時間），最上層但不搶焦點、可拖動與貼邊、同螢幕有全螢幕 App 時隱藏；系統匣圖示用同一個繪圖程式 |
+| 面板 | 點圓環打開：頁首、主圓環卡片、額度卡片（樣式同 Mac 面板）；點外面收起，收起即關閉視窗 |
+| 設定 | 顯示方式、圓環的額度、大小、透明度、開機自動啟動、外觀 |
+| UsageCore | `windows/src/UsageCore`：UsageKit 純邏輯的 C# 移植，以 `fixtures/logic/golden.json`（Swift 產生）比對 |
+
+- 資料來源：與 Mac 相同，只讀 `%LOCALAPPDATA%\AIUsageMonitor` 下收集器寫的 `usage.json`（PC 的收集器要以 `install-task.ps1 -WithQuota` 安裝才有）；不連網、不持有密鑰、不寫收集器的檔案。「立即更新」以 `schtasks /Run` 提早執行收集器的排程，節流同 Mac。
+- PC 的收集器仍不上傳額度快照（`/usage` 只由 Mac 上傳，ADR-0015 第 3 節）；存了讀取密鑰（`set-tier2.ps1 -ReadKey`）時會下載其他電腦的每日加總。
+
 ## 3. 資料格式
 
 ```json

@@ -107,8 +107,10 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 | 小工具 kind | 手錶 `UsageComplication`、iPhone 主畫面／鎖定畫面 `UsageHomeWidget`（Mac 桌面小工具 `UsageDesktopWidget` 已移除，FR-24 不做） |
 | iOS／watchOS Keychain | service `io.github.kevin930326.AIUsageMonitor`，account `relay-read-token` |
 | Mac Keychain（收集器） | 寫入密鑰 service `AIUsageMonitor-relay-write`，account `default`；讀取密鑰 service `AIUsageMonitor-relay-read` |
+| Windows 認證管理員（收集器） | 目標 `AIUsageMonitor/device-key`（裝置密鑰）、`AIUsageMonitor/relay-read`（讀取密鑰，`set-tier2.ps1 -ReadKey`） |
+| Windows App（ADR-0015） | 執行檔 `AIUsageMonitor.exe`；AppUserModelID `io.github.kevin930326.AIUsageMonitor.Windows`；單一執行個體 Mutex `Local\io.github.kevin930326.AIUsageMonitor.Windows`，具名事件加 `.show`／`.hide`／`.quit`；設定檔 `%LOCALAPPDATA%\AIUsageMonitor\windows-app.json`；安裝資料夾 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`；開機自動啟動 `HKCU\…\CurrentVersion\Run` 的值 `AIUsageMonitor`；系統匣圖示 `uID = 1`（不用 GUID） |
 
-另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（ADR-0009）也是收集器與 App 共用。
+另外：本機快照路徑 `~/Library/Application Support/AIUsageMonitor/usage.json` 與環境變數 `AI_USAGE_MONITOR_HOME` 由收集器與 `UsageFileLocator` 共用，兩邊要一起改；同資料夾的 `history.sqlite3`（ADR-0009）也是收集器與 App 共用。Windows 的資料夾是 `%LOCALAPPDATA%\AIUsageMonitor`（收集器的 `paths.py`、Windows App 的資料讀取一起改）。
 
 ## 6. 資訊排列
 
@@ -173,6 +175,8 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 8. **截圖比對**：`scripts/snapshots.sh`（verify-all 會跑）以固定時間（`AUM_RENDER_NOW` → `RenderClock`）、時區與假資料產生 Mac 面板、完整統計、設定、選單列圖示、設定精靈與 iPhone 小工具、鎖定畫面 Live Activity、動態島，和 `apple/Snapshots/` 比對；畫面有意改變時 `scripts/update-snapshots.sh`。畫面上的「現在」一律用 `RenderClock.now`（不要寫 `Date.now`），自動更新的相對時間用 `Text.relative(to:)`（不要直接寫 `Text(date, style: .relative)`），否則截圖每次都不同。iOS 的 `ProgressView` 在 ImageRenderer 中畫成黃色佔位符，比對只涵蓋其餘版面與文字。
 
 ## 9. Mac 選單列圖示與面板（ADR-0008、ADR-0010）
+
+Windows App（`windows/`，ADR-0015）的懸浮圓環與面板沿用本節的圓環、四種狀態、預期進度、卡片與動畫規則；差異（懸浮窗行為、Acrylic 材質、`SystemParameters.ClientAreaAnimation` 關閉時直接顯示、`Get-Process` 量測）見 ADR-0015 第 1、6、7 節。計算一律用 `UsageCore`（與 UsageKit 以 golden 比對），不要在畫面裡自己算。
 
 ### 選單列圖示
 
