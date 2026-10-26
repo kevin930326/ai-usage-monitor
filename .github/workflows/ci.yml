@@ -133,6 +133,50 @@ jobs:
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
           if ($task.Actions[0].Arguments -notmatch '--write-local') { throw '-WithQuota should run with --write-local' }
           .\windows\uninstall-task.ps1
+      # set-tier2.ps1 (ADR-0015 section 3): keys go through stdin (python reads one line when stdin is not a
+      # console), into a temporary LOCALAPPDATA. One key per run: python may buffer more than one line.
+      # Fake keys only; the credential targets are deleted at the end.
+      - name: set-tier2.ps1 modes with piped keys
+        shell: powershell
+        run: |
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP 'aum-tier2'
+          New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
+          $py = (Get-Command python).Source
+          $device = 'aumd_' + ('A1b2-C3d4_' * 4) + 'xyz'
+          $read = 'RL4aesydLJXpCzwcEsNc7WDCww9cZEf6RVTmmGY5G2I='
+          function Run-Tier2([string]$Stdin, [string]$Extra) {
+            $file = Join-Path $env:RUNNER_TEMP 'aum-stdin.txt'
+            Set-Content -Path $file -Value $Stdin -Encoding ascii
+            cmd /c "type `"$file`" | powershell -NoProfile -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -Python `"$py`" -RelayUrl https://relay.example.test $Extra" | Out-Host
+            return $LASTEXITCODE
+          }
+          function Has([string]$Name) { python -X utf8 -m usage_collector.credentials has $Name | Out-Host; return $LASTEXITCODE -eq 0 }
+          # a wrong key three times: nothing stored, non-zero exit
+          if ((Run-Tier2 "aumd_short`r`nfoo`r`nbar" '-NoReadKey') -eq 0) { throw 'a malformed key should fail' }
+          if (Has 'device-key') { throw 'a malformed key was stored' }
+          # surrounding spaces and CRLF are trimmed; upload only
+          if ((Run-Tier2 "  $device  " '-NoReadKey') -ne 0) { throw 'storing the device key failed' }
+          if (-not (Has 'device-key')) { throw 'device key missing' }
+          if (Has 'relay-read') { throw 'read key should not exist' }
+          # keep the device key, add the read key
+          if ((Run-Tier2 $read '-KeepDeviceKey -ReadKey') -ne 0) { throw '-KeepDeviceKey -ReadKey failed' }
+          if (-not (Has 'relay-read')) { throw 'read key missing after -ReadKey' }
+          # neither switch leaves the read key alone
+          if ((Run-Tier2 $device '') -ne 0) { throw 'storing the device key again failed' }
+          if (-not (Has 'relay-read')) { throw 'the read key should be kept without -NoReadKey' }
+          # a device key pasted as the read key is refused
+          if ((Run-Tier2 "$device`r`n" '-KeepDeviceKey -ReadKey') -eq 0) { throw 'a device key as the read key should fail' }
+          if ((Run-Tier2 '' '-KeepDeviceKey -NoReadKey') -ne 0) { throw '-NoReadKey failed' }
+          if (Has 'relay-read') { throw 'read key should be deleted by -NoReadKey' }
+          $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($config.token_sync -ne $true -or $config.relay_url -ne 'https://relay.example.test') { throw "unexpected config: $($config | ConvertTo-Json)" }
+          # the keys never reach a log or the config file
+          foreach ($f in Get-ChildItem -Recurse -File $env:LOCALAPPDATA) {
+            $text = [IO.File]::ReadAllText($f.FullName)
+            if ($text.Contains($device) -or $text.Contains($read)) { throw "a key was written to $($f.Name)" }
+          }
+          python -X utf8 -m usage_collector.credentials delete device-key
+          python -X utf8 -m usage_collector.credentials delete relay-read
       # One-line installer (scripts/install.ps1): package the release zip, then install into a temporary
       # LOCALAPPDATA from the local zip (no download), check the SHA-256 refusal, the iex path and uninstall
       - name: install.ps1 from the release zip
