@@ -160,30 +160,36 @@ def _intact(conn: sqlite3.Connection) -> bool:
 
 
 def quarantine(path: Path, now: int) -> str | None:
-    """把壞掉的資料庫連同 -wal、-shm 改名保留；回傳新檔名，改不了時回傳 None。"""
+    """把壞掉的資料庫連同 -wal、-shm 改名保留；回傳新檔名，改不了時回傳 None（檔案維持原狀）。"""
     stamp = datetime.fromtimestamp(now).strftime("%Y%m%d-%H%M%S")
     target = path.with_name(f"{CORRUPT_PREFIX}{stamp}.sqlite3")
     n = 1
     while any(Path(f"{target}{s}").exists() for s in ("", "-wal", "-shm")):  # 不覆寫已保留的舊檔
         n += 1
         target = path.with_name(f"{CORRUPT_PREFIX}{stamp}-{n}.sqlite3")
+    moved: list[tuple[Path, Path]] = []
     try:
-        os.replace(path, target)
-    except OSError as e:
-        log(f"history.sqlite3 已損毀，但無法改名（{type(e).__name__}）：把檔案移走，或在設定中清除歷史")
-        return None
-    for suffix in ("-wal", "-shm"):
-        side = Path(f"{path}{suffix}")
-        try:
-            os.replace(side, Path(f"{target}{suffix}"))
-        except FileNotFoundError:
-            pass
-        except OSError:
-            # 舊的 -wal 不能留在原位：新檔開啟時 SQLite 會把它套用到新檔上
+        for suffix in ("", "-wal", "-shm"):
+            src, dst = Path(f"{path}{suffix}"), Path(f"{target}{suffix}")
             try:
-                _remove(side)
-            except OSError as e:
-                log(f"無法移走 history.sqlite3{suffix}（{type(e).__name__}），請手動刪除")
+                os.replace(src, dst)
+                moved.append((src, dst))
+            except FileNotFoundError:
+                if not suffix:
+                    raise
+            except OSError:
+                if not suffix:
+                    raise
+                # 舊的 -wal 不能留在原位：新檔開啟時 SQLite 會把它套用到新檔上。刪不掉就整個放棄（審查 C-02）
+                _remove(src)
+    except OSError as e:
+        for src, dst in reversed(moved):
+            try:
+                os.replace(dst, src)
+            except OSError:
+                pass
+        log(f"history.sqlite3 已損毀，但無法改名或移走 -wal、-shm（{type(e).__name__}）：把檔案移走，或在設定中清除歷史")
+        return None
     _prune(path.parent, f"{CORRUPT_PREFIX}*.sqlite3", KEEP_CORRUPT)
     return target.name
 

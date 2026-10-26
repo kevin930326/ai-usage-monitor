@@ -119,6 +119,22 @@ class RecoveryTest(CareTestCase):
             history_care.quarantine(self.path, T0)
         self.assertFalse(Path(f"{self.path}-wal").exists())  # 留在原位會被套用到新檔上
 
+    def test_a_wal_that_cannot_move_or_be_deleted_stops_the_recovery(self):
+        for suffix in ("", "-wal"):
+            Path(f"{self.path}{suffix}").write_bytes(suffix.encode() or b"db")
+        real = os.replace
+
+        def replace(src, dst):
+            if str(src).endswith("-wal"):
+                raise PermissionError
+            return real(src, dst)
+        with redirect_stderr(self.err), mock.patch.object(history_care.os, "replace", side_effect=replace), \
+             mock.patch.object(Path, "unlink", side_effect=PermissionError):
+            self.assertIsNone(history_care.quarantine(self.path, T0))
+        self.assertEqual(self.path.read_bytes(), b"db")  # 改回原名，不在舊 -wal 旁建新檔
+        self.assertEqual(Path(f"{self.path}-wal").read_bytes(), b"-wal")
+        self.assertEqual(self.kept(), [])
+
     def test_never_overwrites_a_kept_file_from_the_same_second(self):
         for content in (b"first", b"second"):
             self.path.write_bytes(content)
@@ -195,7 +211,7 @@ class RecoveryTest(CareTestCase):
         with mock.patch.object(history_care.os, "replace", side_effect=replace):
             self.record(history_care.RECOVER_AFTER)
         self.assertTrue(self.path.exists())
-        self.assertIn("無法改名（PermissionError）", self.err.getvalue())
+        self.assertIn("無法改名或移走 -wal、-shm（PermissionError）", self.err.getvalue())
         self.record(history_care.RECOVER_AFTER)  # 下一個 12 輪再試
         self.assertEqual(len(self.kept()), 1)
 
