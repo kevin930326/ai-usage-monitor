@@ -151,7 +151,7 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
 | 貼齊邊緣 | 放開時以圓環所在螢幕的**工作區**（扣掉工作列）為準，距離邊緣 ≤ 16 DIP 就吸到那一邊、留 8 DIP 邊距；角落可同時吸兩邊 |
 | 記住位置 | 每個螢幕一筆：鍵＝裝置名稱＋解析度＋DPI（例如 `\\.\DISPLAY1|2560x1440|144`），存 `windows-app.json`，最多 16 筆。啟動時找相同的鍵 → 同裝置名稱（比例換算）→ 主螢幕工作區右下角內縮 24 DIP；最後一律夾進該螢幕的工作區（一定看得見）。顯示設定改變（螢幕拔掉、解析度）時重新套用 |
 | 多螢幕與 DPI | `app.manifest` 宣告 Per-Monitor V2；WPF 處理 `WM_DPICHANGED`，跨螢幕拖動時 DIP 尺寸不變 |
-| 全螢幕時隱藏 | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`（`WINEVENT_OUTOFCONTEXT`，事件驅動）：前景視窗不是自己、不是桌面與工作列（`Progman`、`WorkerW`、`Shell_TrayWnd`、`Shell_SecondaryTrayWnd`），在圓環所在的螢幕、且矩形（`DWMWA_EXTENDED_FRAME_BOUNDS`）涵蓋整個螢幕（不是工作區）→ 隱藏圓環與面板。另外 `SHQueryUserNotificationState` 回報獨占全螢幕的 D3D（`QUNS_RUNNING_D3D_FULL_SCREEN`）或簡報模式時也隱藏；`QUNS_BUSY` 不用（它是全系統的狀態，另一個螢幕全螢幕時也會回報）。離開全螢幕而前景視窗沒變（影片按 Esc）：隱藏期間對那個程序掛 `EVENT_OBJECT_LOCATIONCHANGE`／`EVENT_OBJECT_DESTROY`，收到就重新判斷，恢復後解除。可在設定關閉 |
+| 全螢幕時隱藏 | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`（`WINEVENT_OUTOFCONTEXT`，事件驅動）：前景視窗不是自己、不是桌面與工作列（`Progman`、`WorkerW`、`Shell_TrayWnd`、`Shell_SecondaryTrayWnd`），在圓環所在的螢幕、且矩形（`DWMWA_EXTENDED_FRAME_BOUNDS`）涵蓋整個螢幕（不是工作區）→ 隱藏圓環與面板。另外 `SHQueryUserNotificationState` 回報獨占全螢幕的 D3D（`QUNS_RUNNING_D3D_FULL_SCREEN`）或簡報模式時也隱藏；`QUNS_BUSY` 不用（它是全系統的狀態，另一個螢幕全螢幕時也會回報）。前景視窗沒變但進入或離開全螢幕（瀏覽器按 F11、影片按 Esc）：對**目前前景視窗的程序**掛 `EVENT_OBJECT_LOCATIONCHANGE`／`EVENT_OBJECT_DESTROY`（`SetWinEventHook` 的 `idProcess`；前景改變時換掛到新的程序），回呼只處理 `idObject = OBJID_WINDOW` 且是前景視窗本身的事件，合併成 250 ms 內一次判斷（拖動視窗時不連續判斷）。事件只在那個程序的視窗移動或改變大小時才有，閒置時沒有回呼。可在設定關閉 |
 | 透明度 | `Window.Opacity`（層疊視窗的整體 alpha，不重繪），30～100%，預設 100% |
 | 滑鼠穿透 | 階段 4（`WS_EX_TRANSPARENT`；開啟時必須同時顯示系統匣，否則無法操作） |
 | 面板 | 要被啟用才收得到 `Deactivated`：面板不加 `WS_EX_NOACTIVATE`（搶焦點是使用者點圓環的結果，同 Mac 點選單列圖示），加 `WS_EX_TOOLWINDOW`。寬 360 DIP，高度依內容、上限為工作區高度 − 40 DIP（超過時捲動）。位置：貼著圓環、間距 8 DIP，優先放在圓環內側（圓環貼右邊就放左邊），候選位置第一個完全在工作區內的採用；從系統匣打開時放在工作區右下角。收起：失去焦點（點面板外）、Esc、再點一次圓環。**收起＝關閉視窗**，下次重新建立：關閉後不留任何計時器與動畫是結構上的保證 |
@@ -257,7 +257,7 @@ scripts/install-windows-app.ps1  # 使用者執行的安裝腳本（與 install.
 
 ## 實機確認（使用者）
 
-x64 桌機（Windows 11）與 ARM64 VM（Parallels）的清單在 `windows/README.md`「實機確認」：安裝、焦點不被搶、拖動與貼邊、點一下開關面板、點外面收起、全螢幕隱藏（同螢幕與另一個螢幕）、多螢幕與 DPI、拔掉螢幕、開機自動啟動、單一執行個體、外觀切換、透明效果關閉時的純色、防火牆封鎖後仍正常、閒置效能。
+x64 桌機（Windows 11）與 ARM64 VM（Parallels）的清單在 `windows/README.md`「實機確認」：安裝、焦點不被搶、拖動與貼邊、點一下開關面板、點外面收起、全螢幕隱藏（切換到全螢幕 App、同一個視窗按 F11 進入與離開、另一個螢幕全螢幕時不隱藏）、多螢幕與 DPI、拔掉螢幕、開機自動啟動、單一執行個體、外觀切換、透明效果關閉時的純色、防火牆封鎖後仍正常、閒置效能。
 
 ## 查證來源
 
