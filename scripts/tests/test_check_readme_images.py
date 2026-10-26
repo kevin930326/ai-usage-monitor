@@ -78,6 +78,13 @@ class CheckReadmeImagesTests(unittest.TestCase):
         self.assertIn("docs/images/gone.png 不存在", r.stdout)
         self.assertIn("docs/images/gone.png 沒有列在", r.stdout)
 
+    def test_translated_readme_is_checked_too(self):
+        self.write("README.zh-TW.md", '<img src="docs/images/panel.png"> <img src="docs/images/gone.png">\n')
+        r = self.run_check()
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("README.zh-TW.md 引用的 docs/images/gone.png 不存在", r.stdout)
+        self.assertIn("docs/images/gone.png 沒有列在", r.stdout)
+
     def test_unlisted_image_fails(self):
         self.write("docs/images/extra.png", "x")
         self.write("README.md", '<source srcset="docs/images/extra.png"><img src="docs/images/panel.png">\n')
