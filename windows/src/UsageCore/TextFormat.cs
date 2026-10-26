@@ -44,6 +44,16 @@ public static class TokenFormat
         return (value < 0 ? "-" : "") + scaled.Text + unit;
     }
 
+    /// <summary>「1 小時 23 分」「45 分」「30 秒」</summary>
+    public static string Duration(long seconds)
+    {
+        if (seconds < 60) return $"{seconds} 秒";
+        var minutes = seconds / 60;
+        if (minutes < 60) return $"{minutes} 分";
+        long h = minutes / 60, m = minutes % 60;
+        return m == 0 ? $"{h} 小時" : $"{h} 小時 {m} 分";
+    }
+
     /// <summary>完整數字加千分位：「12,345,678」</summary>
     public static string Full(long value) => value.ToString("#,0", CultureInfo.InvariantCulture);
 
