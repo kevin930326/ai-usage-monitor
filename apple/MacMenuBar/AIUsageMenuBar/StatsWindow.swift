@@ -4,6 +4,7 @@ import UsageKitUI
 
 // 完整統計視窗（FR-44、ADR-0008 第 4 節）：一年熱力圖、30 天疊加長條、各模型、時段分布、個人紀錄。
 // 打開時另開一個短暫的資料庫連線讀完就關；關閉視窗時釋放資料（ADR-0009 第 7 節）。
+// 開著（看得見）時每分鐘比對 history.sqlite3 的大小與修改時間，收集器寫入後重新讀取（LT-21），不重播動畫。
 // 可調整大小，最小 720×520。
 
 struct StatsWindowView: View {
@@ -20,11 +21,16 @@ struct StatsWindowView: View {
     @State private var scope: TokenScope = .all
     @State private var motion = PanelMotion.settled
     @State private var visible = false
+    /// 看得見時多久檢查一次收集器有沒有寫入（收集器每 5 分鐘一輪）
+    static let refreshInterval: Duration = .seconds(60)
 
     /// Debug 截圖直接給資料與動畫進度
     var fixedData: TokenStatsData?
     var fixedMotion: PanelMotion?
     var now: Date = RenderClock.now
+    /// 這份資料讀取時的時間：畫面的「今天」以它為準。視窗開著跨日、自動更新後，長條、熱力圖與摘要跟著換到新的一天（審查 C-02）
+    @State private var readAt: Date?
+    private var today: Date { readAt ?? now }
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
@@ -85,6 +91,27 @@ struct StatsWindowView: View {
                 }
             }
         }
+        .task(id: visible) { await watchForChanges() }
+    }
+
+    /// 看得見時每分鐘比對檔案；變了就在背景重新讀，讀到才換掉畫面上的資料（讀不到時保留原本的）
+    private func watchForChanges() async {
+        guard visible, fixedData == nil else { return }
+        let store = historyStore
+        var stamp = store.changeStamp()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: Self.refreshInterval)
+            guard !Task.isCancelled, visible, data != nil, !loading else { continue }
+            let current = store.changeStamp()
+            guard current != stamp else { continue }
+            let at = RenderClock.now
+            let loaded = await Task.detached(priority: .utility) { store.loadFullTokenStats(now: at) }.value
+            guard !Task.isCancelled, visible, let loaded else { continue }
+            // 讀到才記下這次的檔案狀態：讀不到（例如收集器正在整理資料庫）時下一分鐘再試（審查 C-01）
+            stamp = current
+            readAt = at
+            data = loaded
+        }
     }
 
     private func message(_ text: String) -> some View {
@@ -100,9 +127,11 @@ struct StatsWindowView: View {
         loading = true
         let store = historyStore
         Task {
-            let loaded = await Task.detached(priority: .userInitiated) { store.loadFullTokenStats() }.value
+            let at = RenderClock.now
+            let loaded = await Task.detached(priority: .userInitiated) { store.loadFullTokenStats(now: at) }.value
             loading = false
             guard visible else { return }
+            readAt = at
             data = loaded
             failed = loaded == nil
             replayCharts()
@@ -127,13 +156,14 @@ struct StatsWindowView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             data = nil
+            readAt = nil
             failed = false
             motion = .settled
         }
     }
 
     private func deviceMenu(_ devices: TokenDevices) -> some View {
-        TokenDeviceMenu(devices: devices, selected: device, now: now) { selected in
+        TokenDeviceMenu(devices: devices, selected: device, now: today) { selected in
             PanelSettings.shared.statsDevice = selected
             replayCharts()
         }
@@ -143,7 +173,7 @@ struct StatsWindowView: View {
         let devices = data.devices
         let scopes = TokenScopeChips.scopes(data)
         let scope = scopes.contains(self.scope) ? self.scope : .all
-        let summary = TokenSummary(data: data, scope: scope, now: now)
+        let summary = TokenSummary(data: data, scope: scope, now: today)
         let page = VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("完整統計").font(.title2.weight(.bold))
@@ -163,11 +193,11 @@ struct StatsWindowView: View {
             }
             RecordsRow(summary: summary)
             section("活動熱力圖（一年）") {
-                TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: now, weeks: 53), scope: scope)
+                TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: today, weeks: 53), scope: scope)
                     .id("\(scope.rawValue)-\(measure.rawValue)")
             }
             section("最近 30 天") {
-                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: .days30, now: now),
+                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: .days30, now: today),
                                    scope: scope, range: .days30, measure: measure, height: 140)
                     .id("\(scope.rawValue)-\(measure.rawValue)")
             }
