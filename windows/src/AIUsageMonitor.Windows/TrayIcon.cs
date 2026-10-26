@@ -155,8 +155,10 @@ internal sealed class TrayIcon : IDisposable
             shown = null;
             if (Visible) SettingsChanged?.Invoke();
         }
-        else if (msg == NativeMethods.WM_SETTINGCHANGE)
+        else if (msg == NativeMethods.WM_SETTINGCHANGE && lParam != IntPtr.Zero
+                 && Marshal.PtrToStringUni(lParam) == "ImmersiveColorSet")
         {
+            // 只處理深淺色、輔色與透明效果的改變（ImmersiveColorSet）；環境變數等其他廣播不重畫、不關面板
             SettingsChanged?.Invoke();
         }
         else if (msg == NativeMethods.WM_DISPLAYCHANGE)
