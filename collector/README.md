@@ -93,6 +93,8 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 |---|---|---|
 | 本機快照 | `~/Library/Application Support/AIUsageMonitor/usage.json` | 最新一次的用量（Mac 選單列 App 讀這個）。磁碟空間不足時多一個只在本機的 `local_status`（不上傳） |
 | 磁碟不足標記 | `~/Library/Application Support/AIUsageMonitor/disk-low` | 空檔案：剩餘空間不足期間存在，只用來讓日誌在狀態改變時才記一行 |
+| 每週備份 | `~/Library/Application Support/AIUsageMonitor/backups/history-<日期>.sqlite3` | `history.sqlite3` 的線上備份（單一檔案、0600），每 7 天一份、只留最近 2 份（ADR-0014 D-1）。App 的「清除歷史」一併刪除 |
+| 損毀時保留的舊檔 | `~/Library/Application Support/AIUsageMonitor/history.corrupt-<時間>.sqlite3` | 資料庫損毀、自動建立新檔時改名保留的舊檔，最多 2 份；`history-failures.json` 記連續失敗次數，`history-recovered.json` 讓面板提示 7 天 |
 | 設定 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼 API 網址、claude 與 codex 的完整路徑、啟用的服務（`enabled_providers`）、對話紀錄資料夾（`claude_config_dir`、`codex_home`） |
 | 額度歷史與 Token 統計 | `~/Library/Application Support/AIUsageMonitor/history.sqlite3` | 見下方「額度歷史」「Token 統計」 |
 | 服務狀態 | `~/Library/Application Support/AIUsageMonitor/service-status.json` | 見下方「服務狀態」；只在本機、不上傳 |
@@ -115,6 +117,8 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 - SQLite WAL 模式、`busy_timeout` 5 秒；資料庫與 `-wal`／`-shm` 權限 `0600`。
 - 每天（本機日期）第一次執行時清理：刪除超過保留期間的資料（`meta.retention_days`，預設 365，`0`＝永久，由 App 的設定修改）；35 天前的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆，`collector_runs` 合成一列並保留次數）。每 30 天（或可回收的空間超過 20%）`VACUUM` 並截斷 WAL，讓刪掉的空間還給磁碟；剩餘空間不到資料庫大小的 2 倍＋64 MB 時隔天再試（ADR-0014 LT-14）。清理用的時間比上次清理最多前進 2 天（`meta.cleanup_clock`）：時鐘被設到未來時不會一次刪光保留期間內的資料，時鐘往回走時用現在的時間（ADR-0014 LT-11）。
 - **歷史是附加功能**：寫在 `usage.json` 與上傳之後；資料庫被鎖住、損毀、版本較新或資料夾不能寫入時，只在日誌記一行「略過額度歷史（例外類別）」，不影響 `usage.json`、上傳與結束碼。損毀的檔案不會被自動刪除或覆蓋。
+- **每週備份**（ADR-0014 D-1）：每天的清理順便檢查，距離上次成功超過 7 天時，以 SQLite 的線上備份 API（`sqlite3` 的 `.backup` 同一個）複製到 `backups/history-<日期>.sqlite3`，複本通過 `quick_check` 才換上，只留最近 2 份。複製後剩餘空間會不到 500 MB 時跳過；任何失敗只記一行日誌、隔天再試，不影響收集。
+- **資料庫損毀**（ADR-0014 D-1）：額度歷史連續 12 輪（約 1 小時；Windows 的 `--tokens-only` 由每天的清理計算）因 `DatabaseError` 寫不進去，而且 `PRAGMA quick_check` 也失敗（或檔案不是資料庫）時，把舊檔連同 `-wal`、`-shm` 改名為 `history.corrupt-<時間>.sqlite3` 保留，這一輪就寫進新檔；本機 `usage.json` 7 天內多 `"local_status": {"history_reset_at": …, "history_kept_as": …}`，Mac 面板顯示提示。只是被鎖住（`quick_check` 跑不完）時不動檔案。從備份還原見 [docs/runbook.md](../docs/runbook.md)。
 - **磁碟空間不足**（剩不到 500 MB，ADR-0014 LT-06）：不寫 `history.sqlite3`（額度歷史、Token 統計、第二層同步、每日清理都暫停），`usage.json`、上傳與服務狀態照常；本機的 `usage.json` 多 `"local_status": {"history_paused": "low_disk", "disk_free_mb": N}`，Mac 面板顯示警告。不足與恢復各記一行日誌。`--tokens-only`（Windows）在不足時直接結束並回傳 1。`usage.json` 本身寫不進去時只記一行，照常上傳。被強制結束留下的暫存檔（`.usage-*.json`、`.service-status-*.json`）超過 1 天就刪掉
 - 只有收集器執行 migration；App 只讀（清除歷史、縮短保留期間除外）。
 - 每次執行增加的時間：`python3 scripts/measure-history.py`（一年的資料量，一般執行約 1 ms，每天第一次含清理約 3 ms）。

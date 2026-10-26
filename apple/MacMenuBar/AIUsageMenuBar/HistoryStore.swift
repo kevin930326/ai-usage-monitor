@@ -286,6 +286,8 @@ final class HistoryStore {
         case missing
         case unsupportedSchema
         case failed
+        /// 歷史已清除，但每週備份或保留的舊檔刪不掉（ADR-0014 D-1）
+        case copiesRemain
     }
 
     /// 改保留期間：寫入 `meta.retention_days`；縮短時立即刪除超出的資料（收集器每天也會依 meta 再刪一次）。
@@ -337,6 +339,23 @@ final class HistoryStore {
                 // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時，也不等失敗後的退避）
                 && Self.exec(db, "DELETE FROM meta WHERE key IN ('sync_last_success', 'sync_next_at', 'sync_failures')", [])
         }
+        guard removeCopies() else { throw WriteError.copiesRemain }
+    }
+
+    /// 清除歷史時一併刪掉收集器的每週備份、損毀時保留的舊檔與提示（ADR-0014 D-1），「無法復原」才成立。
+    /// 回傳是否都刪掉了（本來就沒有也算）；刪不掉的要讓設定告訴使用者（審查 C-03）
+    nonisolated func removeCopies() -> Bool {
+        let folder = url.deletingLastPathComponent()
+        let fm = FileManager.default
+        let names = ["backups", "history-recovered.json"]
+            + ((try? fm.contentsOfDirectory(atPath: folder.path)) ?? []).filter { $0.hasPrefix("history.corrupt-") }
+        var removed = true
+        for name in names {
+            let item = folder.appendingPathComponent(name)
+            guard fm.fileExists(atPath: item.path) else { continue }
+            do { try fm.removeItem(at: item) } catch { removed = false }
+        }
+        return removed
     }
 
     /// `daily_tokens` 最早的一天；沒有資料時為 nil

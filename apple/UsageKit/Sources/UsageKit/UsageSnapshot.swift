@@ -32,17 +32,34 @@ public struct LocalStatus: Codable, Equatable, Sendable {
     /// 暫停記錄歷史的原因；目前只有 "low_disk"
     public var historyPaused: String?
     public var diskFreeMB: Int?
+    /// history.sqlite3 損毀、收集器改名保留並建立新檔的時間（7 天內才有，ADR-0014 D-1）
+    public var historyResetAt: Date?
+    /// 保留下來的舊檔名（`history.corrupt-<時間>.sqlite3`）
+    public var historyKeptAs: String?
 
-    public init(historyPaused: String? = nil, diskFreeMB: Int? = nil) {
+    public init(historyPaused: String? = nil, diskFreeMB: Int? = nil, historyResetAt: Date? = nil, historyKeptAs: String? = nil) {
         self.historyPaused = historyPaused
         self.diskFreeMB = diskFreeMB
+        self.historyResetAt = historyResetAt
+        self.historyKeptAs = historyKeptAs
     }
 
     public var lowDisk: Bool { historyPaused == "low_disk" }
 
+    /// 本機狀態只是提示：個別欄位格式不對時當成沒有，不能讓整份 usage.json 讀不了
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        historyPaused = try? c.decodeIfPresent(String.self, forKey: .historyPaused)
+        diskFreeMB = try? c.decodeIfPresent(Int.self, forKey: .diskFreeMB)
+        historyResetAt = try? c.decodeIfPresent(Date.self, forKey: .historyResetAt)
+        historyKeptAs = try? c.decodeIfPresent(String.self, forKey: .historyKeptAs)
+    }
+
     enum CodingKeys: String, CodingKey {
         case historyPaused = "history_paused"
         case diskFreeMB = "disk_free_mb"
+        case historyResetAt = "history_reset_at"
+        case historyKeptAs = "history_kept_as"
     }
 }
 

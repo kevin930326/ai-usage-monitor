@@ -417,6 +417,18 @@ struct PanelView: View {
                 .foregroundStyle(UsageColors.notice)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        if let status = store.snapshot?.localStatus, let resetAt = status.historyResetAt {
+            // 收集器發現 history.sqlite3 損毀，改名保留並建立新檔（ADR-0014 D-1）；7 天內顯示
+            Label {
+                Text("history.sqlite3 損毀，\(resetAt, format: .dateTime.month(.defaultDigits).day().hour().minute()) 已改名保留並重新記錄；可從每週備份還原（docs/runbook.md）")
+            } icon: {
+                Image(systemName: "externaldrive.badge.xmark")
+            }
+            .font(.caption)
+            .foregroundStyle(UsageColors.notice)
+            .fixedSize(horizontal: false, vertical: true)
+            .help(status.historyKeptAs.map { "保留的舊檔：\($0)（和 history.sqlite3 同一個資料夾）" } ?? "")
+        }
         if let refreshHint {
             Text(refreshHint.text)
                 .font(.caption)
