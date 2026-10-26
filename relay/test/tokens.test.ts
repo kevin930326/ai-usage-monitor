@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import worker, { type Env } from "../src/index.ts";
-import { MAX_DOWNLOAD_ROWS, MAX_ROWS, MAX_TOKENS_BODY_BYTES } from "../src/tokens.ts";
+import { MAX_DOWNLOAD_ROWS, MAX_ROWS, MAX_TOKENS_BODY_BYTES, PRUNE_BATCH_ROWS, PRUNE_MAX_BATCHES, pruneOldDays } from "../src/tokens.ts";
 import { FakeD1 } from "./fake-d1.ts";
 
 class MemoryKV {
@@ -318,5 +318,62 @@ describe("GET /tokens/daily", () => {
 
   it("其他方法回 405", async () => {
     assert.equal((await call("DELETE", "/tokens/daily", "read-secret")).status, 405);
+  });
+});
+
+describe("每月清理（ADR-0014 D-4）", () => {
+  /** 直接寫進 D1：上傳不收 400 天以前的日期 */
+  function insert(deviceId: string, day: string, model = "claude-opus-5-5") {
+    db.db
+      .prepare("INSERT INTO daily_tokens (device_id, day, provider, model, input_tokens, updated_at) VALUES (?, ?, 'claude', ?, 1, 0)")
+      .run(deviceId, day, model);
+  }
+  const days = (deviceId: string) =>
+    db.rows().filter((r) => r.device_id === deviceId).map((r) => `${r.day} ${r.model}`);
+
+  it("刪除 400 天以前的每日加總，400 天內的保留", async () => {
+    const pc = await addDevice();
+    for (const n of [0, 399, 400, 401, 800]) insert(pc.device_id, daysAgo(n));
+    assert.equal(await pruneOldDays(db, Date.now()), 2);
+    assert.deepEqual(days(pc.device_id), [daysAgo(400), daysAgo(399), daysAgo(0)].map((d) => `${d} claude-opus-5-5`));
+  });
+
+  it("每台裝置最新的那一天不刪，下載的 has_data 不會因為資料過期而變成 false", async () => {
+    const old = await addDevice("舊電腦");
+    insert(old.device_id, daysAgo(900));
+    insert(old.device_id, daysAgo(500), "claude-opus-5-5");
+    insert(old.device_id, daysAgo(500), "claude-sonnet-5-5");
+    assert.equal((await call("POST", `/devices/${old.device_id}/revoke`, "admin-secret", {})).status, 200);
+    assert.equal(await pruneOldDays(db, Date.now()), 1);
+    assert.deepEqual(days(old.device_id), [`${daysAgo(500)} claude-opus-5-5`, `${daysAgo(500)} claude-sonnet-5-5`]);
+    const { devices, rows } = await download(daysAgo(1000));
+    assert.equal(devices[0].has_data, true); // Mac 不會把它當成「撤銷時一併刪除了資料」
+    assert.deepEqual(rows, []); // 留下的列早於下載範圍（400 天），不會回傳
+  });
+
+  it("超過一批的列數分批刪除；一次最多刪到上限，其餘留到下個月", async () => {
+    const pc = await addDevice();
+    insert(pc.device_id, daysAgo(0));
+    const day = daysAgo(500);
+    const many = db.db.prepare(
+      "INSERT INTO daily_tokens (device_id, day, provider, model, updated_at) VALUES (?, ?, 'claude', ?, 0)",
+    );
+    const limit = PRUNE_BATCH_ROWS * PRUNE_MAX_BATCHES;
+    for (let i = 0; i < limit + 10; i++) many.run(pc.device_id, day, `claude-m${i}`);
+    const before = db.batches;
+    assert.equal(await pruneOldDays(db, Date.now()), limit);
+    assert.equal(db.batches - before, PRUNE_MAX_BATCHES);
+    assert.ok(limit <= 5_000); // 只佔 D1 免費方案每日 10 萬列寫入的一小部分
+    assert.equal(await pruneOldDays(db, Date.now()), 10); // 下個月
+    assert.equal(db.rows().length, 1);
+  });
+
+  it("排程：有 D1 時清理，沒有 D1 時什麼都不做", async () => {
+    const pc = await addDevice();
+    insert(pc.device_id, daysAgo(0));
+    insert(pc.device_id, daysAgo(401));
+    await worker.scheduled({}, env);
+    assert.equal(db.rows().length, 1);
+    await worker.scheduled({}, { ...env, DB: undefined });
   });
 });

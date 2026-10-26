@@ -140,6 +140,10 @@ compatibility_date = "$(sed -n 's/^compatibility_date = "\(.*\)"/\1/p' "$RELAY/w
 [[kv_namespaces]]
 binding = "USAGE_KV"
 id = "${KV_ID}"
+
+# 第二層的每月清理（ADR-0014 D-4）：刪除 400 天以前的每日加總；沒有 D1 綁定時什麼都不做
+[triggers]
+crons = ["0 19 1 * *"]
 EOF
 
 DEPLOY_OUT=$(wrangler deploy --config wrangler.local.toml 2>&1) || fail "部署失敗（可在 relay/ 執行 npx wrangler deploy --config wrangler.local.toml 看完整訊息）。${CLEANUP}" 4
