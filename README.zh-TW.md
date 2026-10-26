@@ -266,7 +266,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | App 內建的收集器（`usage_collector.setup`） | `config.json` | `claude`／`codex` 路徑、啟用的服務；在 App 註冊收集器或設定精靈按「重新檢查」時（內建收集器執行中）寫入，保留其他欄位 |
 | `setup-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json`、`relay/wrangler.local.toml`（不進版控） | 中繼寫入密鑰；中繼網址；KV 的 id 與 Worker 名稱 |
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
-| 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容） |
+| 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log`、`collector.log*.repeats.json` | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容）；`.repeats.json` 是同樣的訊息與時間，用來讓重複的錯誤每小時只記一行 |
 | Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍、統計是否含快取讀取）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）、啟動時是否已詢問過通知權限（`notify.askedAtLaunch`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`）、外觀（`app.appearance`）、設定精靈是否已完成（`wizard.completed`） |
 | Mac 選單列 App | `history.sqlite3` | 只在設定的「清除歷史」「縮短保留期間」「清除並重新掃描」確認後寫入 |
 | Mac 選單列 App | 你選擇的位置 | 「匯出額度 CSV」：每小時的額度歷史；「匯出 Token CSV」：每日 Token（日期、服務、模型、四種 Token、任務數與秒數） |
