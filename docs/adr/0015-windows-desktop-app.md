@@ -109,7 +109,15 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
   - 日期：Swift 的 `.iso8601` 不接受小數秒；C# 用同樣的格式（`yyyy-MM-dd'T'HH:mm:ssK`）。
   - 同分的取捨：剩餘相同取較早重置的，沒有重置時間排最後，完全相同保留先出現的。
 - 欄位（每個情境）：`stale`、`has_no_providers`、`ordered_providers`、`tightest`、`chosen`（依 `choice`）、`chosen_state`、`least_label`（螢幕閱讀程式的說法），以及每個額度的 `display_name`、`hidden`、`is_reset`、`effective_used_pct`、`effective_remaining_pct`、`remaining_rounded`、`severity`、`state`、`duration`、`elapsed_fraction`、`time_remaining_fraction`、`expected_remaining_pct`、`expected_description`、`pace`／`pace_history`（`ahead_by`、`exhausts_at`、`too_fast`）、`recent_rate_per_hour`、`countdown`。另有 `token_format`（`short`、`full`）、`countdown`、`updated`。
-- 時區：階段 1 的欄位都與時區無關（倒數是時間差）；「可撐到星期幾」、額度消耗的本機日期在階段 2 加入時，golden 加時區欄位。
+- 時區：階段 1 的欄位都與時區無關（倒數是時間差）。階段 2、3 的計算（2026-10-26 先完成計算、畫面之後做）在情境加 `time_zone`（IANA，
+  沒有時為 UTC）：「可撐到星期幾」、額度消耗的整點、Token 統計的「今天」與本週依它計算；golden 有美東（3/8、11/1）與倫敦（10/25）
+  日光節約時間切換的那一天（不存在的整點是 0 長度的格子、重複的整點併成 2 小時，同 Foundation）。
+- 階段 2、3 另外比對的欄位：`history`（`suggestion`、`upcoming_resets`、`awaiting_start`、`weekly_forecast`、`trends`、`consumption`）、
+  `token_cases`（裝置範圍 × 計算方式 × 服務範圍的四個數字、30 天／週／累計長條、熱力圖、各模型、時段，與裝置清單的文字），以及 `duration`。
+  Mac 的「這台 Mac」在 Windows 是「這台電腦」，這類平台文字不在 golden 裡，由各自的單元測試檢查。
+- 讀取 `history.sqlite3`：`HistoryReader` 照 Mac 的 HistoryStore（讀寫模式不建立檔案＋`query_only`、忙碌時等 1 秒、錯誤不帶訊息），
+  但每次讀完就關閉連線（Windows 上開著的檔案不能改名，不能擋住收集器的整理），並設 `NO_CKPT_ON_CLOSE`。SQLite 用系統內建的
+  `winsqlite3.dll`（Windows 10 以上都有，只從 System32 載入），維持零套件相依。
 - 規則改變時：改 UsageKit → `AUM_UPDATE_GOLDEN=1 swift test --filter LogicGoldenTests` → 改 C# 直到測試通過 → 一起提交。
 
 ## 5. 範圍與 Mac 功能對照

@@ -14,7 +14,9 @@ windows/
 ├── Directory.Build.props        # 共用設定（Nullable、TreatWarningsAsErrors、不帶網路的隱含 using）
 ├── src/
 │   ├── UsageCore/               # net10.0 純邏輯（UsageKit 的 C# 移植）：解析 usage.json、剩餘／預期進度／用得太快、
-│   │                            #   文字、圓環內容、位置計算、全螢幕判斷、設定檔。Mac／Linux 上也能測試
+│   │                            #   文字、圓環內容、位置計算、全螢幕判斷、設定檔；階段 2、3 的計算（QuotaHistory、QuotaInsights、
+│   │                            #   TokenStats、TokenDevices、LocalCalendar）與唯讀開啟 history.sqlite3（HistoryReader，系統內建的
+│   │                            #   SQLite）。畫面還沒有用到階段 2、3。Mac／Linux 上也能測試
 │   └── AIUsageMonitor.Windows/  # net10.0-windows WPF
 │       ├── App.xaml(.cs)        # 進入點、單一執行個體與命令列（--show-panel／--hide-panel／--quit）
 │       ├── AppHost.cs           # 把下面各部分接起來：每分鐘的計時器、顯示方式、選單、開關面板
@@ -30,7 +32,8 @@ windows/
 │       ├── NativeMethods.cs     # Win32 P/Invoke
 │       └── DebugTools.cs        # 只在 Debug：示範資料與截圖
 ├── tests/
-│   └── UsageCore.Tests/         # xUnit：golden 比對（和 Swift 共用 ../fixtures/logic）與單元測試
+│   └── UsageCore.Tests/         # xUnit：golden 比對（和 Swift 共用 ../fixtures/logic）與單元測試；HistoryReaderTests 以收集器的
+│                                #   程式建立 history.sqlite3（make_history_db.py，需要 Python 3）
 └── tools/
     ├── check-no-network.py      # 靜態檢查：不連網、不碰密鑰、只有一處啟動程式、Release 不含 Debug 字串
     ├── measure-perf.ps1         # 效能量測
@@ -87,6 +90,10 @@ scripts/verify-all.sh                                           # 也包含上�
 - **計算一致**：`fixtures/logic/cases.json` 的每個案例由 Swift（`apple/UsageKit/Tests/UsageKitTests/LogicGoldenTests.swift`）與 C#
   （`tests/UsageCore.Tests/LogicGoldenTests.cs`）各算一次，都要等於 `golden.json`。改了計算時兩邊一起改；新增案例後以
   `AUM_UPDATE_GOLDEN=1 swift test --filter LogicGoldenTests`（在 `apple/UsageKit`）重寫 golden，再確認 C# 也通過。
+  階段 2、3 的部分（建議接下來用、重置時間軸、每週預測、走勢、額度消耗、Token 統計）在 `LogicGoldenHistory.swift`／`.cs`；
+  情境可指定 `time_zone`（IANA），golden 有美東與倫敦日光節約時間切換的那一天。
+- **唯讀開啟資料庫**（`HistoryReader`）：照 Mac 的 HistoryStore 以讀寫模式（不建立檔案）＋`query_only` 開啟，每次讀完就關閉，
+  Windows 另外設 `NO_CKPT_ON_CLOSE`（關閉時不寫主檔）。SQLite 用系統內建的 `winsqlite3.dll`（只從 System32 載入），不帶套件。
 - **「現在」**：畫面上的時間一律用 `Clock.Now`（截圖時固定）。
 - **Windows 上執行 Debug 版**：`AIUsageMonitor.exe --demo <normal|too_fast|critical|stale|error|single|none>` 以示範資料啟動（暫存資料夾，不碰真實資料，也不改開機自動啟動）。
 - **`--isolated`**（Release 也有）：不改開機自動啟動、不觸發收集器；效能量測以它加上暫存資料夾的 `AI_USAGE_MONITOR_HOME` 啟動。
