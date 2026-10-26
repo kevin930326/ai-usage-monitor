@@ -273,9 +273,12 @@ public static class FullscreenRule
     /// <param name="bounds">前景視窗的矩形（DWMWA_EXTENDED_FRAME_BOUNDS）</param>
     /// <param name="foregroundMonitor">前景視窗所在的螢幕</param>
     /// <param name="ringMonitor">圓環所在的螢幕：只有同一個螢幕的全螢幕才隱藏</param>
-    public static bool IsFullscreen(string className, bool cloaked, PixelRect bounds, MonitorInfo foregroundMonitor, MonitorInfo ringMonitor)
+    /// <param name="maximizedWithCaption">有標題列的最大化視窗：工作列自動隱藏時它也涵蓋整個螢幕，但不是全螢幕
+    /// （瀏覽器按 F11、遊戲、影片是沒有標題列的視窗，不受影響）</param>
+    public static bool IsFullscreen(string className, bool cloaked, PixelRect bounds, MonitorInfo foregroundMonitor, MonitorInfo ringMonitor,
+                                    bool maximizedWithCaption = false)
     {
-        if (cloaked || ShellClasses.Contains(className)) return false;
+        if (cloaked || maximizedWithCaption || ShellClasses.Contains(className)) return false;
         if (foregroundMonitor.Device != ringMonitor.Device) return false;
         return bounds.Covers(foregroundMonitor.Bounds);
     }

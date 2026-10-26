@@ -202,6 +202,8 @@ public class FullscreenRuleTests
         Assert.False(FullscreenRule.IsFullscreen("WorkerW", false, A.Bounds, A, A));
         Assert.False(FullscreenRule.IsFullscreen("Progman", false, A.Bounds, A, A));
         Assert.False(FullscreenRule.IsFullscreen("ApplicationFrameWindow", true, A.Bounds, A, A));
+        // 工作列自動隱藏時，最大化的記事本也涵蓋整個螢幕
+        Assert.False(FullscreenRule.IsFullscreen("Notepad", false, A.Bounds, A, A, maximizedWithCaption: true));
     }
 
     [Fact]

@@ -105,7 +105,8 @@ internal sealed class FullscreenWatcher : IDisposable
         var monitor = NativeMethods.Monitor(NativeMethods.MonitorFromWindow(foreground, NativeMethods.MONITOR_DEFAULTTONEAREST));
         if (monitor is null) return false;
         return FullscreenRule.IsFullscreen(NativeMethods.ClassName(foreground), NativeMethods.IsCloaked(foreground),
-                                           NativeMethods.FrameBounds(foreground), monitor, ringMonitor);
+                                           NativeMethods.FrameBounds(foreground), monitor, ringMonitor,
+                                           NativeMethods.IsMaximizedWithCaption(foreground));
     }
 
     private void WatchProcessOf(IntPtr window)
