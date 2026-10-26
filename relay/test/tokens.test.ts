@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import worker, { type Env } from "../src/index.ts";
-import { MAX_DOWNLOAD_ROWS, MAX_ROWS, MAX_TOKENS_BODY_BYTES, PRUNE_BATCH_ROWS, pruneOldDays } from "../src/tokens.ts";
+import { MAX_DOWNLOAD_ROWS, MAX_ROWS, MAX_TOKENS_BODY_BYTES, PRUNE_BATCH_ROWS, PRUNE_MAX_BATCHES, pruneOldDays } from "../src/tokens.ts";
 import { FakeD1 } from "./fake-d1.ts";
 
 class MemoryKV {
@@ -351,17 +351,20 @@ describe("每月清理（ADR-0014 D-4）", () => {
     assert.deepEqual(rows, []); // 留下的列早於下載範圍（400 天），不會回傳
   });
 
-  it("超過一批的列數分批刪除", async () => {
+  it("超過一批的列數分批刪除；一次最多刪到上限，其餘留到下個月", async () => {
     const pc = await addDevice();
     insert(pc.device_id, daysAgo(0));
     const day = daysAgo(500);
     const many = db.db.prepare(
       "INSERT INTO daily_tokens (device_id, day, provider, model, updated_at) VALUES (?, ?, 'claude', ?, 0)",
     );
-    for (let i = 0; i < PRUNE_BATCH_ROWS * 2 + 10; i++) many.run(pc.device_id, day, `claude-m${i}`);
+    const limit = PRUNE_BATCH_ROWS * PRUNE_MAX_BATCHES;
+    for (let i = 0; i < limit + 10; i++) many.run(pc.device_id, day, `claude-m${i}`);
     const before = db.batches;
-    assert.equal(await pruneOldDays(db, Date.now()), PRUNE_BATCH_ROWS * 2 + 10);
-    assert.equal(db.batches - before, 3);
+    assert.equal(await pruneOldDays(db, Date.now()), limit);
+    assert.equal(db.batches - before, PRUNE_MAX_BATCHES);
+    assert.ok(limit <= 5_000); // 只佔 D1 免費方案每日 10 萬列寫入的一小部分
+    assert.equal(await pruneOldDays(db, Date.now()), 10); // 下個月
     assert.equal(db.rows().length, 1);
   });
 

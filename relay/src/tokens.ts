@@ -336,9 +336,13 @@ export async function handleTier2(request: Request, env: TokensEnv, now = Date.n
   }
 }
 
-/** 每月排程一次刪除的上限：每批 5,000 列、最多 20 批（3 台電腦一個月約 1,000 列，平常一批就結束） */
-export const PRUNE_BATCH_ROWS = 5_000;
-export const PRUNE_MAX_BATCHES = 20;
+/**
+ * 每月排程一次刪除的上限：每批 1,000 列、最多 5 批。刪除也算 D1 的寫入（連同索引），上限只佔免費方案每日
+ * 10 萬列的一小部分，同一天的上傳與裝置管理不受影響（審查 C-01）。3 台電腦一個月約 1,000 列過期，
+ * 刪不完的留到下個月。
+ */
+export const PRUNE_BATCH_ROWS = 1_000;
+export const PRUNE_MAX_BATCHES = 5;
 
 /**
  * 刪除 400 天以前（UTC，與上傳接受的範圍相同）的每日加總（ADR-0014 D-4），回傳刪除的列數。
