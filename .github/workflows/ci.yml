@@ -219,11 +219,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "install under Restricted failed: $LASTEXITCODE" }
           if (-not (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue)) { throw 'no task under Restricted' }
           if ((Get-ExecutionPolicy -List | Out-String) -ne $before) { throw 'execution policy changed' }
-          # the repo copy has no version: through iex it must stop with a message, not close the session.
-          # Last on purpose: iex runs its param() block in this scope and clears $zip and the other parameters
+          # the repo copy has no version: through iex it must stop with a message, not close the session,
+          # and leave nothing in this scope (its parameters and function stay inside one script block)
           $msg = ''
+          $Version = 'kept'
           try { Get-Content scripts\install.ps1 -Raw | Invoke-Expression } catch { $msg = "$_" }
           if ($msg -notlike '*has no version*') { throw "unexpected iex result: $msg" }
+          if ($zip -ne (Join-Path $out 'AIUsageMonitor-collector-0.0.1.zip') -or $Version -ne 'kept') { throw 'iex changed variables in this scope' }
+          foreach ($name in 'WithQuota', 'Uninstall', 'Sha256', 'NoTask') { if (Test-Path "variable:$name") { throw "iex left `$$name" } }
+          if (Get-Command Install-AIUsageCollector -ErrorAction SilentlyContinue) { throw 'iex left the installer function' }
           & $installer -Uninstall
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
           if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\app')) { throw 'app was not removed' }

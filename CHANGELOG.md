@@ -73,6 +73,7 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- Windows 的 `install.ps1`：整個檔案包在一個 script block 裡，以 `irm | iex` 執行後不再在使用者的 PowerShell 工作階段留下 `$Zip`、`$Version` 等變數與安裝函式；CI 檢查 iex 前後變數不變
 - Windows 的 `install.ps1 -Uninstall`：收集器剛好在執行時，先等它停下（最多 30 秒）、刪除程式資料夾失敗時重試 15 秒，不再因「檔案正在使用」中斷；仍刪不掉時說明怎麼做（ADR-0014 LT-27，CI 偶發失敗發現）
 - 長期使用的防護（ADR-0014）：Claude 的重置時間沒有年份時取前一年、今年、明年中離現在最近的一個，跨年不再算成 11 個月後或已過期（LT-10）；從鑰匙圈讀中繼寫入密鑰加 10 秒逾時，鑰匙圈卡住時不再拖住整次收集（LT-09）；系統時鐘往後跳時，清理每次最多前進 2 天（升級後第一次以上次清理的日期當基準），不會一次刪掉保留期間內的資料；時鐘倒退後降採樣的水位線重設，Token 同步的退避時間在未來太遠時視為過期（LT-11）；Codex 重新計算扣回 Token 後，單日最高與連續天數會跟著下修（LT-18）
 - 第二層：撤銷並刪除資料（`relay-device.sh revoke --delete-data`）的電腦不再列在裝置切換、不算在「所有電腦（N 台）」裡，只剩這台 Mac 時回到「這台 Mac」；只撤銷、保留資料的電腦仍列出並標「已撤銷」、數字照算。中繼的 `GET /tokens/daily` 裝置清單加上 `has_data`（不限 `from`），收集器據此排除，**中繼要重新部署**才生效（舊版中繼照常列出）。截圖比對加上兩種情況的統計卡片
