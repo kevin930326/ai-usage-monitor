@@ -44,6 +44,21 @@ $usage = @"
 [IO.File]::WriteAllText((Join-Path $home2 'usage.json'), $usage, (New-Object Text.UTF8Encoding($false)))
 $cores = [Environment]::ProcessorCount
 
+# 面板是否真的開著：找這個程序、標題 "AI Usage Monitor"、看得見的頂層視窗（面板關閉＝視窗銷毀）
+Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+public static bool PanelVisible(int pid) {
+    IntPtr h = IntPtr.Zero;
+    while ((h = FindWindowExW(IntPtr.Zero, h, null, "AI Usage Monitor")) != IntPtr.Zero) {
+        uint owner; GetWindowThreadProcessId(h, out owner);
+        if (owner == pid && IsWindowVisible(h)) return true;
+    }
+    return false;
+}
+'@
+
 # 環境變數只在量測期間指到暫存資料夾，結束（含失敗）時還原，App 結束、暫存資料夾刪除
 $previousHome = $env:AI_USAGE_MONITOR_HOME
 $app = $null
@@ -62,8 +77,14 @@ try {
         $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
         [pscustomobject]@{ Cpu = [Math]::Round($cpu, 3); WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1); PrivateMB = [Math]::Round($app.PrivateMemorySize64 / 1MB, 1) }
     }
-    function Send([string]$arg) {
+    # 第二個執行個體送命令，再確認面板真的打開或關閉（5 秒內），否則量測失敗
+    function Send([string]$arg, [bool]$open) {
         Start-Process -FilePath $Exe -ArgumentList $arg -Wait | Out-Null
+        $deadline = [DateTime]::UtcNow.AddSeconds(5)
+        while ([AumPerf.Win]::PanelVisible($app.Id) -ne $open) {
+            if ([DateTime]::UtcNow -gt $deadline) { throw "panel did not $(if ($open) { 'open' } else { 'close' }) after $arg" }
+            Start-Sleep -Milliseconds 100
+        }
     }
     function PeakDuring([double]$seconds) {
         $max = 0
@@ -73,17 +94,17 @@ try {
     }
 
     $idle = Sample 30
-    Send '--show-panel'
+    Send '--show-panel' $true
     $peak = PeakDuring 2
     $open = Sample 10
-    Send '--hide-panel'
+    Send '--hide-panel' $false
     Start-Sleep -Seconds 60
     $after = Sample 30
     $memFirst = $after.WorkingSetMB
     for ($i = 0; $i -lt 5; $i++) {
-        Send '--show-panel'
+        Send '--show-panel' $true
         Start-Sleep -Seconds 2
-        Send '--hide-panel'
+        Send '--hide-panel' $false
         Start-Sleep -Seconds 2
     }
     Start-Sleep -Seconds 20
