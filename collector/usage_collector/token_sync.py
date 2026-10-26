@@ -343,7 +343,7 @@ def _sync_download(conn: sqlite3.Connection, url: str, now: int) -> None:
         return
     read_key = credentials.read(credentials.READ_KEY)
     if not read_key:
-        return  # Windows 與沒有設定讀取密鑰的 Mac：只上傳
+        return  # 沒有存讀取密鑰（Windows 預設、set-tier2.sh --no-read-key）：只上傳
     try:
         download(conn, url, read_key, now)
     except (ProviderError, sqlite3.DatabaseError) as e:
@@ -402,7 +402,7 @@ def reset(path: Path | None = None) -> None:
 
 
 def forget(path: Path | None = None) -> None:
-    """關閉第二層時呼叫：刪除本機的其他裝置列與裝置清單（面板回到「這台 Mac」）；本機的統計與上傳進度保留。"""
+    """關閉第二層時呼叫：刪除本機的其他裝置列與裝置清單（面板回到「這台電腦」）；本機的統計與上傳進度保留。"""
     path = path or history.HISTORY_PATH
     if not path.exists():
         return

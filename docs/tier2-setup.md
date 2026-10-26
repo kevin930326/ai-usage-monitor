@@ -1,6 +1,6 @@
 # 第二層：多台電腦的 Token 合併（FR-49、ADR-0011 第 2 節）
 
-讓 Mac 的統計卡片與完整統計視窗顯示「所有電腦（N 台）」：每台裝了收集器的電腦把**每日加總**上傳到你自己的中繼（Cloudflare Worker＋D1），Mac 收集器再下載其他電腦的加總寫進本機的 `history.sqlite3`。選單列 App 本身仍然不連網、不持有密鑰。
+讓 Mac 的統計卡片與完整統計視窗顯示「所有電腦（N 台）」：每台裝了收集器的電腦把**每日加總**上傳到你自己的中繼（Cloudflare Worker＋D1），存了讀取密鑰的電腦（Mac 預設；PC 加 `-ReadKey`）再下載其他電腦的加總寫進本機的 `history.sqlite3`。選單列 App 與 Windows App 本身仍然不連網、不持有密鑰。
 
 - **選用**。不設定時什麼都不上傳，面板一律是「這台 Mac」（Mac 單機使用者永遠不上傳）。
 - 只上傳：日期、服務（`claude`／`codex`）、模型名稱、輸入／快取寫入／快取讀取／輸出／推理 Token、任務秒數合計、最長任務。**不上傳**每小時資料、任務次數、專案名稱、路徑、檔名、對話內容、session ID、訊息 ID。
@@ -63,7 +63,7 @@ scripts/relay-device.sh add 工作PC
 collector/scripts/set-tier2.sh
 ```
 
-依提示貼上這台 Mac 的寫入密鑰與 `READ_TOKEN`（`security` 的提示，不經過指令列、不留在 shell 歷史紀錄），兩把都存在 Keychain（`AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`）。收集器下一輪（5 分鐘內）開始上傳；第一次上傳一年的資料會分幾輪（每輪最多 2,000 列）。
+依提示貼上這台 Mac 的寫入密鑰與 `READ_TOKEN`（不顯示；檢查格式後經標準輸入交給 `security`，不經過指令列、不留在 shell 歷史紀錄；格式不對時當場說明並重新詢問，見第 4 節最後），兩把都存在 Keychain（`AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`）。收集器下一輪（5 分鐘內）開始上傳；第一次上傳一年的資料會分幾輪（每輪最多 2,000 列）。
 
 | 選項 | 作用 |
 |---|---|
@@ -79,8 +79,18 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 ```
 
 - 依提示貼上這台 PC 的寫入密鑰（不顯示），存在 Windows 認證管理員（一般認證 `AIUsageMonitor/device-key`），不寫進任何檔案。
-- PC 只上傳、不下載，不需要讀取密鑰。
-- `-Disable`：關閉上傳（認證管理員裡的密鑰保留）。
+- 預設只上傳、不下載。要在 PC 上（Windows App，[ADR-0015](adr/0015-windows-desktop-app.md)）看「所有電腦」時加 `-ReadKey`，再貼上 `READ_TOKEN`（存在 `AIUsageMonitor/relay-read`）；收集器第一次上傳成功後每小時下載其他電腦的每日加總。
+- PC 仍**不上傳額度快照**（`/usage` 只由 Mac 上傳，避免兩台互相覆蓋、iPhone 的更新時間來回跳，ADR-0015 第 3 節）。
+
+| 選項 | 作用 |
+|---|---|
+| `-ReadKey` | 也存讀取密鑰，下載其他電腦的每日加總 |
+| `-NoReadKey` | 刪除讀取密鑰與本機的其他電腦資料，回到只上傳 |
+| （兩者都不加） | 不動之前的讀取密鑰設定（例如只換寫入密鑰） |
+| `-KeepDeviceKey` | 沿用已存的寫入密鑰、不重新提示（例如之後只想加 `-ReadKey`） |
+| `-Disable` | 關閉上傳與下載，刪除本機的其他電腦資料（認證管理員裡的密鑰保留） |
+
+貼上的密鑰會先檢查（Mac 的 `set-tier2.sh` 相同）：去掉前後的空白與換行；寫入密鑰必須以 `aumd_` 開頭、共 48 個字元；讀取密鑰至少 20 個字元、不含空白，也不能是寫入密鑰（貼錯位置）。不對時說明原因並重新詢問，三次都不對就停止、不存入。
 
 ## 5. 確認
 

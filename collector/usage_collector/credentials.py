@@ -2,14 +2,19 @@
 不寫進任何檔案、不寫進日誌。
 
 - `device-key`：這台電腦的寫入密鑰，只能寫 /tokens/daily（每台電腦一把，可單獨撤銷）
-- `relay-read`：中繼的讀取密鑰，Mac 用來下載其他裝置的每日加總（Windows 不下載，不需要）
+- `relay-read`：中繼的讀取密鑰，用來下載其他裝置的每日加總（Mac 預設存；Windows 加 `set-tier2.ps1 -ReadKey` 才存，
+  ADR-0015 第 3 節）
 
-Mac 的密鑰由 `collector/scripts/set-tier2.sh` 以 `security` 的提示輸入存入（不經過指令列）；
-Windows 由 `collector/windows/set-tier2.ps1` 呼叫 `python -m usage_collector.credentials store device-key`。
+貼上的密鑰先以 `normalize` 檢查格式（去掉前後空白與換行；裝置密鑰要 `aumd_` 開頭、48 字元），不對就當場提示，
+不必等上傳被拒兩次才知道貼錯（BACKLOG 第 10 節）。
+Mac 的密鑰由 `collector/scripts/set-tier2.sh` 讀入、`python -m usage_collector.credentials check` 檢查後，
+經 `security -i` 的標準輸入存入（不經過指令列）；Windows 由 `collector/windows/set-tier2.ps1` 呼叫
+`python -m usage_collector.credentials store device-key|relay-read`。
 """
 from __future__ import annotations
 
 import getpass
+import re
 import subprocess
 import sys
 
@@ -18,6 +23,45 @@ READ_KEY = "relay-read"
 NAMES = (DEVICE_KEY, READ_KEY)
 KEYCHAIN_SERVICES = {DEVICE_KEY: "AIUsageMonitor-device-key", READ_KEY: "AIUsageMonitor-relay-read"}
 KEYCHAIN_ACCOUNT = "default"
+
+
+# 裝置密鑰：`aumd_`＋32 bytes 的 base64url（無 padding，43 字元），見 relay/src/tokens.ts 的 newKey
+DEVICE_KEY_PREFIX = "aumd_"
+DEVICE_KEY_LENGTH = len(DEVICE_KEY_PREFIX) + 43
+_DEVICE_KEY = re.compile(r"aumd_[A-Za-z0-9_-]{43}")
+# 讀取密鑰（READ_TOKEN）：setup-relay.sh 產生 43 字元的 base64url，手動部署（relay/README.md）用 openssl rand -base64 32
+# 的 44 字元。格式不固定，只擋明顯貼錯的：太短、中間有空白、含 base64 以外的字元（也讓 security -i 不必處理引號）
+_READ_KEY = re.compile(r"[A-Za-z0-9+/=_.~-]{20,256}")
+TRIES = 3
+
+
+class KeyFormatError(ValueError):
+    """貼上的密鑰格式不對；訊息是給使用者看的提示（不含密鑰內容）。"""
+
+
+def normalize(name: str, raw: str) -> str:
+    """去掉前後空白與換行，檢查格式；不對時丟出 `KeyFormatError`（訊息不含密鑰內容）。"""
+    value = raw.strip()  # 也去掉 Windows 的 \r 與全形空白
+    if not value:
+        raise KeyFormatError("沒有輸入密鑰")
+    if name == DEVICE_KEY:
+        if not value.startswith(DEVICE_KEY_PREFIX):
+            hint = "（貼上的看起來像中繼的讀取密鑰）" if _READ_KEY.fullmatch(value) else ""
+            raise KeyFormatError(f"寫入密鑰應以 {DEVICE_KEY_PREFIX} 開頭（scripts/relay-device.sh add 印出的那一行）{hint}")
+        if len(value) != DEVICE_KEY_LENGTH:
+            raise KeyFormatError(f"寫入密鑰應為 {DEVICE_KEY_LENGTH} 個字元，貼上的是 {len(value)} 個（可能少複製或多複製了一段）")
+        if not _DEVICE_KEY.fullmatch(value):
+            raise KeyFormatError("寫入密鑰含有不該出現的字元（只會有英文字母、數字、- 與 _）")
+        return value
+    if value.startswith(DEVICE_KEY_PREFIX):
+        raise KeyFormatError("這是裝置的寫入密鑰（aumd_ 開頭），這裡要貼中繼的讀取密鑰（READ_TOKEN，和 iPhone App 用的相同）")
+    if not _READ_KEY.fullmatch(value):
+        if any(c.isspace() for c in value):
+            raise KeyFormatError("讀取密鑰中間有空白或換行，可能複製到多餘的文字")
+        if len(value) < 20:
+            raise KeyFormatError(f"讀取密鑰太短（{len(value)} 個字元），可能少複製了一段")
+        raise KeyFormatError("讀取密鑰含有不該出現的字元（只會有英文字母、數字與 + / = _ . ~ -）")
+    return value
 
 
 def target(name: str) -> str:
@@ -31,6 +75,7 @@ if sys.platform == "win32":
 
     CRED_TYPE_GENERIC = 1
     CRED_PERSIST_LOCAL_MACHINE = 2  # 只存在這台電腦、這個使用者（不隨漫遊設定檔同步）
+    ERROR_NOT_FOUND = 1168
 
     class _FILETIME(ctypes.Structure):
         _fields_ = [("dwLowDateTime", wintypes.DWORD), ("dwHighDateTime", wintypes.DWORD)]
@@ -89,7 +134,11 @@ if sys.platform == "win32":
             raise OSError(f"無法寫入認證管理員（錯誤 {ctypes.get_last_error()}）")
 
     def _delete_windows(name: str) -> None:
-        _advapi32.CredDeleteW(target(name), CRED_TYPE_GENERIC, 0)
+        # 沒有這個項目（ERROR_NOT_FOUND）視為已刪除；其他錯誤要讓呼叫端知道（-NoReadKey 才不會留下讀取密鑰，Codex C-02）
+        if not _advapi32.CredDeleteW(target(name), CRED_TYPE_GENERIC, 0):
+            error = ctypes.get_last_error()
+            if error != ERROR_NOT_FOUND:
+                raise OSError(f"無法刪除認證管理員的 {target(name)}（錯誤 {error}）")
 
 
 def read(name: str) -> str | None:
@@ -121,17 +170,47 @@ def delete(name: str) -> None:
                    capture_output=True, check=False)
 
 
+def _prompt(text: str) -> str:
+    """主控台用不顯示的提示；標準輸入不是主控台（CI 以管線送入）時讀一行（Windows 的 getpass 直接讀主控台，不讀管線）"""
+    if sys.stdin is not None and sys.stdin.isatty():
+        return getpass.getpass(text)
+    line = sys.stdin.readline() if sys.stdin is not None else ""
+    return line
+
+
 def main(argv: list[str]) -> int:
-    """`python -m usage_collector.credentials store <名稱>`：提示輸入（不顯示）後存入；`delete <名稱>` 刪除。"""
-    if len(argv) != 2 or argv[0] not in ("store", "delete") or argv[1] not in NAMES:
-        print(f"用法：python -m usage_collector.credentials store|delete {'|'.join(NAMES)}", file=sys.stderr)
+    """- `store <名稱>`：提示輸入（不顯示），格式不對時重新提示（最多 3 次），存入認證管理員（Windows）
+    - `check <名稱>`：從標準輸入讀一行，格式對時把整理過的密鑰印到標準輸出（給 set-tier2.sh 用，不經過指令列）；
+      不對時把提示印到標準錯誤、結束碼 1
+    - `delete <名稱>`：刪除
+    - `has <名稱>`：存過時結束碼 0，沒有時 1（不印出密鑰）"""
+    if len(argv) != 2 or argv[0] not in ("store", "check", "delete", "has") or argv[1] not in NAMES:
+        print(f"用法：python -m usage_collector.credentials store|check|delete|has {'|'.join(NAMES)}", file=sys.stderr)
         return 2
     if argv[0] == "delete":
-        delete(argv[1])
+        try:
+            delete(argv[1])
+        except OSError as e:
+            print(str(e), file=sys.stderr)
+            return 1
         return 0
-    value = getpass.getpass("貼上密鑰（不會顯示）：").strip()
-    if not value:
-        print("沒有輸入密鑰", file=sys.stderr)
+    if argv[0] == "has":
+        return 0 if read(argv[1]) else 1
+    if argv[0] == "check":
+        try:
+            print(normalize(argv[1], sys.stdin.readline()))
+        except KeyFormatError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+        return 0
+    for attempt in range(TRIES):
+        try:
+            value = normalize(argv[1], _prompt("貼上密鑰（不會顯示）："))
+            break
+        except KeyFormatError as e:
+            left = TRIES - attempt - 1
+            print(f"{e}{'，請重新貼上' if left else ''}", file=sys.stderr)
+    else:
         return 1
     try:
         store(argv[1], value)

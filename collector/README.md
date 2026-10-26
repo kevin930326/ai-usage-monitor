@@ -170,7 +170,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 
 ### 第二層：多台電腦的 Token 合併（選用）
 
-設定後（[docs/tier2-setup.md](../docs/tier2-setup.md)），每一輪 Token 統計之後由 `usage_collector/token_sync.py` 上傳這台電腦有變動的每日加總，Mac 有讀取密鑰時再下載其他電腦的加總寫進 `daily_tokens`（其他 `device_id`）與 `devices` 表。`config.json` 的 `token_sync` 不是 `true` 時完全不執行。
+設定後（[docs/tier2-setup.md](../docs/tier2-setup.md)），每一輪 Token 統計之後由 `usage_collector/token_sync.py` 上傳這台電腦有變動的每日加總，存了讀取密鑰時（Mac 的 `set-tier2.sh` 預設、Windows 的 `set-tier2.ps1 -ReadKey`）再下載其他電腦的加總寫進 `daily_tokens`（其他 `device_id`）與 `devices` 表。`config.json` 的 `token_sync` 不是 `true` 時完全不執行。
 
 - 每小時＋本機日期改變後的第一輪；每批 400 列、每輪最多 5 批或 60 秒。進度記在 `upload_state`（每列上次上傳的數值雜湊），失敗時不前進，以 5 分鐘、15 分鐘、1 小時、6 小時遞增間隔重試。
 - 連續兩次 401 停止上傳（403 只會來自 Cloudflare 邊緣，照一般失敗重試）（`meta.upload_status = revoked`，面板顯示密鑰失效），重新執行設定腳本才恢復。

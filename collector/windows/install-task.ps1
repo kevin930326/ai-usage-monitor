@@ -13,7 +13,8 @@
 
 .PARAMETER WithQuota
   另外收集額度（執行 claude -p /usage、codex app-server），結果只寫在本機 usage.json，不上傳。
-  ADR-0011 的預設是 Windows 不收集額度（額度是整個帳號的數字，Mac 已經在收集）；需要時才加。
+  ADR-0011 的預設是 Windows 不收集額度（額度是整個帳號的數字，Mac 已經在收集）；要用 Windows App（ADR-0015，
+  windows\README.md）在 PC 上看額度時加。PC 不上傳額度快照（iPhone 的資料只由 Mac 上傳）。
 
 .PARAMETER Python
   Python 3.10 以上的 python.exe 完整路徑。預設用 py 啟動器找到的 Python 3，再退回 PATH 中的 python。
@@ -104,4 +105,5 @@ Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
 Write-Host "已安裝排程：$TaskPath$TaskName（每 5 分鐘，$Mode）"
 Write-Host "資料夾：$DataDir"
 Write-Host "日誌：$Log"
+if (-not $WithQuota) { Write-Host '要在 Windows App 看額度：加 -WithQuota 重新執行。' }
 Write-Host '第一次會整理過去的對話紀錄，每次最多 64 MB，可能要跑幾輪；進度看 history.sqlite3 的 meta.first_scan_progress。'
