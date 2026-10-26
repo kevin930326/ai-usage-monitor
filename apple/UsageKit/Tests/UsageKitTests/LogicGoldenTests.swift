@@ -3,7 +3,8 @@ import Testing
 @testable import UsageKit
 
 /// 跨平台的計算一致性（ADR-0015 第 4 節）：讀 repo 根目錄的 `fixtures/logic/cases.json`，用 UsageKit 算出
-/// 剩餘最少的額度、預期進度、用量節奏、近期速度、重置判斷、倒數文字與萬／億格式，和 `fixtures/logic/golden.json` 比對。
+/// 剩餘最少的額度、預期進度、用量節奏、近期速度、重置判斷、倒數文字與萬／億格式，以及額度歷史（建議接下來用、
+/// 重置時間軸、每週預測、走勢、額度消耗）與 Token 統計（LogicGoldenHistory.swift），和 `fixtures/logic/golden.json` 比對。
 /// Windows App 的 C# 測試（`windows/tests/UsageCore.Tests`）讀同一份輸入，必須算出同樣的 golden。
 ///
 /// 計算規則改變時：`AUM_UPDATE_GOLDEN=1 swift test --filter LogicGoldenTests` 重新產生 golden.json，
@@ -38,12 +39,16 @@ import Testing
         var tokenFormat: [Int64]
         var countdownSeconds: [Double]
         var updatedSeconds: [Double]
+        var durationSeconds: [Int64]
+        var tokenCases: [TokenCase]
 
         enum CodingKeys: String, CodingKey {
             case cases
             case tokenFormat = "token_format"
             case countdownSeconds = "countdown_seconds"
             case updatedSeconds = "updated_seconds"
+            case durationSeconds = "duration_seconds"
+            case tokenCases = "token_cases"
         }
     }
 
@@ -53,6 +58,20 @@ import Testing
         var choice: String?
         var snapshot: UsageSnapshot
         var samples: [Sample]?
+        var runs: [Run]?
+        /// 本機時區（IANA）；沒有時為 UTC。額度消耗的整點與每週預測的「週五晚上」依它計算
+        var timeZone: String?
+
+        enum CodingKeys: String, CodingKey {
+            case name, now, choice, snapshot, samples, runs
+            case timeZone = "time_zone"
+        }
+    }
+
+    struct Run: Decodable {
+        var ts: Date
+        var ok: Int?
+        var runs: Int?
     }
 
     struct Sample: Decodable {
@@ -76,10 +95,13 @@ import Testing
         var tokenFormat: [TokenOutput]
         var countdown: [CountdownOutput]
         var updated: [CountdownOutput]
+        var duration: [JSONValue]
+        var tokenCases: [JSONValue]
 
         enum CodingKeys: String, CodingKey {
-            case cases, countdown, updated
+            case cases, countdown, updated, duration
             case tokenFormat = "token_format"
+            case tokenCases = "token_cases"
         }
     }
 
@@ -93,9 +115,11 @@ import Testing
         var chosenState: String?
         var leastLabel: String?
         var windows: [WindowOutput]
+        /// 額度歷史的畫面（LogicGoldenHistory.swift）
+        var history: JSONValue
 
         enum CodingKeys: String, CodingKey {
-            case name, stale, tightest, chosen, windows
+            case name, stale, tightest, chosen, windows, history
             case hasNoProviders = "has_no_providers"
             case orderedProviders = "ordered_providers"
             case chosenState = "chosen_state"
@@ -114,6 +138,7 @@ import Testing
             try c.encode(chosenState, forKey: .chosenState)
             try c.encode(leastLabel, forKey: .leastLabel)
             try c.encode(windows, forKey: .windows)
+            try c.encode(history, forKey: .history)
         }
     }
 
@@ -231,7 +256,9 @@ import Testing
             },
             updated: input.updatedSeconds.map {
                 CountdownOutput(seconds: $0, text: ResetCountdown.updatedText(since: epoch.addingTimeInterval(-$0), now: epoch))
-            })
+            },
+            duration: input.durationSeconds.map { .object(["seconds": .int($0), "text": .string(TokenFormat.duration($0))]) },
+            tokenCases: input.tokenCases.map(tokenCaseOutput))
     }
 
     static func caseOutput(_ c: Case) -> CaseOutput {
@@ -240,7 +267,7 @@ import Testing
         let stale = snapshot.isStale(now: now)
         let history = QuotaHistory(samples: (c.samples ?? []).map {
             QuotaSample(ts: $0.ts, provider: $0.provider, windowID: $0.window, usedPct: $0.usedPct, resetsAt: $0.resetsAt)
-        })
+        }, runs: (c.runs ?? []).map { CollectorRun(ts: $0.ts, ok: $0.ok ?? 1, runs: $0.runs ?? 1) })
         let chosen = snapshot.window(for: MenuBarWindowChoice(rawValue: c.choice ?? "auto"), at: now)
         var windows: [WindowOutput] = []
         for provider in snapshot.orderedProviderKeys {
@@ -277,7 +304,8 @@ import Testing
             chosen: chosen?.key,
             chosenState: chosen.map { stateName(MenuBarState(window: $0.window, stale: stale, now: now)) },
             leastLabel: snapshot.tightestWindow(at: now)?.leastRemainingAccessibilityLabel(at: now),
-            windows: windows)
+            windows: windows,
+            history: historyOutput(c, snapshot: snapshot, history: history))
     }
 
     static func paceOutput(_ pace: UsagePace) -> PaceOutput {

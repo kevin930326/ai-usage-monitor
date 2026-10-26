@@ -67,7 +67,19 @@ public class LogicGoldenTests
             var s = v!.GetValue<double>();
             updated.Add(new JsonObject { ["seconds"] = s, ["text"] = ResetCountdown.UpdatedText(epoch.AddSeconds(-s), epoch) });
         }
-        return new JsonObject { ["cases"] = cases, ["token_format"] = tokens, ["countdown"] = countdown, ["updated"] = updated };
+        var duration = new JsonArray();
+        foreach (var v in input["duration_seconds"]!.AsArray())
+        {
+            var s = v!.GetValue<long>();
+            duration.Add(new JsonObject { ["seconds"] = s, ["text"] = TokenFormat.Duration(s) });
+        }
+        var tokenCases = new JsonArray();
+        foreach (var c in input["token_cases"]!.AsArray()) tokenCases.Add(LogicGoldenHistory.TokenCase(c!));
+        return new JsonObject
+        {
+            ["cases"] = cases, ["token_format"] = tokens, ["countdown"] = countdown, ["updated"] = updated,
+            ["duration"] = duration, ["token_cases"] = tokenCases,
+        };
     }
 
     private static JsonObject CaseOutput(JsonNode c)
@@ -85,7 +97,15 @@ public class LogicGoldenTests
                                             r["resets_at"] is JsonValue ra ? Parse(ra.GetValue<string>()) : null));
             }
         }
-        var history = new QuotaHistory(samples);
+        var runs = new List<CollectorRun>();
+        if (c["runs"] is JsonArray runRows)
+        {
+            foreach (var r in runRows)
+            {
+                runs.Add(new CollectorRun(Parse(r!["ts"]!.GetValue<string>()), r["ok"]?.GetValue<int>() ?? 1, r["runs"]?.GetValue<int>() ?? 1));
+            }
+        }
+        var history = new QuotaHistory(samples, runs);
         var chosen = snapshot.Window(WindowChoice.Parse(c["choice"]?.GetValue<string>()), now);
         var windows = new JsonArray();
         foreach (var provider in snapshot.OrderedProviderKeys)
@@ -129,6 +149,7 @@ public class LogicGoldenTests
             ["chosen_state"] = chosen is null ? null : RingStates.Name(RingStates.Of(chosen.Window, stale, now)),
             ["least_label"] = tightest?.LeastRemainingAccessibilityLabel(now),
             ["windows"] = windows,
+            ["history"] = LogicGoldenHistory.History(c, snapshot, history, now),
         };
     }
 
@@ -139,9 +160,9 @@ public class LogicGoldenTests
         ["too_fast"] = pace.IsTooFast,
     };
 
-    private static double? Round9(double? x) => x is { } v ? Math.Round(v * 1e9, MidpointRounding.AwayFromZero) / 1e9 : null;
+    internal static double? Round9(double? x) => x is { } v ? Math.Round(v * 1e9, MidpointRounding.AwayFromZero) / 1e9 : null;
 
-    private static DateTimeOffset Parse(string s) =>
+    internal static DateTimeOffset Parse(string s) =>
         UsageDecoder.TryParseIso(s, out var d) ? d : throw new FormatException(s);
 
     internal static void Compare(JsonNode? expected, JsonNode? actual, string path, List<string> differences)

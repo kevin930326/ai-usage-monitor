@@ -1425,6 +1425,2019 @@
     }
    },
    "now": "2026-10-26T17:30:00+08:00"
+  },
+  {
+   "name": "suggest-codex",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 85,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 40,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 20,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 30,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "suggest-none-other-low",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 85,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 40,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 20,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 85,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "suggest-counterpart-missing",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 90,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 40,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 30,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "2h",
+        "label": "2 小時",
+        "used_pct": 0,
+        "resets_at": null,
+        "hidden": true
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "suggest-codex-low-claude-error",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": "登入已過期",
+      "windows": []
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 95,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "timeline-just-reset-and-awaiting",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 50,
+        "resets_at": "2026-10-26T09:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-26T15:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly_opus",
+        "label": "Opus 每週",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T16:00:00Z",
+        "hidden": true
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 0,
+        "resets_at": null,
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-26T17:29:00Z",
+        "hidden": false
+       },
+       {
+        "id": "monthly",
+        "label": "每月",
+        "used_pct": 0,
+        "resets_at": null,
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "timeline-stale",
+   "now": "2026-10-26T09:30:00Z",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T08:00:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 50,
+        "resets_at": "2026-10-26T09:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 37,
+        "resets_at": "2026-10-26T15:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly_opus",
+        "label": "Opus 每週",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T16:00:00Z",
+        "hidden": true
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 0,
+        "resets_at": null,
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-10-26T17:29:00Z",
+        "hidden": false
+       },
+       {
+        "id": "monthly",
+        "label": "每月",
+        "used_pct": 0,
+        "resets_at": null,
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "forecast-recent-runs-out",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Asia/Taipei",
+   "samples": [
+    {
+     "ts": "2026-10-25T17:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 44,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 48,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T01:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 52,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T05:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 56,
+     "resets_at": "2026-10-29T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 60,
+     "resets_at": "2026-10-29T09:30:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 30,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 60,
+        "resets_at": "2026-10-29T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 5,
+        "resets_at": "2026-10-31T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "forecast-idle-early-usedup",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "America/Los_Angeles",
+   "samples": [
+    {
+     "ts": "2026-10-25T13:30:00Z",
+     "provider": "codex",
+     "window": "weekly",
+     "used_pct": 70,
+     "resets_at": "2026-10-28T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T18:30:00Z",
+     "provider": "codex",
+     "window": "weekly",
+     "used_pct": 70,
+     "resets_at": "2026-10-28T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T23:30:00Z",
+     "provider": "codex",
+     "window": "weekly",
+     "used_pct": 70,
+     "resets_at": "2026-10-28T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T04:30:00Z",
+     "provider": "codex",
+     "window": "weekly",
+     "used_pct": 70,
+     "resets_at": "2026-10-28T09:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:30:00Z",
+     "provider": "codex",
+     "window": "weekly",
+     "used_pct": 70,
+     "resets_at": "2026-10-28T09:30:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 100,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": "2026-11-02T03:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 70,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "forecast-used-up-and-average-late",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Europe/London",
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 100,
+        "resets_at": "2026-10-28T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 80,
+        "resets_at": "2026-10-27T21:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "trend-gaps-resets-downsampled",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Asia/Taipei",
+   "samples": [
+    {
+     "ts": "2026-10-22T08:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 80,
+     "resets_at": "2026-10-23T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-22T08:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 81,
+     "resets_at": "2026-10-23T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-22T09:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 85,
+     "resets_at": "2026-10-23T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 90,
+     "resets_at": "2026-10-23T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:35:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 1,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:40:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 2,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-23T18:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 8,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 10.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 10.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:10:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 11.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:15:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 11.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:20:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 12.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 12.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 13.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:35:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 13.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:40:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 14.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:45:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 14.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:50:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 15.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:55:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 15.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 14.5,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 13,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:10:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 15.25,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 30,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 31,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:10:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 32,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:15:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 33,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:20:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 34,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 35,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 36,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:35:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 37,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:40:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 38,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:45:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 39,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:50:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 40,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:55:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 41,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 42,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 43,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:10:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 44,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:15:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 45,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:20:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 46,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 47,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 48,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:35:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 49,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:15:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 52.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:20:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 52.4,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 52.8,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 53.2,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:35:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 53.6,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:40:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 54.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:45:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 54.4,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:50:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 54.8,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:55:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 55.2,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:00:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 55.6,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:05:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 56.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:10:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 56.4,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:15:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 56.8,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:20:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 57.2,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:25:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 57.6,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:30:00Z",
+     "provider": "claude",
+     "window": "weekly",
+     "used_pct": 58.0,
+     "resets_at": "2026-10-30T11:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:00:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 70,
+     "resets_at": "2026-10-25T23:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T01:00:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 5,
+     "resets_at": "2026-10-26T04:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T01:05:00Z",
+     "provider": "claude",
+     "window": "five_hour",
+     "used_pct": 7,
+     "resets_at": "2026-10-26T04:00:00Z"
+    }
+   ],
+   "runs": [
+    {
+     "ts": "2026-10-20T00:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-20T01:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-20T02:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-20T03:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-20T04:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-20T05:55:00Z",
+     "ok": 11,
+     "runs": 12
+    },
+    {
+     "ts": "2026-10-22T08:00:00Z"
+    },
+    {
+     "ts": "2026-10-22T08:05:00Z"
+    },
+    {
+     "ts": "2026-10-22T09:00:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:25:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:35:00Z"
+    },
+    {
+     "ts": "2026-10-23T11:40:00Z"
+    },
+    {
+     "ts": "2026-10-23T18:00:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:00:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:05:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:10:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:15:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:20:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:25:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:35:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:40:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:45:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:50:00Z"
+    },
+    {
+     "ts": "2026-10-24T02:55:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:00:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:05:00Z"
+    },
+    {
+     "ts": "2026-10-24T03:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:00:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:05:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:15:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:25:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:35:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:40:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:45:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:50:00Z"
+    },
+    {
+     "ts": "2026-10-25T20:55:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:00:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:05:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:15:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:25:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T21:35:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:15:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:20:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:25:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:30:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:35:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:40:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:45:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:50:00Z"
+    },
+    {
+     "ts": "2026-10-26T08:55:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:00:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:05:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:10:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:15:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:20:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:25:00Z"
+    },
+    {
+     "ts": "2026-10-26T09:30:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T11:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 58,
+        "resets_at": "2026-10-30T11:30:00Z",
+        "hidden": false
+       }
+      ]
+     },
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 20,
+        "resets_at": null,
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "consumption-dst-new-york-spring",
+   "now": "2026-03-09T15:00:00Z",
+   "time_zone": "America/New_York",
+   "samples": [
+    {
+     "ts": "2026-03-08T05:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 2.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T05:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 3.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 5.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 6.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 8.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 9.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 11.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 12.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 14.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 15.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 17.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 18.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 20.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 21.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 23.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 24.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 26.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 27.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 29.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 30.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 32.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 33.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 35.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 36.5,
+     "resets_at": "2026-03-08T10:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 38.0,
+     "resets_at": "2026-03-08T10:40:00Z"
+    }
+   ],
+   "runs": [
+    {
+     "ts": "2026-03-08T05:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T05:50:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:00:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:10:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:20:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:30:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T06:50:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:00:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:10:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:20:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:30:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T07:50:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:00:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:10:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:20:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:30:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:40:00Z"
+    },
+    {
+     "ts": "2026-03-08T08:50:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:00:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:10:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:20:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:30:00Z"
+    },
+    {
+     "ts": "2026-03-08T09:40:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-03-09T14:55:00Z",
+    "providers": {
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-03-09T18:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 30,
+        "resets_at": "2026-03-12T15:00:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "consumption-dst-new-york-fall",
+   "now": "2026-11-02T15:00:00Z",
+   "time_zone": "America/New_York",
+   "samples": [
+    {
+     "ts": "2026-11-01T04:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 2.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T04:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 3.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 5.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 6.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 8.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 9.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 11.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 12.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 14.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 15.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 17.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 18.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 20.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 21.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 23.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 24.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 26.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 27.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 29.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 30.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 32.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 33.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 35.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 36.5,
+     "resets_at": "2026-11-01T09:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 38.0,
+     "resets_at": "2026-11-01T09:40:00Z"
+    }
+   ],
+   "runs": [
+    {
+     "ts": "2026-11-01T04:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T04:50:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:00:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:10:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:20:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:30:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T05:50:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:00:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:10:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:20:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:30:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T06:50:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:00:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:10:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:20:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:30:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:40:00Z"
+    },
+    {
+     "ts": "2026-11-01T07:50:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:00:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:10:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:20:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:30:00Z"
+    },
+    {
+     "ts": "2026-11-01T08:40:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-11-02T14:55:00Z",
+    "providers": {
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-11-02T18:00:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 30,
+        "resets_at": "2026-11-05T15:00:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "consumption-dst-london-fall",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Europe/London",
+   "samples": [
+    {
+     "ts": "2026-10-24T23:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 2.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 3.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 5.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 6.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 8.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 9.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 11.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 12.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 14.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 15.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 17.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 18.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 20.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 21.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 23.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:50:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 24.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:00:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 26.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:10:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 27.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:20:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 29.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:30:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 30.5,
+     "resets_at": "2026-10-25T04:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:40:00Z",
+     "provider": "codex",
+     "window": "five_hour",
+     "used_pct": 32.0,
+     "resets_at": "2026-10-25T04:20:00Z"
+    }
+   ],
+   "runs": [
+    {
+     "ts": "2026-10-24T23:20:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:30:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:40:00Z"
+    },
+    {
+     "ts": "2026-10-24T23:50:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:00:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:40:00Z"
+    },
+    {
+     "ts": "2026-10-25T00:50:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:00:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:40:00Z"
+    },
+    {
+     "ts": "2026-10-25T01:50:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:00:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:10:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:20:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:30:00Z"
+    },
+    {
+     "ts": "2026-10-25T02:40:00Z"
+    }
+   ],
+   "snapshot": {
+    "schema_version": 1,
+    "updated_at": "2026-10-26T09:25:00Z",
+    "providers": {
+     "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+       {
+        "id": "five_hour",
+        "label": "5 小時",
+        "used_pct": 10,
+        "resets_at": "2026-10-26T12:30:00Z",
+        "hidden": false
+       },
+       {
+        "id": "weekly",
+        "label": "每週",
+        "used_pct": 30,
+        "resets_at": "2026-10-29T09:30:00Z",
+        "hidden": false
+       }
+      ]
+     }
+    }
+   }
   }
  ],
  "token_format": [
@@ -1476,5 +3489,3323 @@
   3600,
   3720,
   90000
+ ],
+ "duration_seconds": [
+  0,
+  59,
+  60,
+  3599,
+  3600,
+  3660,
+  7200,
+  90061
+ ],
+ "token_cases": [
+  {
+   "name": "tokens-local-records",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Asia/Taipei",
+   "data": {
+    "days": [
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 20000,
+       "cache_read": 900000,
+       "output": 5000,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 600,
+      "longest_task_seconds": 300
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3000,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 100
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-25",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1037,
+       "cache_write": 20011,
+       "cache_read": 901000,
+       "output": 5003,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 601,
+      "longest_task_seconds": 397
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1074,
+       "cache_write": 20022,
+       "cache_read": 902000,
+       "output": 5006,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 602,
+      "longest_task_seconds": 494
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3002,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 102
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1148,
+       "cache_write": 20044,
+       "cache_read": 904000,
+       "output": 5012,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 604,
+      "longest_task_seconds": 688
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3004,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 104
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1185,
+       "cache_write": 20055,
+       "cache_read": 905000,
+       "output": 5015,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 605,
+      "longest_task_seconds": 785
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1222,
+       "cache_write": 20066,
+       "cache_read": 906000,
+       "output": 5018,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 606,
+      "longest_task_seconds": 882
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3006,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 106
+     },
+     {
+      "day": "2026-10-19",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1259,
+       "cache_write": 20077,
+       "cache_read": 907000,
+       "output": 5021,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 607,
+      "longest_task_seconds": 979
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1296,
+       "cache_write": 20088,
+       "cache_read": 908000,
+       "output": 5024,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 608,
+      "longest_task_seconds": 1076
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3008,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 108
+     },
+     {
+      "day": "2026-10-17",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1333,
+       "cache_write": 20099,
+       "cache_read": 909000,
+       "output": 5027,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 609,
+      "longest_task_seconds": 1173
+     },
+     {
+      "day": "2026-10-15",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1407,
+       "cache_write": 20121,
+       "cache_read": 911000,
+       "output": 5033,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 611,
+      "longest_task_seconds": 1367
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1444,
+       "cache_write": 20132,
+       "cache_read": 912000,
+       "output": 5036,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 612,
+      "longest_task_seconds": 1464
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3012,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 112
+     },
+     {
+      "day": "2026-10-13",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1481,
+       "cache_write": 20143,
+       "cache_read": 913000,
+       "output": 5039,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 613,
+      "longest_task_seconds": 1561
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1518,
+       "cache_write": 20154,
+       "cache_read": 914000,
+       "output": 5042,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 614,
+      "longest_task_seconds": 1658
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3014,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 114
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1555,
+       "cache_write": 20165,
+       "cache_read": 915000,
+       "output": 5045,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 615,
+      "longest_task_seconds": 1755
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1592,
+       "cache_write": 20176,
+       "cache_read": 916000,
+       "output": 5048,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 616,
+      "longest_task_seconds": 1852
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3016,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 116
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1666,
+       "cache_write": 20198,
+       "cache_read": 918000,
+       "output": 5054,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 618,
+      "longest_task_seconds": 2046
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3018,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 118
+     },
+     {
+      "day": "2026-10-07",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1703,
+       "cache_write": 20209,
+       "cache_read": 919000,
+       "output": 5057,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 619,
+      "longest_task_seconds": 2143
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1740,
+       "cache_write": 20220,
+       "cache_read": 920000,
+       "output": 5060,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 620,
+      "longest_task_seconds": 2240
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3020,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 120
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-05",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1777,
+       "cache_write": 20231,
+       "cache_read": 921000,
+       "output": 5063,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 621,
+      "longest_task_seconds": 337
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1814,
+       "cache_write": 20242,
+       "cache_read": 922000,
+       "output": 5066,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 622,
+      "longest_task_seconds": 434
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3022,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 122
+     },
+     {
+      "day": "2026-10-03",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1851,
+       "cache_write": 20253,
+       "cache_read": 923000,
+       "output": 5069,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 623,
+      "longest_task_seconds": 531
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1925,
+       "cache_write": 20275,
+       "cache_read": 925000,
+       "output": 5075,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 625,
+      "longest_task_seconds": 725
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-30",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1962,
+       "cache_write": 20286,
+       "cache_read": 926000,
+       "output": 5078,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 626,
+      "longest_task_seconds": 822
+     },
+     {
+      "day": "2026-09-30",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3026,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 126
+     },
+     {
+      "day": "2026-09-29",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1999,
+       "cache_write": 20297,
+       "cache_read": 927000,
+       "output": 5081,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 627,
+      "longest_task_seconds": 919
+     },
+     {
+      "day": "2026-09-28",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2036,
+       "cache_write": 20308,
+       "cache_read": 928000,
+       "output": 5084,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 628,
+      "longest_task_seconds": 1016
+     },
+     {
+      "day": "2026-09-28",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3028,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 128
+     },
+     {
+      "day": "2026-09-27",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2073,
+       "cache_write": 20319,
+       "cache_read": 929000,
+       "output": 5087,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 629,
+      "longest_task_seconds": 1113
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2110,
+       "cache_write": 20330,
+       "cache_read": 930000,
+       "output": 5090,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 630,
+      "longest_task_seconds": 1210
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3030,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 130
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-24",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2184,
+       "cache_write": 20352,
+       "cache_read": 932000,
+       "output": 5096,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 632,
+      "longest_task_seconds": 1404
+     },
+     {
+      "day": "2026-09-24",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3032,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 132
+     },
+     {
+      "day": "2026-09-23",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2221,
+       "cache_write": 20363,
+       "cache_read": 933000,
+       "output": 5099,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 633,
+      "longest_task_seconds": 1501
+     },
+     {
+      "day": "2026-09-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2258,
+       "cache_write": 20374,
+       "cache_read": 934000,
+       "output": 5102,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 634,
+      "longest_task_seconds": 1598
+     },
+     {
+      "day": "2026-09-22",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3034,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 134
+     },
+     {
+      "day": "2026-09-21",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2295,
+       "cache_write": 20385,
+       "cache_read": 935000,
+       "output": 5105,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 635,
+      "longest_task_seconds": 1695
+     },
+     {
+      "day": "2026-09-21",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-21",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-20",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2332,
+       "cache_write": 20396,
+       "cache_read": 936000,
+       "output": 5108,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 636,
+      "longest_task_seconds": 1792
+     },
+     {
+      "day": "2026-09-20",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3036,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 136
+     },
+     {
+      "day": "2026-09-19",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2369,
+       "cache_write": 20407,
+       "cache_read": 937000,
+       "output": 5111,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 637,
+      "longest_task_seconds": 1889
+     },
+     {
+      "day": "2026-09-17",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2443,
+       "cache_write": 20429,
+       "cache_read": 939000,
+       "output": 5117,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 639,
+      "longest_task_seconds": 2083
+     },
+     {
+      "day": "2026-09-16",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2480,
+       "cache_write": 20440,
+       "cache_read": 940000,
+       "output": 5120,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 640,
+      "longest_task_seconds": 2180
+     },
+     {
+      "day": "2026-09-16",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3040,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 140
+     },
+     {
+      "day": "2026-09-16",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-16",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-15",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2517,
+       "cache_write": 20451,
+       "cache_read": 941000,
+       "output": 5123,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 641,
+      "longest_task_seconds": 2277
+     },
+     {
+      "day": "2026-09-14",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2554,
+       "cache_write": 20462,
+       "cache_read": 942000,
+       "output": 5126,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 642,
+      "longest_task_seconds": 374
+     },
+     {
+      "day": "2026-09-14",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3042,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 142
+     },
+     {
+      "day": "2026-09-13",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2591,
+       "cache_write": 20473,
+       "cache_read": 943000,
+       "output": 5129,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 643,
+      "longest_task_seconds": 471
+     },
+     {
+      "day": "2026-09-12",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2628,
+       "cache_write": 20484,
+       "cache_read": 944000,
+       "output": 5132,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 644,
+      "longest_task_seconds": 568
+     },
+     {
+      "day": "2026-09-12",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3044,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 144
+     },
+     {
+      "day": "2026-09-20",
+      "provider": "claude",
+      "model": "sonnet",
+      "counts": {
+       "input": 500000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-21",
+      "provider": "claude",
+      "model": "sonnet",
+      "counts": {
+       "input": 500000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     }
+    ],
+    "hours": [
+     {
+      "day": "2026-10-26",
+      "hour": 0,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 0,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 0,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 7,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 3,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 300,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 3,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 307,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 6,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 600,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 6,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 607,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 9,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 900,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 9,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 907,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 12,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 1200,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 12,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 1207,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 15,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 1500,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 15,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 1507,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 18,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 1800,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 18,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 1807,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 21,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 2100,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 21,
+      "provider": "codex",
+      "model": "m",
+      "counts": {
+       "input": 2107,
+       "cache_read": 50
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "hour": 24,
+      "provider": "claude",
+      "model": "m",
+      "counts": {
+       "input": 999
+      }
+     }
+    ],
+    "retention_days": 365,
+    "records": {
+     "best_day_tokens": {
+      "value": 600000,
+      "day": "2026-08-01"
+     },
+     "best_day_tokens:claude": {
+      "value": 500000,
+      "day": "2026-09-20"
+     },
+     "total_tokens": {
+      "value": 99000000
+     },
+     "total_tokens:claude": {
+      "value": 70000000
+     },
+     "total_tokens_cached": {
+      "value": 999000000
+     },
+     "best_day_tokens_cached": {
+      "value": 2000000,
+      "day": "2026-07-04"
+     },
+     "longest_task_seconds": {
+      "value": 5000,
+      "day": "2026-06-01"
+     },
+     "longest_streak_days": {
+      "value": 9,
+      "day": "2026-05-01"
+     },
+     "longest_streak_days:codex": {
+      "value": 1,
+      "day": "2026-05-02"
+     }
+    },
+    "record_days": {
+     "2026-10-26": {
+      "claude": 1
+     },
+     "2026-10-25": {
+      "claude": 1
+     },
+     "2026-10-24": {
+      "claude": 1
+     },
+     "2026-10-22": {
+      "claude": 1
+     },
+     "2026-10-21": {
+      "claude": 1
+     },
+     "2026-10-20": {
+      "claude": 1
+     },
+     "2026-10-19": {
+      "claude": 1
+     },
+     "2026-10-18": {
+      "claude": 1
+     },
+     "2026-10-17": {
+      "claude": 1
+     },
+     "2026-10-16": {
+      "claude": 1
+     },
+     "2026-10-15": {
+      "claude": 1
+     },
+     "2026-10-14": {
+      "claude": 1
+     },
+     "2026-10-13": {
+      "claude": 1
+     },
+     "2026-10-12": {
+      "claude": 1
+     },
+     "2026-10-11": {
+      "claude": 1
+     },
+     "2026-10-10": {
+      "claude": 1
+     },
+     "2026-10-09": {
+      "claude": 1
+     },
+     "2026-10-08": {
+      "claude": 1
+     },
+     "2026-10-07": {
+      "claude": 1
+     },
+     "2026-10-06": {
+      "claude": 1
+     },
+     "2026-10-05": {
+      "claude": 1
+     },
+     "2026-10-04": {
+      "claude": 1
+     },
+     "2026-10-03": {
+      "claude": 1
+     },
+     "2026-10-02": {
+      "claude": 1
+     },
+     "2026-10-01": {
+      "claude": 1
+     },
+     "2026-09-30": {
+      "claude": 1
+     },
+     "2026-09-29": {
+      "claude": 1
+     },
+     "2026-09-28": {
+      "claude": 1
+     },
+     "2026-09-27": {
+      "claude": 1
+     },
+     "2026-09-26": {
+      "claude": 1
+     },
+     "2026-09-25": {
+      "claude": 1
+     },
+     "2026-09-24": {
+      "claude": 1
+     },
+     "2026-09-23": {
+      "claude": 1
+     },
+     "2026-09-22": {
+      "claude": 1
+     },
+     "2026-09-21": {
+      "claude": 1
+     },
+     "2026-09-20": {
+      "claude": 1
+     },
+     "2026-09-19": {
+      "claude": 1
+     },
+     "2026-09-18": {
+      "claude": 1
+     },
+     "2026-09-17": {
+      "claude": 1
+     },
+     "2026-09-16": {
+      "claude": 1
+     },
+     "2026-09-15": {
+      "claude": 1
+     },
+     "2026-09-14": {
+      "claude": 1
+     },
+     "2026-09-13": {
+      "claude": 1
+     },
+     "2026-09-12": {
+      "claude": 1
+     },
+     "2026-09-11": {
+      "claude": 1
+     },
+     "2026-09-10": {
+      "claude": 1
+     },
+     "2026-09-09": {
+      "claude": 1
+     },
+     "2026-09-08": {
+      "claude": 1
+     },
+     "2026-09-07": {
+      "claude": 1
+     },
+     "2026-09-06": {
+      "claude": 1
+     },
+     "2026-09-05": {
+      "claude": 1
+     },
+     "2026-09-04": {
+      "claude": 1
+     },
+     "2026-09-03": {
+      "claude": 1
+     },
+     "2026-09-02": {
+      "claude": 1
+     },
+     "2026-09-01": {
+      "claude": 1
+     },
+     "2026-08-31": {
+      "claude": 1
+     },
+     "2026-08-30": {
+      "claude": 1
+     },
+     "2026-08-29": {
+      "claude": 1
+     },
+     "2026-08-28": {
+      "claude": 1
+     }
+    }
+   }
+  },
+  {
+   "name": "tokens-retention-computed",
+   "now": "2026-10-28T18:00:00Z",
+   "time_zone": "UTC",
+   "data": {
+    "days": [
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 20000,
+       "cache_read": 900000,
+       "output": 5000,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 600,
+      "longest_task_seconds": 300
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3000,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 100
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-25",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1037,
+       "cache_write": 20011,
+       "cache_read": 901000,
+       "output": 5003,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 601,
+      "longest_task_seconds": 397
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1074,
+       "cache_write": 20022,
+       "cache_read": 902000,
+       "output": 5006,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 602,
+      "longest_task_seconds": 494
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3002,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 102
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1148,
+       "cache_write": 20044,
+       "cache_read": 904000,
+       "output": 5012,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 604,
+      "longest_task_seconds": 688
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3004,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 104
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1185,
+       "cache_write": 20055,
+       "cache_read": 905000,
+       "output": 5015,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 605,
+      "longest_task_seconds": 785
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1222,
+       "cache_write": 20066,
+       "cache_read": 906000,
+       "output": 5018,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 606,
+      "longest_task_seconds": 882
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3006,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 106
+     },
+     {
+      "day": "2026-10-19",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1259,
+       "cache_write": 20077,
+       "cache_read": 907000,
+       "output": 5021,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 607,
+      "longest_task_seconds": 979
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1296,
+       "cache_write": 20088,
+       "cache_read": 908000,
+       "output": 5024,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 608,
+      "longest_task_seconds": 1076
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3008,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 108
+     },
+     {
+      "day": "2026-10-17",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1333,
+       "cache_write": 20099,
+       "cache_read": 909000,
+       "output": 5027,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 609,
+      "longest_task_seconds": 1173
+     },
+     {
+      "day": "2026-10-15",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1407,
+       "cache_write": 20121,
+       "cache_read": 911000,
+       "output": 5033,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 611,
+      "longest_task_seconds": 1367
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1444,
+       "cache_write": 20132,
+       "cache_read": 912000,
+       "output": 5036,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 612,
+      "longest_task_seconds": 1464
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3012,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 112
+     },
+     {
+      "day": "2026-10-13",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1481,
+       "cache_write": 20143,
+       "cache_read": 913000,
+       "output": 5039,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 613,
+      "longest_task_seconds": 1561
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1518,
+       "cache_write": 20154,
+       "cache_read": 914000,
+       "output": 5042,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 614,
+      "longest_task_seconds": 1658
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3014,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 114
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1555,
+       "cache_write": 20165,
+       "cache_read": 915000,
+       "output": 5045,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 615,
+      "longest_task_seconds": 1755
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1592,
+       "cache_write": 20176,
+       "cache_read": 916000,
+       "output": 5048,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 616,
+      "longest_task_seconds": 1852
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3016,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 116
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1666,
+       "cache_write": 20198,
+       "cache_read": 918000,
+       "output": 5054,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 618,
+      "longest_task_seconds": 2046
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3018,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 118
+     },
+     {
+      "day": "2026-10-07",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1703,
+       "cache_write": 20209,
+       "cache_read": 919000,
+       "output": 5057,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 619,
+      "longest_task_seconds": 2143
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1740,
+       "cache_write": 20220,
+       "cache_read": 920000,
+       "output": 5060,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 620,
+      "longest_task_seconds": 2240
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3020,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 120
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-05",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1777,
+       "cache_write": 20231,
+       "cache_read": 921000,
+       "output": 5063,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 621,
+      "longest_task_seconds": 337
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1814,
+       "cache_write": 20242,
+       "cache_read": 922000,
+       "output": 5066,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 622,
+      "longest_task_seconds": 434
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3022,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 122
+     },
+     {
+      "day": "2026-10-03",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1851,
+       "cache_write": 20253,
+       "cache_read": 923000,
+       "output": 5069,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 623,
+      "longest_task_seconds": 531
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1925,
+       "cache_write": 20275,
+       "cache_read": 925000,
+       "output": 5075,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 625,
+      "longest_task_seconds": 725
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-30",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1962,
+       "cache_write": 20286,
+       "cache_read": 926000,
+       "output": 5078,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 626,
+      "longest_task_seconds": 822
+     },
+     {
+      "day": "2026-09-30",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3026,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 126
+     },
+     {
+      "day": "2026-09-29",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1999,
+       "cache_write": 20297,
+       "cache_read": 927000,
+       "output": 5081,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 627,
+      "longest_task_seconds": 919
+     },
+     {
+      "day": "2026-09-28",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2036,
+       "cache_write": 20308,
+       "cache_read": 928000,
+       "output": 5084,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 628,
+      "longest_task_seconds": 1016
+     },
+     {
+      "day": "2026-09-28",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3028,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 128
+     },
+     {
+      "day": "2026-09-27",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2073,
+       "cache_write": 20319,
+       "cache_read": 929000,
+       "output": 5087,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 629,
+      "longest_task_seconds": 1113
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 2110,
+       "cache_write": 20330,
+       "cache_read": 930000,
+       "output": 5090,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 630,
+      "longest_task_seconds": 1210
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3030,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 130
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-09-26",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     }
+    ],
+    "retention_days": 30,
+    "data_from": "2026-10-10"
+   }
+  },
+  {
+   "name": "tokens-devices-dst",
+   "now": "2026-11-03T03:00:00Z",
+   "time_zone": "America/New_York",
+   "data": {
+    "days": [
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 20000,
+       "cache_read": 900000,
+       "output": 5000,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 600,
+      "longest_task_seconds": 300
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3000,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 100
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-25",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1037,
+       "cache_write": 20011,
+       "cache_read": 901000,
+       "output": 5003,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 601,
+      "longest_task_seconds": 397
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1074,
+       "cache_write": 20022,
+       "cache_read": 902000,
+       "output": 5006,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 602,
+      "longest_task_seconds": 494
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3002,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 102
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1148,
+       "cache_write": 20044,
+       "cache_read": 904000,
+       "output": 5012,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 604,
+      "longest_task_seconds": 688
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3004,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 104
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1185,
+       "cache_write": 20055,
+       "cache_read": 905000,
+       "output": 5015,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 605,
+      "longest_task_seconds": 785
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1222,
+       "cache_write": 20066,
+       "cache_read": 906000,
+       "output": 5018,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 606,
+      "longest_task_seconds": 882
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3006,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 106
+     },
+     {
+      "day": "2026-10-19",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1259,
+       "cache_write": 20077,
+       "cache_read": 907000,
+       "output": 5021,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 607,
+      "longest_task_seconds": 979
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1296,
+       "cache_write": 20088,
+       "cache_read": 908000,
+       "output": 5024,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 608,
+      "longest_task_seconds": 1076
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3008,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 108
+     },
+     {
+      "day": "2026-10-17",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1333,
+       "cache_write": 20099,
+       "cache_read": 909000,
+       "output": 5027,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 609,
+      "longest_task_seconds": 1173
+     },
+     {
+      "day": "2026-10-15",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1407,
+       "cache_write": 20121,
+       "cache_read": 911000,
+       "output": 5033,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 611,
+      "longest_task_seconds": 1367
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1444,
+       "cache_write": 20132,
+       "cache_read": 912000,
+       "output": 5036,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 612,
+      "longest_task_seconds": 1464
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3012,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 112
+     },
+     {
+      "day": "2026-10-13",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1481,
+       "cache_write": 20143,
+       "cache_read": 913000,
+       "output": 5039,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 613,
+      "longest_task_seconds": 1561
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1518,
+       "cache_write": 20154,
+       "cache_read": 914000,
+       "output": 5042,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 614,
+      "longest_task_seconds": 1658
+     },
+     {
+      "day": "2026-10-12",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3014,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 114
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1555,
+       "cache_write": 20165,
+       "cache_read": 915000,
+       "output": 5045,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 615,
+      "longest_task_seconds": 1755
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-11",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1592,
+       "cache_write": 20176,
+       "cache_read": 916000,
+       "output": 5048,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 616,
+      "longest_task_seconds": 1852
+     },
+     {
+      "day": "2026-10-10",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3016,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 116
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1666,
+       "cache_write": 20198,
+       "cache_read": 918000,
+       "output": 5054,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 618,
+      "longest_task_seconds": 2046
+     },
+     {
+      "day": "2026-10-08",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3018,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 118
+     },
+     {
+      "day": "2026-10-07",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1703,
+       "cache_write": 20209,
+       "cache_read": 919000,
+       "output": 5057,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 619,
+      "longest_task_seconds": 2143
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1740,
+       "cache_write": 20220,
+       "cache_read": 920000,
+       "output": 5060,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 620,
+      "longest_task_seconds": 2240
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3020,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 120
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-05",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1777,
+       "cache_write": 20231,
+       "cache_read": 921000,
+       "output": 5063,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 621,
+      "longest_task_seconds": 337
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1814,
+       "cache_write": 20242,
+       "cache_read": 922000,
+       "output": 5066,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 622,
+      "longest_task_seconds": 434
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 3022,
+       "cache_write": 0,
+       "cache_read": 40000,
+       "output": 7000,
+       "reasoning": 3000
+      },
+      "task_count": 1,
+      "task_seconds": 100,
+      "longest_task_seconds": 122
+     },
+     {
+      "day": "2026-10-03",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1851,
+       "cache_write": 20253,
+       "cache_read": 923000,
+       "output": 5069,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 623,
+      "longest_task_seconds": 531
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1925,
+       "cache_write": 20275,
+       "cache_read": 925000,
+       "output": 5075,
+       "reasoning": 200
+      },
+      "task_count": 3,
+      "task_seconds": 625,
+      "longest_task_seconds": 725
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "other",
+      "counts": {
+       "input": 10,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 5,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-01",
+      "provider": "codex",
+      "model": "other",
+      "counts": {
+       "input": 15,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 0,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-11-02",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7000,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-11-02",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-11-01",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7001,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-31",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7002,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-30",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7003,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-30",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-29",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7004,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-28",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7005,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-27",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7006,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-27",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-26",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7007,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-25",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7008,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7009,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-24",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-23",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7010,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7011,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7012,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7013,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-19",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7014,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7015,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-18",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-17",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7016,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-16",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7017,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-15",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7018,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-15",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 4000,
+       "cache_write": 0,
+       "cache_read": 0,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-14",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 7019,
+       "cache_write": 0,
+       "cache_read": 10000,
+       "output": 300,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     }
+    ],
+    "retention_days": 0,
+    "data_from": "2026-10-05",
+    "upload_status": "copied",
+    "records": {
+     "total_tokens": {
+      "value": 123456789
+     }
+    },
+    "devices": [
+     {
+      "id": "self-id",
+      "name": "MacBook",
+      "last_upload": "2026-11-03T02:50:00Z",
+      "is_self": true
+     },
+     {
+      "id": "dev-desk",
+      "name": "桌機",
+      "last_upload": "2026-11-02T20:00:00Z"
+     },
+     {
+      "id": "dev-laptop",
+      "name": "筆電",
+      "last_upload": "2026-10-30T01:00:00Z"
+     },
+     {
+      "id": "dev-old",
+      "name": "舊電腦",
+      "last_upload": "2026-09-01T00:00:00Z",
+      "revoked": true
+     },
+     {
+      "id": "dev-new",
+      "name": "新電腦"
+     }
+    ]
+   }
+  },
+  {
+   "name": "tokens-empty",
+   "now": "2026-10-26T09:30:00Z",
+   "data": {
+    "days": []
+   }
+  },
+  {
+   "name": "tokens-cache-only",
+   "now": "2026-10-26T09:30:00Z",
+   "time_zone": "Asia/Taipei",
+   "data": {
+    "days": [
+     {
+      "day": "2026-10-26",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 0,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 0,
+       "reasoning": 0
+      }
+     }
+    ],
+    "retention_days": 7
+   }
+  }
  ]
 }
