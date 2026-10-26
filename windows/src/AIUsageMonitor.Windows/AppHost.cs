@@ -290,17 +290,11 @@ internal sealed class AppHost : IDisposable
             Add("顯示圓環", () => SetDisplayMode(DisplayMode.Both));
         }
         Add("結束", Quit);
-        if (fromTray)
-        {
-            // 選單要能在點其他地方時收起：先讓隱藏的系統匣視窗成為前景
-            NativeMethods.SetForegroundWindow(tray.Handle);
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        }
-        else
-        {
-            menu.PlacementTarget = ring;
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        }
+        // 選單要能在點其他地方時收起、用鍵盤操作：先讓隱藏的系統匣視窗成為前景（圓環不搶焦點，
+        // 它本身不能成為前景；剛按了右鍵，這個程序有成為前景的資格）
+        NativeMethods.SetForegroundWindow(tray.Handle);
+        if (!fromTray) menu.PlacementTarget = ring;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         menu.IsOpen = true;
     }
 
