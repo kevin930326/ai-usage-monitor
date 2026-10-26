@@ -176,6 +176,7 @@ struct StatsWindowView: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             if data.devices.uploadRevoked { UploadRevokedNotice() }
+            if data.devices.uploadCopied { UploadCopiedNotice() }
             Text(footnote(data))
                 .font(.caption)
                 .foregroundStyle(.secondary)

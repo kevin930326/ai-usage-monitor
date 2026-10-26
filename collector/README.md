@@ -174,6 +174,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 
 - 每小時＋本機日期改變後的第一輪；每批 400 列、每輪最多 5 批或 60 秒。進度記在 `upload_state`（每列上次上傳的數值雜湊），失敗時不前進，以 5 分鐘、15 分鐘、1 小時、6 小時遞增間隔重試。
 - 連續兩次 401 停止上傳（403 只會來自 Cloudflare 邊緣，照一般失敗重試）（`meta.upload_status = revoked`，面板顯示密鑰失效），重新執行設定腳本才恢復。
+- 換電腦（ADR-0014 D-2）：第一次上傳時記下這台電腦的硬體指紋雜湊（Mac 的 IOPlatformUUID、Windows 的 MachineGuid；`meta.machine_fingerprint`，不存識別碼本身）。之後不一致＝`history.sqlite3` 連同密鑰從別台搬來：暫停上傳（`meta.upload_status = copied`，面板提示，下載照常），照 [docs/runbook.md](../docs/runbook.md)「換電腦」處理、重新執行設定腳本（`token_sync reset` 改記這台的指紋）才恢復。
 - 這台電腦在中繼上的 `device_id` 由中繼依密鑰決定（和本機 `meta.device_id` 不同）；下載時略過自己的所有 `device_id`，本機的數字以本機統計為準。
 - 日誌只記錄狀態碼與錯誤類別，不記錄密鑰、網址與資料內容；任何失敗都不影響 Token 統計、額度與結束碼。
 
