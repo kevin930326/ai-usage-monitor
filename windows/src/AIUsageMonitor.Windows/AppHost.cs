@@ -62,7 +62,12 @@ internal sealed class AppHost : IDisposable
         };
         tray.DisplayChanged += () => dispatcher.BeginInvoke(PlaceRing, DispatcherPriority.Background);
         fullscreen.Changed += ApplyVisibility;
-        fullscreen.ForegroundChanged += () => ring?.BringToTop();
+        fullscreen.ForegroundChanged += () =>
+        {
+            ring?.BringToTop();
+            // 別的程序成為前景（只會收到其他程序的事件）：面板若沒能成為作用中視窗就收不到 Deactivated，在這裡收起
+            if (panel is { IsActive: false }) panel.SafeClose();
+        };
         fullscreen.Start();
         store.Start();
         ApplyDisplayMode();
