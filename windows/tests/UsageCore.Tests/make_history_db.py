@@ -3,6 +3,7 @@
 用法：python make_history_db.py <路徑> <模式> [<現在的 Unix 秒>]
 - full：建表（收集器的 migration、WAL）並寫入額度、收集紀錄、每日 Token（含其他電腦）、個人紀錄、裝置清單，然後關閉
 - hold：開一個寫入交易、寫一筆新的額度，印出 locked 後等 stdin 一行再提交（測試讀取不被寫入擋住）
+- commit：寫入一筆新的每日 Token 與個人紀錄並提交（測試在讀取的查詢之間執行）
 - old：只建 meta 表、schema_version 2（收集器尚未更新）
 不讀真實的資料夾：路徑由測試給暫存資料夾。
 """
@@ -35,6 +36,13 @@ if mode == "hold":
     sys.exit(0)
 
 local = history.meta(conn, "device_id")
+if mode == "commit":
+    with conn:
+        conn.execute("""INSERT INTO daily_tokens (device_id, day, provider, model, input_tokens, updated_at)
+                        VALUES (?, '2026-10-26', 'claude', 'opus', 5000, ?)""", (local, now))
+        conn.execute("UPDATE records SET value = 128456 WHERE key = 'total_tokens'")
+    conn.close()
+    sys.exit(0)
 with conn:
     conn.execute("BEGIN")
     for i in range(6):

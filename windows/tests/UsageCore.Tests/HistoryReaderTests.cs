@@ -141,6 +141,21 @@ public sealed class HistoryReaderTests : IDisposable
     }
 
     [Fact]
+    public void OneReadSeesOneSnapshotWhenTheCollectorCommitsInBetween()
+    {
+        Make("full");
+        var reader = new HistoryReader(DbPath) { BetweenQueries = () => Make("commit") };
+        var during = reader.Read(Now, TimeZoneInfo.Utc);
+        Assert.Equal(HistoryReader.Status.Ready, during.Status);
+        // 收集器在額度歷史與 Token 統計之間提交（沒有被讀取擋住，Make 會檢查結束碼）：這次讀到的全是提交前的
+        Assert.DoesNotContain(during.Tokens.Days, d => d.Day == "2026-10-26");
+        Assert.Equal(123456, during.Tokens.Records["total_tokens"].Value);
+        var after = new HistoryReader(DbPath).Read(Now, TimeZoneInfo.Utc);
+        Assert.Contains(after.Tokens.Days, d => d.Day == "2026-10-26");
+        Assert.Equal(128456, after.Tokens.Records["total_tokens"].Value);
+    }
+
+    [Fact]
     public void OlderSchemaIsReportedWithoutReading()
     {
         Make("old");

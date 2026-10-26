@@ -48,6 +48,9 @@ public sealed class HistoryReader(string path)
 
     public string Path { get; } = path;
 
+    /// <summary>額度歷史讀完、Token 統計開始讀之前呼叫（仍在同一個讀取交易內）。只給測試在查詢之間讓收集器提交</summary>
+    public Action? BetweenQueries { get; init; }
+
     /// <summary>
     /// 讀取面板需要的資料：最近 8 天的額度歷史與收集紀錄、最近一年的每日 Token（含其他電腦）、個人紀錄、裝置清單。
     /// <paramref name="hourly"/> 為真時另外讀每小時 Token（完整統計視窗）。<paramref name="zone"/> 決定每日資料的起始日期。
@@ -74,11 +77,16 @@ public sealed class HistoryReader(string path)
             Sqlite.DbConfig(db, Sqlite.ConfigNoCheckpointOnClose, 1);
             Sqlite.BusyTimeout(db, BusyTimeoutMs);
             if (Sqlite.Exec(db, "PRAGMA query_only = ON") != Sqlite.Ok) return Failed("open");
+            // 所有查詢在同一個讀取交易內：WAL 的快照從第一個 SELECT 開始，收集器在查詢之間提交時，
+            // 這次讀到的仍全是提交前的資料（不會每日 Token 是舊的、個人紀錄是新的）。讀取交易不擋寫入；
+            // 交易由 Close 結束（沒有寫入，等同 ROLLBACK）
+            if (Sqlite.Exec(db, "BEGIN") != Sqlite.Ok) return Failed("open");
             var version = SchemaVersion(db);
             if (version is not { } v) return Failed("schema");
             if (v < SupportedSchema) return new Result(Status.OlderSchema, v, QuotaHistory.Empty, TokenStatsData.Empty);
             var since = (now - Lookback).ToUnixTimeSeconds();
             if (Samples(db, since) is not { } samples || Runs(db, since) is not { } runs) return Failed("query");
+            BetweenQueries?.Invoke();
             // Token 統計讀不了（例如收集器還在建立表）時不影響額度歷史
             var tokens = TokenStats(db, now, zone, hourly) ?? TokenStatsData.Empty;
             return new Result(v > SupportedSchema ? Status.NewerSchema : Status.Ready, v, new QuotaHistory(samples, runs), tokens);
