@@ -60,9 +60,10 @@ store_key() {
     done
     # security -i 從標準輸入讀指令；check 已確認密鑰只有英數與 + / = _ . ~ -，不必處理引號
     printf 'add-generic-password -U -s %s -a default -w %s\n' "$service" "$key" | security -i >/dev/null
-    # security -i 的結束碼不反映指令是否成功：讀回來確認（不加 -w，不印出密鑰）
-    if ! security find-generic-password -s "$service" -a default >/dev/null 2>&1; then
-        echo "無法存入 Keychain（${service}）。" >&2
+    # security -i 的結束碼不反映指令是否成功：讀回來比對（只在變數裡比較，不印出密鑰）。只檢查項目存在時，
+    # 更新失敗、舊密鑰還在也會當成成功（Codex C-01，同 setup-relay.sh 的 keychain_store）
+    if [ "$(security find-generic-password -s "$service" -a default -w 2>/dev/null)" != "$key" ]; then
+        echo "無法存入 Keychain（${service}），沒有變更設定。" >&2
         exit 1
     fi
 }

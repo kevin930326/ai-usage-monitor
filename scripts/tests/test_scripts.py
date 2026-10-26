@@ -504,11 +504,26 @@ class SetTier2Tests(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.tmp / "security.log"
         self.argv_log = self.tmp / "security-argv.log"
-        # 假的 security：記錄參數（-i 時另記標準輸入的指令）；find-generic-password 一律成功
+        self.store = self.tmp / "keychain"
+        self.store.mkdir()
+        # 假的 security：記錄參數（-i 時另記標準輸入的指令），密鑰存在 keychain/<service>；
+        # FAKE_SECURITY_FAIL_ADD=1 時 add 不生效（security -i 仍回傳 0，同真的 security）
         write_exec(self.bin / "security", f"""
             #!/bin/bash
             echo "$*" >> "{self.argv_log}"
-            if [ "$1" = -i ]; then cat >> "{self.log}"; else echo "$*" >> "{self.log}"; fi
+            if [ "$1" = -i ]; then
+                while read -r cmd _u _s service _a _acct _w value; do
+                    echo "$cmd $_u $_s $service $_a $_acct $_w $value" >> "{self.log}"
+                    [ "$cmd" = add-generic-password ] && [ "${{FAKE_SECURITY_FAIL_ADD:-0}}" != 1 ] && printf '%s' "$value" > "{self.store}/$service"
+                done
+                exit 0
+            fi
+            echo "$*" >> "{self.log}"
+            case "$1" in
+                find-generic-password) [ -f "{self.store}/$3" ] || exit 44; [ "${{@: -1}}" = -w ] && cat "{self.store}/$3" && echo ;;
+                delete-generic-password) rm -f "{self.store}/$3" ;;
+            esac
+            exit 0
         """)
         self.home = self.tmp / "home"
         self.home.mkdir()
@@ -517,8 +532,9 @@ class SetTier2Tests(unittest.TestCase):
     DEVICE_KEY = "aumd_" + "A1b2-C3d4_" * 4 + "xyz"
     READ_KEY = "RL4aesydLJXpCzwcEsNc7WDCww9cZEf6RVTmmGY5G2I="
 
-    def run_script(self, *args, keys: str | None = None):
-        env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "AI_USAGE_MONITOR_HOME": str(self.home)}
+    def run_script(self, *args, keys: str | None = None, env_extra: dict | None = None):
+        env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "AI_USAGE_MONITOR_HOME": str(self.home),
+               **(env_extra or {})}
         if keys is None:
             keys = f"{self.DEVICE_KEY}\n{self.READ_KEY}\n"
         return subprocess.run(["/bin/bash", str(ROOT / "collector" / "scripts" / "set-tier2.sh"), *args], env=env,
@@ -531,9 +547,9 @@ class SetTier2Tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.log.read_text().splitlines()
         self.assertEqual(calls, [f"add-generic-password -U -s AIUsageMonitor-device-key -a default -w {self.DEVICE_KEY}",
-                                 "find-generic-password -s AIUsageMonitor-device-key -a default",
+                                 "find-generic-password -s AIUsageMonitor-device-key -a default -w",
                                  f"add-generic-password -U -s AIUsageMonitor-relay-read -a default -w {self.READ_KEY}",
-                                 "find-generic-password -s AIUsageMonitor-relay-read -a default"])
+                                 "find-generic-password -s AIUsageMonitor-relay-read -a default -w"])
         # 密鑰只經過 security -i 的標準輸入，不在任何參數裡
         argv = self.argv_log.read_text()
         self.assertNotIn(self.DEVICE_KEY, argv)
@@ -553,10 +569,21 @@ class SetTier2Tests(unittest.TestCase):
         self.assertEqual(self.run_script("--no-read-key").returncode, 0)
         self.assertEqual(self.log.read_text().splitlines(),
                          [f"add-generic-password -U -s AIUsageMonitor-device-key -a default -w {self.DEVICE_KEY}",
-                          "find-generic-password -s AIUsageMonitor-device-key -a default",
+                          "find-generic-password -s AIUsageMonitor-device-key -a default -w",
                           "delete-generic-password -s AIUsageMonitor-relay-read -a default"])
         self.assertEqual(self.run_script("--disable").returncode, 0)
         self.assertIs(json.loads(self.config.read_text())["token_sync"], False)
+
+    def test_failed_update_with_an_old_key_present_stops(self):
+        # C-01：security -i 回傳 0 但沒有更新、舊密鑰還在時，不能當成成功
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        (self.store / "AIUsageMonitor-device-key").write_text("aumd_" + "O" * 43)
+        result = self.run_script("--no-read-key", env_extra={"FAKE_SECURITY_FAIL_ADD": "1"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("無法存入 Keychain", result.stderr)
+        self.assertNotIn(self.DEVICE_KEY, result.stdout + result.stderr)
+        self.assertNotIn("aumd_OOO", result.stdout + result.stderr)
+        self.assertNotIn("token_sync", self.config.read_text())  # 沒有開啟上傳
 
     def test_trims_whitespace_and_crlf(self):
         self.config.write_text('{"relay_url": "https://relay.example.dev"}')
