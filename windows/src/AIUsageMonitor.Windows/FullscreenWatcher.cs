@@ -9,6 +9,7 @@ namespace AIUsageMonitor.Windows;
 /// - 前景視窗改變（EVENT_SYSTEM_FOREGROUND，全系統、略過自己的程序）
 /// - 前景視窗本身移動、改變大小或關閉（只掛在前景視窗的程序上；前景改變時換掛）：同一個視窗按 F11 進入或離開全螢幕
 /// 事件 250 ms 內合併成一次判斷。判斷規則在 UsageCore 的 <see cref="FullscreenRule"/>。
+/// 前景視窗改變的 hook 在 App 執行期間一直掛著（圓環重新排到最上層也靠它）；「全螢幕時隱藏」只決定要不要判斷（<see cref="Enabled"/>）。
 /// </summary>
 internal sealed class FullscreenWatcher : IDisposable
 {
@@ -22,6 +23,7 @@ internal sealed class FullscreenWatcher : IDisposable
     private IntPtr destroyHook;
     private uint watchedProcess;
     private IntPtr foreground;
+    private bool enabled;
 
     public bool IsFullscreen { get; private set; }
     public event Action? Changed;
@@ -44,21 +46,37 @@ internal sealed class FullscreenWatcher : IDisposable
         if (foregroundHook != IntPtr.Zero) return;
         foregroundHook = NativeMethods.SetWinEventHook(NativeMethods.EVENT_SYSTEM_FOREGROUND, NativeMethods.EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
                                                        foregroundProc, 0, 0, NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS);
-        Evaluate();
+    }
+
+    /// <summary>是否判斷全螢幕（有圓環且「全螢幕時隱藏」打開）。關閉時拆掉前景程序的 hook、回到「不是全螢幕」</summary>
+    public bool Enabled
+    {
+        get => enabled;
+        set
+        {
+            if (enabled == value) return;
+            enabled = value;
+            if (value)
+            {
+                Evaluate();
+                return;
+            }
+            coalesce.Stop();
+            Unhook(ref locationHook);
+            Unhook(ref destroyHook);
+            watchedProcess = 0;
+            if (IsFullscreen)
+            {
+                IsFullscreen = false;
+                Changed?.Invoke();
+            }
+        }
     }
 
     public void Stop()
     {
-        coalesce.Stop();
+        Enabled = false;
         Unhook(ref foregroundHook);
-        Unhook(ref locationHook);
-        Unhook(ref destroyHook);
-        watchedProcess = 0;
-        if (IsFullscreen)
-        {
-            IsFullscreen = false;
-            Changed?.Invoke();
-        }
     }
 
     /// <summary>前景視窗改變時也要讓圓環重新排到最上層（其他 topmost 視窗可能蓋住它）</summary>
@@ -67,7 +85,7 @@ internal sealed class FullscreenWatcher : IDisposable
     private void OnForeground(IntPtr hook, uint eventType, IntPtr hWnd, int idObject, int idChild, uint thread, uint time)
     {
         ForegroundChanged?.Invoke();
-        Schedule();
+        if (enabled) Schedule();
     }
 
     private void OnLocation(IntPtr hook, uint eventType, IntPtr hWnd, int idObject, int idChild, uint thread, uint time)

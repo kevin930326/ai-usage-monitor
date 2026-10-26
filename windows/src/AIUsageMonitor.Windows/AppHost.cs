@@ -63,6 +63,7 @@ internal sealed class AppHost : IDisposable
         tray.DisplayChanged += () => dispatcher.BeginInvoke(PlaceRing, DispatcherPriority.Background);
         fullscreen.Changed += ApplyVisibility;
         fullscreen.ForegroundChanged += () => ring?.BringToTop();
+        fullscreen.Start();
         store.Start();
         ApplyDisplayMode();
         ScheduleMinute();
@@ -123,14 +124,13 @@ internal sealed class AppHost : IDisposable
             ring.SetContent(Content, AppPalette);
             _ = ring.Handle;
             PlaceRing();
-            fullscreen.Start();
         }
         else if (!settings.ShowsRing && ring is not null)
         {
-            fullscreen.Stop();
             ring.Close();
             ring = null;
         }
+        fullscreen.Enabled = ring is not null && settings.HideInFullscreen;
         if (ring is not null)
         {
             ring.Opacity = settings.Opacity;
@@ -139,8 +139,6 @@ internal sealed class AppHost : IDisposable
                 ring.SetSize(AppSettings.RingDip(settings.RingSize));
                 PlaceRing();
             }
-            if (settings.HideInFullscreen) fullscreen.Start();
-            else fullscreen.Stop();
         }
         if (settings.ShowsTray) tray.Show(Content, TrayPalette);
         else tray.Hide();
