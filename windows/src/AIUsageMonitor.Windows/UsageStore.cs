@@ -33,6 +33,7 @@ internal sealed class UsageStore : IDisposable
     private string? lastText;
     private string? lastError;
     private bool loaded;
+    private bool retry;
 
     public UsageSnapshot? Snapshot { get; private set; }
     /// <summary>讀不到或解析失敗時的說明（沒有檔案時為 null，Snapshot 也是 null）</summary>
@@ -57,12 +58,16 @@ internal sealed class UsageStore : IDisposable
         Reload();
     }
 
-    /// <summary>每分鐘：監看不在時重建，並重讀一次（監看在時內容沒變不會通知）</summary>
+    /// <summary>每分鐘：監看不在時重建並重讀；上次讀取遇到暫時的 I/O 錯誤時補讀（監看在、讀取正常時不讀檔）</summary>
     public void Poll()
     {
         if (watcher is null)
         {
             EnsureWatcher();
+            Reload();
+        }
+        else if (retry)
+        {
             Reload();
         }
     }
@@ -72,6 +77,7 @@ internal sealed class UsageStore : IDisposable
     {
         string? text = null;
         string? error = null;
+        retry = false;
         try
         {
             text = ReadShared(DataPaths.Usage);
@@ -86,8 +92,9 @@ internal sealed class UsageStore : IDisposable
         }
         catch (IOException e)
         {
-            // 收集器正在改名：下一次變更或計時器再讀
+            // 收集器正在改名或檔案被鎖住：下一次變更或每分鐘的計時器（Poll）再讀
             AppLog.Write($"read usage.json: {e.GetType().Name}");
+            retry = true;
             return;
         }
         if (loaded && text == lastText && error == lastError) return;
