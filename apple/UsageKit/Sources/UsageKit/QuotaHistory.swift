@@ -432,14 +432,21 @@ public struct QuotaConsumption: Equatable, Sendable {
 
     public init(provider: String, windowID: String, history: QuotaHistory, now: Date, days: Int = 7, calendar: Calendar = .current) {
         self.days = days
+        // 每天的開始各自以 startOfDay 求：在午夜切換日光節約時間的時區（Santiago、Havana 等）切換日從 01:00 開始，
+        // 從那裡逐日加一天會保留 01:00，其他天的 00:00～01:00 就被算到前一天、切換日附近的小時重複計算（Fable F-01）。
+        // 以當天中午為基準加減天數，再取那天的開始
         let todayStart = calendar.startOfDay(for: now)
-        let first = calendar.date(byAdding: .day, value: -(days - 1), to: todayStart) ?? todayStart
+        let noon = calendar.date(bySettingHour: 12, minute: 0, second: 0, of: todayStart) ?? todayStart.addingTimeInterval(12 * 3600)
+        func startOfDay(_ offset: Int) -> Date {
+            calendar.startOfDay(for: calendar.date(byAdding: .day, value: offset, to: noon) ?? noon.addingTimeInterval(Double(offset) * 86400))
+        }
+        let first = startOfDay(-(days - 1))
         // 每個本機日期固定 24 格（第 h 格＝當天 h 點開始到下一格開始），日期與小時才不會錯位。
         // 日光節約時間開始那天不存在的小時是 0 長度的格子；結束那天重複的小時併在同一格（2 小時）。
         var spans: [TimeSpan] = []
         for day in 0..<days {
-            let dayStart = calendar.date(byAdding: .day, value: day, to: first) ?? first.addingTimeInterval(Double(day) * 86400)
-            let nextDay = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(86400)
+            let dayStart = startOfDay(day - (days - 1))
+            let nextDay = startOfDay(day - (days - 1) + 1)
             let starts = (0..<24).map { h in
                 h == 0 ? dayStart : calendar.date(bySettingHour: h, minute: 0, second: 0, of: dayStart) ?? dayStart.addingTimeInterval(Double(h) * 3600)
             } + [nextDay]

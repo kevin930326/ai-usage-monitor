@@ -101,7 +101,8 @@ struct StatsWindowView: View {
         var stamp = store.changeStamp()
         while !Task.isCancelled {
             try? await Task.sleep(for: Self.refreshInterval)
-            guard !Task.isCancelled, visible, data != nil, !loading else { continue }
+            // 第一次讀不到（檔案還不存在、收集器正在建立）時也繼續看：檔案出現或變了就再讀一次（Fable F-02）
+            guard !Task.isCancelled, visible, data != nil || failed, !loading else { continue }
             let current = store.changeStamp()
             guard current != stamp else { continue }
             let at = RenderClock.now
@@ -110,7 +111,10 @@ struct StatsWindowView: View {
             // 讀到才記下這次的檔案狀態：讀不到（例如收集器正在整理資料庫）時下一分鐘再試（審查 C-01）
             stamp = current
             readAt = at
+            let wasEmpty = data == nil
             data = loaded
+            failed = false
+            if wasEmpty { replayCharts() }
         }
     }
 
