@@ -62,7 +62,7 @@ store_key() {
     printf 'add-generic-password -U -s %s -a default -w %s\n' "$service" "$key" | security -i >/dev/null
     # security -i 的結束碼不反映指令是否成功：讀回來確認（不加 -w，不印出密鑰）
     if ! security find-generic-password -s "$service" -a default >/dev/null 2>&1; then
-        echo "無法存入 Keychain（$service）。" >&2
+        echo "無法存入 Keychain（${service}）。" >&2
         exit 1
     fi
 }
