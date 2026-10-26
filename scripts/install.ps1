@@ -34,6 +34,10 @@
 .PARAMETER NoTask
   Install the files but do not register the scheduled task (testing).
 #>
+# The whole file is one script block called with @args: through `irm | iex` the parameters and the function stay
+# inside it instead of being left in the user's session ($Zip, $Version, Install-AIUsageCollector, ...).
+# Not indented on purpose (keeps the body readable against the history).
+& {
 param(
     [switch]$WithQuota,
     [switch]$Uninstall,
@@ -204,3 +208,4 @@ function Install-AIUsageCollector {
 
 # Explicit arguments rather than @PSBoundParameters: with `irm | iex` the parameters are simply unset
 Install-AIUsageCollector -WithQuota:$WithQuota -Uninstall:$Uninstall -Version $Version -Sha256 $Sha256 -Zip $Zip -NoTask:$NoTask
+} @args

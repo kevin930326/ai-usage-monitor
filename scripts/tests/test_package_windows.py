@@ -56,6 +56,17 @@ class PackageWindowsTests(unittest.TestCase):
         self.assertEqual(text.decode().count("'__VERSION__'"), 1)
         self.assertEqual(text.decode().count("'__ZIP_SHA256__'"), 1)
 
+    def test_installer_is_one_script_block(self):
+        # irm | iex 在使用者的工作階段執行：參數與函式要包在一個 script block 裡，才不會留下 $Zip、$Version 等變數
+        # 註解式說明（<# ... #>）之後的第一行程式就是 script block 的開頭，最後一行以 @args 呼叫它
+        text = INSTALLER.read_text(encoding="ascii")
+        code = [
+            line for line in text[text.index("\n#>") + 3:].splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        self.assertEqual(code[:2], ["& {", "param("])
+        self.assertEqual(code[-1], "} @args")
+
 
 if __name__ == "__main__":
     unittest.main()
