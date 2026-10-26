@@ -50,6 +50,8 @@ struct SettingsView: View {
                 Section {
                     Button { scanning = true } label: { Label("掃描 QR 碼", systemImage: "qrcode.viewfinder") }
                         .disabled(!PairingScannerSheet.isAvailable)
+                        // Form 裡停用的按鈕文字仍是一般的黑色、圖示仍是藍色，看起來像可以按：停用時兩者都用次要顏色
+                        .foregroundStyle(PairingScannerSheet.isAvailable ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     Button { enteringCode = true } label: { Label("輸入短碼", systemImage: "number") }
                     if paired {
                         Label("已配對，正在更新", systemImage: "checkmark.circle.fill")
