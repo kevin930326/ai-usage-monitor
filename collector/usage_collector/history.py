@@ -10,13 +10,14 @@ from __future__ import annotations
 import os
 import shutil
 import sqlite3
+import time
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import system
+from . import history_care, system
 from .log import log
 from .models import parse_iso
 from .paths import APP_SUPPORT_DIR
@@ -462,6 +463,7 @@ def maybe_cleanup(conn: sqlite3.Connection, now: int, today: date) -> bool:
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_cleanup_day', ?)",
                  (today.isoformat(),))
     maybe_vacuum(conn, now)
+    history_care.maybe_backup(conn, now)  # 每週一次；失敗只記日誌（ADR-0014 D-1）
     return True
 
 
@@ -543,28 +545,44 @@ def tidy(path: Path | None = None, now: datetime | None = None) -> None:
 
 
 def tidy_safely(path: Path | None = None) -> bool:
-    """`tidy` 的外層：不丟出任何例外，日誌只記錄類別。"""
+    """`tidy` 的外層：不丟出任何例外，日誌只記錄類別。Windows 的 `--tokens-only` 沒有 `record`，
+    損毀復原的連續失敗由這裡計算（ADR-0014 D-1）。"""
+    target = path or HISTORY_PATH
     try:
         tidy(path)
+        if target.exists():
+            history_care.succeeded(target)
         return True
     except HistoryError as e:
         log(f"略過歷史清理：{e}")
+    except sqlite3.DatabaseError as e:
+        log(f"略過歷史清理（{type(e).__name__}）：history.sqlite3 被鎖住或已損毀")
+        history_care.failed(target, int(time.time()))
     except Exception as e:
         log(f"略過歷史清理：{type(e).__name__}")
     return False
 
 
 def record_safely(snapshot: dict, path: Path | None = None) -> bool:
-    """`record` 的外層：不丟出任何例外。回傳是否寫入成功。"""
+    """`record` 的外層：不丟出任何例外。回傳是否寫入成功。
+    連續寫不進去、而且檔案確定損毀時改名保留並建新檔，這一輪就寫進新檔（ADR-0014 D-1，history_care）。"""
+    target = path or HISTORY_PATH
     try:
         record(snapshot, path)
+        history_care.succeeded(target)
         return True
     except HistoryError as e:
         log(f"略過額度歷史：{e}")
     except sqlite3.DatabaseError as e:
         # 鎖住（另一個程序寫入超過 5 秒）或檔案損毀；訊息可能含路徑，只記類別
         log(f"略過額度歷史（{type(e).__name__}）：history.sqlite3 被鎖住或已損毀；"
-            "持續發生時在設定中清除歷史，或把檔案移走")
+            "損毀時收集器約 1 小時後會改名保留並建立新檔")
+        if history_care.failed(target, int(time.time())):
+            try:
+                record(snapshot, path)
+                return True
+            except Exception as e:
+                log(f"略過額度歷史：新檔也寫不進去（{type(e).__name__}）")
     except Exception as e:
         log(f"略過額度歷史：{type(e).__name__}")
     return False

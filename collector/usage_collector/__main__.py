@@ -8,11 +8,12 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import disk, history, local_store, paths, relay, service_status, token_stats, token_sync
+from . import disk, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
 from .log import log, rotate_if_large, rotate_inherited
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -144,10 +145,11 @@ def main(argv: list[str] | None = None) -> int:
 
     low_disk = disk.low_space() if args.write_local else None
     if args.write_local:
-        local = snapshot
+        # 只寫進本機的 usage.json（不上傳）：App 依此在面板顯示暫停記錄歷史、資料庫損毀後已改名保留（ADR-0014）
+        status = history_care.notice(history.HISTORY_PATH.parent, int(time.time())) or {}
         if low_disk is not None:
-            # 只寫進本機的 usage.json（不上傳）：App 依此在面板顯示暫停記錄歷史
-            local = {**snapshot, "local_status": {"history_paused": "low_disk", "disk_free_mb": low_disk // (1024 * 1024)}}
+            status = {"history_paused": "low_disk", "disk_free_mb": low_disk // (1024 * 1024), **status}
+        local = {**snapshot, "local_status": status} if status else snapshot
         try:
             local_store.write_snapshot(local)
         except OSError as e:

@@ -17,6 +17,19 @@ struct LocalStatusTests {
         #expect(s.localStatus?.lowDisk == true)
     }
 
+    /// 資料庫損毀後改名保留並建立新檔（ADR-0014 D-1）
+    @Test func historyResetIsDecoded() throws {
+        let s = try decode(#", "local_status": {"history_reset_at": "2026-10-26T03:10:00Z", "history_kept_as": "history.corrupt-20261026-111000.sqlite3"}"#)
+        #expect(s.localStatus?.historyResetAt == Date(timeIntervalSince1970: 1_792_984_200))
+        #expect(s.localStatus?.historyKeptAs == "history.corrupt-20261026-111000.sqlite3")
+        #expect(s.localStatus?.lowDisk == false)
+    }
+
+    @Test func malformedFieldsDoNotBreakTheSnapshot() throws {
+        let s = try decode(#", "local_status": {"history_reset_at": "yesterday", "disk_free_mb": "a lot", "history_paused": "low_disk"}"#)
+        #expect(s.localStatus == LocalStatus(historyPaused: "low_disk"))
+    }
+
     @Test func missingStatusIsNil() throws {
         #expect(try decode("").localStatus == nil)
     }

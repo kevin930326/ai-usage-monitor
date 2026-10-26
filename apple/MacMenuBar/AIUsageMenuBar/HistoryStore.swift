@@ -337,6 +337,18 @@ final class HistoryStore {
                 // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時，也不等失敗後的退避）
                 && Self.exec(db, "DELETE FROM meta WHERE key IN ('sync_last_success', 'sync_next_at', 'sync_failures')", [])
         }
+        removeCopies()
+    }
+
+    /// 清除歷史時一併刪掉收集器的每週備份、損毀時保留的舊檔與提示（ADR-0014 D-1），「無法復原」才成立
+    nonisolated func removeCopies() {
+        let folder = url.deletingLastPathComponent()
+        let fm = FileManager.default
+        try? fm.removeItem(at: folder.appendingPathComponent("backups"))
+        try? fm.removeItem(at: folder.appendingPathComponent("history-recovered.json"))
+        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where name.hasPrefix("history.corrupt-") {
+            try? fm.removeItem(at: folder.appendingPathComponent(name))
+        }
     }
 
     /// `daily_tokens` 最早的一天；沒有資料時為 nil

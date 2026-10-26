@@ -88,11 +88,11 @@ cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新�
 
 | 位置 | 內容 | 誰會清 |
 |---|---|---|
-| `~/Library/Application Support/AIUsageMonitor` | usage.json、history.sqlite3、config.json、service-status.json | `install.sh --uninstall --purge`，或自行刪除 |
+| `~/Library/Application Support/AIUsageMonitor` | usage.json、history.sqlite3（含 `backups/` 的每週備份與損毀時保留的 `history.corrupt-*`）、config.json、service-status.json | `install.sh --uninstall --purge`，或自行刪除 |
 | `~/Library/Logs/AIUsageMonitor` | 收集器、重新安裝的日誌 | 同上 |
 | `~/Library/Caches/AIUsageMonitor` | iPhone App 的建置產物 | 自行刪除 |
 | Keychain `AIUsageMonitor-relay-write`、`AIUsageMonitor-relay-read` | 中繼的寫入與讀取密鑰 | 見「中繼」 |
 | App 的設定（UserDefaults） | 面板卡片順序、外觀等 | `defaults delete io.github.kevin930326.AIUsageMenuBar` |
-| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3、config.json、collector.log | 自行刪除 |
+| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3（含 `backups\`）、config.json、collector.log | 自行刪除 |
 
 收集器從不修改 Claude Code、Codex CLI 的設定與登入資訊；移除本專案不影響它們。

@@ -153,9 +153,10 @@ class SchemaTest(HistoryTestCase):
 
     @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_files_are_private(self):
-        history.record(snapshot(T0), self.path)
-        for p in Path(self.dir.name).iterdir():
-            self.assertEqual(p.stat().st_mode & 0o777, 0o600, p.name)
+        history.record(snapshot(T0), self.path)  # 第一次清理也做了每週備份（backups/，ADR-0014 D-1）
+        self.assertTrue((Path(self.dir.name) / "backups").is_dir())
+        for p in Path(self.dir.name).rglob("*"):
+            self.assertEqual(p.stat().st_mode & 0o777, 0o700 if p.is_dir() else 0o600, p.name)
 
     @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限位元")
     def test_existing_loose_permissions_are_tightened(self):
