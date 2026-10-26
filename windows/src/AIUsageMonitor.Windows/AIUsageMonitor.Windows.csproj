@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows 桌面 App（ADR-0015）：WPF，x64 與 ARM64。只讀本機檔案，不連網、不持有密鑰 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Mac 上也能編譯（不能執行） -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RootNamespace>AIUsageMonitor.Windows</RootNamespace>
+    <AssemblyName>AIUsageMonitor</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Product>AI Usage Monitor</Product>
+    <Version>0.1.0</Version>
+    <!-- 只用明確的 using：隱含的 using 會帶進網路的命名空間（App 不連網，ADR-0015 第 2 節） -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <SatelliteResourceLanguages>zh-Hant</SatelliteResourceLanguages>
+    <!-- 設定視窗的 Fluent 主題（Window.ThemeMode，.NET 9 起標為實驗性） -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageCore\UsageCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+  </ItemGroup>
+</Project>
