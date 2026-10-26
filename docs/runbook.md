@@ -72,11 +72,12 @@ iPhone 與 Apple Watch 共用同一把讀取密鑰（`READ_TOKEN`，[ADR-0012](a
    ```
 
    用 `scripts/setup-relay.sh` 部署的中繼，`wrangler secret put` 要加 `--config wrangler.local.toml`。`wrangler secret put` 送出後立即生效，不必重新部署：遺失的裝置從此讀不到（401）。
-3. 確認 Mac 的 Keychain 是新密鑰（不會印出密鑰；有輸出 `200` 就對了）：
+3. 確認 Mac 的 Keychain 是新密鑰（輸出 `200` 就對了）。授權標頭由 shell 內建的 `printf` 經標準輸入交給 `curl`，密鑰不出現在程序參數：
 
    ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' "$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/Library/Application Support/AIUsageMonitor/config.json")))["relay_url"])')/usage" \
-     -H "Authorization: Bearer $(security find-generic-password -s AIUsageMonitor-relay-read -a default -w)"
+   URL=$(python3 -c 'import json,os;print(json.load(open(os.path.expanduser("~/Library/Application Support/AIUsageMonitor/config.json")))["relay_url"])')
+   printf 'Authorization: Bearer %s\n' "$(security find-generic-password -s AIUsageMonitor-relay-read -a default -w)" \
+     | curl -s -o /dev/null -w '%{http_code}\n' -H @- "$URL/usage"
    ```
 
 4. 其他 iPhone 重新配對：`scripts/setup-iphone.sh --pair-only qr`，iPhone 設定按「掃描 QR 碼」。
