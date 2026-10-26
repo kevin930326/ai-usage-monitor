@@ -28,6 +28,9 @@ struct StatsWindowView: View {
     var fixedData: TokenStatsData?
     var fixedMotion: PanelMotion?
     var now: Date = RenderClock.now
+    /// 這份資料讀取時的時間：畫面的「今天」以它為準。視窗開著跨日、自動更新後，長條、熱力圖與摘要跟著換到新的一天（審查 C-02）
+    @State private var readAt: Date?
+    private var today: Date { readAt ?? now }
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
 
@@ -101,10 +104,12 @@ struct StatsWindowView: View {
             guard !Task.isCancelled, visible, data != nil, !loading else { continue }
             let current = store.changeStamp()
             guard current != stamp else { continue }
-            let loaded = await Task.detached(priority: .utility) { store.loadFullTokenStats() }.value
+            let at = RenderClock.now
+            let loaded = await Task.detached(priority: .utility) { store.loadFullTokenStats(now: at) }.value
             guard !Task.isCancelled, visible, let loaded else { continue }
             // 讀到才記下這次的檔案狀態：讀不到（例如收集器正在整理資料庫）時下一分鐘再試（審查 C-01）
             stamp = current
+            readAt = at
             data = loaded
         }
     }
@@ -122,9 +127,11 @@ struct StatsWindowView: View {
         loading = true
         let store = historyStore
         Task {
-            let loaded = await Task.detached(priority: .userInitiated) { store.loadFullTokenStats() }.value
+            let at = RenderClock.now
+            let loaded = await Task.detached(priority: .userInitiated) { store.loadFullTokenStats(now: at) }.value
             loading = false
             guard visible else { return }
+            readAt = at
             data = loaded
             failed = loaded == nil
             replayCharts()
@@ -149,13 +156,14 @@ struct StatsWindowView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             data = nil
+            readAt = nil
             failed = false
             motion = .settled
         }
     }
 
     private func deviceMenu(_ devices: TokenDevices) -> some View {
-        TokenDeviceMenu(devices: devices, selected: device, now: now) { selected in
+        TokenDeviceMenu(devices: devices, selected: device, now: today) { selected in
             PanelSettings.shared.statsDevice = selected
             replayCharts()
         }
@@ -165,7 +173,7 @@ struct StatsWindowView: View {
         let devices = data.devices
         let scopes = TokenScopeChips.scopes(data)
         let scope = scopes.contains(self.scope) ? self.scope : .all
-        let summary = TokenSummary(data: data, scope: scope, now: now)
+        let summary = TokenSummary(data: data, scope: scope, now: today)
         let page = VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("完整統計").font(.title2.weight(.bold))
@@ -185,11 +193,11 @@ struct StatsWindowView: View {
             }
             RecordsRow(summary: summary)
             section("活動熱力圖（一年）") {
-                TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: now, weeks: 53), scope: scope)
+                TokenHeatmapView(map: TokenHeatmap(data: data, scope: scope, now: today, weeks: 53), scope: scope)
                     .id("\(scope.rawValue)-\(measure.rawValue)")
             }
             section("最近 30 天") {
-                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: .days30, now: now),
+                TokenActivityChart(bars: TokenActivity.bars(data: data, scope: scope, range: .days30, now: today),
                                    scope: scope, range: .days30, measure: measure, height: 140)
                     .id("\(scope.rawValue)-\(measure.rawValue)")
             }
