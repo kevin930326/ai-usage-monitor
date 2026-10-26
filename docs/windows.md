@@ -4,6 +4,7 @@ Windows PC 用和 Mac 相同的 Python 程式（`collector/usage_collector`，�
 
 - **預設只統計 Token、不收集額度、不上傳任何東西**。額度 % 是整個帳號的數字，Mac 已經在收集（ADR-0011 第 2 節）。
 - 統計結果在 `%LOCALAPPDATA%\AIUsageMonitor\history.sqlite3`。要在 Mac 的面板看到這台 PC 的數字，需要第二層（多裝置合併，FR-49）：安裝排程後執行 `windows\set-tier2.ps1`，見 [docs/tier2-setup.md](tier2-setup.md)。
+- 在 PC 上看額度：以 `-WithQuota` 安裝排程（只寫本機），再裝 Windows App（[ADR-0015](adr/0015-windows-desktop-app.md)）。要在 PC 上看其他電腦的 Token，`set-tier2.ps1` 加 `-ReadKey`。
 - 不讀 `auth.json`、`.credentials.json`、瀏覽器 cookie；對話紀錄只透過白名單欄位讀取（和 Mac 相同，README「隱私與安全」）。
 
 ## 需要
@@ -50,7 +51,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | 參數 | 作用 |
 |---|---|
 | `-Python C:\…\python.exe` | 指定 Python（預設：`py -3` 找到的，再退回 PATH 的 `python`） |
-| `-WithQuota` | 另外收集額度（執行 `claude -p /usage`、`codex app-server`），**只寫在本機** `usage.json`、不上傳。安裝時找到的 `claude`／`codex` 路徑寫進 `config.json`。Windows 的 Python 沒有時區資料庫時，Claude 額度的重置時間以本機時區解讀（可另裝 `py -m pip install tzdata` 取得精確時區） |
+| `-WithQuota` | 另外收集額度（執行 `claude -p /usage`、`codex app-server`），**只寫在本機** `usage.json`、不上傳。安裝時找到的 `claude`／`codex` 路徑寫進 `config.json`。Windows 的 Python 沒有時區資料庫時，Claude 額度的重置時間以本機時區解讀（可另裝 `py -m pip install tzdata` 取得精確時區）。Windows App 讀這份 `usage.json`；PC 不上傳額度快照（ADR-0015 第 3 節） |
 
 再執行一次 `install-task.ps1` 會以新的設定取代舊的排程。
 

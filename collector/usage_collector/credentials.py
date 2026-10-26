@@ -177,13 +177,16 @@ def main(argv: list[str]) -> int:
     """- `store <名稱>`：提示輸入（不顯示），格式不對時重新提示（最多 3 次），存入認證管理員（Windows）
     - `check <名稱>`：從標準輸入讀一行，格式對時把整理過的密鑰印到標準輸出（給 set-tier2.sh 用，不經過指令列）；
       不對時把提示印到標準錯誤、結束碼 1
-    - `delete <名稱>`：刪除"""
-    if len(argv) != 2 or argv[0] not in ("store", "check", "delete") or argv[1] not in NAMES:
-        print(f"用法：python -m usage_collector.credentials store|check|delete {'|'.join(NAMES)}", file=sys.stderr)
+    - `delete <名稱>`：刪除
+    - `has <名稱>`：存過時結束碼 0，沒有時 1（不印出密鑰）"""
+    if len(argv) != 2 or argv[0] not in ("store", "check", "delete", "has") or argv[1] not in NAMES:
+        print(f"用法：python -m usage_collector.credentials store|check|delete|has {'|'.join(NAMES)}", file=sys.stderr)
         return 2
     if argv[0] == "delete":
         delete(argv[1])
         return 0
+    if argv[0] == "has":
+        return 0 if read(argv[1]) else 1
     if argv[0] == "check":
         try:
             print(normalize(argv[1], sys.stdin.readline()))

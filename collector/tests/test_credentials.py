@@ -84,6 +84,13 @@ class MainTests(unittest.TestCase):
         store.assert_not_called()
         self.assertEqual(err.getvalue().count("請重新貼上"), 2)
 
+    def test_has_reports_without_printing_the_key(self):
+        out = io.StringIO()
+        with mock.patch.object(credentials, "read", side_effect=[DEVICE, None]), redirect_stdout(out):
+            self.assertEqual(credentials.main(["has", credentials.DEVICE_KEY]), 0)
+            self.assertEqual(credentials.main(["has", credentials.READ_KEY]), 1)
+        self.assertEqual(out.getvalue(), "")
+
     def test_store_read_key(self):
         with mock.patch.object(credentials, "_prompt", return_value=READ + "\n"), \
                 mock.patch.object(credentials, "store") as store, redirect_stdout(io.StringIO()):
