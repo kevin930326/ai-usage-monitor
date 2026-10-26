@@ -503,18 +503,26 @@ class SetTier2Tests(unittest.TestCase):
         self.bin = self.tmp / "bin"
         self.bin.mkdir()
         self.log = self.tmp / "security.log"
+        self.argv_log = self.tmp / "security-argv.log"
+        # 假的 security：記錄參數（-i 時另記標準輸入的指令）；find-generic-password 一律成功
         write_exec(self.bin / "security", f"""
             #!/bin/bash
-            echo "$*" >> "{self.log}"
+            echo "$*" >> "{self.argv_log}"
+            if [ "$1" = -i ]; then cat >> "{self.log}"; else echo "$*" >> "{self.log}"; fi
         """)
         self.home = self.tmp / "home"
         self.home.mkdir()
         self.config = self.home / "config.json"
 
-    def run_script(self, *args):
+    DEVICE_KEY = "aumd_" + "A1b2-C3d4_" * 4 + "xyz"
+    READ_KEY = "RL4aesydLJXpCzwcEsNc7WDCww9cZEf6RVTmmGY5G2I="
+
+    def run_script(self, *args, keys: str | None = None):
         env = {**os.environ, **UTF8_ENV, "PATH": f"{self.bin}:{os.environ['PATH']}", "AI_USAGE_MONITOR_HOME": str(self.home)}
+        if keys is None:
+            keys = f"{self.DEVICE_KEY}\n{self.READ_KEY}\n"
         return subprocess.run(["/bin/bash", str(ROOT / "collector" / "scripts" / "set-tier2.sh"), *args], env=env,
-                              capture_output=True, text=True, stdin=subprocess.DEVNULL)
+                              capture_output=True, text=True, input=keys)
 
     def test_stores_both_keys_and_enables_upload(self):
         import json
@@ -522,8 +530,15 @@ class SetTier2Tests(unittest.TestCase):
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
         calls = self.log.read_text().splitlines()
-        self.assertEqual(calls, ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
-                                 "add-generic-password -U -s AIUsageMonitor-relay-read -a default -w"])
+        self.assertEqual(calls, [f"add-generic-password -U -s AIUsageMonitor-device-key -a default -w {self.DEVICE_KEY}",
+                                 "find-generic-password -s AIUsageMonitor-device-key -a default",
+                                 f"add-generic-password -U -s AIUsageMonitor-relay-read -a default -w {self.READ_KEY}",
+                                 "find-generic-password -s AIUsageMonitor-relay-read -a default"])
+        # 密鑰只經過 security -i 的標準輸入，不在任何參數裡
+        argv = self.argv_log.read_text()
+        self.assertNotIn(self.DEVICE_KEY, argv)
+        self.assertNotIn(self.READ_KEY, argv)
+        self.assertNotIn(self.DEVICE_KEY, result.stdout + result.stderr)
         config = json.loads(self.config.read_text())
         self.assertIs(config["token_sync"], True)
         self.assertEqual(config["claude_path"], "/bin/claude")
@@ -536,10 +551,42 @@ class SetTier2Tests(unittest.TestCase):
         self.log.unlink()
         # C-05：從完整同步切換成只上傳時，移除之前存的讀取密鑰（收集器才不會繼續下載）
         self.assertEqual(self.run_script("--no-read-key").returncode, 0)
-        self.assertEqual(self.log.read_text().splitlines(), ["add-generic-password -U -s AIUsageMonitor-device-key -a default -w",
-                                                             "delete-generic-password -s AIUsageMonitor-relay-read -a default"])
+        self.assertEqual(self.log.read_text().splitlines(),
+                         [f"add-generic-password -U -s AIUsageMonitor-device-key -a default -w {self.DEVICE_KEY}",
+                          "find-generic-password -s AIUsageMonitor-device-key -a default",
+                          "delete-generic-password -s AIUsageMonitor-relay-read -a default"])
         self.assertEqual(self.run_script("--disable").returncode, 0)
         self.assertIs(json.loads(self.config.read_text())["token_sync"], False)
+
+    def test_trims_whitespace_and_crlf(self):
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        result = self.run_script(keys=f"  {self.DEVICE_KEY} \r\n\t{self.READ_KEY}\r\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"-w {self.DEVICE_KEY}\n", self.log.read_text())
+        self.assertIn(f"-w {self.READ_KEY}\n", self.log.read_text())
+
+    def test_wrong_format_prompts_again(self):
+        # BACKLOG 第 10 節：少複製一個字、把讀取密鑰貼到寫入密鑰的位置，都當場提示並重新詢問
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        result = self.run_script(keys=f"{self.DEVICE_KEY[:-1]}\n{self.READ_KEY}\n{self.DEVICE_KEY}\n{self.DEVICE_KEY}\n"
+                                      f"{self.READ_KEY}\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("應為 48 個字元，貼上的是 47 個", result.stderr)
+        self.assertIn("應以 aumd_ 開頭", result.stderr)
+        self.assertIn("這是裝置的寫入密鑰", result.stderr)  # 第三次的 aumd_ 貼在讀取密鑰的位置
+        self.assertEqual(result.stderr.count("請重新貼上"), 3)
+        self.assertNotIn(self.READ_KEY, result.stderr)
+        calls = self.log.read_text().splitlines()
+        self.assertEqual(calls[0], f"add-generic-password -U -s AIUsageMonitor-device-key -a default -w {self.DEVICE_KEY}")
+        self.assertEqual(calls[2], f"add-generic-password -U -s AIUsageMonitor-relay-read -a default -w {self.READ_KEY}")
+
+    def test_gives_up_after_three_wrong_keys(self):
+        self.config.write_text('{"relay_url": "https://relay.example.dev"}')
+        result = self.run_script(keys="abc\n\naumd_short\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("沒有存入密鑰", result.stderr)
+        self.assertFalse(self.log.exists())
+        self.assertNotIn("token_sync", self.config.read_text())  # 沒有開啟上傳
 
     def test_requires_an_https_relay_url(self):
         self.config.write_text('{"relay_url": "http://relay.example.dev"}')
