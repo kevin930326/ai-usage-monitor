@@ -236,6 +236,7 @@ internal sealed class AppHost : IDisposable
             : NativeMethods.MonitorFromWindow(ring.Handle, NativeMethods.MONITOR_DEFAULTTONEAREST));
         if (monitor is not null)
         {
+            window.FitTo(monitor);
             // 移到 DPI 不同的螢幕時 WPF 會改大小：放兩次，第二次用新的大小
             for (var pass = 0; pass < 2; pass++)
             {

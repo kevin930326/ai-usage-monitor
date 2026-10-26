@@ -41,6 +41,7 @@ internal sealed class PanelWindow : Window
         Topmost = true;
         SizeToContent = SizeToContent.Height;
         Width = PanelContent.PanelWidth;
+        // 先以主螢幕為準；打開時 AppHost 依面板所在的螢幕重設（FitTo）
         MaxHeight = SystemParameters.WorkArea.Height - 40;
         WindowChrome.SetWindowChrome(this, new WindowChrome
         {
@@ -70,6 +71,13 @@ internal sealed class PanelWindow : Window
     {
         get => (double)GetValue(MarkerProperty);
         set => SetValue(MarkerProperty, value);
+    }
+
+    /// <summary>高度上限＝所在螢幕的工作區高度 − 40 DIP（超過時捲動，ADR-0015 第 6 節）</summary>
+    public void FitTo(MonitorInfo monitor)
+    {
+        MaxHeight = Math.Max(120, monitor.WorkArea.Height / monitor.Scale - 40);
+        UpdateLayout();
     }
 
     /// <summary>資料或時間改變（每分鐘）時換內容，不播動畫</summary>
