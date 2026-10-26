@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using AIUsageMonitor.Core;
 
 namespace AIUsageMonitor.Windows;
@@ -173,11 +174,19 @@ internal sealed class SettingsView : StackPanel
         };
         void Show() => value.Text = $"{Math.Round(slider.Value).ToString(CultureInfo.InvariantCulture)}%";
         Show();
+        // 拖動時每一格都會觸發：停下 300 ms 後才存檔與套用
+        var settle = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(300) };
+        settle.Tick += (_, _) =>
+        {
+            settle.Stop();
+            Changed();
+        };
         slider.ValueChanged += (_, _) =>
         {
             Show();
             settings.Opacity = slider.Value / 100;
-            Changed();
+            settle.Stop();
+            settle.Start();
         };
         panel.Children.Add(value);
         panel.Children.Add(slider);
