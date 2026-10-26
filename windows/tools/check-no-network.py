@@ -7,7 +7,7 @@
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
 - 傳入 Release 版的執行檔（--release <資料夾>）時，另外確認不含 Debug 專用的字串（示範資料、截圖參數）
 
-用法：python3 windows/tools/check-no-network.py [--release <publish 資料夾>]
+用法：python3 windows/tools/check-no-network.py [--release <publish 資料夾>] [--root <windows 資料夾>（測試用）]
 """
 from __future__ import annotations
 
@@ -16,12 +16,16 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = [ROOT / "src" / "AIUsageMonitor.Windows", ROOT / "src" / "UsageCore"]
 
 FORBIDDEN = [
+    # 網路：.NET、Win32（DLL 名稱不分大小寫）、WinRT、WPF 的瀏覽器與超連結、網址
     r"System\.Net\b", r"\bHttpClient\b", r"\bWebRequest\b", r"\bWebClient\b", r"\bSocket\b", r"\bTcpClient\b", r"\bUdpClient\b",
-    r"\bWebSocket", r"WinHttp", r"wininet", r"\bDns\b", r"URLDownloadToFile", r"\bNamedPipe",
-    r"\bCredRead", r"\bCredWrite", r"\bCredEnumerate", r"\bPasswordVault\b", r"\bProtectedData\b", r"advapi32",
+    r"\bWebSocket", r"(?i:winhttp)", r"(?i:wininet)", r"(?i:ws2_32)", r"(?i:urlmon)", r"\bDns\b", r"URLDownloadToFile", r"\bNamedPipe",
+    r"Windows\.Networking", r"Windows\.Web\b", r"\bWebBrowser\b", r"\bWebView", r"\bHyperlink\b", r"NavigateUri", r"\bUri\b",
+    r"(?i:https?://)",
+    # 認證與密鑰
+    r"\bCredRead", r"\bCredWrite", r"\bCredEnumerate", r"\bPasswordVault\b", r"\bProtectedData\b", r"(?i:advapi32)",
+    # 每一格都執行的回呼（動畫只用 DoubleAnimation）
     r"CompositionTarget\.Rendering",
 ]
 PROCESS = re.compile(r"\bProcess\.Start\b|\bProcessStartInfo\b|\bShellExecute")
@@ -30,20 +34,26 @@ PROCESS_ALLOWED = {"SystemServices.cs"}
 DEBUG_STRINGS = ["--render", "--demo", "aum-demo-", "DebugTools", "DemoJson"]
 
 
+# 字串（raw、verbatim、一般、字元）先配對、原樣保留，才不會把字串裡的 // 當成註解剝掉
+_TOKENS = re.compile(r'("""[\s\S]*?"""|@"(?:[^"]|"")*"|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\')|//[^\n]*|/\*[\s\S]*?\*/')
+
+
 def strip_comments(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
-    return re.sub(r"//[^\n]*", "", text)
+    return _TOKENS.sub(lambda m: m.group(1) or "", text)
 
 
-def check_sources() -> list[str]:
+def check_sources(root: Path = ROOT) -> list[str]:
     problems = []
-    for folder in SOURCES:
+    for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore"):
         for path in sorted(folder.rglob("*")):
             if path.suffix not in (".cs", ".xaml", ".csproj", ".props") or "obj" in path.parts or "bin" in path.parts:
                 continue
             raw = path.read_text(encoding="utf-8")
             code = strip_comments(raw) if path.suffix == ".cs" else raw
-            rel = path.relative_to(ROOT.parent)
+            if path.suffix == ".xaml":
+                # XML 命名空間是識別字、不會連線
+                code = re.sub(r'xmlns(?::\w+)?="[^"]*"', "", code)
+            rel = path.relative_to(root.parent)
             for pattern in FORBIDDEN:
                 for m in re.finditer(pattern, code):
                     problems.append(f"{rel}: 不允許 {m.group(0)}")
@@ -68,7 +78,8 @@ def check_release(folder: Path) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    problems = check_sources()
+    root = Path(argv[argv.index("--root") + 1]) if "--root" in argv else ROOT
+    problems = check_sources(root)
     if "--release" in argv:
         problems += check_release(Path(argv[argv.index("--release") + 1]))
     for p in problems:
