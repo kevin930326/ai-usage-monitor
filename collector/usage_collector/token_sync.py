@@ -308,7 +308,8 @@ def _same_machine(conn: sqlite3.Connection) -> bool:
 
 
 def _sync_upload(conn: sqlite3.Connection, url: str, now: int) -> None:
-    if history.meta(conn, "upload_status") == "revoked" or not _due(conn, "upload", UPLOAD_INTERVAL, now):
+    # 「密鑰失效」與「從別台搬來」只由設定腳本（reset）清除：之後讀不到指紋也不恢復上傳
+    if history.meta(conn, "upload_status") in ("revoked", "copied") or not _due(conn, "upload", UPLOAD_INTERVAL, now):
         return
     if not _same_machine(conn):
         return

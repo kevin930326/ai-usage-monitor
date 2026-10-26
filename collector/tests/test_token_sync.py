@@ -634,6 +634,23 @@ class CopiedDatabaseTest(TokenSyncTestCase):
         self.assertEqual(new.meta("upload_status"), "copied")
         self.assertEqual(new.total_by_device().get(pc.relay_id), 40)
 
+    def test_unreadable_fingerprint_does_not_lift_the_pause(self):
+        old = self.machine()
+        old.set_tokens(0, 100)
+        old.run(NOW)
+        new = self.copy_to_new_mac(old)
+        new.run(NOW + 3600)
+        self.assertEqual(new.meta("upload_status"), "copied")
+        new.fingerprint = None  # ioreg 逾時或讀取失敗
+        new.set_tokens(0, 250)
+        new.run(NOW + 2 * 86400)
+        self.assertEqual(new.meta("upload_status"), "copied")
+        self.assertEqual(self.relay.total(old.relay_id), 100)
+        new.fingerprint = "fp-new-mac"
+        new.reset()
+        new.run(NOW + 3 * 86400)
+        self.assertEqual(self.relay.total(old.relay_id), 250)
+
     def test_no_fingerprint_means_no_check(self):
         old = self.machine()
         old.fingerprint = None
