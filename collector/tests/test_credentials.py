@@ -91,6 +91,14 @@ class MainTests(unittest.TestCase):
             self.assertEqual(credentials.main(["has", credentials.READ_KEY]), 1)
         self.assertEqual(out.getvalue(), "")
 
+    def test_delete_failure_is_an_error(self):
+        # C-02：-NoReadKey 依結束碼判斷；刪不掉（拒絕存取等）時不能回報成功
+        err = io.StringIO()
+        failure = OSError("無法刪除認證管理員的 AIUsageMonitor/relay-read（錯誤 5）")
+        with mock.patch.object(credentials, "delete", side_effect=failure), redirect_stderr(err):
+            self.assertEqual(credentials.main(["delete", credentials.READ_KEY]), 1)
+        self.assertIn("錯誤 5", err.getvalue())
+
     def test_store_read_key(self):
         with mock.patch.object(credentials, "_prompt", return_value=READ + "\n"), \
                 mock.patch.object(credentials, "store") as store, redirect_stdout(io.StringIO()):
@@ -116,6 +124,7 @@ class WindowsCredentialManagerTests(unittest.TestCase):
             self.assertEqual(credentials.read(credentials.READ_KEY), READ)
             credentials.delete(credentials.READ_KEY)
             self.assertIsNone(credentials.read(credentials.READ_KEY))
+            credentials.delete(credentials.READ_KEY)  # 已經沒有這個項目：不是錯誤
 
 
 if __name__ == "__main__":

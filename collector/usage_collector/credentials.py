@@ -75,6 +75,7 @@ if sys.platform == "win32":
 
     CRED_TYPE_GENERIC = 1
     CRED_PERSIST_LOCAL_MACHINE = 2  # 只存在這台電腦、這個使用者（不隨漫遊設定檔同步）
+    ERROR_NOT_FOUND = 1168
 
     class _FILETIME(ctypes.Structure):
         _fields_ = [("dwLowDateTime", wintypes.DWORD), ("dwHighDateTime", wintypes.DWORD)]
@@ -133,7 +134,11 @@ if sys.platform == "win32":
             raise OSError(f"無法寫入認證管理員（錯誤 {ctypes.get_last_error()}）")
 
     def _delete_windows(name: str) -> None:
-        _advapi32.CredDeleteW(target(name), CRED_TYPE_GENERIC, 0)
+        # 沒有這個項目（ERROR_NOT_FOUND）視為已刪除；其他錯誤要讓呼叫端知道（-NoReadKey 才不會留下讀取密鑰，Codex C-02）
+        if not _advapi32.CredDeleteW(target(name), CRED_TYPE_GENERIC, 0):
+            error = ctypes.get_last_error()
+            if error != ERROR_NOT_FOUND:
+                raise OSError(f"無法刪除認證管理員的 {target(name)}（錯誤 {error}）")
 
 
 def read(name: str) -> str | None:
@@ -183,7 +188,11 @@ def main(argv: list[str]) -> int:
         print(f"用法：python -m usage_collector.credentials store|check|delete|has {'|'.join(NAMES)}", file=sys.stderr)
         return 2
     if argv[0] == "delete":
-        delete(argv[1])
+        try:
+            delete(argv[1])
+        except OSError as e:
+            print(str(e), file=sys.stderr)
+            return 1
         return 0
     if argv[0] == "has":
         return 0 if read(argv[1]) else 1
