@@ -105,7 +105,8 @@ Mac 收集器 (Python)     ──POST──▶ Cloudflare Worker (KV) ◀──G
 collector/   Mac 端用量收集器 (Python，只用標準函式庫)
 relay/       Cloudflare Worker 中繼 API
 apple/       UsageKit 共用套件、iOS App + Live Activity + 小工具、Mac 選單列 App、Apple Watch App
-fixtures/    三個元件測試共用的範例 usage.json
+windows/     Windows 桌面 App（WPF：懸浮圓環與面板）與 C# 的 UsageCore，見 windows/README.md
+fixtures/    三個元件測試共用的範例 usage.json；logic/ 是 Swift 與 C# 共用的計算 golden
 scripts/     verify-all.sh、setup-relay.sh、setup-iphone.sh、install-mac-app.sh、build-release.sh、截圖與效能量測工具
 docs/        需求、架構、ADR、手動測試清單、README 截圖
 ```
@@ -113,6 +114,7 @@ docs/        需求、架構、ADR、手動測試清單、README 截圖
 ```bash
 scripts/verify-all.sh              # 全部測試 + iOS／Mac／手錶的 Debug 與 Release 建置 + Release 不含 Debug 程式碼的檢查
 SKIP_LINUX=1 scripts/verify-all.sh # 沒有 Docker 時略過 Linux 的 UsageKit 測試
+SKIP_WINDOWS=1 scripts/verify-all.sh # 沒有 .NET SDK 時略過 Windows App 的測試與建置
 ```
 
 ## 安裝
@@ -216,6 +218,8 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 
 > 狀態：一行指令要等第一次發布後才能用，在那之前照 [docs/windows.md](docs/windows.md) 從原始碼安裝。
 
+**在 PC 上看額度（Windows 桌面 App）**：收集器以 `install-task.ps1 -WithQuota` 安裝後，從 repo 執行 `scripts\install-windows-app.ps1`，桌面上會有和 Mac 選單列相同的雙圓環（可拖動、貼邊、全螢幕時隱藏），點一下打開卡片式面板。App 只讀本機的 `usage.json`、不連網。細節與實機確認清單見 [windows/README.md](windows/README.md)（ADR-0015，目前是階段 1）。
+
 ### 解除安裝
 
 見 [docs/uninstall.md](docs/uninstall.md)：Mac App、內建或 launchd 收集器、iPhone、中繼、PC，各自怎麼移除、哪些資料會留下。
@@ -274,6 +278,8 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | iPhone | App 自己的 UserDefaults（`app.appearance`） | 外觀設定（不放 App Group、不同步到手錶） |
 | iPhone | Live Activity 與小工具 | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
 | Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults（`relayURL`）、App Group 的 `usage.json` | 讀取密鑰、中繼網址、最新快照（給複雜功能，**錶面上隨時看得到**百分比） |
+| Windows App | `%LOCALAPPDATA%\AIUsageMonitor\windows-app.json`、`logs\windows-app.log` | 顯示方式、圓環的額度／大小／透明度與每個螢幕的位置、外觀、「立即更新」觸發收集器的時間；錯誤的類型與位置（不含用量數字） |
+| Windows App | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `AIUsageMonitor` | 開機自動啟動（安裝時預設開；設定關掉即移除） |
 
 iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給開著的手錶 App，系統不保存訊息（FR-30）。寫入密鑰只存在 Mac 的 Keychain 與 Cloudflare，不會傳到 iPhone 或手錶。
 
@@ -293,6 +299,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | `setup-relay.sh`（Mac） | Cloudflare（以 wrangler） | 你登入 Cloudflare 的 wrangler 帳號 | 建 KV、部署 Worker、設定兩把密鑰；確認網址回應 | 只在你執行時 |
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘） |
 | Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
+| Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行 | — | — | 只在你按下時 |
 | Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
 上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏，以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。

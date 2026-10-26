@@ -84,6 +84,8 @@ cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新�
 
 移除工作排程 `\AIUsageMonitor\Collector` 與 `%LOCALAPPDATA%\AIUsageMonitor\app`；`%LOCALAPPDATA%\AIUsageMonitor` 裡的 history.sqlite3、config.json、collector.log 保留，不需要時自行刪除。從 repo 安裝的用 `collector\windows\uninstall-task.ps1`（見 [windows.md](windows.md#移除)）。用 winget 裝的 Python 不會被移除（`winget uninstall Python.Python.3.13`）。
 
+Windows 桌面 App（`scripts\install-windows-app.ps1` 安裝的）：在 repo 執行 `scripts\install-windows-app.ps1 -Uninstall`，結束 App、移除開機自動啟動（`HKCU\…\Run` 的 `AIUsageMonitor`）與 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`；設定 `windows-app.json` 保留。用 winget 裝的 .NET SDK 不會被移除（`winget uninstall Microsoft.DotNet.SDK.10`）。
+
 ## 會留下什麼
 
 | 位置 | 內容 | 誰會清 |
@@ -93,6 +95,6 @@ cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新�
 | `~/Library/Caches/AIUsageMonitor` | iPhone App 的建置產物 | 自行刪除 |
 | Keychain `AIUsageMonitor-relay-write`、`AIUsageMonitor-relay-read` | 中繼的寫入與讀取密鑰 | 見「中繼」 |
 | App 的設定（UserDefaults） | 面板卡片順序、外觀等 | `defaults delete io.github.kevin930326.AIUsageMenuBar` |
-| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3（含 `backups\`）、config.json、collector.log | 自行刪除 |
+| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3（含 `backups\`）、config.json、collector.log、Windows App 的 windows-app.json 與 `logs\windows-app.log` | 自行刪除 |
 
 收集器從不修改 Claude Code、Codex CLI 的設定與登入資訊；移除本專案不影響它們。
