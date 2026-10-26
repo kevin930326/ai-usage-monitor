@@ -14,7 +14,7 @@
 # - SOURCES.tsv 第 5 欄「後製」（可省略）：crop=<y>:<高>（裁切，原圖像素）、frame=<圓角半徑>（圓角與細邊框，縮放後的像素），
 #   由 scripts/readme-image-post.swift 處理，順序固定為裁切 → 縮放（第 4 欄）→ 加框。
 # - 畫面改變並以 scripts/update-snapshots.sh 更新基準後執行；scripts/check-readme-images.py 會提醒比基準舊的截圖。
-# 執行後逐張檢查 git diff 中的圖再提交。
+# 執行後逐張檢查 git diff 中的圖，連同 docs/images/BASELINES.tsv 一起提交。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # shellcheck source=scripts/ios-render-launch.sh
@@ -84,6 +84,8 @@ place() {  # place <前綴> <資料夾>
     [ "${post:--}" = - ] || ops="$ops $post"
     # shellcheck disable=SC2086  # ops 是以空白分隔的參數（crop=…、width=…、frame=…，本身不含空白）
     if [ -n "$ops" ]; then "$POST" "$IMAGES/$image" $ops; fi
+    # 記下依哪一版基準產生（docs/images/BASELINES.tsv；check-readme-images.py 比對內容，圖片沒變也不再提醒）
+    README_IMAGES_ROOT=$ROOT python3 "$ROOT/scripts/check-readme-images.py" --record "$image"
     echo "  $image"
   done <"$SOURCES"
   [ "$missing" = 0 ] || exit 2

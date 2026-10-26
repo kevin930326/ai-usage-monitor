@@ -54,7 +54,7 @@ run collector-lint   scripts/lint-collector.sh
 run script-tests     python3 -m unittest discover -s scripts/tests -v
 # 示範用環境變數（"AUM_…"）只能在 #if DEBUG 裡：Swift 的短字串直接編進指令，下面 strings 的 Release 檢查看不到
 run debug-env-source python3 scripts/check-debug-env.py
-# README 的截圖齊全；比對應的截圖基準舊時只提醒（scripts/update-readme-images.sh 更新）
+# README 的截圖齊全；不是依目前的截圖基準產生時只提醒（scripts/update-readme-images.sh 更新）
 run readme-images    python3 scripts/check-readme-images.py
 run relay-tests      bash -c "cd relay && ([ -d node_modules ] || npm ci --no-audit --no-fund) && npm test"
 run usagekit-macos   bash -c "cd apple/UsageKit && swift test"

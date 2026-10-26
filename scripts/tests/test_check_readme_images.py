@@ -15,29 +15,16 @@ class CheckReadmeImagesTests(unittest.TestCase):
     def setUp(self):
         self.repo = Path(tempfile.mkdtemp(prefix="aum-readme-images-"))
         self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(self.repo)]))
-        self.git("init", "-q")
-        self.git("config", "user.email", "test@example.invalid")
-        self.git("config", "user.name", "test")
         self.write("README.md", '<img src="docs/images/panel.png">\n')
         self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\tapple/Snapshots/mac/panel-light.png\t-\n")
         self.write("docs/images/panel.png", "image v1")
         self.write("apple/Snapshots/mac/panel-light.png", "baseline v1")
-        self.commit("first", when=1_000_000)
-
-    def git(self, *args, when=None):
-        env = dict(os.environ)
-        if when is not None:
-            env["GIT_AUTHOR_DATE"] = env["GIT_COMMITTER_DATE"] = f"@{when} +0000"
-        return subprocess.run(["git", "-C", str(self.repo), *args], capture_output=True, text=True, check=True, env=env)
+        self.assertEqual(self.run_check("--record", "panel.png").returncode, 0)
 
     def write(self, rel, body):
         path = self.repo / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(body, encoding="utf-8")
-
-    def commit(self, message, when):
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", message, when=when)
 
     def run_check(self, *args, env=None):
         environ = {k: v for k, v in os.environ.items() if k != "GITHUB_ACTIONS"}
@@ -49,27 +36,49 @@ class CheckReadmeImagesTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("齊全", r.stdout)
 
-    def test_baseline_committed_later_warns(self):
+    def test_changed_baseline_warns(self):
         self.write("apple/Snapshots/mac/panel-light.png", "baseline v2")
-        self.commit("update baseline", when=2_000_000)
         r = self.run_check()
         self.assertEqual(r.returncode, 0)
-        self.assertIn("docs/images/panel.png 比截圖基準 apple/Snapshots/mac/panel-light.png 舊", r.stdout)
+        self.assertIn("docs/images/panel.png 不是依目前的截圖基準 apple/Snapshots/mac/panel-light.png 產生的", r.stdout)
         self.assertIn("scripts/update-readme-images.sh", r.stdout)
         self.assertEqual(self.run_check("--strict").returncode, 1)
 
-    def test_image_updated_after_baseline_passes(self):
+    def test_regenerated_image_that_did_not_change_stops_warning(self):
+        # 基準改了別的區域，重新產生的 README 圖一模一樣：只有記錄更新，提醒就消失（以前比提交時間時消不掉）
         self.write("apple/Snapshots/mac/panel-light.png", "baseline v2")
-        self.commit("update baseline", when=2_000_000)
-        self.write("docs/images/panel.png", "image v2")
-        self.commit("update image", when=3_000_000)
-        self.assertNotIn("提醒：", self.run_check().stdout)
+        self.assertEqual(self.run_check("--record", "panel.png").returncode, 0)
+        self.assertEqual((self.repo / "docs/images/panel.png").read_text(), "image v1")
+        r = self.run_check("--strict")
+        self.assertEqual(r.returncode, 0, r.stdout)
 
-    def test_uncommitted_baseline_change_warns_until_image_changes_too(self):
+    def test_baseline_changed_back_passes_again(self):
         self.write("apple/Snapshots/mac/panel-light.png", "baseline v2")
         self.assertIn("提醒：", self.run_check().stdout)
-        self.write("docs/images/panel.png", "image v2")
+        self.write("apple/Snapshots/mac/panel-light.png", "baseline v1")
         self.assertNotIn("提醒：", self.run_check().stdout)
+
+    def test_missing_record_warns(self):
+        (self.repo / "docs/images/BASELINES.tsv").unlink()
+        self.assertIn("docs/images/panel.png 不是依目前的截圖基準", self.run_check().stdout)
+
+    def test_record_for_a_different_baseline_warns(self):
+        self.write("apple/Snapshots/mac/panel-dark.png", "baseline v1")
+        self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-dark.png\tapple/Snapshots/mac/panel-dark.png\t-\n")
+        self.assertIn("提醒：", self.run_check().stdout)
+
+    def test_record_keeps_other_images_and_rejects_unknown_ones(self):
+        self.write("docs/images/other.png", "x")
+        self.write("apple/Snapshots/mac/other.png", "other baseline")
+        self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\tapple/Snapshots/mac/panel-light.png\t-\n"
+                   "other.png\tmac:other.png\tapple/Snapshots/mac/other.png\t-\n")
+        self.assertEqual(self.run_check("--record", "other.png").returncode, 0)
+        records = (self.repo / "docs/images/BASELINES.tsv").read_text(encoding="utf-8")
+        self.assertIn("panel.png\tapple/Snapshots/mac/panel-light.png\t", records)
+        self.assertIn("other.png\tapple/Snapshots/mac/other.png\t", records)
+        r = self.run_check("--record", "nope.png")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("nope.png 沒有列在", r.stdout)
 
     def test_missing_image_fails(self):
         self.write("README.md", '<img src="docs/images/panel.png"> <img src="docs/images/gone.png">\n')
@@ -100,13 +109,11 @@ class CheckReadmeImagesTests(unittest.TestCase):
 
     def test_image_without_baseline_is_not_compared(self):
         self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tios-screen:light\t-\t520\n")
-        self.commit("no baseline", when=2_000_000)
         r = self.run_check("--strict")
         self.assertEqual(r.returncode, 0, r.stdout)
 
     def test_post_processing_column_is_accepted(self):
         self.write("docs/images/SOURCES.tsv", HEADER + "panel.png\tmac:panel-light.png\tapple/Snapshots/mac/panel-light.png\t-\tcrop=0:1186 frame=24\n")
-        self.commit("post column", when=2_000_000)
         r = self.run_check("--strict")
         self.assertEqual(r.returncode, 0, r.stdout)
 
@@ -128,34 +135,6 @@ class CheckReadmeImagesTests(unittest.TestCase):
         self.write("apple/Snapshots/mac/panel-light.png", "baseline v2")
         r = self.run_check(env={"GITHUB_ACTIONS": "true"})
         self.assertIn("::warning::docs/images/panel.png", r.stdout)
-
-    def test_shallow_clone_says_history_is_missing(self):
-        clone = Path(tempfile.mkdtemp(prefix="aum-readme-shallow-"))
-        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(clone)]))
-        self.write("apple/Snapshots/mac/panel-light.png", "baseline v2")
-        self.commit("update baseline", when=2_000_000)
-        subprocess.run(["git", "clone", "-q", "--depth", "1", f"file://{self.repo}", str(clone / "r")], check=True)
-        r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True,
-                           env={**os.environ, "README_IMAGES_ROOT": str(clone / "r")})
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("fetch-depth: 0", r.stdout)
-
-    def test_git_failure_is_not_reported_as_up_to_date(self):
-        # 不是 git 資料夾：所有 git 查詢都失敗
-        plain = Path(tempfile.mkdtemp(prefix="aum-readme-nogit-"))
-        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(plain)]))
-        for rel in ("README.md", "docs/images/SOURCES.tsv", "docs/images/panel.png", "apple/Snapshots/mac/panel-light.png"):
-            (plain / rel).parent.mkdir(parents=True, exist_ok=True)
-            (plain / rel).write_bytes((self.repo / rel).read_bytes())
-        env = {k: v for k, v in os.environ.items() if k != "GITHUB_ACTIONS"}
-        env.update({"README_IMAGES_ROOT": str(plain), "GIT_CEILING_DIRECTORIES": str(plain.parent)})
-        r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 0)
-        self.assertIn("無法查詢提交歷史", r.stdout)
-        self.assertNotIn("齊全", r.stdout)
-        self.assertNotIn(str(plain), r.stdout)
-        r = subprocess.run([sys.executable, str(SCRIPT), "--strict"], capture_output=True, text=True, env=env)
-        self.assertEqual(r.returncode, 1)
 
     def test_repository_is_consistent(self):
         r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True,
