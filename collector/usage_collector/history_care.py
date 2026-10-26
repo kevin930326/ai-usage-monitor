@@ -17,6 +17,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +34,8 @@ KEEP_BACKUPS = 2
 BACKUP_DIR = "backups"
 FAILURES_FILE = "history-failures.json"
 RECOVERED_FILE = "history-recovered.json"
+LOCK_FILE = "history-recover.lock"
+STALE_LOCK = 600  # 秒：被強制結束留下的鎖
 CORRUPT_PREFIX = "history.corrupt-"
 CHECK_TIMEOUT = 5  # 秒：與 history.BUSY_TIMEOUT_MS 相同
 
@@ -81,9 +86,13 @@ def failed(path: Path, now: int) -> bool:
         _write_json(counter, {"count": count, "since": state.get("since", now)})
     except OSError:
         pass  # 記不下來就照常（這一輪不算）
-    if count % RECOVER_AFTER or check(path) != "corrupt":
+    if count % RECOVER_AFTER:
         return False
-    kept = quarantine(path, now)
+    # 兩個收集器同時走到這裡時只有一個檢查與改名；另一個拿到鎖時檔案已經換成新的，quick_check 通過就不動（審查 C-01）
+    with _recovery_lock(path.parent) as locked:
+        if not locked or check(path) != "corrupt":
+            return False
+        kept = quarantine(path, now)
     if kept is None:
         return False
     succeeded(path)
@@ -114,6 +123,38 @@ def check(path: Path) -> str:
         conn.close()
 
 
+@contextmanager
+def _recovery_lock(directory: Path) -> Iterator[bool]:
+    """跨程序互斥（`O_EXCL` 建立鎖檔）；另一個程序正拿著時回傳 False，這一輪不復原。"""
+    lock = directory / LOCK_FILE
+    for _ in range(2):
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime < STALE_LOCK:
+                    yield False
+                    return
+                _remove(lock)  # 過期：上一個程序被強制結束
+            except OSError:
+                yield False
+                return
+        except OSError:
+            yield False
+            return
+    else:
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        try:
+            _remove(lock)
+        except OSError:
+            pass
+
+
 def _intact(conn: sqlite3.Connection) -> bool:
     return conn.execute("PRAGMA quick_check(1)").fetchall() == [("ok",)]
 
@@ -122,6 +163,10 @@ def quarantine(path: Path, now: int) -> str | None:
     """把壞掉的資料庫連同 -wal、-shm 改名保留；回傳新檔名，改不了時回傳 None。"""
     stamp = datetime.fromtimestamp(now).strftime("%Y%m%d-%H%M%S")
     target = path.with_name(f"{CORRUPT_PREFIX}{stamp}.sqlite3")
+    n = 1
+    while any(Path(f"{target}{s}").exists() for s in ("", "-wal", "-shm")):  # 不覆寫已保留的舊檔
+        n += 1
+        target = path.with_name(f"{CORRUPT_PREFIX}{stamp}-{n}.sqlite3")
     try:
         os.replace(path, target)
     except OSError as e:

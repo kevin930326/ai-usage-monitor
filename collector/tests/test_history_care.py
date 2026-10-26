@@ -119,6 +119,39 @@ class RecoveryTest(CareTestCase):
             history_care.quarantine(self.path, T0)
         self.assertFalse(Path(f"{self.path}-wal").exists())  # 留在原位會被套用到新檔上
 
+    def test_never_overwrites_a_kept_file_from_the_same_second(self):
+        for content in (b"first", b"second"):
+            self.path.write_bytes(content)
+            history_care.quarantine(self.path, T0)
+        stamp = datetime.fromtimestamp(T0).strftime("%Y%m%d-%H%M%S")
+        self.assertEqual((self.dir / f"history.corrupt-{stamp}.sqlite3").read_bytes(), b"first")
+        self.assertEqual((self.dir / f"history.corrupt-{stamp}-2.sqlite3").read_bytes(), b"second")
+
+    def test_only_one_of_two_collectors_recovers(self):
+        """另一個收集器已經改名並建立新檔：這一個拿到鎖後重新檢查，新檔沒壞就不動（審查 C-01）"""
+        self.path.write_bytes(b"garbage" * 1000)
+        self.record(history_care.RECOVER_AFTER - 1)
+        counter = json.loads((self.dir / history_care.FAILURES_FILE).read_text())
+        self.record()  # 程序 A：改名保留、建立新檔
+        (self.dir / history_care.FAILURES_FILE).write_text(json.dumps(counter))  # 程序 B 讀到的是同一個計數
+        with redirect_stderr(self.err):
+            self.assertFalse(history_care.failed(self.path, T0))
+        self.assertEqual(len(self.kept()), 1)
+        self.assertEqual(self.count("collector_runs"), 1)  # 新檔還在原位
+
+    def test_a_held_lock_skips_and_a_stale_one_is_taken_over(self):
+        self.path.write_bytes(b"garbage" * 1000)
+        lock = self.dir / history_care.LOCK_FILE
+        lock.write_text("")
+        os.utime(lock, (T0, T0))  # self.record 把時間固定在 T0
+        self.record(history_care.RECOVER_AFTER)
+        self.assertEqual(self.kept(), [])  # 另一個程序正在復原
+        old = T0 - history_care.STALE_LOCK - 1
+        os.utime(lock, (old, old))
+        self.record(history_care.RECOVER_AFTER)
+        self.assertEqual(len(self.kept()), 1)
+        self.assertFalse(lock.exists())
+
     def test_a_locked_but_healthy_database_is_never_renamed(self):
         history.record(snapshot(T0), self.path)
         with mock.patch.object(history, "record", side_effect=sqlite3.OperationalError("database is locked")):
