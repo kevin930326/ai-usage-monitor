@@ -85,10 +85,15 @@ internal static class DebugTools
 
     private const double Scale = 2;
 
+    /// <summary>截圖上顯示的資料夾（設定、沒有資料的面板）：固定的示範路徑，不帶出這台電腦的使用者名稱或真正的資料位置</summary>
+    private const string DemoHome = @"C:\Users\demo\AppData\Local\AIUsageMonitor";
+
     private static int Render(string output, DateTimeOffset now)
     {
         Directory.CreateDirectory(output);
         Clock.Fixed = now;
+        // 只在這個程序裡；截圖不讀寫檔案（也讓開機自動啟動、觸發收集器不動作）
+        Environment.SetEnvironmentVariable("AI_USAGE_MONITOR_HOME", DemoHome);
         var failures = new List<string>();
         foreach (var dark in new[] { false, true })
         {
