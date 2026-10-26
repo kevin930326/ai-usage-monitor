@@ -6,7 +6,7 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 
 | 方法 | 路徑 | 驗證 | 回應 |
 |---|---|---|---|
-| `POST` | `/usage` | `Authorization: Bearer <WRITE_TOKEN>` | `204`；格式錯誤 `400`／`422`，超過 16 KB `413` |
+| `POST` | `/usage` | `Authorization: Bearer <WRITE_TOKEN>` | `204`；格式錯誤 `400`／`422`，超過 64 KB `413` |
 | `GET` | `/usage` | `Authorization: Bearer <READ_TOKEN>` | `200` 最新一筆 JSON；尚無資料 `404` |
 | `POST` | `/pair` | `Authorization: Bearer <WRITE_TOKEN>` | `200` `{"code", "expires_at"}`：iPhone 配對用的一次性短碼（[ADR-0012](../docs/adr/0012-iphone-pairing.md)） |
 | `POST` | `/pair/claim` | 不需要；內容 `{"code": "XXXX-XXXX"}` | `200` `{"read_token"}`；錯誤、到期、沒有短碼一律 `403` |
