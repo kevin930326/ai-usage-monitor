@@ -15,6 +15,8 @@ struct StatsWindowView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var data: TokenStatsData?
     @State private var loading = false
+    /// 讀過一次、讀不到（資料庫打不開）。還沒讀（視窗剛打開、被擋住或 App 不在前景）時顯示「正在讀取…」，不是錯誤
+    @State private var failed = false
     @State private var scope: TokenScope = .all
     @State private var motion = PanelMotion.settled
     @State private var visible = false
@@ -63,10 +65,10 @@ struct StatsWindowView: View {
                     if raw.devices.uploadCopied { UploadCopiedNotice() }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if loading {
-                message("正在讀取…")
-            } else {
+            } else if failed {
                 message("無法讀取 Token 統計（history.sqlite3）")
+            } else {
+                message("正在讀取…")
             }
         }
         .frame(minWidth: 720, minHeight: 520)
@@ -102,6 +104,7 @@ struct StatsWindowView: View {
             loading = false
             guard visible else { return }
             data = loaded
+            failed = loaded == nil
             replayCharts()
         }
     }
@@ -124,6 +127,7 @@ struct StatsWindowView: View {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             data = nil
+            failed = false
             motion = .settled
         }
     }
