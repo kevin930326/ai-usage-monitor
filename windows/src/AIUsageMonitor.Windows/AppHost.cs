@@ -109,6 +109,7 @@ internal sealed class AppHost : IDisposable
     private void ApplyLook()
     {
         Refresh();
+        settingsWindow?.RefreshLook();
         // 面板的材質與深淺色在建立時決定：下次打開時套用
         panel?.SafeClose();
     }

@@ -16,8 +16,11 @@ namespace AIUsageMonitor.Windows;
 /// </summary>
 internal sealed class SettingsWindow : Window
 {
+    private readonly AppSettings settings;
+
     public SettingsWindow(AppSettings settings, UsageSnapshot? snapshot, DateTimeOffset now, Action changed)
     {
+        this.settings = settings;
         Title = "AI Usage Monitor 設定";
         Width = 440;
         SizeToContent = SizeToContent.Height;
@@ -30,6 +33,9 @@ internal sealed class SettingsWindow : Window
             changed();
         });
     }
+
+    /// <summary>系統的深淺色或透明效果改變時（AppHost 收到 ImmersiveColorSet）：重新套用主題與背景</summary>
+    public void RefreshLook() => ApplyTheme(settings.Appearance);
 
     private void ApplyTheme(Appearance appearance)
     {
