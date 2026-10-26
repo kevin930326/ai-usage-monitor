@@ -293,6 +293,13 @@ enum DebugTools {
             write(statsCard(suspectEmpty), scheme: scheme, to: dir.appendingPathComponent("stats-format-suspect-empty-\(n).png"))
             write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: suspectEmpty, fixedMotion: .settled, scrolls: false)
                 .frame(width: 860, height: 520), scheme: scheme, to: dir.appendingPathComponent("stats-window-format-suspect-empty-\(n).png"))
+            // 從別台搬來（ADR-0014 D-2）：沒有統計、首次掃描時也看得到暫停上傳的提示
+            for (name, base) in [("empty", none), ("scanning", fresh)] {
+                var copied = base
+                copied.devices.uploadCopied = true
+                write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: copied, fixedMotion: .settled, scrolls: false)
+                    .frame(width: 860, height: 520), scheme: scheme, to: dir.appendingPathComponent("stats-window-copied-\(name)-\(n).png"))
+            }
             write(statsCard(data, status: .olderSchema(1)), scheme: scheme, to: dir.appendingPathComponent("stats-older-schema-\(n).png"))
             if let full = HistoryStore.shared.loadFullTokenStats() {
                 write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: full, fixedMotion: .settled, scrolls: false).frame(width: 860),
