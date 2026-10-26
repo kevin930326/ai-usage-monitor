@@ -42,54 +42,61 @@ $usage = @"
     {"id": "weekly", "label": "每週", "used_pct": 22, "resets_at": "$(Iso 130)"}]}}}
 "@
 [IO.File]::WriteAllText((Join-Path $home2 'usage.json'), $usage, (New-Object Text.UTF8Encoding($false)))
-$env:AI_USAGE_MONITOR_HOME = $home2
 $cores = [Environment]::ProcessorCount
 
-$app = Start-Process -FilePath $Exe -PassThru
-Start-Sleep -Seconds 10
-if ($app.HasExited) { throw "App exited early (code $($app.ExitCode))" }
+# 環境變數只在量測期間指到暫存資料夾，結束（含失敗）時還原，App 結束、暫存資料夾刪除
+$previousHome = $env:AI_USAGE_MONITOR_HOME
+$app = $null
+try {
+    $env:AI_USAGE_MONITOR_HOME = $home2
+    $app = Start-Process -FilePath $Exe -PassThru
+    Start-Sleep -Seconds 10
+    if ($app.HasExited) { throw "App exited early (code $($app.ExitCode))" }
 
-function Sample([double]$seconds) {
-    $app.Refresh()
-    $cpu0 = $app.TotalProcessorTime.TotalSeconds
-    $t0 = [Diagnostics.Stopwatch]::StartNew()
-    Start-Sleep -Milliseconds ([int]($seconds * 1000))
-    $app.Refresh()
-    $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
-    [pscustomobject]@{ Cpu = [Math]::Round($cpu, 3); WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1); PrivateMB = [Math]::Round($app.PrivateMemorySize64 / 1MB, 1) }
-}
-function Send([string]$arg) {
-    $p = Start-Process -FilePath $Exe -ArgumentList $arg -PassThru -Wait
-}
-function PeakDuring([double]$seconds) {
-    $max = 0
-    $n = [int]($seconds / 0.25)
-    for ($i = 0; $i -lt $n; $i++) { $s = Sample 0.25; if ($s.Cpu -gt $max) { $max = $s.Cpu } }
-    $max
-}
+    function Sample([double]$seconds) {
+        $app.Refresh()
+        $cpu0 = $app.TotalProcessorTime.TotalSeconds
+        $t0 = [Diagnostics.Stopwatch]::StartNew()
+        Start-Sleep -Milliseconds ([int]($seconds * 1000))
+        $app.Refresh()
+        $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
+        [pscustomobject]@{ Cpu = [Math]::Round($cpu, 3); WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1); PrivateMB = [Math]::Round($app.PrivateMemorySize64 / 1MB, 1) }
+    }
+    function Send([string]$arg) {
+        Start-Process -FilePath $Exe -ArgumentList $arg -Wait | Out-Null
+    }
+    function PeakDuring([double]$seconds) {
+        $max = 0
+        $n = [int]($seconds / 0.25)
+        for ($i = 0; $i -lt $n; $i++) { $s = Sample 0.25; if ($s.Cpu -gt $max) { $max = $s.Cpu } }
+        $max
+    }
 
-$idle = Sample 30
-Send '--show-panel'
-$peak = PeakDuring 2
-$open = Sample 10
-Send '--hide-panel'
-Start-Sleep -Seconds 60
-$after = Sample 30
-$memFirst = $after.WorkingSetMB
-for ($i = 0; $i -lt 5; $i++) {
+    $idle = Sample 30
     Send '--show-panel'
-    Start-Sleep -Seconds 2
+    $peak = PeakDuring 2
+    $open = Sample 10
     Send '--hide-panel'
-    Start-Sleep -Seconds 2
-}
-Start-Sleep -Seconds 20
-$last = Sample 10
-$memGrowth = [Math]::Round($last.WorkingSetMB - $memFirst, 1)
+    Start-Sleep -Seconds 60
+    $after = Sample 30
+    $memFirst = $after.WorkingSetMB
+    for ($i = 0; $i -lt 5; $i++) {
+        Send '--show-panel'
+        Start-Sleep -Seconds 2
+        Send '--hide-panel'
+        Start-Sleep -Seconds 2
+    }
+    Start-Sleep -Seconds 20
+    $last = Sample 10
+    $memGrowth = [Math]::Round($last.WorkingSetMB - $memFirst, 1)
 
-Send '--quit'
-Start-Sleep -Seconds 3
-if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
-Remove-Item -Recurse -Force $home2 -ErrorAction SilentlyContinue
+    Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
+    Start-Sleep -Seconds 3
+} finally {
+    if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+    $env:AI_USAGE_MONITOR_HOME = $previousHome
+    Remove-Item -Recurse -Force $home2 -ErrorAction SilentlyContinue
+}
 
 $limits = if ($Ci) { 0.3, 4, 0.6 } else { 0.1, 2, 0.3 }
 $rows = @(
