@@ -9,6 +9,8 @@ internal static class NativeMethods
 {
     // ---------- 視窗樣式 ----------
     public const int GWL_EXSTYLE = -20;
+    public const int GWL_STYLE = -16;
+    public const long WS_CAPTION = 0x00C00000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_NOACTIVATE = 0x08000000;
     public const int WS_EX_TOPMOST = 0x00000008;
@@ -34,6 +36,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsZoomed(IntPtr hWnd);
+
+    /// <summary>有標題列的最大化視窗</summary>
+    public static bool IsMaximizedWithCaption(IntPtr hWnd) =>
+        IsZoomed(hWnd) && ((long)GetWindowLongPtr(hWnd, GWL_STYLE) & WS_CAPTION) == WS_CAPTION;
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
     public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);

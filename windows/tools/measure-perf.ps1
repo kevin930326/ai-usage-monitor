@@ -64,7 +64,8 @@ $previousHome = $env:AI_USAGE_MONITOR_HOME
 $app = $null
 try {
     $env:AI_USAGE_MONITOR_HOME = $home2
-    $app = Start-Process -FilePath $Exe -PassThru
+    # --isolated：不改開機自動啟動、不觸發收集器
+    $app = Start-Process -FilePath $Exe -ArgumentList '--isolated' -PassThru
     Start-Sleep -Seconds 10
     if ($app.HasExited) { throw "App exited early (code $($app.ExitCode))" }
 

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using AIUsageMonitor.Core;
 
 namespace AIUsageMonitor.Windows;
@@ -15,8 +16,11 @@ namespace AIUsageMonitor.Windows;
 /// </summary>
 internal sealed class SettingsWindow : Window
 {
+    private readonly AppSettings settings;
+
     public SettingsWindow(AppSettings settings, UsageSnapshot? snapshot, DateTimeOffset now, Action changed)
     {
+        this.settings = settings;
         Title = "AI Usage Monitor 設定";
         Width = 440;
         SizeToContent = SizeToContent.Height;
@@ -30,13 +34,21 @@ internal sealed class SettingsWindow : Window
         });
     }
 
-    private void ApplyTheme(Appearance appearance) =>
+    /// <summary>系統的深淺色或透明效果改變時（AppHost 收到 ImmersiveColorSet）：重新套用主題與背景</summary>
+    public void RefreshLook() => ApplyTheme(settings.Appearance);
+
+    private void ApplyTheme(Appearance appearance)
+    {
         ThemeMode = appearance switch
         {
             Appearance.Light => ThemeMode.Light,
             Appearance.Dark => ThemeMode.Dark,
             _ => SystemLook.ForcedDark is { } dark ? (dark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System,
         };
+        // Fluent 主題的視窗背景是透明的（給 Mica）：Windows 10 或透明效果關閉時改用和面板相同的純色
+        if (SystemLook.SupportsBackdrop && SystemLook.TransparencyEnabled) ClearValue(BackgroundProperty);
+        else Background = new Palette(SystemLook.IsDark(appearance)).Solid;
+    }
 }
 
 /// <summary>設定的內容（截圖也用這個）</summary>
@@ -168,11 +180,19 @@ internal sealed class SettingsView : StackPanel
         };
         void Show() => value.Text = $"{Math.Round(slider.Value).ToString(CultureInfo.InvariantCulture)}%";
         Show();
+        // 拖動時每一格都會觸發：停下 300 ms 後才存檔與套用
+        var settle = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(300) };
+        settle.Tick += (_, _) =>
+        {
+            settle.Stop();
+            Changed();
+        };
         slider.ValueChanged += (_, _) =>
         {
             Show();
             settings.Opacity = slider.Value / 100;
-            Changed();
+            settle.Stop();
+            settle.Start();
         };
         panel.Children.Add(value);
         panel.Children.Add(slider);

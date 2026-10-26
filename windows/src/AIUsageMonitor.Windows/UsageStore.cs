@@ -9,8 +9,6 @@ namespace AIUsageMonitor.Windows;
 /// <summary>收集器與 App 共用的資料夾（收集器的 paths.py）：AI_USAGE_MONITOR_HOME 有值用它，否則 %LOCALAPPDATA%\AIUsageMonitor。</summary>
 internal static class DataPaths
 {
-    public static bool UsesCustomHome => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AI_USAGE_MONITOR_HOME"));
-
     public static string Home =>
         Environment.GetEnvironmentVariable("AI_USAGE_MONITOR_HOME") is { Length: > 0 } custom
             ? custom

@@ -62,7 +62,13 @@ internal sealed class AppHost : IDisposable
         };
         tray.DisplayChanged += () => dispatcher.BeginInvoke(PlaceRing, DispatcherPriority.Background);
         fullscreen.Changed += ApplyVisibility;
-        fullscreen.ForegroundChanged += () => ring?.BringToTop();
+        fullscreen.ForegroundChanged += () =>
+        {
+            ring?.BringToTop();
+            // 別的程序成為前景（只會收到其他程序的事件）：面板若沒能成為作用中視窗就收不到 Deactivated，在這裡收起
+            if (panel is { IsActive: false }) panel.SafeClose();
+        };
+        fullscreen.Start();
         store.Start();
         ApplyDisplayMode();
         ScheduleMinute();
@@ -103,6 +109,7 @@ internal sealed class AppHost : IDisposable
     private void ApplyLook()
     {
         Refresh();
+        settingsWindow?.RefreshLook();
         // 面板的材質與深淺色在建立時決定：下次打開時套用
         panel?.SafeClose();
     }
@@ -123,14 +130,13 @@ internal sealed class AppHost : IDisposable
             ring.SetContent(Content, AppPalette);
             _ = ring.Handle;
             PlaceRing();
-            fullscreen.Start();
         }
         else if (!settings.ShowsRing && ring is not null)
         {
-            fullscreen.Stop();
             ring.Close();
             ring = null;
         }
+        fullscreen.Enabled = ring is not null && settings.HideInFullscreen;
         if (ring is not null)
         {
             ring.Opacity = settings.Opacity;
@@ -139,8 +145,6 @@ internal sealed class AppHost : IDisposable
                 ring.SetSize(AppSettings.RingDip(settings.RingSize));
                 PlaceRing();
             }
-            if (settings.HideInFullscreen) fullscreen.Start();
-            else fullscreen.Stop();
         }
         if (settings.ShowsTray) tray.Show(Content, TrayPalette);
         else tray.Hide();
@@ -287,17 +291,11 @@ internal sealed class AppHost : IDisposable
             Add("顯示圓環", () => SetDisplayMode(DisplayMode.Both));
         }
         Add("結束", Quit);
-        if (fromTray)
-        {
-            // 選單要能在點其他地方時收起：先讓隱藏的系統匣視窗成為前景
-            NativeMethods.SetForegroundWindow(tray.Handle);
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        }
-        else
-        {
-            menu.PlacementTarget = ring;
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        }
+        // 選單要能在點其他地方時收起、用鍵盤操作：先讓隱藏的系統匣視窗成為前景（圓環不搶焦點，
+        // 它本身不能成為前景；剛按了右鍵，這個程序有成為前景的資格）
+        NativeMethods.SetForegroundWindow(tray.Handle);
+        if (!fromTray) menu.PlacementTarget = ring;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         menu.IsOpen = true;
     }
 
@@ -340,12 +338,14 @@ internal sealed class AppHost : IDisposable
         if (disposed) return;
         disposed = true;
         minute.Stop();
-        fullscreen.Dispose();
-        store.Dispose();
-        tray.Dispose();
+        // 先關圓環再停全螢幕偵測：停止時「不是全螢幕」的通知不會把隱藏中的圓環再顯示一下
+        fullscreen.Changed -= ApplyVisibility;
         panel?.SafeClose();
         settingsWindow?.Close();
         ring?.Close();
         ring = null;
+        fullscreen.Dispose();
+        store.Dispose();
+        tray.Dispose();
     }
 }
