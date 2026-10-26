@@ -30,13 +30,18 @@ internal sealed class SettingsWindow : Window
         });
     }
 
-    private void ApplyTheme(Appearance appearance) =>
+    private void ApplyTheme(Appearance appearance)
+    {
         ThemeMode = appearance switch
         {
             Appearance.Light => ThemeMode.Light,
             Appearance.Dark => ThemeMode.Dark,
             _ => SystemLook.ForcedDark is { } dark ? (dark ? ThemeMode.Dark : ThemeMode.Light) : ThemeMode.System,
         };
+        // Fluent 主題的視窗背景是透明的（給 Mica）：Windows 10 或透明效果關閉時改用和面板相同的純色
+        if (SystemLook.SupportsBackdrop && SystemLook.TransparencyEnabled) ClearValue(BackgroundProperty);
+        else Background = new Palette(SystemLook.IsDark(appearance)).Solid;
+    }
 }
 
 /// <summary>設定的內容（截圖也用這個）</summary>
