@@ -89,6 +89,8 @@ scripts/verify-all.sh                                           # 也包含上�
   `AUM_UPDATE_GOLDEN=1 swift test --filter LogicGoldenTests`（在 `apple/UsageKit`）重寫 golden，再確認 C# 也通過。
 - **「現在」**：畫面上的時間一律用 `Clock.Now`（截圖時固定）。
 - **Windows 上執行 Debug 版**：`AIUsageMonitor.exe --demo <normal|too_fast|critical|stale|error|single|none>` 以示範資料啟動（暫存資料夾，不碰真實資料，也不改開機自動啟動）。
+- **`--isolated`**（Release 也有）：不改開機自動啟動、不觸發收集器；效能量測以它加上暫存資料夾的 `AI_USAGE_MONITOR_HOME` 啟動。
+  `AI_USAGE_MONITOR_HOME` 本身只決定資料夾（和收集器相同），設了它 App 照常運作。
 
 ### 截圖
 

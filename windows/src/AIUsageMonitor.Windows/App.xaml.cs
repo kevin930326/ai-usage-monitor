@@ -9,6 +9,7 @@ namespace AIUsageMonitor.Windows;
 /// 進入點。命令列：
 /// - （沒有參數）啟動；已在執行時請它打開面板
 /// - <c>--show-panel</c>／<c>--hide-panel</c>／<c>--quit</c>：交給執行中的 App（效能量測、安裝腳本）
+/// - <c>--isolated</c>：不改開機自動啟動、不觸發收集器（效能量測與測試，和 AI_USAGE_MONITOR_HOME 的暫存資料夾一起用）
 /// - Debug 版另有截圖與示範資料的參數（DebugTools），Release 版沒有
 /// </summary>
 public partial class App : Application
@@ -28,6 +29,7 @@ public partial class App : Application
             return;
         }
 #endif
+        if (args.Contains("--isolated")) AppMode.Isolated = true;
         instance = new SingleInstance();
         var command = args.Contains("--quit") ? "quit" : args.Contains("--hide-panel") ? "hide" : "show";
         if (!instance.IsFirst)

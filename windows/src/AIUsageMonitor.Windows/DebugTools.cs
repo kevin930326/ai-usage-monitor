@@ -37,6 +37,7 @@ internal static class DebugTools
             Directory.CreateDirectory(home);
             File.WriteAllText(Path.Combine(home, "usage.json"), DemoJson(demo, DateTimeOffset.UtcNow), new UTF8Encoding(false));
             Environment.SetEnvironmentVariable("AI_USAGE_MONITOR_HOME", home);
+            AppMode.Isolated = true;
         }
         return false;
     }
@@ -92,8 +93,9 @@ internal static class DebugTools
     {
         Directory.CreateDirectory(output);
         Clock.Fixed = now;
-        // 只在這個程序裡；截圖不讀寫檔案（也讓開機自動啟動、觸發收集器不動作）
+        // 只在這個程序裡；截圖不讀寫檔案，也不改開機自動啟動、不觸發收集器
         Environment.SetEnvironmentVariable("AI_USAGE_MONITOR_HOME", DemoHome);
+        AppMode.Isolated = true;
         var failures = new List<string>();
         foreach (var dark in new[] { false, true })
         {

@@ -62,6 +62,15 @@ internal sealed class SingleInstance : IDisposable
     }
 }
 
+/// <summary>
+/// 隔離模式（命令列 <c>--isolated</c>；Debug 的示範與截圖也會設定）：不改開機自動啟動、不觸發收集器，給測試與效能量測用。
+/// <c>AI_USAGE_MONITOR_HOME</c> 只決定資料夾（和收集器相同），不代表測試：使用者把資料放在別處時一切照常。
+/// </summary>
+internal static class AppMode
+{
+    public static bool Isolated { get; set; }
+}
+
 /// <summary>開機自動啟動：目前使用者的 HKCU\…\Run（值 AIUsageMonitor），不需要系統管理員。</summary>
 internal static class Autostart
 {
@@ -86,8 +95,8 @@ internal static class Autostart
 
     public static void Set(bool enabled)
     {
-        // 測試、截圖、效能量測（AI_USAGE_MONITOR_HOME 指到暫存資料夾）不改真正的開機項目
-        if (DataPaths.UsesCustomHome) return;
+        // 測試、截圖、效能量測（--isolated）不改真正的開機項目
+        if (AppMode.Isolated) return;
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(RunKey);
@@ -115,8 +124,8 @@ internal sealed class CollectorTrigger
 
     public async Task<RefreshOutcome> TriggerAsync()
     {
-        // 以 AI_USAGE_MONITOR_HOME 讀假資料時（測試、截圖、效能量測）不碰真的收集器
-        if (DataPaths.UsesCustomHome) return RefreshOutcome.Skipped;
+        // 測試、截圖、效能量測（--isolated）不碰真的收集器
+        if (AppMode.Isolated) return RefreshOutcome.Skipped;
         var now = DateTimeOffset.Now;
         var throttle = new CollectorKickThrottle(settings.CollectorKicks);
         switch (throttle.DecisionAt(now))
