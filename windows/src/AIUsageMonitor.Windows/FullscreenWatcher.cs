@@ -97,13 +97,14 @@ internal sealed class FullscreenWatcher : IDisposable
         if (ring == IntPtr.Zero) return false;
         var ringMonitor = NativeMethods.Monitor(NativeMethods.MonitorFromWindow(ring, NativeMethods.MONITOR_DEFAULTTONEAREST));
         if (ringMonitor is null) return false;
-        // 獨占全螢幕的 D3D 或簡報模式
-        if (NativeMethods.SHQueryUserNotificationState(out var state) == 0 && FullscreenRule.IsExclusiveFullscreen(state)) return true;
         if (foreground == IntPtr.Zero || foreground == ring) return false;
         NativeMethods.GetWindowThreadProcessId(foreground, out var pid);
         if (pid == (uint)Environment.ProcessId) return false;
         var monitor = NativeMethods.Monitor(NativeMethods.MonitorFromWindow(foreground, NativeMethods.MONITOR_DEFAULTTONEAREST));
         if (monitor is null) return false;
+        // 獨占全螢幕的 D3D 或簡報模式：這是全系統的狀態，前景視窗（遊戲、投影片）在圓環的螢幕上時才採信
+        if (monitor.Device == ringMonitor.Device
+            && NativeMethods.SHQueryUserNotificationState(out var state) == 0 && FullscreenRule.IsExclusiveFullscreen(state)) return true;
         return FullscreenRule.IsFullscreen(NativeMethods.ClassName(foreground), NativeMethods.IsCloaked(foreground),
                                            NativeMethods.FrameBounds(foreground), monitor, ringMonitor,
                                            NativeMethods.IsMaximizedWithCaption(foreground));

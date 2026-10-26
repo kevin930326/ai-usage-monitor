@@ -283,6 +283,9 @@ public static class FullscreenRule
         return bounds.Covers(foregroundMonitor.Bounds);
     }
 
-    /// <summary>SHQueryUserNotificationState：3＝獨占全螢幕的 D3D、4＝簡報模式。2（QUNS_BUSY）是全系統的狀態，另一個螢幕全螢幕時也會回報，不用。</summary>
+    /// <summary>
+    /// SHQueryUserNotificationState：3＝獨占全螢幕的 D3D、4＝簡報模式（全系統的狀態，呼叫端只在前景視窗位於圓環的螢幕時採信）。
+    /// 2（QUNS_BUSY）連一般的全螢幕視窗都會回報、無法分辨螢幕，不用。
+    /// </summary>
     public static bool IsExclusiveFullscreen(int notificationState) => notificationState is 3 or 4;
 }
