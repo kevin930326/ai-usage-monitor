@@ -7,7 +7,7 @@ namespace AIUsageMonitor.Windows;
 /// <summary>
 /// 圓環所在的螢幕有全螢幕 App 時通知隱藏（ADR-0015 第 6 節），事件驅動、不輪詢：
 /// - 前景視窗改變（EVENT_SYSTEM_FOREGROUND，全系統、略過自己的程序）
-/// - 前景視窗本身移動、改變大小或關閉（只掛在前景視窗的程序上；前景改變時換掛）：同一個視窗按 F11 進入或離開全螢幕
+/// - 前景視窗本身移動、改變大小或關閉（只掛在前景視窗的執行緒上；前景改變時換掛）：同一個視窗按 F11 進入或離開全螢幕
 /// 事件 250 ms 內合併成一次判斷。判斷規則在 UsageCore 的 <see cref="FullscreenRule"/>。
 /// 前景視窗改變的 hook 在 App 執行期間一直掛著（圓環重新排到最上層也靠它）；「全螢幕時隱藏」只決定要不要判斷（<see cref="Enabled"/>）。
 /// </summary>
@@ -21,7 +21,7 @@ internal sealed class FullscreenWatcher : IDisposable
     private IntPtr foregroundHook;
     private IntPtr locationHook;
     private IntPtr destroyHook;
-    private uint watchedProcess;
+    private uint watchedThread;
     private IntPtr foreground;
     private bool enabled;
 
@@ -64,7 +64,7 @@ internal sealed class FullscreenWatcher : IDisposable
             coalesce.Stop();
             Unhook(ref locationHook);
             Unhook(ref destroyHook);
-            watchedProcess = 0;
+            watchedThread = 0;
             if (IsFullscreen)
             {
                 IsFullscreen = false;
@@ -131,18 +131,20 @@ internal sealed class FullscreenWatcher : IDisposable
     private void WatchProcessOf(IntPtr window)
     {
         uint pid = 0;
-        if (window != IntPtr.Zero) NativeMethods.GetWindowThreadProcessId(window, out pid);
-        if (pid == (uint)Environment.ProcessId) pid = 0;
-        if (pid == watchedProcess) return;
+        uint thread = 0;
+        if (window != IntPtr.Zero) thread = NativeMethods.GetWindowThreadProcessId(window, out pid);
+        if (pid == (uint)Environment.ProcessId) thread = 0;
+        if (thread == watchedThread) return;
         Unhook(ref locationHook);
         Unhook(ref destroyHook);
-        watchedProcess = pid;
-        if (pid == 0) return;
-        // 兩個事件分開掛：中間的範圍（名稱、狀態、焦點…）在瀏覽器裡很頻繁，不需要
+        watchedThread = thread;
+        if (thread == 0) return;
+        // 只掛前景視窗的執行緒（視窗的事件都在擁有它的執行緒產生；瀏覽器其他執行緒的游標、捲動事件不會送來）。
+        // 兩個事件分開掛：中間的範圍（名稱、狀態、焦點…）很頻繁，不需要
         locationHook = NativeMethods.SetWinEventHook(NativeMethods.EVENT_OBJECT_LOCATIONCHANGE, NativeMethods.EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero,
-                                                     locationProc, pid, 0, NativeMethods.WINEVENT_OUTOFCONTEXT);
+                                                     locationProc, pid, thread, NativeMethods.WINEVENT_OUTOFCONTEXT);
         destroyHook = NativeMethods.SetWinEventHook(NativeMethods.EVENT_OBJECT_DESTROY, NativeMethods.EVENT_OBJECT_DESTROY, IntPtr.Zero,
-                                                    locationProc, pid, 0, NativeMethods.WINEVENT_OUTOFCONTEXT);
+                                                    locationProc, pid, thread, NativeMethods.WINEVENT_OUTOFCONTEXT);
     }
 
     private static void Unhook(ref IntPtr hook)
