@@ -4,6 +4,7 @@ import UsageKitUI
 
 // 完整統計視窗（FR-44、ADR-0008 第 4 節）：一年熱力圖、30 天疊加長條、各模型、時段分布、個人紀錄。
 // 打開時另開一個短暫的資料庫連線讀完就關；關閉視窗時釋放資料（ADR-0009 第 7 節）。
+// 開著（看得見）時每分鐘比對 history.sqlite3 的大小與修改時間，收集器寫入後重新讀取（LT-21），不重播動畫。
 // 可調整大小，最小 720×520。
 
 struct StatsWindowView: View {
@@ -20,6 +21,8 @@ struct StatsWindowView: View {
     @State private var scope: TokenScope = .all
     @State private var motion = PanelMotion.settled
     @State private var visible = false
+    /// 看得見時多久檢查一次收集器有沒有寫入（收集器每 5 分鐘一輪）
+    static let refreshInterval: Duration = .seconds(60)
 
     /// Debug 截圖直接給資料與動畫進度
     var fixedData: TokenStatsData?
@@ -84,6 +87,24 @@ struct StatsWindowView: View {
                     if isVisible { load() } else { release() }
                 }
             }
+        }
+        .task(id: visible) { await watchForChanges() }
+    }
+
+    /// 看得見時每分鐘比對檔案；變了就在背景重新讀，讀到才換掉畫面上的資料（讀不到時保留原本的）
+    private func watchForChanges() async {
+        guard visible, fixedData == nil else { return }
+        let store = historyStore
+        var stamp = store.changeStamp()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: Self.refreshInterval)
+            guard !Task.isCancelled, visible, data != nil, !loading else { continue }
+            let current = store.changeStamp()
+            guard current != stamp else { continue }
+            stamp = current
+            let loaded = await Task.detached(priority: .utility) { store.loadFullTokenStats() }.value
+            guard !Task.isCancelled, visible, let loaded else { continue }
+            data = loaded
         }
     }
 

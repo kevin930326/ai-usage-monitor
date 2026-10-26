@@ -583,6 +583,17 @@ extension HistoryStore {
         return TokenDevices(devices: list ?? [], uploadRevoked: revoked, uploadCopied: copied)
     }
 
+    /// 檔案是否可能有新資料：主檔與 `-wal` 的大小與修改時間（完整統計視窗開著時每分鐘比對，變了才重新讀）。
+    /// 不開連線，所以不能用 `PRAGMA data_version`（只在同一個連線裡比較才有意義）
+    nonisolated func changeStamp() -> String {
+        [url.path, url.path + "-wal"].map { path in
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: path) else { return "-" }
+            let size = (attributes[.size] as? NSNumber)?.int64Value ?? -1
+            let modified = (attributes[.modificationDate] as? Date)?.timeIntervalSinceReferenceDate ?? 0
+            return "\(size):\(modified)"
+        }.joined(separator: "|")
+    }
+
     /// 完整統計視窗：另開一個短暫的連線讀完就關，結果由視窗保存，關閉視窗時釋放（ADR-0009 第 7 節）。
     nonisolated func loadFullTokenStats(now: Date = RenderClock.now) -> TokenStatsData? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
