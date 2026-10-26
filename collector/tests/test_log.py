@@ -264,6 +264,15 @@ class LimitRepeatsTest(unittest.TestCase):
         self.run_round(*many)
         self.assertEqual(len(json.loads(self.state.read_text(encoding="utf-8"))), log_module.REPEAT_MAX_TRACKED)
 
+    @unittest.skipIf(sys.platform == "win32", "Windows 沒有 POSIX 權限")
+    def test_state_file_is_private(self):
+        old = os.umask(0o022)
+        try:
+            self.run_round("x")
+        finally:
+            os.umask(old)
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o600)
+
     def test_without_a_state_file_every_line_is_written(self):
         lines: list[str] = []
         with mock.patch.object(log_module, "_write", side_effect=lines.append):

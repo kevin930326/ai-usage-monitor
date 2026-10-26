@@ -96,7 +96,11 @@ class _Repeats:
         try:
             if keep:
                 tmp = self.path.with_name(self.path.name + ".tmp")
-                tmp.write_text(json.dumps(dict(keep), ensure_ascii=False), encoding="utf-8")
+                # 內容是日誌的訊息：只有使用者自己能讀（與 App 內建收集器的日誌相同，審查 C-01）
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(json.dumps(dict(keep), ensure_ascii=False))
+                os.chmod(tmp, 0o600)  # 之前留下的暫存檔可能是別的權限
                 os.replace(tmp, self.path)
             else:
                 self.path.unlink(missing_ok=True)
