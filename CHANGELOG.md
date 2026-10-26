@@ -75,6 +75,7 @@
 - 收集器的 Codex 用量改為執行未修改的 Codex CLI（`codex app-server --listen stdio://` 的 `account/rateLimits/read`）；收集器不再讀取 `~/.codex/auth.json`、不再持有 token、不再直接呼叫 chatgpt.com，至此不讀取任何服務的 token。app-server 每次查完就關閉，逾時或不結束時結束整個 process group；回應中的帳號 ID 不保留；格式認不得時回報錯誤而不是 0%。安裝腳本偵測 codex 路徑寫入 `codex_path`，並改用 `codex login status` 偵測登入，判斷不出來時不更動 `enabled_providers`；找不到 `claude`／`codex` 且沒有 `~/.claude`／`~/.codex` 時視為沒用過、不啟用，只用其中一個服務的人不會一直看到另一個的錯誤；用 API key 登入 Codex 的人重新安裝後 Codex 會停用（ADR-0007）
 
 ### Fixed
+- 額度消耗（ADR-0009 第 4 節）：在午夜切換日光節約時間的時區（例如 America/Santiago、Havana），每天的格子改以各自的 startOfDay 起算；之前從切換日的 01:00 逐日加一天，其他天的 00:00～01:00 被算到前一天、切換日附近的小時重複計算。golden 新增 Santiago 兩個情境（切換日是今天、在範圍中間），Windows 的 UsageCore 原本就正確
 - Windows 的 `install.ps1`：整個檔案包在一個 script block 裡，以 `irm | iex` 執行後不再在使用者的 PowerShell 工作階段留下 `$Zip`、`$Version` 等變數與安裝函式；CI 檢查 iex 前後變數不變
 - 中繼 README：`POST /usage` 的大小上限更正為 64 KB（與程式的 `MAX_BODY_BYTES` 相同；原本寫 16 KB），並以測試檢查 README 與常數一致。中繼程式沒有改，不需要重新部署
 - 完整統計視窗剛打開、還沒讀資料（視窗被擋住或 App 不在前景時要等視窗看得到才讀）時，顯示「正在讀取…」，不再顯示「無法讀取 Token 統計」；只有真的讀不到 history.sqlite3 時才顯示錯誤
