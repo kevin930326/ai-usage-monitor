@@ -32,19 +32,24 @@
 
 ### 1-2. 新電腦另立身分
 
-新電腦以新名稱出現在裝置切換中（例如舊電腦還要繼續用，或想分開看兩台的數字）。
+新電腦以新名稱出現在裝置切換中（例如舊電腦還要繼續用，或想分開看兩台的數字）。新身分只能從**沒有舊電腦資料**的狀態開始：本機的 `history.sqlite3` 記著舊電腦的身分（`meta.relay_device_ids`，App 的「清除歷史」不會清掉它），搬來的 Claude／Codex 對話紀錄也會被首次掃描再算一次。
 
-1. 新增身分，在新電腦設定：
+1. 確認新電腦沒有舊電腦的資料。用移轉輔助程式或 Time Machine 搬過的，依序：
+   1. 在新電腦執行 `collector/scripts/set-tier2.sh --disable`：搬來的設定與密鑰會讓新電腦用舊電腦的身分上傳，先停掉。
+   2. 刪掉或移走搬來的 `~/.claude/projects` 與 `~/.codex/sessions`（舊電腦還有一份，那些用量由舊電腦上傳）。
+   3. 刪掉整個 `~/Library/Application Support/AIUsageMonitor/history.sqlite3`（連同 `-wal`、`-shm`；不是「清除歷史」）。收集器下一輪建立新檔。
+
+   搬了資料又不想刪：不要另立身分，改用 1-1。
+2. 新增身分，在新電腦設定：
 
    ```bash
    scripts/relay-device.sh add <新名稱>
    collector/scripts/set-tier2.sh            # 在新電腦執行，貼上新密鑰
    ```
 
-2. 處理舊身分：
-   - **新電腦的 `history.sqlite3` 是從舊電腦搬來的、舊電腦不再使用**：不要另立身分，改用上面的 1-1。另立身分會把搬來的紀錄用新身分再上傳一次；就算之後以 `revoke --delete-data` 刪掉舊身分，新電腦能補上的也只有本機保留期間內、而且已經上傳完的日子，中繼上更早的數字會永久消失。
-   - **新電腦從空的資料庫開始**（沒有搬資料）且舊電腦不再使用：`scripts/relay-device.sh revoke <舊的 device_id>`（不加 `--delete-data`），舊電腦過去的數字照算、標「已撤銷」。
-   - 舊電腦還要繼續用：不撤銷，兩台各自上傳。這時新電腦的資料庫**不能**是從舊電腦搬來的（同上，會重複），請先依設定的「清除歷史」或刪掉新電腦的 `history.sqlite3` 從頭統計。
+3. 處理舊身分：
+   - 舊電腦還要繼續用：不撤銷，兩台各自上傳。
+   - 舊電腦不再使用：`scripts/relay-device.sh revoke <舊的 device_id>`（**不加** `--delete-data`），舊電腦過去的數字照算、標「已撤銷」。
 
 ### 1-3. Windows PC
 
