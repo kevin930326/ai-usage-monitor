@@ -4,6 +4,7 @@
     python3 scripts/check-readme-images.py            # verify-all、CI
     python3 scripts/check-readme-images.py --strict   # 截圖比基準舊也算失敗
 
+- 檢查 README.md 與 README.zh-TW.md（後者有才檢查）引用的圖片。
 - 失敗（結束碼 1）：README 引用的圖片不存在、沒有列在 docs/images/SOURCES.tsv，或表中的圖片、基準不存在。
 - 提醒（結束碼 0，--strict 時 1）：圖片最後一次提交早於對應基準的最後一次提交，或基準有未提交的修改而圖片沒有。
   看到提醒時執行 scripts/update-readme-images.sh，檢查圖片後一起提交。
@@ -20,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCES = "docs/images/SOURCES.tsv"
+READMES = ("README.md", "README.zh-TW.md")  # 英文版在前；繁體中文版有才檢查
 NOW = float("inf")
 
 
@@ -50,9 +52,17 @@ def read_sources(root: Path) -> dict[str, str]:
     return mapping
 
 
-def readme_images(root: Path) -> list[str]:
-    text = (root / "README.md").read_text(encoding="utf-8")
-    return sorted(set(re.findall(r"docs/images/([\w.\-]+\.(?:png|gif|jpe?g|svg|webp))", text)))
+def readme_images(root: Path) -> dict[str, list[str]]:
+    """圖片 → 引用它的 README（README.md 必須存在；其他語言版本有才檢查）"""
+    images: dict[str, list[str]] = {}
+    for name in READMES:
+        path = root / name
+        if name != READMES[0] and not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for image in sorted(set(re.findall(r"docs/images/([\w.\-]+\.(?:png|gif|jpe?g|svg|webp))", text))):
+            images.setdefault(image, []).append(name)
+    return dict(sorted(images.items()))
 
 
 def changed_at(root: Path, path: str) -> float:
@@ -68,9 +78,9 @@ def check(root: Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     mapping = read_sources(root)
     referenced = readme_images(root)
-    for image in referenced:
+    for image, readmes in referenced.items():
         if not (root / "docs/images" / image).is_file():
-            errors.append(f"README 引用的 docs/images/{image} 不存在")
+            errors.append(f"{'、'.join(readmes)} 引用的 docs/images/{image} 不存在")
         if image not in mapping:
             errors.append(f"docs/images/{image} 沒有列在 {SOURCES}（不知道怎麼重新產生）")
     for image, baseline in mapping.items():
