@@ -1,4 +1,5 @@
 """日誌輪替（ADR-0014）：每份最多 1 MB、留一份舊的；Windows 的 --log-file、App 內建收集器與 launchd 開好的 stderr 三種寫法。"""
+import json
 import os
 import subprocess
 import sys
@@ -193,6 +194,112 @@ class MainRotatesTest(unittest.TestCase):
                 sys.stderr = saved
             self.assertTrue(path.with_name("collector.log.1").exists())
             self.assertLess(path.stat().st_size, 1000)
+
+
+class LimitRepeatsTest(unittest.TestCase):
+    """相同的一行連續出現時每小時一行、不再出現時一行「已恢復」（ADR-0014 LT-02 後續）。每一輪是一個 limit_repeats"""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.state = log_module.repeats_path(Path(tmp.name) / "collector.log")
+        self.now = 1_800_000_000
+
+    def run_round(self, *messages: str, minutes: int = 5) -> list[str]:
+        """一輪收集：記錄 messages，回傳實際寫出的行（去掉時間）"""
+        self.now += minutes * 60
+        lines: list[str] = []
+        with mock.patch.object(log_module.time, "time", return_value=self.now), \
+                mock.patch.object(log_module, "_write", side_effect=lines.append):
+            with log_module.limit_repeats(self.state):
+                for message in messages:
+                    log_module.log(message)
+        return lines
+
+    def test_same_error_every_round_is_written_once_an_hour(self):
+        written = [self.run_round("claude: 未登入") for _ in range(25)]  # 每 5 分鐘一輪，2 小時
+        self.assertEqual(written[0], ["claude: 未登入"])
+        self.assertTrue(all(lines == [] for lines in written[1:12]))
+        self.assertEqual(written[12], ["claude: 未登入（仍在發生，已持續 1 小時，期間略過 11 次）"])
+        self.assertTrue(all(lines == [] for lines in written[13:24]))
+        self.assertEqual(written[24], ["claude: 未登入（仍在發生，已持續 2 小時，期間略過 11 次）"])
+
+    def test_recovery_is_written_once(self):
+        self.run_round("codex: 逾時")
+        self.run_round("codex: 逾時")
+        self.run_round("codex: 逾時")
+        self.assertEqual(self.run_round(), ["已恢復：codex: 逾時（持續 10 分鐘）"])
+        self.assertEqual(self.run_round(), [])
+        self.assertFalse(self.state.exists())
+        # 之後再出現是新的一次，照常記錄
+        self.assertEqual(self.run_round("codex: 逾時"), ["codex: 逾時"])
+
+    def test_a_line_seen_once_has_no_recovery_line(self):
+        self.run_round("整理 history.sqlite3：3.0 MB → 2.0 MB")
+        self.assertEqual(self.run_round(), [])
+
+    def test_different_messages_are_tracked_separately(self):
+        self.assertEqual(self.run_round("a", "b"), ["a", "b"])
+        self.assertEqual(self.run_round("a", "c"), ["c"])
+        # b、c 都只出現過一輪：不記「已恢復」
+        self.assertEqual(self.run_round("a"), [])
+        self.assertEqual(self.run_round(), ["已恢復：a（持續 10 分鐘）"])
+
+    def test_the_same_line_twice_in_one_round_is_written_once(self):
+        self.assertEqual(self.run_round("x", "x"), ["x"])
+        self.assertEqual(self.run_round("x", "x"), [])
+
+    def test_unreadable_or_broken_state_logs_normally(self):
+        self.state.write_text("{not json")
+        self.assertEqual(self.run_round("x"), ["x"])
+        self.state.write_text('{"x": {"first": "a"}}')
+        self.assertEqual(self.run_round("x"), ["x"])
+
+    def test_clock_going_back_logs_again(self):
+        self.run_round("x")
+        self.assertEqual(self.run_round("x", minutes=-60), ["x"])
+
+    def test_state_keeps_at_most_the_most_recent_messages(self):
+        many = [f"錯誤 {i}" for i in range(log_module.REPEAT_MAX_TRACKED + 10)]
+        self.run_round(*many)
+        self.assertEqual(len(json.loads(self.state.read_text(encoding="utf-8"))), log_module.REPEAT_MAX_TRACKED)
+
+    def test_without_a_state_file_every_line_is_written(self):
+        lines: list[str] = []
+        with mock.patch.object(log_module, "_write", side_effect=lines.append):
+            with log_module.limit_repeats(None):
+                log_module.log("x")
+                log_module.log("x")
+            log_module.log("x")
+        self.assertEqual(lines, ["x", "x", "x"])
+
+
+class MainLimitsRepeatsTest(unittest.TestCase):
+    def test_log_file_runs_share_the_state_next_to_the_log(self):
+        from usage_collector import __main__ as main_module
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "collector.log"
+            saved = sys.stderr
+            try:
+                with mock.patch.object(main_module.token_stats, "run_safely",
+                                       side_effect=lambda: main_module.log("略過 Token 統計：OperationalError") or False), \
+                        mock.patch.object(main_module.history, "tidy_safely"), \
+                        mock.patch.object(main_module.token_sync, "run_safely"):
+                    for _ in range(3):
+                        self.assertEqual(main_module.main(["--tokens-only", "--quiet", "--log-file", str(path)]), 1)
+                        if sys.stderr is not saved:
+                            sys.stderr.close()
+                        sys.stderr = saved
+            finally:
+                if sys.stderr is not saved:
+                    sys.stderr.close()
+                sys.stderr = saved
+            self.assertEqual(path.read_text(encoding="utf-8").count("略過 Token 統計"), 1)
+            self.assertTrue(log_module.repeats_path(path).exists())
+
+    def test_app_agent_and_legacy_collector_keep_separate_state(self):
+        log_path = Path("/x/collector.log")
+        self.assertNotEqual(log_module.repeats_path(log_path), log_module.repeats_path(log_path, "app"))
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import disk, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
-from .log import log, rotate_if_large, rotate_inherited
+from .log import limit_repeats, log, repeats_path, rotate_if_large, rotate_inherited, stderr_is
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
 
@@ -112,7 +112,19 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr = open(args.log_file, "a", encoding="utf-8", buffering=1)  # 用到程序結束
     elif args.agent != "app":
         rotate_inherited(legacy_log_path())
+    # 相同的錯誤每小時一行、恢復時一行（ADR-0014 LT-02）：只在寫進日誌檔時；App 內建與 install-launchd.sh 的收集器
+    # 寫同一個檔案，狀態分開（App 內建的在舊收集器存在時每輪只記「不執行」那一行，不能讓兩邊互相當成已恢復）
+    if args.log_file:
+        repeats: Path | None = repeats_path(Path(args.log_file))
+    elif args.agent == "app":
+        repeats = repeats_path(app_agent_log_path(), "app")
+    else:
+        repeats = repeats_path(legacy_log_path()) if stderr_is(legacy_log_path()) else None
+    with limit_repeats(repeats):
+        return run(args)
 
+
+def run(args: argparse.Namespace) -> int:
     if args.tokens_only:
         # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）。
         # 這是唯一的工作，失敗時回傳非 0，工作排程器的「上次執行結果」才看得出來
