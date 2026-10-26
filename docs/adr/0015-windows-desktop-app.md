@@ -200,6 +200,7 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
   4. 開機自動啟動：目前使用者的 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`（值 `AIUsageMonitor`）。第一次安裝預設開，之後以 App 的設定為準。
   5. 啟動 App。可重跑（＝更新）；`-Uninstall` 停止、刪除登錄值與安裝資料夾，保留設定檔。
 - **Release（之後）**：`release.yml` 加自含式 zip（`win-x64`、`win-arm64`，約 65 MB）與 SHA-256；`install-windows-app.ps1 -FromRelease` 下載、比對 SHA-256 後才解除封鎖。
+  - 2026-10-26：zip 與 `SHA256SUMS-windows` 已加入（`scripts/package-windows-app.py`：Release、不含 .pdb 與測試組件、檢查 Debug 專用字串與組件版本；workflow 在 Windows runner 解壓後於沒有 .NET 的環境啟動）；`-FromRelease` 尚未做。第一次發布照 `docs/release-checklist.md`。
 - **SmartScreen**：瀏覽器下載的 zip 帶 Mark of the Web，解壓後第一次執行會出現「Windows 已保護您的電腦」→「其他資訊」→「仍要執行」，或先在 zip 的「內容」勾「解除封鎖」。從 repo 建置的檔案沒有 Mark of the Web，不會出現。不簽章（NFR-3：OV／EV 憑證每年數百美元，SmartScreen 信譽仍要累積；Azure Trusted Signing 列為未來選項）。
 
 ### 識別字（之後不能改）

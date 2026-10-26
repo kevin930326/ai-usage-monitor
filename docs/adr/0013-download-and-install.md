@@ -187,7 +187,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 
 | 觸發 | 做什麼 |
 |---|---|
-| push tag `v*` | Mac：xcodegen、`scripts/build-release.sh`（Release 建置、內嵌 Python、ad-hoc 簽署、.zip、.dmg、`SHA256SUMS`、寫入 SHA-256 的 `install.sh`）；Windows：收集器＋PowerShell 腳本的 .zip（`collector/windows/` 存在時）；產生建置來源證明（`actions/attest-build-provenance`）；以 `gh release create --draft` 建立**草稿** Release 並上傳檔案（要人到 GitHub 按發布） |
+| push tag `v*` | Mac：xcodegen、`scripts/build-release.sh`（Release 建置、內嵌 Python、ad-hoc 簽署、.zip、.dmg、`SHA256SUMS`、寫入 SHA-256 的 `install.sh`）；Windows：收集器＋PowerShell 腳本的 .zip（`collector/windows/` 存在時）；Windows App 的自含式 zip（x64、ARM64）與 `SHA256SUMS-windows`（ADR-0015，`windows` job）；產生建置來源證明（`actions/attest-build-provenance`）；以 `gh release create --draft` 建立**草稿** Release 並上傳檔案（要人到 GitHub 按發布） |
 | `workflow_dispatch` | 同樣的建置，只上傳成 workflow artifact，不建立 Release、不產生證明 |
 
 - 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`）。

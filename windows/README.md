@@ -60,6 +60,11 @@ windows/
 
 從 repo 建置的檔案沒有 Mark of the Web，不會出現 SmartScreen 的「Windows 已保護您的電腦」。
 
+**從 Release 的 zip 安裝**（發布後；不需要 .NET）：下載符合架構的 `AIUsageMonitor-windows-<x64|arm64>-<版本>.zip`，以 `SHA256SUMS-windows`
+比對（`Get-FileHash <zip> -Algorithm SHA256`），解壓到固定的位置（例如 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`）後打開
+`AIUsageMonitor.exe`。zip 是自含式（內含 .NET 執行環境）、沒有程式碼簽章，第一次打開會出現 SmartScreen，按「其他資訊」→「仍要執行」。
+開機自動啟動在 App 的設定裡打開。發布流程見 [docs/release-checklist.md](../docs/release-checklist.md)。
+
 ## 使用
 
 - **懸浮圓環**：外圈是剩餘 %、內圈是距離重置的時間；剩不到 20% 變紅、用得太快加一個點、資料過期（30 分鐘沒更新）變灰色虛線。
