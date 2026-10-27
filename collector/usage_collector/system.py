@@ -108,22 +108,73 @@ def kill_tree(proc: subprocess.Popen) -> None:
                    stderr=subprocess.DEVNULL, check=False, **hidden_console_kwargs())
 
 
+CLEANUP_TIMEOUT = 5  # 秒；逾時結束程序樹後，等管線關閉的上限
+PROCESS_TERMINATE = 0x0001
+PROCESS_SET_QUOTA = 0x0100
+
+
+def _job_for(pid: int) -> int | None:
+    """Windows：把剛啟動的程序放進新的 Job Object，它之後啟動的子孫程序都會跟著在裡面；
+    父程序先結束時 taskkill /T 找不到孫程序，以 TerminateJobObject 一次結束。失敗時回傳 None（退回 taskkill）。"""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateJobObjectW.restype = ctypes.c_void_p
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    job = kernel32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    process = kernel32.OpenProcess(PROCESS_TERMINATE | PROCESS_SET_QUOTA, False, pid)
+    assigned = bool(process) and kernel32.AssignProcessToJobObject(ctypes.c_void_p(job), ctypes.c_void_p(process))
+    if process:
+        kernel32.CloseHandle(ctypes.c_void_p(process))
+    if not assigned:
+        kernel32.CloseHandle(ctypes.c_void_p(job))
+        return None
+    return job
+
+
+def _close_job(job: int | None, terminate: bool) -> None:
+    if sys.platform != "win32" or job is None:
+        return
+    import ctypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    if terminate:
+        kernel32.TerminateJobObject(ctypes.c_void_p(job), 1)
+    kernel32.CloseHandle(ctypes.c_void_p(job))
+
+
 def run_isolated(argv: list[str], timeout: float, **kwargs) -> subprocess.CompletedProcess:
-    """subprocess.run 的替代：Windows 開在隱藏的主控台與自己的 process group，逾時時以 kill_tree 結束整棵程序樹
-    再丟出 TimeoutExpired（subprocess.run 只會結束子程序本身，孫程序會留下）。macOS／Linux 照舊直接呼叫 subprocess.run。"""
+    """subprocess.run 的替代：Windows 開在隱藏的主控台與自己的 process group，並放進 Job Object；
+    逾時時結束整棵程序樹（含父程序已結束後留下的孫程序），等管線關閉最多 CLEANUP_TIMEOUT 秒，再丟出 TimeoutExpired
+    （subprocess.run 只會結束子程序本身，孫程序會留下，且孫程序握著管線時會一直等）。macOS／Linux 照舊直接呼叫 subprocess.run。"""
     if not IS_WINDOWS:
         return subprocess.run(argv, timeout=timeout, **kwargs)
-    capture = kwargs.pop("capture_output", False)
-    if capture:
+    if kwargs.pop("capture_output", False):
         kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
-    with subprocess.Popen(argv, **kwargs, **isolated_popen_kwargs()) as proc:
+    proc = subprocess.Popen(argv, **kwargs, **isolated_popen_kwargs())
+    job = _job_for(proc.pid)
+    timed_out = False
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _close_job(job, terminate=True)
+        job = None
+        kill_tree(proc)
+        proc.kill()
         try:
-            out, err = proc.communicate(timeout=timeout)
+            proc.communicate(timeout=CLEANUP_TIMEOUT)
         except subprocess.TimeoutExpired:
-            kill_tree(proc)
-            proc.kill()
-            proc.communicate()
-            raise
+            pass
+        raise
+    finally:
+        _close_job(job, terminate=False)
+        if timed_out:
+            for pipe in (proc.stdout, proc.stderr):
+                if pipe is not None:
+                    pipe.close()
     return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
