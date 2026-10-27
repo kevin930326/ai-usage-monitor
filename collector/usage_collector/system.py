@@ -17,7 +17,9 @@ OPEN_READ_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BI
 
 BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
 CREATE_NEW_PROCESS_GROUP = 0x00000200
-CREATE_NO_WINDOW = 0x08000000
+CREATE_NEW_CONSOLE = 0x00000010
+STARTF_USESHOWWINDOW = 0x00000001
+SW_HIDE = 0
 
 
 def default_home(environ: Mapping[str, str] = os.environ, windows: bool = IS_WINDOWS) -> Path:
@@ -80,17 +82,49 @@ def lower_priority() -> None:
         os.nice(10)
 
 
+def hidden_console_kwargs() -> dict:
+    """Windows：子程序開在新的主控台，視窗以 SW_HIDE 隱藏，並放在自己的 process group。
+    不用 CREATE_NO_WINDOW：那樣子程序的主控台沒有視窗，claude／codex 再啟動的孫程序（hook、MCP 伺服器、
+    Python 工具等）有時會被 Windows 另開一個看得到的新主控台，收集器每輪就閃出空白視窗。
+    改成隱藏的主控台後，整棵程序樹共用這一個看不到的主控台。macOS／Linux 回傳空的 dict。"""
+    if sys.platform != "win32":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()  # 每次新建：subprocess 會改寫它的 dwFlags 與標準輸入輸出
+    startupinfo.dwFlags |= STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = SW_HIDE
+    return {"creationflags": CREATE_NEW_PROCESS_GROUP | CREATE_NEW_CONSOLE, "startupinfo": startupinfo}
+
+
 def isolated_popen_kwargs() -> dict:
-    """子程序放在自己的 process group（逾時時連同它的子程序一起結束）；Windows 另外不開主控台視窗。"""
+    """子程序放在自己的 process group（逾時時連同它的子程序一起結束）；Windows 另外開在隱藏的主控台。"""
     if IS_WINDOWS:
-        return {"creationflags": CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW}
+        return hidden_console_kwargs()
     return {"start_new_session": True}
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
     """強制結束子程序與它啟動的子程序。macOS 由呼叫端以 killpg 分段處理，這裡只給 Windows 用。"""
     subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], stdout=subprocess.DEVNULL,
-                   stderr=subprocess.DEVNULL, creationflags=CREATE_NO_WINDOW, check=False)
+                   stderr=subprocess.DEVNULL, check=False, **hidden_console_kwargs())
+
+
+def run_isolated(argv: list[str], timeout: float, **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run 的替代：Windows 開在隱藏的主控台與自己的 process group，逾時時以 kill_tree 結束整棵程序樹
+    再丟出 TimeoutExpired（subprocess.run 只會結束子程序本身，孫程序會留下）。macOS／Linux 照舊直接呼叫 subprocess.run。"""
+    if not IS_WINDOWS:
+        return subprocess.run(argv, timeout=timeout, **kwargs)
+    capture = kwargs.pop("capture_output", False)
+    if capture:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    with subprocess.Popen(argv, **kwargs, **isolated_popen_kwargs()) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            kill_tree(proc)
+            proc.kill()
+            proc.communicate()
+            raise
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)
 
 
 def local_datetime(ts: float) -> datetime:

@@ -94,10 +94,17 @@ class ZoneTest(unittest.TestCase):
 
 
 class PopenTest(unittest.TestCase):
-    def test_windows_hides_the_console_and_uses_a_new_group(self):
-        with mock.patch.object(system, "IS_WINDOWS", True):
-            flags = system.isolated_popen_kwargs()["creationflags"]
-        self.assertTrue(flags & system.CREATE_NO_WINDOW and flags & system.CREATE_NEW_PROCESS_GROUP)
+    @unittest.skipUnless(sys.platform == "win32", "STARTUPINFO 只有 Windows 有")
+    def test_windows_uses_a_hidden_console_and_a_new_group(self):
+        kwargs = system.isolated_popen_kwargs()
+        self.assertTrue(kwargs["creationflags"] & system.CREATE_NEW_CONSOLE)
+        self.assertTrue(kwargs["creationflags"] & system.CREATE_NEW_PROCESS_GROUP)
+        self.assertTrue(kwargs["startupinfo"].dwFlags & system.STARTF_USESHOWWINDOW)
+        self.assertEqual(kwargs["startupinfo"].wShowWindow, system.SW_HIDE)
+
+    def test_hidden_console_is_windows_only(self):
+        if sys.platform != "win32":
+            self.assertEqual(system.hidden_console_kwargs(), {})
 
     def test_posix_uses_a_new_session(self):
         with mock.patch.object(system, "IS_WINDOWS", False):
