@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Windows 收集器（`install-task.ps1 -WithQuota`）每 5 分鐘閃出空白主控台視窗：claude、codex 改在隱藏的主控台（`CREATE_NEW_CONSOLE`＋`SW_HIDE`）與自己的 process group 執行，它們再啟動的孫程序共用這個看不到的主控台；claude 逾時時也連同孫程序一起結束（Job Object）。macOS 與 Linux 不變
+
 ### Changed
 - Windows App 的 UsageCore（ADR-0015 第 4 節）：移植階段 2、3 的計算（近期速度與沒有紀錄的時段、建議接下來用、重置時間軸、每週預測、本週走勢、額度消耗、Token 統計含裝置範圍與含快取讀取、萬／億與時間長度），golden 新增 15 個額度情境（含美東、倫敦日光節約時間）與 5 個 Token 情境，C# 與 Swift 一致；新增唯讀讀取 `history.sqlite3` 的 `HistoryReader`（系統內建的 SQLite，每次讀完就關閉）。畫面還沒有用到，Windows App 的外觀不變
 - 收集器日誌的相同錯誤限頻（ADR-0014 LT-02 後續）：同一行連續出現時每小時只記一行（附持續時間與略過次數），不再出現時記一行「已恢復」；狀態存在日誌旁的 `collector.log.repeats.json`（App 內建收集器是 `collector.log.app.repeats.json`）

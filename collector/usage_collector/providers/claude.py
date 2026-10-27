@@ -51,8 +51,9 @@ def run_claude(path: str, args: tuple[str, ...]) -> subprocess.CompletedProcess:
             # NO_COLOR：輸出不帶色碼，解析才不會把被色碼包住的額度行當成一般文字略過
             env = {**paths.cli_environ(), "NO_COLOR": "1"}
             env.pop("FORCE_COLOR", None)
-            return subprocess.run([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
-                                  capture_output=True, text=True, timeout=TIMEOUT)
+            # Windows：隱藏的主控台與自己的 process group，逾時時連同 claude 啟動的孫程序一起結束
+            return system.run_isolated([path, *args], cwd=cwd, stdin=subprocess.DEVNULL, env=env,
+                                       capture_output=True, text=True, timeout=TIMEOUT)
         except subprocess.TimeoutExpired:
             raise ProviderError(f"Claude Code 執行逾時（{TIMEOUT:g} 秒）") from None
         except OSError:
