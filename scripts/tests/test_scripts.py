@@ -709,7 +709,8 @@ class SnapshotsScriptTests(unittest.TestCase):
            "tier2-card-revoked-device-light", "tier2-card-revoked-device-dark",
            "tier2-card-deleted-device-light", "tier2-card-deleted-device-dark",
            "tier2-card-all-cache-read-light", "tier2-card-all-cache-read-dark",
-           "notch-collapsed", "notch-intro", "notch-expressions", "notch-agents", "notch-menubar-light", "notch-menubar-dark",
+           "notch-collapsed", "notch-intro", "notch-expressions", "notch-agents", "notch-forecast",
+           "notch-menubar-light", "notch-menubar-dark",
            "notch-menu-light", "notch-menu-dark"]
     IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
            "widget-large-dark", "live-activity-light", "live-activity-dark", "island-normal"]
