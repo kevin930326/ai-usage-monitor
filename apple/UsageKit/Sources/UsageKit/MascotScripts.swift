@@ -90,17 +90,57 @@ public struct MascotScripts: Sendable {
 
     /// 收合時的姿勢依模式：睡覺時迷你角色也閉眼低頭（靜止，不呼吸、沒有 z）；其他模式是平常的迷你角色
     public func collapsedPose(mode: MascotMode) -> MascotPose {
-        guard mode == .sleep else { return collapsedPose }
-        // 迷你角色很小：頭只低一半，閉著的眼睛才不會落到最下緣、看起來像嘴巴
-        return collapsedPose.with([.pitch: config.poses.sleep.pitch * 0.45, .dash: 1, .follow: 0])
+        switch mode {
+        case .sleep:
+            // 迷你角色很小：頭只低一半，閉著的眼睛才不會落到最下緣、看起來像嘴巴
+            return collapsedPose.with([.pitch: config.poses.sleep.pitch * 0.45, .dash: 1, .follow: 0])
+        case .raise:
+            // 需要你：迷你角色也舉手（收合時就看得到，靜止不重畫）
+            return collapsedPose.with(raiseHands)
+        case .none, .work:
+            return collapsedPose
+        }
     }
 
-    /// 收著時換模式（睡著或醒來）：迷你角色換姿勢一次（.4 秒），之後靜止
+    /// 舉手的姿勢（展開與收合共用；位置、大小另外決定）
+    private var raiseHands: [MascotProp: Double] {
+        let r = config.poses.raise
+        return [.hands: 1, .wave: 0, .pitch: r.pitch, .roll: r.roll, .yaw: 0,
+                .lx: r.left[0], .ly: r.left[1], .lz: r.left[2], .rx: r.right[0], .ry: r.right[1], .rz: r.right[2]]
+    }
+
+    /// 收合時滑回迷你位置的屬性（`close` 與收合途中的 `collapsedCheer` 共用；揮手會動的手、頭的角度另外處理）
+    private static let closeProps: [MascotProp] = [.x, .y, .r, .sc, .sway, .glow, .tint, .dot, .sx, .sy, .jump, .orbit, .shiver,
+                                                   .blush, .type, .kb, .breathe]
+
+    /// 收著時換姿勢會動到的屬性（`collapsedRest`、`close`、揮手後回位共用）
+    private static let collapsedProps: [MascotProp] = [.pitch, .dash, .yaw, .roll, .hands, .wave,
+                                                       .lx, .ly, .lz, .rx, .ry, .rz]
+
+    /// 收著時換模式（睡著、醒來、舉手、放下）：迷你角色換姿勢一次（.4 秒），之後靜止
     public func collapsedRest(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
         var s = MascotScript(start: start, base: base)
         let target = collapsedPose(mode: mode)
-        s.to([.pitch: target[.pitch], .dash: target[.dash], .yaw: 0, .roll: 0], 400, .inOut)
+        s.to(Dictionary(uniqueKeysWithValues: Self.collapsedProps.map { ($0, target[$0]) }), 400, .inOut)
         s.to([.follow: target[.follow]], 300)
+        s.finalize()
+        return s
+    }
+
+    /// 收著時 AI 完成：迷你角色舉起右手揮一下，再回到目前模式的姿勢（瀏海鼓一下由 `MascotPanelSpring.bump` 計算）。
+    /// 收合途中完成時，位置、大小與其他收合時會變的屬性照樣滑回迷你位置（Codex C-01）
+    public func collapsedCheer(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
+        var s = MascotScript(start: start, base: base)
+        let mini = collapsedPose(mode: mode)
+        s.to(Dictionary(uniqueKeysWithValues: Self.closeProps.map { ($0, mini[$0]) }), config.panel.closeGlideMs, .inOut)
+        let wave = config.poses.cheerWaveMs
+        s.to([.hands: 1, .pitch: 0, .dash: 0], 200, .back)
+        s.to([.wave: 1], 200)
+        s.setEyes(.happy, at: 150)
+        s.setEyes(.pill, at: 150 + wave)
+        s.to([.wave: 0], 200, at: 200 + wave)
+        let target = collapsedPose(mode: mode)
+        s.to(Dictionary(uniqueKeysWithValues: Self.collapsedProps.map { ($0, target[$0]) }), 320, .inOut, at: 300 + wave)
         s.finalize()
         return s
     }
@@ -110,8 +150,7 @@ public struct MascotScripts: Sendable {
         var s = MascotScript(start: start, base: base)
         let mini = collapsedPose(mode: mode)
         var target: [MascotProp: Double] = [:]
-        for prop in [MascotProp.x, .y, .r, .sc, .hands, .wave, .sway, .glow, .tint, .dot, .dash, .pitch, .yaw, .roll,
-                     .sx, .sy, .jump, .orbit, .shiver, .blush, .type, .kb, .breathe] {
+        for prop in Self.closeProps + [.hands, .wave, .dash, .pitch, .yaw, .roll] + (mode == .raise ? Self.collapsedProps : []) {
             target[prop] = mini[prop]
         }
         s.to(target, config.panel.closeGlideMs, .inOut)
@@ -143,6 +182,9 @@ public struct MascotScripts: Sendable {
             let sleep = config.poses.sleep
             s.to([.pitch: sleep.pitch, .yaw: 0, .roll: 0, .dash: 1, .hands: 0, .wave: 0, .type: 0, .kb: 0, .breathe: 1,
                   .glow: sleep.glow, .follow: 0], duration ?? sleep.enterMs, .inOut)
+        case .raise:
+            s.to([.sx: 1, .sy: 1, .jump: 0, .orbit: 0, .shiver: 0, .blush: 0, .dash: 0, .sway: 0, .breathe: 0,
+                  .type: 0, .kb: 0, .follow: 1].merging(raiseHands) { $1 }, duration ?? config.poses.raiseMs, .backSoft)
         case .none:
             var target: [MascotProp: Double] = [.sx: 1, .sy: 1, .jump: 0, .orbit: 0, .shiver: 0, .blush: 0, .yaw: 0,
                                                 .pitch: 0, .roll: 0, .dash: 0, .hands: 0, .wave: 0, .sway: 0, .breathe: 0,

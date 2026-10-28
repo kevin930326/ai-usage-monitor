@@ -192,7 +192,19 @@ enum DebugTools {
             (close + 90, "closed-90s", {}),
             (close + 92, "notch-reopen", { mascot.pointerEntered() }),
             (close + 100, "notch-close-2", { mascot.closeNow() }),
-            (close + 125, "exit", { exit(0) }),
+            // AI 狀態（mascot2 第 2 部分）：收著時一個回合完成（瀏海鼓一下、迷你角色揮手），之後看過、等你下指令（每 7 秒脈動）
+            (close + 103, "agent-cheer", {
+                AgentMonitor.shared.debugApply(.userPromptSubmit)
+                AgentMonitor.shared.debugApply(.stop)
+            }),
+            (close + 106, "waiting-pulse", { AgentMonitor.shared.markSeen() }),
+            // 需要你（舉手）與處理後放下：收著與展開各一次（Codex C-05），之後靜止的部分看門檻
+            (close + 130, "agent-raise", { AgentMonitor.shared.debugApply(.permissionRequest, need: .permission) }),
+            (close + 150, "agent-lower", { AgentMonitor.shared.debugApply(.postToolUse) }),
+            (close + 153, "notch-reopen-3", { mascot.pointerEntered() }),
+            (close + 160, "agent-raise-open", { AgentMonitor.shared.debugApply(.permissionRequest, need: .permission) }),
+            (close + 175, "agent-lower-open", { AgentMonitor.shared.debugApply(.postToolUse) }),
+            (close + 180, "exit", { exit(0) }),
         ])
     }
 

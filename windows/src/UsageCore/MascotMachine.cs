@@ -39,7 +39,8 @@ public static class MascotRequests
 public enum MascotGesture { Circle, Shake, Hover }
 
 /// <summary>模式和動畫是兩回事：動畫播完回到目前模式的姿勢。模式由 AI 的狀態決定（工作中優先於睡覺），不看滑鼠</summary>
-public enum MascotMode { None, Sleep, Work }
+/// <summary>Raise：有 AI 需要你（舉手）；優先於工作中與睡覺</summary>
+public enum MascotMode { None, Sleep, Work, Raise }
 
 /// <summary>短反應可以被連點 5 下打斷，長動畫中的點擊不計次</summary>
 public enum MascotAnimationKind { Tap, Long, Hold }
@@ -103,6 +104,8 @@ public abstract record MascotEvent
     public sealed record Ignore(string Name) : MascotEvent { public override string ToString() => $"ignore {Name}"; }
     public sealed record Status(int Level) : MascotEvent { public override string ToString() => $"status {Level}"; }
     public sealed record Bump : MascotEvent { public override string ToString() => "bump"; }
+    /// <summary>AI 完成一個回合、面板收著：瀏海鼓一下、迷你角色揮手（展開時改成排隊播 wave）</summary>
+    public sealed record Cheer : MascotEvent { public override string ToString() => "cheer"; }
 }
 
 /// <summary>事件紀錄的一行：golden 比對與畫面換腳本用</summary>
@@ -151,6 +154,8 @@ public sealed class MascotMachine
     public bool IsWorking { get; private set; }
     /// <summary>Claude 與 Codex 都閒置超過設定的時間（睡覺）；工作中優先</summary>
     public bool IsAgentIdle { get; private set; }
+    /// <summary>有 AI 需要你（要權限、問你問題）：舉手，優先於工作中與睡覺</summary>
+    public bool IsNeedsYou { get; private set; }
 
     public bool IsIntro => IntroUntil is not null;
     public bool IsBusy => Playing is not null || RestUntil is not null;
@@ -348,7 +353,26 @@ public sealed class MascotMachine
         UpdateMode();
     }
 
-    private void UpdateMode() => SetMode(IsWorking ? MascotMode.Work : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
+    /// <summary>需要你：舉手立即生效（同工作中，動畫播放中不打斷，播完接到舉手的姿勢）</summary>
+    public void SetNeedsYou(bool needsYou, long time)
+    {
+        Begin(time);
+        IsNeedsYou = needsYou;
+        UpdateMode();
+    }
+
+    /// <summary>AI 完成一個回合：展開時照按鈕的規則排隊揮手；收著時瀏海鼓一下、迷你角色揮手。
+    /// react 為 false（靜音、勿擾）時什麼都不做</summary>
+    public void Cheer(long time, bool react = true)
+    {
+        time = Begin(time);
+        if (!react) return;
+        if (IsOpen) Request(MascotRequest.Wave, time);
+        else Record(new MascotEvent.Cheer());
+    }
+
+    private void UpdateMode() => SetMode(IsNeedsYou ? MascotMode.Raise
+                                         : IsWorking ? MascotMode.Work : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
 
     /// <summary>額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；
     /// 回到正常只換表情，排隊中的提醒也丟掉。react 為 false（靜音、勿擾）時只換表情、不播也不鼓</summary>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -62,6 +63,14 @@ public class AgentGoldenTests
                     var (working, idle) = sessions.Activity(t, new Dictionary<AgentKind, (bool, bool)>());
                     log.Add($"{t} activity working={(working ? "true" : "false")} idle={(idle ? "true" : "false")}");
                     break;
+                case "notices":
+                    var policy = new AgentNoticePolicy();
+                    var notices = AgentNotices.Due(sessions, t, policy).Select(n =>
+                        $"{AgentNames.Name(n.Ai)}:{(n.Kind == AgentNoticeKind.NeedsYou ? "needsYou" : "done")}" +
+                        $"{(n.Need is { } nd ? $"({AgentNames.Name(nd)})" : "")} key={n.Key}");
+                    var next = AgentNotices.NextCheck(sessions, t, policy);
+                    log.Add($"{t} notices [{string.Join(", ", notices)}] next={(next is { } nx ? nx.ToString(CultureInfo.InvariantCulture) : "none")}");
+                    break;
                 case "seen":
                     sessions.MarkSeen(t);
                     log.Add($"{t} seen → {Describe(sessions, t)}");
@@ -104,6 +113,19 @@ public class AgentGoldenTests
         var data = message.Encoded();
         Assert.True(data.Length <= AgentHookMessage.MaxLength);
         Assert.Equal(message, AgentHookMessage.Parse(data));
+    }
+
+    /// <summary>通知關閉（門檻 long.MaxValue）：不發、也不排下一次檢查，不會溢位</summary>
+    [Fact]
+    public void DisabledNoticesNeverFire()
+    {
+        var sessions = new AgentSessions(300_000);
+        var off = new AgentNoticePolicy(long.MaxValue, long.MaxValue);
+        sessions.Apply(new AgentHookMessage(AgentKind.Claude, AgentHookEvent.UserPromptSubmit, null, "0123456789abcdef", 0, ""), 0);
+        sessions.Apply(new AgentHookMessage(AgentKind.Claude, AgentHookEvent.PermissionRequest, AgentNeed.Permission, "0123456789abcdef",
+                                            1000, ""), 1_000_000);
+        Assert.Empty(AgentNotices.Due(sessions, 9_000_000, off));
+        Assert.Null(AgentNotices.NextCheck(sessions, 9_000_000, off));
     }
 
     [Fact]

@@ -140,6 +140,12 @@ public struct MascotConfig: Sendable {
         public var restMs: Int
         public var neutralMs: Int
         public var workMs: Int
+        /// 需要你：右手舉高（收合的迷你角色也一樣）
+        public var raise: Raise
+        public var raiseMs: Int
+        /// 收著時完成：迷你角色揮手多久
+        public var cheerWaveMs: Int
+        public struct Raise: Decodable, Sendable { public var pitch: Double; public var roll: Double; public var left: [Double]; public var right: [Double] }
         public struct Work: Decodable, Sendable { public var pitch: Double; public var follow: Double; public var left: [Double]; public var right: [Double] }
         public struct Sleep: Decodable, Sendable { public var pitch: Double; public var glow: Double; public var enterMs: Int }
     }

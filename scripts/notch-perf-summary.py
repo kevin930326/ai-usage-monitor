@@ -18,6 +18,8 @@ NEW_ANIMATIONS = ["nod", "tilt", "giggle", "look", "pinch", "face"]
 try:
     o, z, w, c, c2 = marks["notch-open"], marks["notch-sleep"], marks["notch-wave"], marks["notch-close"], marks["notch-close-2"]
     ga, g, gs = marks["gaze-move-asleep"], marks["gaze-move"], marks["gaze-still"]
+    ch, wp = marks["agent-cheer"], marks["waiting-pulse"]
+    ra, lo, rao, loo = marks["agent-raise"], marks["agent-lower"], marks["agent-raise-open"], marks["agent-lower-open"]
     extra = {name: marks[f"notch-{name}"] for name in NEW_ANIMATIONS}
 except KeyError as missing:
     print(f"缺少標記 {missing}")
@@ -36,6 +38,16 @@ rows = [
     ("收合、游標停住（停止重畫，扣掉每分鐘更新）", without_ticks(window(gs + 3, gs + 20)), "avg"),
     ("收合後 60～90 秒", window(c + 60, c + 90), "avg"),
     ("第二次收合後 5～18 秒", window(c2 + 5, c2 + 18), "avg"),
+    # AI 狀態（mascot2 第 2 部分）：收著時完成的鼓一下與揮手只記峰值；等你下指令的脈動和收合靜止同一個門檻
+    ("播放中：收著時完成（0～2 秒）", window(ch, ch + 2), "peak"),
+    ("收合、等你下指令（每 7 秒脈動，扣掉每分鐘更新）", without_ticks(window(wp + 2, wp + 23)), "avg"),
+    # 需要你：舉手與放下只記峰值；舉著手靜止時，收著和收合靜止、展開和展開待著同一個門檻（Codex C-05）
+    ("播放中：收著時舉手（0～2 秒）", window(ra, ra + 2), "peak"),
+    ("收合、舉著手（扣掉每分鐘更新）", without_ticks(window(ra + 3, ra + 19)), "avg"),
+    ("播放中：收著時放下（0～2 秒）", window(lo, lo + 2), "peak"),
+    ("播放中：展開時舉手（0～2 秒）", window(rao, rao + 2), "peak"),
+    ("展開、舉著手", window(rao + 3, rao + 14), "avg"),
+    ("播放中：展開時放下（0～2 秒）", window(loo, loo + 2), "peak"),
 ]
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
 print("|---|---|---|---|")
@@ -45,6 +57,8 @@ for name, r, kind in rows:
 by_name = {name: r for name, r, _ in rows}
 awake, asleep = by_name["展開待著、醒著（展開後 5～10 秒）"], by_name["展開待著、睡著（睡著後 2～10 秒，呼吸）"]
 closed, second = by_name["收合後 60～90 秒"], by_name["第二次收合後 5～18 秒"]
+pulsing = by_name["收合、等你下指令（每 7 秒脈動，扣掉每分鐘更新）"]
+raised, raised_open = by_name["收合、舉著手（扣掉每分鐘更新）"], by_name["展開、舉著手"]
 gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分鐘更新）"]
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
@@ -56,6 +70,9 @@ checks = [
     # 看滑鼠：游標一直動時和展開待著同一個門檻；游標停住或睡著時和收合靜止同一個門檻
     ("收合、游標一直移動 ≤ 4%", bool(gaze_moving) and avg(gaze_moving, 1) <= 4),
     ("收合、游標停住或睡著 ≤ 0.3%", bool(gaze_still) and bool(gaze_asleep) and avg(gaze_still, 1) <= 0.3 and avg(gaze_asleep, 1) <= 0.3),
+    ("收合、等你下指令的脈動 ≤ 0.3%", bool(pulsing) and avg(pulsing, 1) <= 0.3),
+    ("收合、舉著手 ≤ 0.3%；展開、舉著手 ≤ 4%", bool(raised) and bool(raised_open) and avg(raised, 1) <= 0.3
+     and avg(raised_open, 1) <= 4),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]
 print()

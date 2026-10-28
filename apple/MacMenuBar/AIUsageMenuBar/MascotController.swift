@@ -113,6 +113,10 @@ final class MascotController {
     @ObservationIgnored private var menuOpen = false
     /// 第一次展開時顯示一次「右鍵有更多」的提示
     private(set) var showsHint = false
+    /// 展開時右邊那張卡：額度或 AI 工作階段
+    private(set) var page = NotchPage.overview
+    /// 等你下一個指令時收合瀏海在脈動（循環由 Core Animation 跑，App 不用每 7 秒醒來）
+    private(set) var pulsing = false
 
     /// 啟動時的系統開機時間（秒）；時間基準用它而不是牆鐘，改系統時間或校時倒退時動畫不會卡住
     @ObservationIgnored private let epoch = ProcessInfo.processInfo.systemUptime
@@ -204,6 +208,8 @@ final class MascotController {
         director.open(at: time(), intro: intro)
         self.director = director
         if !PanelSettings.shared.notchHintShown { showsHint = true }
+        let monitor = AgentMonitor.shared
+        if monitor.sessions.count(.needsYou, at: monitor.now) > 0 { page = .agents }
         refresh()
         restartActivityChecks()
         // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
@@ -248,7 +254,14 @@ final class MascotController {
             mutate { $0.release(at: time()) }
         }
         mutate { $0.close(at: time()) }
+        page = .overview
         restartActivityChecks()
+        updatePulse()
+    }
+
+    /// 上緣的分頁：額度或 AI 工作階段
+    func setPage(_ page: NotchPage) {
+        self.page = page
     }
 
     /// 動畫程度（設定與「減少動態效果」）
@@ -265,6 +278,8 @@ final class MascotController {
         // 彈簧的參數在建立時決定：收著時才重建（展開中等下次收合）
         if motion != builtMotion, director?.machine.isOpen == false, !windowExpanded { rebuild() }
         refresh()
+        // 脈動：開了「減少動態效果」或動畫關閉時，進行中的也立刻停
+        updatePulse()
     }
 
     /// 滑鼠在面板裡移動（畫布座標）：偵測繞圈／甩動／停留（只在這個視窗裡）。看滑鼠另外由 `pollPointer` 處理（整個螢幕）
@@ -405,10 +420,35 @@ final class MascotController {
     /// 修改時間判斷的上一次結果（沒接 hook 的 AI 用）
     @ObservationIgnored private var fallbackActivity: [AgentKind: (working: Bool, active: Bool)] = [:]
 
-    /// hook 的狀態變了：馬上重算工作中與睡覺（不等下一次修改時間的檢查）
+    /// hook 的狀態變了：馬上重算工作中、需要你與睡覺（不等下一次修改時間的檢查），以及表情與脈動
     func agentStateChanged() {
         applyActivity()
+        updateStatus()
+        updatePulse()
+        // 工作階段都結束了：沒有東西可列，回到額度
+        if AgentMonitor.shared.sessions.isEmpty { page = .overview }
     }
+
+    /// 一個回合完成：展開時揮手；收著時瀏海鼓一下、迷你角色揮手。靜音、勿擾時不動；瀏海沒顯示時不排任何動畫（NFR-8，Codex C-02）
+    func agentFinished() {
+        guard NotchPanelController.shared.isShown else { return }
+        let quiet = PanelSettings.shared.isMascotQuiet(at: Date())
+        mutate { $0.cheer(at: time(), react: !quiet) }
+    }
+
+    /// 等你下一個指令（而且沒有更優先的狀態）：收著時每 7 秒輕輕脈動一次（1.6 秒）；
+    /// 展開、靜音或勿擾、動畫關閉、系統「減少動態效果」、設定關掉時不脈動（FR-25、ADR-0010，Codex C-03）
+    private func updatePulse() {
+        let monitor = AgentMonitor.shared
+        let settings = PanelSettings.shared
+        let wanted = settings.notchWaitingPulse && NotchPanelController.shared.isShown && director?.machine.isOpen == false
+            && motion != .off && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && !settings.isMascotQuiet(at: Date())
+            && monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter) == .waiting
+        if pulsing != wanted { pulsing = wanted }
+    }
+
+    static let pulseEveryMs = 7000
+    static let pulseMs = 1600
 
     private func applyActivity() {
         guard motion.animatesBody, let machine = director?.machine else { return }
@@ -417,10 +457,12 @@ final class MascotController {
         #endif
         let monitor = AgentMonitor.shared
         let (working, idle) = monitor.sessions.activity(at: monitor.now, fallback: fallbackActivity)
-        guard machine.isWorking != working || machine.isAgentIdle != idle else { return }
+        let needsYou = monitor.sessions.count(.needsYou, at: monitor.now) > 0
+        guard machine.isWorking != working || machine.isAgentIdle != idle || machine.isNeedsYou != needsYou else { return }
         mutate {
             $0.setWorking(working, at: time())
             $0.setAgentIdle(idle, at: time())
+            $0.setNeedsYou(needsYou, at: time())
         }
     }
 
@@ -431,9 +473,14 @@ final class MascotController {
         let level = NotchQuota.statusLevel(in: store.snapshot, provider: provider, now: store.now)
         let unavailable = MascotMood.isQuotaUnavailable(store.snapshot, provider: provider,
                                                         readFailed: store.errorMessage != nil, now: store.now)
-        let mood = MascotMood.quota(level: level, unavailable: unavailable)
+        let quota = MascotMood.quota(level: level, unavailable: unavailable)
+        let monitor = AgentMonitor.shared
+        let mood = MascotMood.agent(monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter),
+                                    quota: quota)
         if director?.mood != mood { mutate { $0.setMood(mood) } }
         setStatus(level)
+        // 每分鐘也重算脈動：等你超過睡覺分鐘數會變成閒置（沒有計時器，靠這裡停）
+        updatePulse()
     }
 
     /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：靜音、勿擾時只換表情，不播提醒也不鼓一下

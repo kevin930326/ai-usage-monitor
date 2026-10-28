@@ -91,6 +91,16 @@ public enum MascotMood: String, Sendable, CaseIterable {
               let usage = snapshot.providers[provider], usage.error == nil else { return true }
         return usage.visibleWindows.isEmpty
     }
+
+    /// 加上 AI 狀態（mascot2 第 2 部分）：出錯時難過（看過就變回額度的表情）；完成未看、額度正常時開心。
+    /// 額度偏高、用完、過期仍照額度，那些要你處理
+    public static func agent(_ state: AgentState?, quota: MascotMood) -> MascotMood {
+        switch state {
+        case .error: .sad
+        case .done where quota == .normal: .happy
+        default: quota
+        }
+    }
 }
 
 /// 靜音與勿擾（右鍵選單）：角色的提醒動畫與瀏海的通知暫停到某個時間

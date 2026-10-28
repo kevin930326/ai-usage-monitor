@@ -65,6 +65,9 @@ public struct MascotDirector: Sendable {
     public mutating func move(at time: Int) { apply { $0.move(at: time) } }
     public mutating func setAgentIdle(_ idle: Bool, at time: Int) { apply { $0.setAgentIdle(idle, at: time) } }
     public mutating func silence(at time: Int) { apply { $0.silence(at: time) } }
+    public mutating func setNeedsYou(_ needsYou: Bool, at time: Int) { apply { $0.setNeedsYou(needsYou, at: time) } }
+    /// AI 完成一個回合（靜音、勿擾時 `react` 為 false，不揮手也不鼓）
+    public mutating func cheer(at time: Int, react: Bool = true) { apply { $0.cheer(at: time, react: react) } }
 
     /// 臉朝游標轉（`dx`、`dy` 是游標相對角色中心的距離，px；整個螢幕都看，展開與收合都一樣）。
     /// 目標和現在差不到 `threshold`（弧度）時不更新，回傳 false，畫面不必重畫
@@ -109,12 +112,12 @@ public struct MascotDirector: Sendable {
         let pose = script.pose(at: t)
         // 快速展開之後換了別的腳本，就不再是「滑到卡片途中」
         switch entry.event {
-        case .start, .release, .pose, .bump, .introEnd: quickOpening = false
+        case .start, .release, .pose, .bump, .cheer, .introEnd: quickOpening = false
         default: break
         }
         if isStill {
             switch entry.event {
-            case .start, .release, .pose, .bump, .introEnd, .mode:
+            case .start, .release, .pose, .bump, .cheer, .introEnd, .mode:
                 // 靜止時不換腳本；模式照記，姿勢維持平常的樣子
                 if case .mode(let newMode) = entry.event { mode = newMode }
                 return
@@ -185,6 +188,9 @@ public struct MascotDirector: Sendable {
         case .bump:
             bumpStart = t
             use(scripts.collapsedAlert(start: t, from: pose, level: machine.statusLevel))
+        case .cheer:
+            bumpStart = t
+            use(scripts.collapsedCheer(start: t, from: pose, mode: mode))
         case .interrupt, .end, .queue, .drop, .ignore:
             break
         }

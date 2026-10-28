@@ -87,6 +87,13 @@ import Testing
             case "activity":
                 let (working, idle) = sessions.activity(at: event.t, fallback: [:])
                 log.append("\(event.t) activity working=\(working) idle=\(idle)")
+            case "notices":
+                let policy = AgentNoticePolicy()
+                let list = sessions.notices(at: event.t, policy: policy).map { n in
+                    "\(n.ai.rawValue):\(n.kind.rawValue)\(n.need.map { "(\($0.rawValue))" } ?? "") key=\(n.key)"
+                }
+                let next = sessions.nextNoticeCheck(after: event.t, policy: policy).map(String.init) ?? "none"
+                log.append("\(event.t) notices [\(list.joined(separator: ", "))] next=\(next)")
             case "seen":
                 sessions.markSeen(at: event.t)
                 log.append("\(event.t) seen → \(describe(sessions, at: event.t))")
@@ -158,6 +165,49 @@ import Testing
         #expect(sessions.activity(at: 4000 + 300_000, fallback: quiet) == (false, true))
         // hook 只管有工作階段的 AI：Codex 的紀錄檔還在動就醒著
         #expect(sessions.activity(at: 4000 + 300_000, fallback: [.claude: (true, true), .codex: (false, true)]) == (false, false))
+    }
+
+    /// 同一次需要你只通知一次：通知後提高門檻、關掉再打開都不重發；處理後的下一次需要你照樣通知（Codex C-04）
+    @Test func noticeLogSendsEachStateOnce() {
+        var sessions = AgentSessions(idleAfter: 300_000)
+        let message = { (event: AgentHookEvent, need: AgentNeed?) in
+            AgentHookMessage(ai: .claude, event: event, need: need, session: "0123456789abcdef", time: 1, folder: "")
+        }
+        var log = AgentNoticeLog()
+        let fast = AgentNoticePolicy(needsYouAfter: 20_000), slow = AgentNoticePolicy(needsYouAfter: 120_000)
+        let off = AgentNoticePolicy(needsYouAfter: .max, longTask: .max)
+        sessions.apply(message(.permissionRequest, .permission), at: 0)
+        #expect(log.take(sessions, at: 10_000, policy: fast).isEmpty)
+        #expect(log.take(sessions, at: 20_000, policy: fast).count == 1)
+        #expect(log.take(sessions, at: 30_000, policy: slow).isEmpty)
+        #expect(log.take(sessions, at: 120_000, policy: slow).isEmpty)
+        #expect(log.take(sessions, at: 130_000, policy: off).isEmpty)
+        #expect(log.take(sessions, at: 140_000, policy: fast).isEmpty)
+        // 處理後再一次需要你：新的狀態，照樣通知
+        sessions.apply(message(.postToolUse, nil), at: 150_000)
+        #expect(log.take(sessions, at: 150_000, policy: fast).isEmpty)
+        sessions.apply(message(.permissionRequest, .permission), at: 160_000)
+        #expect(log.take(sessions, at: 180_000, policy: fast).count == 1)
+    }
+
+    /// 通知關閉（門檻 Int64.max）：不發、也不排下一次檢查，不會溢位
+    @Test func disabledNoticesNeverFire() {
+        var sessions = AgentSessions(idleAfter: 300_000)
+        let off = AgentNoticePolicy(needsYouAfter: .max, longTask: .max)
+        sessions.apply(AgentHookMessage(ai: .claude, event: .userPromptSubmit, need: nil, session: "0123456789abcdef", time: 0, folder: ""), at: 0)
+        sessions.apply(AgentHookMessage(ai: .claude, event: .permissionRequest, need: .permission, session: "0123456789abcdef",
+                                        time: 1000, folder: ""), at: 1_000_000)
+        #expect(sessions.notices(at: 9_000_000, policy: off).isEmpty)
+        #expect(sessions.nextNoticeCheck(after: 9_000_000, policy: off) == nil)
+    }
+
+    /// 出錯難過；完成未看只在額度正常時開心；其他照額度
+    @Test func agentMoodKeepsQuotaWarnings() {
+        #expect(MascotMood.agent(.error, quota: .out) == .sad)
+        #expect(MascotMood.agent(.done, quota: .normal) == .happy)
+        #expect(MascotMood.agent(.done, quota: .worried) == .worried)
+        #expect(MascotMood.agent(.working, quota: .stale) == .stale)
+        #expect(MascotMood.agent(nil, quota: .normal) == .normal)
     }
 
     @Test func installedEventsAreHandled() {

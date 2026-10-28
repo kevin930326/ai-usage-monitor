@@ -4,8 +4,10 @@ import UsageKit
 /// 設定的「AI 狀態」（ADR-0017 第 3 節）：連接 Claude Code／Codex 的 hook，讓角色知道確切狀態
 struct AgentHookSection: View {
     @State private var installer = AgentHookInstaller.shared
+    @Environment(PanelSettings.self) private var settings
 
     var body: some View {
+        @Bindable var settings = settings
         VStack(alignment: .leading, spacing: 8) {
             Text("AI 狀態").font(.headline)
             Text("連接後，Claude Code 與 Codex 每到一個時間點（開始、送出提示、執行工具、需要你、完成）會通知這個 App，角色就知道哪個 AI 在工作、哪個在等你。只傳事件種類、工作階段的雜湊與資料夾名稱，不傳提示、指令或檔案內容；資料夾名稱只顯示在瀏海上，不存檔、不上傳。沒連接時照紀錄檔的修改時間猜。")
@@ -15,6 +17,19 @@ struct AgentHookSection: View {
             ForEach(AgentKind.allCases, id: \.self) { ai in
                 row(ai)
             }
+            Text("需要你時通知").font(.subheadline.weight(.semibold)).padding(.top, 4)
+            FlowChips(choices: PanelSettings.needsYouSecondChoices.map { ($0, $0 == 0 ? "關閉" : "\($0) 秒後") },
+                      selected: settings.agentNeedsYouSeconds) { settings.agentNeedsYouSeconds = $0 }
+            Text("長任務完成時通知").font(.subheadline.weight(.semibold)).padding(.top, 4)
+            FlowChips(choices: PanelSettings.longTaskMinuteChoices.map { ($0, $0 == 0 ? "關閉" : "跑超過 \($0) 分鐘") },
+                      selected: settings.agentLongTaskMinutes) { settings.agentLongTaskMinutes = $0 }
+            Text("走系統通知中心，會遵守專注模式；瀏海右鍵的靜音與勿擾也會擋掉。通知只寫哪個 AI、要你做什麼，不寫資料夾名稱（通知中心會把通知存在磁碟上）。瀏海上的外框、舉手與揮手不受這兩個設定影響。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            SwitchRow(title: "等你下指令時瀏海輕輕脈動",
+                      detail: "AI 做完、等你下一個指令時，收著的瀏海每 7 秒亮一下外框，不用展開就知道。靜音、勿擾或角色動畫「關閉」時不脈動",
+                      isOn: $settings.notchWaitingPulse)
         }
         .onAppear { installer.refresh() }
     }
