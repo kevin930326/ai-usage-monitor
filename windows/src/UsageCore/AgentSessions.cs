@@ -75,7 +75,13 @@ public static class AgentNames
 
     internal static JsonObject? Object(byte[] data)
     {
-        try { return JsonNode.Parse(data) as JsonObject; }
+        try
+        {
+            if (JsonNode.Parse(data) is not JsonObject o) return null;
+            // JsonObject 延到第一次讀取才檢查重複鍵（丟 ArgumentException）：在這裡就讀一次，格式不對只回 null、不當機
+            _ = o.Count;
+            return o;
+        }
         catch (Exception e) when (e is JsonException or ArgumentException or InvalidOperationException) { return null; }
     }
 }
@@ -84,7 +90,8 @@ public static class AgentNames
 /// hook 從標準輸入的事件 JSON 取出的東西。其餘欄位（提示、工具輸入與輸出、訊息、紀錄路徑、完整的工作目錄）
 /// 在這裡就丟掉，不會進到任何回傳值（隱私底線）。
 /// </summary>
-public sealed record AgentHookInput(AgentHookEvent Event, AgentNeed? Need, string SessionId, string Folder)
+/// <remarks>Sub：事件來自子代理（輸入有 agent_id；只記有沒有，不記內容）</remarks>
+public sealed record AgentHookInput(AgentHookEvent Event, AgentNeed? Need, string SessionId, string Folder, bool Sub = false)
 {
     /// <summary>事件 JSON 最多讀多少（超過就整個丟掉）</summary>
     public const int MaxInput = 1 << 20;
@@ -125,7 +132,9 @@ public sealed record AgentHookInput(AgentHookEvent Event, AgentNeed? Need, strin
                 };
                 break;
         }
-        return new AgentHookInput(e.Value, need, sessionId, FolderName(AgentNames.Text(o["cwd"])));
+        // 子代理的事件帶父工作階段的 session_id，另有 agent_id（Fable F-03）
+        var sub = !string.IsNullOrEmpty(AgentNames.Text(o["agent_id"]));
+        return new AgentHookInput(e.Value, need, sessionId, FolderName(AgentNames.Text(o["cwd"])), sub);
     }
 
     /// <summary>完整路徑只取最後一段；去掉控制與格式字元（同 Swift 的 controlCharacters），最多 48 個純量</summary>
@@ -149,26 +158,31 @@ public sealed record AgentHookInput(AgentHookEvent Event, AgentNeed? Need, strin
 
 /// <summary>
 /// hook 經 socket 送給 App 的一行 JSON：
-/// {"v":1,"ai":"claude","ev":"Stop","need":"","sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}
+/// {"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}
 /// </summary>
-public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentNeed? Need, string Session, long Time, string Folder)
+public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentNeed? Need, string Session, long Time, string Folder,
+                                      bool Sub = false)
 {
     public const int Version = 1;
     /// <summary>一行最多多少位元組（App 讀超過就丟掉）</summary>
     public const int MaxLength = 1024;
 
-    private static readonly string[] Keys = ["v", "ai", "ev", "need", "sid", "t", "dir"];
+    private static readonly string[] Keys = ["v", "ai", "ev", "need", "sub", "sid", "t", "dir"];
 
     /// <summary>送出的一行（不含換行）；鍵的順序固定，和 Swift 輸出相同</summary>
     public byte[] Encoded()
     {
         var text = $"{{\"v\":{Version},\"ai\":{Quote(AgentNames.Name(Ai))},\"ev\":{Quote(AgentNames.Name(Event))}," +
-                   $"\"need\":{Quote(Need is { } n ? AgentNames.Name(n) : "")},\"sid\":{Quote(Session)}," +
+                   $"\"need\":{Quote(Need is { } n ? AgentNames.Name(n) : "")},\"sub\":{(Sub ? "true" : "false")}," +
+                   $"\"sid\":{Quote(Session)}," +
                    $"\"t\":{Time.ToString(CultureInfo.InvariantCulture)},\"dir\":{Quote(Folder)}}}";
         return Encoding.UTF8.GetBytes(text);
     }
 
-    /// <summary>驗證收到的一行：版本、欄位、白名單、長度都要對，否則回傳 null（App 直接丟掉）</summary>
+    /// <summary>
+    /// 驗證收到的一行：版本、欄位、白名單、長度都要對，否則回傳 null（App 直接丟掉）。
+    /// 最後要求重新編碼後和收到的一字不差：1.0、1e3、重複鍵、多餘空白都不收，和 Swift 一樣嚴格（Fable F-12）
+    /// </summary>
     public static AgentHookMessage? Parse(byte[] data)
     {
         if (data.Length > MaxLength) return null;
@@ -185,13 +199,16 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
         if (o["t"] is not JsonValue t || t.GetValueKind() != JsonValueKind.Number || !t.TryGetValue<long>(out var time) || time <= 0)
             return null;
         if (folder.Length > 0 && folder != AgentHookInput.FolderName(folder)) return null;
+        if (o["sub"] is not JsonValue subValue || subValue.GetValueKind() is not (JsonValueKind.True or JsonValueKind.False)) return null;
+        var sub = subValue.GetValue<bool>();
         AgentNeed? need = null;
         if (needText.Length > 0)
         {
             need = AgentNames.Need(needText);
             if (need is null) return null;
         }
-        return new AgentHookMessage(ai.Value, e.Value, need, session, time, folder);
+        var message = new AgentHookMessage(ai.Value, e.Value, need, session, time, folder, sub);
+        return message.Encoded().AsSpan().SequenceEqual(data) ? message : null;
     }
 
     public static bool IsSessionHash(string text) =>
@@ -222,6 +239,8 @@ public sealed class AgentSessions(long idleAfter)
 {
     /// <summary>工作中超過這麼久沒有事件，當成被中斷了（Claude Code 被使用者中斷時不送 Stop）</summary>
     public const long WorkingTimeout = 20 * 60_000;
+    /// <summary>需要你超過這麼久沒有事件，當成沒人等了（例如直接關掉終端機，沒送 SessionEnd；Fable F-06）</summary>
+    public const long NeedsYouTimeout = 60 * 60_000;
     /// <summary>任何狀態超過這麼久沒有事件就移除（例如 AI 當掉、沒送 SessionEnd）</summary>
     public const long ForgetAfter = 12 * 3_600_000;
     /// <summary>同時最多記幾個工作階段（假事件塞爆時丟掉最久沒事件的）</summary>
@@ -246,7 +265,7 @@ public sealed class AgentSessions(long idleAfter)
             : new AgentSession(message.Ai, message.Session, message.Folder, AgentState.Waiting, null, now, now);
         if (message.Folder.Length > 0) session = session with { Folder = message.Folder };
         session = session with { Last = now };
-        var next = Transition(session.Stored, message.Event, message.Need);
+        var next = Transition(session.Stored, message.Event, message.Need, message.Sub);
         if (next is { } n && (n.State != session.Stored || n.Need != session.Need))
             session = session with { Stored = n.State, Need = n.Need, Since = now };
         if (index >= 0)
@@ -264,27 +283,38 @@ public sealed class AgentSessions(long idleAfter)
         }
     }
 
-    /// <summary>狀態轉換；null 表示不變</summary>
-    internal static (AgentState State, AgentNeed? Need)? Transition(AgentState state, AgentHookEvent e, AgentNeed? need) => e switch
+    /// <summary>
+    /// 狀態轉換；null 表示不變。子代理的工具事件不把完成、等你、出錯改回工作中（Fable F-03）；
+    /// 工作中收到 SessionStart（回合中途自動壓縮）時維持（Fable F-07）
+    /// </summary>
+    internal static (AgentState State, AgentNeed? Need)? Transition(AgentState state, AgentHookEvent e, AgentNeed? need,
+                                                                    bool sub = false)
     {
-        AgentHookEvent.SessionStart or AgentHookEvent.Interrupt => (AgentState.Waiting, null),
-        AgentHookEvent.UserPromptSubmit or AgentHookEvent.PostToolUse or AgentHookEvent.PostToolUseFailure => (AgentState.Working, null),
-        AgentHookEvent.PreToolUse => need is { } n && n != AgentNeed.Idle ? (AgentState.NeedsYou, n) : (AgentState.Working, null),
-        AgentHookEvent.PermissionRequest => (AgentState.NeedsYou, AgentNeed.Permission),
-        AgentHookEvent.Notification => need switch
+        var stillRunning = state is AgentState.Working or AgentState.NeedsYou;
+        (AgentState, AgentNeed?)? running = sub && !stillRunning ? null : (AgentState.Working, null);
+        return e switch
         {
-            AgentNeed.Permission or AgentNeed.Question or AgentNeed.Plan => (AgentState.NeedsYou, need),
-            // 已經等你輸入一陣子：還記成工作中的（漏了 Stop）改成等你；完成未看、需要你維持
-            AgentNeed.Idle => state == AgentState.Working ? (AgentState.Waiting, null) : null,
+            AgentHookEvent.SessionStart => state == AgentState.Working ? null : (AgentState.Waiting, null),
+            AgentHookEvent.Interrupt => (AgentState.Waiting, null),
+            AgentHookEvent.UserPromptSubmit => (AgentState.Working, null),
+            AgentHookEvent.PostToolUse or AgentHookEvent.PostToolUseFailure => running,
+            AgentHookEvent.PreToolUse => need is { } n && n != AgentNeed.Idle ? (AgentState.NeedsYou, n) : running,
+            AgentHookEvent.PermissionRequest => (AgentState.NeedsYou, AgentNeed.Permission),
+            AgentHookEvent.Notification => need switch
+            {
+                AgentNeed.Permission or AgentNeed.Question or AgentNeed.Plan => (AgentState.NeedsYou, need),
+                // 已經等你輸入一陣子：還記成工作中的（漏了 Stop）改成等你；完成未看、需要你維持
+                AgentNeed.Idle => state == AgentState.Working ? (AgentState.Waiting, null) : null,
+                _ => null,
+            },
+            AgentHookEvent.Stop => (AgentState.Done, null),
+            AgentHookEvent.StopFailure => (AgentState.Error, null),
+            // 子代理與壓縮只代表還在跑：工作中或剛批准（需要你）時算工作中，其他狀態不變
+            AgentHookEvent.SubagentStart or AgentHookEvent.SubagentStop or AgentHookEvent.PreCompact or AgentHookEvent.PostCompact =>
+                stillRunning ? (AgentState.Working, null) : null,
             _ => null,
-        },
-        AgentHookEvent.Stop => (AgentState.Done, null),
-        AgentHookEvent.StopFailure => (AgentState.Error, null),
-        // 子代理與壓縮只代表還在跑：工作中或剛批准（需要你）時算工作中，其他狀態不變
-        AgentHookEvent.SubagentStart or AgentHookEvent.SubagentStop or AgentHookEvent.PreCompact or AgentHookEvent.PostCompact =>
-            state is AgentState.Working or AgentState.NeedsYou ? (AgentState.Working, null) : null,
-        _ => null,
-    };
+        };
+    }
 
     /// <summary>使用者看過了（展開或點角色）：完成未看與出錯都變成等你</summary>
     public void MarkSeen(long now)
@@ -294,14 +324,20 @@ public sealed class AgentSessions(long idleAfter)
                 sessions[i] = sessions[i] with { Stored = AgentState.Waiting, Need = null, Since = now };
     }
 
-    /// <summary>時間經過：工作中太久沒事件變等你、太久沒事件的移除。回傳是否有改變</summary>
+    /// <summary>時間經過：工作中或需要你太久沒事件變等你、太久沒事件的移除。回傳是否有改變</summary>
     public bool Expire(long now)
     {
         var changed = sessions.RemoveAll(s => now - s.Last >= ForgetAfter) > 0;
         for (var i = 0; i < sessions.Count; i++)
         {
-            if (sessions[i].Stored != AgentState.Working || now - sessions[i].Last < WorkingTimeout) continue;
-            sessions[i] = sessions[i] with { Stored = AgentState.Waiting, Need = null, Since = sessions[i].Last + WorkingTimeout };
+            long? timeout = sessions[i].Stored switch
+            {
+                AgentState.Working => WorkingTimeout,
+                AgentState.NeedsYou => NeedsYouTimeout,
+                _ => null,
+            };
+            if (timeout is not { } limit || now - sessions[i].Last < limit) continue;
+            sessions[i] = sessions[i] with { Stored = AgentState.Waiting, Need = null, Since = sessions[i].Last + limit };
             changed = true;
         }
         return changed;
@@ -333,17 +369,22 @@ public sealed class AgentSessions(long idleAfter)
 
     /// <summary>
     /// 角色的工作中與睡覺：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間（fallback）。
-    /// 只有「工作中」算工作；所有 AI 都閒置才睡覺。
+    /// 只有「工作中」算工作；所有 AI 都閒置才睡覺。需要你算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡
+    /// （未看的標記保留；Fable F-06）。
     /// </summary>
     public (bool Working, bool Idle) Activity(long now, IReadOnlyDictionary<AgentKind, (bool Working, bool Active)> fallback)
     {
         bool working = false, active = false;
         foreach (var ai in Enum.GetValues<AgentKind>())
         {
-            if (Top(ai, now) is { } state)
+            var mine = sessions.Where(s => s.Ai == ai).ToList();
+            if (mine.Count > 0)
             {
-                working |= state == AgentState.Working;
-                active |= state != AgentState.Idle;
+                foreach (var s in mine)
+                {
+                    working |= s.Stored == AgentState.Working;
+                    active |= s.Stored is AgentState.Working or AgentState.NeedsYou || now - s.Since < IdleAfter;
+                }
             }
             else if (fallback.TryGetValue(ai, out var probe))
             {

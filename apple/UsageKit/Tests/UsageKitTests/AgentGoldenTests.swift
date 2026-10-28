@@ -36,6 +36,7 @@ import Testing
         var need: String?
         var sid: String?
         var dir: String?
+        var sub: Bool?
     }
 
     struct Output: Codable, Equatable {
@@ -52,7 +53,7 @@ import Testing
     static func extract(_ raw: Raw) -> Named {
         guard let input = AgentHookInput.extract(Data(raw.raw.utf8)) else { return Named(name: raw.name, result: ["nil"]) }
         return Named(name: raw.name, result: ["event=\(input.event.rawValue)", "need=\(input.need?.rawValue ?? "")",
-                                              "session=\(input.sessionID)", "folder=\(input.folder)"])
+                                              "session=\(input.sessionID)", "folder=\(input.folder)"] + (input.sub ? ["sub"] : []))
     }
 
     static func parse(_ raw: Raw) -> Named {
@@ -77,9 +78,13 @@ import Testing
             case "msg":
                 let message = AgentHookMessage(ai: AgentKind(rawValue: event.ai!)!, event: AgentHookEvent(rawValue: event.ev!)!,
                                                need: event.need.flatMap(AgentNeed.init(rawValue:)), session: event.sid!,
-                                               time: event.t, folder: event.dir ?? "")
+                                               time: event.t, folder: event.dir ?? "", sub: event.sub ?? false)
                 sessions.apply(message, at: event.t)
-                log.append("\(event.t) \(event.ai!) \(event.ev!)\(event.need.map { $0.isEmpty ? "" : "(\($0))" } ?? "") → \(describe(sessions, at: event.t))")
+                log.append("\(event.t) \(event.ai!) \(event.ev!)\(event.need.map { $0.isEmpty ? "" : "(\($0))" } ?? "")"
+                           + "\(event.sub == true ? "[sub]" : "") → \(describe(sessions, at: event.t))")
+            case "activity":
+                let (working, idle) = sessions.activity(at: event.t, fallback: [:])
+                log.append("\(event.t) activity working=\(working) idle=\(idle)")
             case "seen":
                 sessions.markSeen(at: event.t)
                 log.append("\(event.t) seen → \(describe(sessions, at: event.t))")

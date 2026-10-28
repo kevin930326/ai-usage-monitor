@@ -230,31 +230,50 @@
       "result" : [
         "nil"
       ]
+    },
+    {
+      "name" : "subagent-posttool",
+      "result" : [
+        "event=PostToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project",
+        "sub"
+      ]
+    },
+    {
+      "name" : "agent-id-empty",
+      "result" : [
+        "event=PostToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
     }
   ],
   "messages" : [
     {
       "name" : "valid",
       "result" : [
-        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
       ]
     },
     {
       "name" : "valid-need",
       "result" : [
-        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PermissionRequest\",\"need\":\"permission\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PermissionRequest\",\"need\":\"permission\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
       ]
     },
     {
       "name" : "valid-codex-empty-dir",
       "result" : [
-        "{\"v\":1,\"ai\":\"codex\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"\"}"
+        "{\"v\":1,\"ai\":\"codex\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"\"}"
       ]
     },
     {
       "name" : "valid-unicode-dir",
       "result" : [
-        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"專案 A\"}"
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"專案 A\"}"
       ]
     },
     {
@@ -361,6 +380,54 @@
     },
     {
       "name" : "array",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "valid-sub",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PostToolUse\",\"need\":\"\",\"sub\":true,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+      ]
+    },
+    {
+      "name" : "spaced-json",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "version-float",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "time-exponent",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "duplicate-key",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "key-order",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "sub-not-bool",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "missing-sub",
       "result" : [
         "nil"
       ]
@@ -556,6 +623,66 @@
         "310 claude UserPromptSubmit → top=claude/1f1f [claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
         "320 claude UserPromptSubmit → top=claude/2020 [claude/2020/proj:working@320, claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10]",
         "330 claude UserPromptSubmit → top=claude/2121 [claude/2121/proj:working@330, claude/2020/proj:working@320, claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20]"
+      ]
+    },
+    {
+      "name" : "background-subagent-after-stop",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "2000 claude PreToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "3000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "4000 claude SubagentStop[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "5000 claude PermissionRequest(permission)[sub] → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@5000]",
+        "6000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@6000]",
+        "7000 claude SubagentStop[sub] → top=claude/aaaa [claude/aaaa/proj:working@6000]",
+        "8000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@8000]"
+      ]
+    },
+    {
+      "name" : "subagent-while-working",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "2000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "3000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@3000]"
+      ]
+    },
+    {
+      "name" : "compact-mid-turn-keeps-working",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreCompact → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "2000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "3000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "4000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@4000]",
+        "5000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@5000]"
+      ]
+    },
+    {
+      "name" : "unseen-done-lets-character-sleep",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 activity working=true idle=false",
+        "2000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "301999 activity working=false idle=false",
+        "302000 activity working=false idle=true",
+        "302000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "303000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@303000]",
+        "304000 claude StopFailure → top=claude/aaaa [claude/aaaa/proj:error@304000]",
+        "604000 activity working=false idle=true"
+      ]
+    },
+    {
+      "name" : "needs-you-times-out",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "3000000 activity working=false idle=false",
+        "3600999 expire (no change) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "3601000 expire → top=claude/aaaa [claude/aaaa/proj:waiting@3601000]",
+        "3601000 activity working=false idle=false",
+        "3901000 activity working=false idle=true"
       ]
     }
   ]

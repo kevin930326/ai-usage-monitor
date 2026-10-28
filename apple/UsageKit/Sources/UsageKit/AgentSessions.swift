@@ -64,12 +64,15 @@ public struct AgentHookInput: Sendable, Equatable {
     public var sessionID: String
     /// 工作目錄的最後一段（資料夾名稱），只給畫面用
     public var folder: String
+    /// 事件來自子代理（輸入有 `agent_id`；只記有沒有，不記內容）
+    public var sub: Bool
 
-    public init(event: AgentHookEvent, need: AgentNeed?, sessionID: String, folder: String) {
+    public init(event: AgentHookEvent, need: AgentNeed?, sessionID: String, folder: String, sub: Bool = false) {
         self.event = event
         self.need = need
         self.sessionID = sessionID
         self.folder = folder
+        self.sub = sub
     }
 
     /// 事件 JSON 最多讀多少（超過就整個丟掉）
@@ -105,8 +108,10 @@ public struct AgentHookInput: Sendable, Equatable {
         default:
             need = nil
         }
+        // 子代理的事件帶父工作階段的 session_id，另有 agent_id（Fable F-03）
+        let sub = (object["agent_id"] as? String).map { !$0.isEmpty } ?? false
         return AgentHookInput(event: event, need: need, sessionID: sessionID,
-                              folder: folderName(object["cwd"] as? String))
+                              folder: folderName(object["cwd"] as? String), sub: sub)
     }
 
     /// 完整路徑只取最後一段；去掉控制字元與路徑分隔字元，最多 48 字
@@ -122,7 +127,7 @@ public struct AgentHookInput: Sendable, Equatable {
 // MARK: - socket：App 收到的一行
 
 /// hook 經 Unix socket 送給 App 的一行 JSON：
-/// `{"v":1,"ai":"claude","ev":"Stop","need":"","sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}`
+/// `{"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}`
 public struct AgentHookMessage: Sendable, Equatable, Codable {
     public var ai: AgentKind
     public var event: AgentHookEvent
@@ -132,36 +137,45 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
     /// hook 的時鐘（毫秒）
     public var time: Int64
     public var folder: String
+    /// 事件來自子代理
+    public var sub: Bool
 
     public static let version = 1
     /// 一行最多多少位元組（App 讀超過就丟掉）
     public static let maxLength = 1024
 
-    public init(ai: AgentKind, event: AgentHookEvent, need: AgentNeed?, session: String, time: Int64, folder: String) {
+    public init(ai: AgentKind, event: AgentHookEvent, need: AgentNeed?, session: String, time: Int64, folder: String,
+                sub: Bool = false) {
         self.ai = ai
         self.event = event
         self.need = need
         self.session = session
         self.time = time
         self.folder = folder
+        self.sub = sub
     }
 
     /// 送出的一行（不含換行）；鍵的順序固定，Swift 與 C# 輸出相同
     public func encoded() -> Data {
         let fields: [(String, Any)] = [("v", Self.version), ("ai", ai.rawValue), ("ev", event.rawValue),
-                                       ("need", need?.rawValue ?? ""), ("sid", session), ("t", time), ("dir", folder)]
+                                       ("need", need?.rawValue ?? ""), ("sub", sub), ("sid", session), ("t", time),
+                                       ("dir", folder)]
         let body = fields.map { key, value -> String in
-            let encoded: String = if let text = value as? String { Self.quote(text) } else { "\(value)" }
+            let encoded: String = if let text = value as? String { Self.quote(text) } else if let flag = value as? Bool {
+                flag ? "true" : "false"
+            } else { "\(value)" }
             return "\"\(key)\":\(encoded)"
         }.joined(separator: ",")
         return Data("{\(body)}".utf8)
     }
 
-    /// 驗證收到的一行：版本、欄位、白名單、長度都要對，否則回傳 nil（App 直接丟掉）
+    /// 驗證收到的一行：版本、欄位、白名單、長度都要對，否則回傳 nil（App 直接丟掉）。
+    /// 最後要求重新編碼後和收到的一字不差：`1.0`、`1e3`、重複鍵、多餘空白都不收，Swift 與 C# 一樣嚴格（Fable F-12）
     public static func parse(_ data: Data) -> AgentHookMessage? {
         guard data.count <= maxLength,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              Set(object.keys) == ["v", "ai", "ev", "need", "sid", "t", "dir"],
+              Set(object.keys) == ["v", "ai", "ev", "need", "sub", "sid", "t", "dir"],
+              let sub = object["sub"] as? Bool,
               let version = object["v"] as? Int, version == Self.version,
               let ai = (object["ai"] as? String).flatMap(AgentKind.init(rawValue:)),
               let event = (object["ev"] as? String).flatMap(AgentHookEvent.init(rawValue:)),
@@ -173,7 +187,8 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
         // 種類只能是空字串或白名單內的值
         let need: AgentNeed?
         if needText.isEmpty { need = nil } else if let value = AgentNeed(rawValue: needText) { need = value } else { return nil }
-        return AgentHookMessage(ai: ai, event: event, need: need, session: session, time: time, folder: folder)
+        let message = AgentHookMessage(ai: ai, event: event, need: need, session: session, time: time, folder: folder, sub: sub)
+        return message.encoded() == data ? message : nil
     }
 
     public static func isSessionHash(_ text: String) -> Bool {
@@ -233,6 +248,8 @@ public struct AgentSession: Sendable, Equatable {
 public struct AgentSessions: Sendable, Equatable {
     /// 工作中超過這麼久沒有事件，當成被中斷了（Claude Code 被使用者中斷時不送 Stop）
     public static let workingTimeout: Int64 = 20 * 60_000
+    /// 需要你超過這麼久沒有事件，當成沒人等了（例如直接關掉終端機，沒送 SessionEnd；Fable F-06）
+    public static let needsYouTimeout: Int64 = 60 * 60_000
     /// 任何狀態超過這麼久沒有事件就移除（例如 AI 當掉、沒送 SessionEnd）
     public static let forgetAfter: Int64 = 12 * 3_600_000
     /// 同時最多記幾個工作階段（假事件塞爆時丟掉最久沒事件的）
@@ -260,7 +277,7 @@ public struct AgentSessions: Sendable, Equatable {
                             since: now, last: now)
         if !message.folder.isEmpty { session.folder = message.folder }
         session.last = now
-        let next = Self.transition(from: session.stored, event: message.event, need: message.need)
+        let next = Self.transition(from: session.stored, event: message.event, need: message.need, sub: message.sub)
         if let next, next.state != session.stored || next.need != session.need {
             session.stored = next.state
             session.need = next.need
@@ -278,15 +295,24 @@ public struct AgentSessions: Sendable, Equatable {
     }
 
     /// 狀態轉換；nil 表示不變
-    static func transition(from state: AgentState, event: AgentHookEvent, need: AgentNeed?) -> (state: AgentState, need: AgentNeed?)? {
+    static func transition(from state: AgentState, event: AgentHookEvent, need: AgentNeed?,
+                           sub: Bool = false) -> (state: AgentState, need: AgentNeed?)? {
+        // 子代理（例如主回合 Stop 之後還在跑的背景子代理）的工具事件只代表還在跑：
+        // 不把完成、等你、出錯改回工作中（Fable F-03）；子代理要權限或問問題照樣是需要你
+        let stillRunning = state == .working || state == .needsYou
         switch event {
-        case .sessionStart, .interrupt:
+        case .sessionStart:
+            // 回合中途自動壓縮也會送 SessionStart（source=compact）：工作中時維持（Fable F-07）
+            return state == .working ? nil : (.waiting, nil)
+        case .interrupt:
             return (.waiting, nil)
-        case .userPromptSubmit, .postToolUse, .postToolUseFailure:
+        case .userPromptSubmit:
             return (.working, nil)
+        case .postToolUse, .postToolUseFailure:
+            return sub && !stillRunning ? nil : (.working, nil)
         case .preToolUse:
             if let need, need != .idle { return (.needsYou, need) }
-            return (.working, nil)
+            return sub && !stillRunning ? nil : (.working, nil)
         case .permissionRequest:
             return (.needsYou, .permission)
         case .notification:
@@ -302,7 +328,7 @@ public struct AgentSessions: Sendable, Equatable {
             return (.error, nil)
         // 子代理與壓縮只代表還在跑：工作中或剛批准（需要你）時算工作中，其他狀態不變
         case .subagentStart, .subagentStop, .preCompact, .postCompact:
-            return state == .working || state == .needsYou ? (.working, nil) : nil
+            return stillRunning ? (.working, nil) : nil
         case .sessionEnd:
             return nil
         }
@@ -317,15 +343,21 @@ public struct AgentSessions: Sendable, Equatable {
         }
     }
 
-    /// 時間經過：工作中太久沒事件變等你、太久沒事件的移除。回傳是否有改變
+    /// 時間經過：工作中或需要你太久沒事件變等你、太久沒事件的移除。回傳是否有改變
     @discardableResult
     public mutating func expire(at now: Int64) -> Bool {
         let before = sessions
         sessions.removeAll { now - $0.last >= Self.forgetAfter }
-        for i in sessions.indices where sessions[i].stored == .working && now - sessions[i].last >= Self.workingTimeout {
+        for i in sessions.indices {
+            let timeout: Int64? = switch sessions[i].stored {
+            case .working: Self.workingTimeout
+            case .needsYou: Self.needsYouTimeout
+            default: nil
+            }
+            guard let timeout, now - sessions[i].last >= timeout else { continue }
             sessions[i].stored = .waiting
             sessions[i].need = nil
-            sessions[i].since = sessions[i].last + Self.workingTimeout
+            sessions[i].since = sessions[i].last + timeout
         }
         return sessions != before
     }
@@ -362,14 +394,18 @@ public struct AgentSessions: Sendable, Equatable {
     }
 
     /// 角色的工作中與睡覺（ADR-0016 第 5 節）：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間
-    /// （`fallback`：沒接 hook 的 AI 是否工作中、最近是否有動）。只有「工作中」算工作；所有 AI 都閒置才睡覺
-    /// （需要你、出錯、完成未看、等你還沒超過睡覺時間都算醒著）。
+    /// （`fallback`：沒接 hook 的 AI 是否工作中、最近是否有動）。只有「工作中」算工作；所有 AI 都閒置才睡覺。
+    /// 需要你算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡（未看的標記保留，只是不撐著不睡；Fable F-06）。
     public func activity(at now: Int64, fallback: [AgentKind: (working: Bool, active: Bool)]) -> (working: Bool, idle: Bool) {
         var working = false, active = false
         for ai in AgentKind.allCases {
-            if let state = top(ai, at: now) {
-                working = working || state == .working
-                active = active || state != .idle
+            let mine = sessions.filter { $0.ai == ai }
+            if !mine.isEmpty {
+                for session in mine {
+                    working = working || session.stored == .working
+                    active = active || session.stored == .working || session.stored == .needsYou
+                        || now - session.since < idleAfter
+                }
             } else if let probe = fallback[ai] {
                 working = working || probe.working
                 active = active || probe.active

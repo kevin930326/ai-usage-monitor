@@ -150,7 +150,7 @@ public enum AgentHookRunner {
         guard let event = AgentHookInput.extract(input), let salt = AgentSocket.readSalt(in: directory) else { return false }
         let message = AgentHookMessage(ai: ai, event: event.event, need: event.need,
                                        session: AgentSocket.sessionHash(event.sessionID, salt: salt),
-                                       time: Int64(now.timeIntervalSince1970 * 1000), folder: event.folder)
+                                       time: Int64(now.timeIntervalSince1970 * 1000), folder: event.folder, sub: event.sub)
         return AgentSocket.send(message, to: AgentSocket.socketURL(in: directory))
     }
 

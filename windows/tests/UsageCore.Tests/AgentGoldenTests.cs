@@ -21,7 +21,7 @@ public class AgentGoldenTests
         return input is null
             ? ["nil"]
             : [$"event={AgentNames.Name(input.Event)}", $"need={(input.Need is { } n ? AgentNames.Name(n) : "")}",
-               $"session={input.SessionId}", $"folder={input.Folder}"];
+               $"session={input.SessionId}", $"folder={input.Folder}", .. (input.Sub ? new[] { "sub" } : [])];
     }
 
     private static string[] Parse(string raw)
@@ -52,9 +52,14 @@ public class AgentGoldenTests
                     var ai = e["ai"]!.GetValue<string>();
                     var ev = e["ev"]!.GetValue<string>();
                     var need = e["need"]?.GetValue<string>() ?? "";
+                    var sub = e["sub"]?.GetValue<bool>() ?? false;
                     sessions.Apply(new AgentHookMessage(AgentNames.Kind(ai)!.Value, AgentNames.Event(ev)!.Value, AgentNames.Need(need),
-                                                        e["sid"]!.GetValue<string>(), t, e["dir"]?.GetValue<string>() ?? ""), t);
-                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")} → {Describe(sessions, t)}");
+                                                        e["sid"]!.GetValue<string>(), t, e["dir"]?.GetValue<string>() ?? "", sub), t);
+                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")}{(sub ? "[sub]" : "")} → {Describe(sessions, t)}");
+                    break;
+                case "activity":
+                    var (working, idle) = sessions.Activity(t, new Dictionary<AgentKind, (bool, bool)>());
+                    log.Add($"{t} activity working={(working ? "true" : "false")} idle={(idle ? "true" : "false")}");
                     break;
                 case "seen":
                     sessions.MarkSeen(t);

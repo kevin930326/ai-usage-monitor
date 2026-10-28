@@ -115,88 +115,96 @@
   {
    "name": "empty",
    "raw": ""
+  },
+  {
+   "name": "subagent-posttool",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"hook_event_name\": \"PostToolUse\", \"agent_id\": \"agent-7\", \"agent_type\": \"Explore\", \"tool_name\": \"Grep\", \"tool_input\": {\"pattern\": \"secret answer\"}, \"tool_response\": {\"content\": \"step 1\"}}"
+  },
+  {
+   "name": "agent-id-empty",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"hook_event_name\": \"PostToolUse\", \"agent_id\": \"\", \"agent_type\": \"Explore\", \"tool_name\": \"Grep\", \"tool_input\": {\"pattern\": \"secret answer\"}, \"tool_response\": {\"content\": \"step 1\"}}"
   }
  ],
  "messages": [
   {
    "name": "valid",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "valid-need",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"PermissionRequest\", \"need\": \"permission\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PermissionRequest\",\"need\":\"permission\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "valid-codex-empty-dir",
-   "raw": "{\"v\": 1, \"ai\": \"codex\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"\"}"
+   "raw": "{\"v\":1,\"ai\":\"codex\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"\"}"
   },
   {
    "name": "valid-unicode-dir",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"專案 A\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"專案 A\"}"
   },
   {
    "name": "bad-version",
-   "raw": "{\"v\": 2, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":2,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "bad-ai",
-   "raw": "{\"v\": 1, \"ai\": \"gemini\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"gemini\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "bad-event",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"FileChanged\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"FileChanged\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "bad-need",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"root\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"root\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "sid-uppercase",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789ABCDEF\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789ABCDEF\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "sid-short",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "sid-raw-uuid",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"5f0c2a8e-1111-2222-3333-444455556666\", \"t\": 1761650000000, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"5f0c2a8e-1111-2222-3333-444455556666\",\"t\":1761650000000,\"dir\":\"proj\"}"
   },
   {
    "name": "time-zero",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 0, \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":0,\"dir\":\"proj\"}"
   },
   {
    "name": "time-string",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": \"1761650000000\", \"dir\": \"proj\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":\"1761650000000\",\"dir\":\"proj\"}"
   },
   {
    "name": "dir-is-path",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"/Users/me/secret\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"/Users/me/secret\"}"
   },
   {
    "name": "dir-backslash",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"C:\\\\x\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"C:\\\\x\"}"
   },
   {
    "name": "dir-control",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"a\\nb\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"a\\nb\"}"
   },
   {
    "name": "dir-too-long",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1761650000000, \"dir\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
   },
   {
    "name": "extra-field",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1, \"dir\": \"p\", \"prompt\": \"hi\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\",\"prompt\":\"hi\"}"
   },
   {
    "name": "missing-field",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"sid\": \"0123456789abcdef\", \"t\": 1, \"dir\": \"p\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\"}"
   },
   {
    "name": "too-long",
-   "raw": "{\"v\": 1, \"ai\": \"claude\", \"ev\": \"Stop\", \"need\": \"\", \"sid\": \"0123456789abcdef\", \"t\": 1, \"dir\": \"p\", \"pad\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\",\"pad\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
   },
   {
    "name": "not-json",
@@ -205,6 +213,38 @@
   {
    "name": "array",
    "raw": "[]"
+  },
+  {
+   "name": "valid-sub",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PostToolUse\",\"need\":\"\",\"sub\":true,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "spaced-json",
+   "raw": "{\"v\":1, \"ai\":\"claude\", \"ev\":\"Stop\", \"need\":\"\", \"sub\":false, \"sid\":\"0123456789abcdef\", \"t\":1761650000000, \"dir\":\"proj\"}"
+  },
+  {
+   "name": "version-float",
+   "raw": "{\"v\":1.0,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "time-exponent",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1.76165e12,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "duplicate-key",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\",\"dir\":\"other\"}"
+  },
+  {
+   "name": "key-order",
+   "raw": "{\"ai\":\"claude\",\"v\":1,\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "sub-not-bool",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":0,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "missing-sub",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   }
  ],
  "sessions": [
@@ -1190,6 +1230,305 @@
      "need": "",
      "sid": "2121212121212121",
      "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "background-subagent-after-stop",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 7000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 8000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "subagent-while-working",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "compact-mid-turn-keeps-working",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreCompact",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "unseen-done-lets-character-sleep",
+   "idle_after_ms": 300000,
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "activity"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 301999,
+     "e": "activity"
+    },
+    {
+     "t": 302000,
+     "e": "activity"
+    },
+    {
+     "t": 302000,
+     "e": "expire"
+    },
+    {
+     "t": 303000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 304000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "StopFailure",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 604000,
+     "e": "activity"
+    }
+   ]
+  },
+  {
+   "name": "needs-you-times-out",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000000,
+     "e": "activity"
+    },
+    {
+     "t": 3600999,
+     "e": "expire"
+    },
+    {
+     "t": 3601000,
+     "e": "expire"
+    },
+    {
+     "t": 3601000,
+     "e": "activity"
+    },
+    {
+     "t": 3901000,
+     "e": "activity"
     }
    ]
   }
