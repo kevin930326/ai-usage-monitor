@@ -9,11 +9,14 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 APP=${1:-$ROOT/build/dd/Build/Products/Debug/AIUsageMenuBar.app}
 N=${2:-100}
+[[ "$N" =~ ^[1-9][0-9]*$ ]] || { echo "次數必須是正整數：$N"; exit 2; }
 HOOK="$APP/Contents/Helpers/aum-hook"
 BIN="$APP/Contents/MacOS/AIUsageMenuBar"
 [ -x "$HOOK" ] && [ -x "$BIN" ] || { echo "找不到 ${HOOK}（先建置 Debug 版）"; exit 2; }
 HOME_DIR=$(mktemp -d)
-trap 'kill "${PID:-0}" 2>/dev/null || true; rm -rf "$HOME_DIR"' EXIT
+PID=
+# 只結束自己啟動的 App（PID 還沒設定時不能 kill 0：那會結束整個程序群組，Codex C-04）
+trap '[ -n "$PID" ] && kill "$PID" 2>/dev/null; rm -rf "$HOME_DIR"' EXIT
 EVENT='{"session_id":"perf-session","hook_event_name":"PreToolUse","cwd":"/tmp/perf-project","tool_name":"Bash","tool_input":{"command":"echo hi"}}'
 
 measure() {
