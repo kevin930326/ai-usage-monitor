@@ -214,6 +214,8 @@ final class MascotController {
         restartActivityChecks()
         // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
         AgentMonitor.shared.markSeen()
+        // 等級（ADR-0020）：每次展開重新讀；升級時 levelUp 歡呼
+        MascotLevelStore.shared.refresh()
     }
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
@@ -434,6 +436,14 @@ final class MascotController {
         guard NotchPanelController.shared.isShown else { return }
         let quiet = PanelSettings.shared.isMascotQuiet(at: Date())
         mutate { $0.cheer(at: time(), react: !quiet) }
+    }
+
+    /// 升級（ADR-0020）：展開時歡呼一次（彩紙）。動畫關閉、靜音或勿擾時只更新數字
+    func levelUp() {
+        guard NotchPanelController.shared.isShown, director?.machine.isOpen == true,
+              PanelSettings.shared.mascotMotion != .off,
+              !PanelSettings.shared.isMascotQuiet(at: Date()) else { return }
+        mutate { $0.cheer(at: time(), react: true) }
     }
 
     /// 等你下一個指令（而且沒有更優先的狀態）：收著時每 7 秒輕輕脈動一次（1.6 秒）；

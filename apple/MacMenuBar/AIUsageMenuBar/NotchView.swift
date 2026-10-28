@@ -54,7 +54,8 @@ extension NotchView {
                            quietUntil: settings.mascotQuietUntil.flatMap { $0 > store.now ? $0 : nil },
                            hint: controller.showsHint,
                            page: rows.isEmpty ? .overview : controller.page,
-                           agents: rows)
+                           agents: rows,
+                           level: MascotLevelStore.shared.level)
     }
 
     /// 收合時瀏海的大小（脈動畫在這個外框上）
@@ -73,6 +74,8 @@ struct NotchExtras: Equatable {
     var hint = false
     var page = NotchPage.overview
     var agents: [NotchAgentRow] = []
+    /// 角色等級（ADR-0020）；沒有任何活躍日時 nil
+    var level: MascotLevel?
 
     var needsYou: Bool { agents.contains { $0.state == .needsYou } }
     /// 收合時顯示的數量：閒置以外的工作階段，兩個以上才顯示
@@ -399,16 +402,6 @@ struct NotchContent: View {
             marks
                 .frame(height: 20)
                 .position(x: (extras.agents.isEmpty ? 112 : 142) + 30, y: 17)
-            if extras.hint {
-                Text("右鍵點我有更多動作")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255)))
-                    .fixedSize()
-                    .position(x: 16 + 70, y: 152)
-            }
             updated
                 .frame(height: 20)
                 .position(x: NotchLayout.canvasWidth - 20 - 50, y: 17)
@@ -424,8 +417,52 @@ struct NotchContent: View {
             }
             .padding(EdgeInsets(top: 34, leading: 16, bottom: 14 + 10, trailing: 16))
             .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+            // 畫在卡片之後（之前的提示被角色卡的底色蓋住）
+            if let level = extras.level, !extras.hint {
+                levelBadge(level)
+                    .frame(width: 124)
+                    .position(x: 16 + 70, y: 151)
+            }
+            if extras.hint {
+                Text("右鍵點我有更多動作")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255)))
+                    .fixedSize()
+                    .position(x: 16 + 70, y: 152)
+            }
         }
         .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight, alignment: .topLeading)
+    }
+
+    /// 角色卡下方的等級、進度與連續天數（所有電腦合併）。等級是文字，不只靠進度條
+    private func levelBadge(_ level: MascotLevel) -> some View {
+        VStack(spacing: 3) {
+            HStack(spacing: 6) {
+                Text(level.title)
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255))
+                    .fixedSize()
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color(red: 0x2a / 255, green: 0x2a / 255, blue: 0x32 / 255))
+                        Capsule().fill(Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255).opacity(0.85))
+                            .frame(width: max(3, proxy.size.width * min(max(level.progress, 0), 1)))
+                    }
+                }
+                .frame(height: 3)
+            }
+            Text("連續 \(level.currentStreak) 天・最長 \(level.longestStreak) 天")
+                .font(.system(size: 9.5).monospacedDigit())
+                .foregroundStyle(Self.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(level.accessibilityText)
+        .help(level.accessibilityText)
     }
 
     /// 保持展開的圖釘（點了取消並在滑鼠不在面板上時收合）、靜音／勿擾到幾點
