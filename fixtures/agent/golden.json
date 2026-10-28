@@ -684,6 +684,25 @@
         "3601000 activity working=false idle=false",
         "3901000 activity working=false idle=true"
       ]
+    },
+    {
+      "name" : "stale-event-after-stop-is-dropped",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "1100 claude PostToolUse (stale) → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "2000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@2000]"
+      ]
+    },
+    {
+      "name" : "stale-event-after-end-does-not-recreate",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude SessionEnd → top=none []",
+        "1100 claude PostToolUse (stale) → top=none []",
+        "1100 activity working=false idle=true",
+        "5000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@5000]"
+      ]
     }
   ]
 }

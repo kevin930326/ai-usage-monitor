@@ -53,9 +53,10 @@ public class AgentGoldenTests
                     var ev = e["ev"]!.GetValue<string>();
                     var need = e["need"]?.GetValue<string>() ?? "";
                     var sub = e["sub"]?.GetValue<bool>() ?? false;
-                    sessions.Apply(new AgentHookMessage(AgentNames.Kind(ai)!.Value, AgentNames.Event(ev)!.Value, AgentNames.Need(need),
-                                                        e["sid"]!.GetValue<string>(), t, e["dir"]?.GetValue<string>() ?? "", sub), t);
-                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")}{(sub ? "[sub]" : "")} → {Describe(sessions, t)}");
+                    var sent = e["sent"]?.GetValue<long>() ?? t;
+                    var applied = sessions.Apply(new AgentHookMessage(AgentNames.Kind(ai)!.Value, AgentNames.Event(ev)!.Value, AgentNames.Need(need),
+                                                                      e["sid"]!.GetValue<string>(), sent, e["dir"]?.GetValue<string>() ?? "", sub), t);
+                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")}{(sub ? "[sub]" : "")}{(applied ? "" : " (stale)")} → {Describe(sessions, t)}");
                     break;
                 case "activity":
                     var (working, idle) = sessions.Activity(t, new Dictionary<AgentKind, (bool, bool)>());

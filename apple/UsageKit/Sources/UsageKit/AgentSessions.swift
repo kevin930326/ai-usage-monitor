@@ -256,6 +256,9 @@ public struct AgentSessions: Sendable, Equatable {
     public static let maxSessions = 32
 
     public private(set) var sessions: [AgentSession] = []
+    /// 每個工作階段（含已結束的）最後一個事件在 hook 端的時間：連線是並行讀的，較早的事件可能較晚讀完；
+    /// 比這個舊的事件丟掉，免得把完成改回工作中、或重建已結束的工作階段（Codex C-02）。最多記 `maxSessions` × 2 個
+    private var latest: [String: Int64] = [:]
     /// 等你多久算閒置（設定的「睡覺」分鐘數）
     public var idleAfter: Int64
 
@@ -265,12 +268,19 @@ public struct AgentSessions: Sendable, Equatable {
 
     public var isEmpty: Bool { sessions.isEmpty }
 
-    /// 收到一個事件（時間用 App 收到的時間，不信任 hook 的時鐘以外的東西）
-    public mutating func apply(_ message: AgentHookMessage, at now: Int64) {
+    /// 收到一個事件（時間用 App 收到的時間；hook 的時間只用來排除較晚讀完的舊事件）。舊事件丟掉時回傳 false
+    @discardableResult
+    public mutating func apply(_ message: AgentHookMessage, at now: Int64) -> Bool {
+        let key = "\(message.ai.rawValue)/\(message.session)"
+        if let seen = latest[key], message.time < seen { return false }
+        latest[key] = message.time
+        if latest.count > Self.maxSessions * 2, let oldest = latest.min(by: { $0.value < $1.value })?.key {
+            latest[oldest] = nil
+        }
         let index = sessions.firstIndex { $0.ai == message.ai && $0.id == message.session }
         if message.event == .sessionEnd {
             if let index { sessions.remove(at: index) }
-            return
+            return true
         }
         var session = index.map { sessions[$0] }
             ?? AgentSession(ai: message.ai, id: message.session, folder: message.folder, stored: .waiting, need: nil,
@@ -292,6 +302,7 @@ public struct AgentSessions: Sendable, Equatable {
                 sessions.remove(at: oldest)
             }
         }
+        return true
     }
 
     /// 狀態轉換；nil 表示不變

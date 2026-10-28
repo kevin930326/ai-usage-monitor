@@ -77,9 +77,13 @@ final class AgentMonitor {
             dropped += 1
             return
         }
-        received += 1
         sessions.idleAfter = Self.idleAfterMs
-        sessions.apply(message, at: now)
+        // 比同一工作階段已收到的事件舊（並行讀取時較晚讀完）：丟掉
+        guard sessions.apply(message, at: now) else {
+            dropped += 1
+            return
+        }
+        received += 1
         changed()
     }
 

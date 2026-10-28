@@ -37,6 +37,8 @@ import Testing
         var sid: String?
         var dir: String?
         var sub: Bool?
+        /// hook 端的時間（預設同 t）：模擬較早的事件較晚讀完
+        var sent: Int64?
     }
 
     struct Output: Codable, Equatable {
@@ -78,10 +80,10 @@ import Testing
             case "msg":
                 let message = AgentHookMessage(ai: AgentKind(rawValue: event.ai!)!, event: AgentHookEvent(rawValue: event.ev!)!,
                                                need: event.need.flatMap(AgentNeed.init(rawValue:)), session: event.sid!,
-                                               time: event.t, folder: event.dir ?? "", sub: event.sub ?? false)
-                sessions.apply(message, at: event.t)
+                                               time: event.sent ?? event.t, folder: event.dir ?? "", sub: event.sub ?? false)
+                let applied = sessions.apply(message, at: event.t)
                 log.append("\(event.t) \(event.ai!) \(event.ev!)\(event.need.map { $0.isEmpty ? "" : "(\($0))" } ?? "")"
-                           + "\(event.sub == true ? "[sub]" : "") → \(describe(sessions, at: event.t))")
+                           + "\(event.sub == true ? "[sub]" : "")\(applied ? "" : " (stale)") → \(describe(sessions, at: event.t))")
             case "activity":
                 let (working, idle) = sessions.activity(at: event.t, fallback: [:])
                 log.append("\(event.t) activity working=\(working) idle=\(idle)")

@@ -1531,6 +1531,98 @@
      "e": "activity"
     }
    ]
+  },
+  {
+   "name": "stale-event-after-stop-is-dropped",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 1000
+    },
+    {
+     "t": 1100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 900
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 2000
+    }
+   ]
+  },
+  {
+   "name": "stale-event-after-end-does-not-recreate",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionEnd",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 1000
+    },
+    {
+     "t": 1100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 900
+    },
+    {
+     "t": 1100,
+     "e": "activity"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 5000
+    }
+   ]
   }
  ]
 }

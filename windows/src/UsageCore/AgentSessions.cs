@@ -247,18 +247,24 @@ public sealed class AgentSessions(long idleAfter)
     public const int MaxSessions = 32;
 
     private readonly List<AgentSession> sessions = [];
+    /// <summary>每個工作階段（含已結束的）最後一個事件在 hook 端的時間：較晚讀完的舊事件丟掉（Codex C-02）</summary>
+    private readonly Dictionary<string, long> latest = [];
 
     /// <summary>等你多久算閒置（設定的「睡覺」分鐘數）</summary>
     public long IdleAfter { get; set; } = idleAfter;
     public IReadOnlyList<AgentSession> Sessions => sessions;
 
-    public void Apply(AgentHookMessage message, long now)
+    public bool Apply(AgentHookMessage message, long now)
     {
+        var key = $"{AgentNames.Name(message.Ai)}/{message.Session}";
+        if (latest.TryGetValue(key, out var seen) && message.Time < seen) return false;
+        latest[key] = message.Time;
+        if (latest.Count > MaxSessions * 2) latest.Remove(latest.MinBy(p => p.Value).Key);
         var index = sessions.FindIndex(s => s.Ai == message.Ai && s.Id == message.Session);
         if (message.Event == AgentHookEvent.SessionEnd)
         {
             if (index >= 0) sessions.RemoveAt(index);
-            return;
+            return true;
         }
         var session = index >= 0
             ? sessions[index]
@@ -271,7 +277,7 @@ public sealed class AgentSessions(long idleAfter)
         if (index >= 0)
         {
             sessions[index] = session;
-            return;
+            return true;
         }
         sessions.Add(session);
         if (sessions.Count > MaxSessions)
@@ -281,6 +287,7 @@ public sealed class AgentSessions(long idleAfter)
                 if (sessions[i].Last < sessions[oldest].Last) oldest = i;
             sessions.RemoveAt(oldest);
         }
+        return true;
     }
 
     /// <summary>
