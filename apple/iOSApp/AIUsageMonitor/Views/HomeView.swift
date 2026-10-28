@@ -58,7 +58,7 @@ struct HomeView: View {
             // （FR-11、FR-26）。TimelineView 在 App 進入背景後不會更新
             TimelineView(.everyMinute) { context in
                 UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode, now: context.date,
-                          remoteAgents: model.remoteAgents)
+                          remoteAgents: model.remoteAgents.filter { $0.isShown(at: Int64(context.date.timeIntervalSince1970 * 1000)) })
             }
             .refreshable { await model.refresh() }
         } else if let error = model.errorMessage {

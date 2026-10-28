@@ -152,7 +152,11 @@ import Testing
         ]}
         """
         let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now + 5_000)
-        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1, id: "0/claude")])
+        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1, id: "0/claude",
+                                     expiresAt: now + 5_000 + RemoteAgents.maxAge - 60_000 + 1)])
+        // 畫面停著不重新下載：中繼收到後滿 30 分鐘就不顯示
+        #expect(list[0].isShown(at: now + 5_000 + 29 * 60_000))
+        #expect(!list[0].isShown(at: now + 5_000 + 29 * 60_000 + 1))
         #expect(list.first?.text == "桌機：Claude Code 需要你")
         #expect(RemoteAgents.parseRelay(Data("[]".utf8), localNow: now).isEmpty)
         // 同名的兩台：列表識別不同

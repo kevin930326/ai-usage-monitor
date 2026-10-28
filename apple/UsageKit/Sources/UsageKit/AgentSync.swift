@@ -35,14 +35,19 @@ public struct RemoteAgent: Sendable, Equatable {
     public var sessions: Int
     /// 列表用：檔案裡第幾台＋AI（裝置名稱可能重複，不能當識別）
     public var id: String
+    /// 本機時間（ms）到了就不顯示：中繼收到後滿 30 分鐘（畫面停著不重新下載時也會消失）
+    public var expiresAt: Int64
 
-    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil) {
+    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil, expiresAt: Int64 = .max) {
         self.device = device
         self.ai = ai
         self.state = state
         self.sessions = sessions
         self.id = id ?? "\(device)/\(ai.rawValue)"
+        self.expiresAt = expiresAt
     }
+
+    public func isShown(at localNow: Int64) -> Bool { localNow < expiresAt }
 
     /// 「桌機：Claude Code 需要你」
     public var text: String {
@@ -91,7 +96,8 @@ public enum RemoteAgents {
                       let state = (row["state"] as? String).flatMap(AgentState.init(rawValue:)),
                       let sessions = int(row["sessions"]), (0...32).contains(sessions) else { continue }
                 seen.insert(ai)
-                if shown.contains(state) { list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)")) }
+                if shown.contains(state) { list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)",
+                                                           expiresAt: fetched + maxAge - (now - updated) + 1)) }
             }
         }
         return list.sorted { a, b in
