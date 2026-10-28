@@ -66,18 +66,35 @@ public struct MascotActivityProbe: Sendable {
         self.lister = lister
     }
 
-    /// 預設的位置：`CLAUDE_CONFIG_DIR`／`CODEX_HOME`，沒有時 `~/.claude`、`~/.codex`（與收集器相同）
-    public static func defaultRoots(environment: [String: String] = ProcessInfo.processInfo.environment,
+    /// 紀錄的位置，優先序同收集器（ADR-0009 第 3 節）：`config.json` 的 `claude_config_dir`／`codex_home`，
+    /// 再來是 `CLAUDE_CONFIG_DIR`／`CODEX_HOME`，最後是 `~/.claude`、`~/.codex`。
+    /// 從 Finder 打開的 App 不會繼承 shell 的環境變數，所以要看收集器的設定。
+    public static func defaultRoots(config: [String: String] = [:],
+                                    environment: [String: String] = ProcessInfo.processInfo.environment,
                                     home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [Root] {
-        func dir(_ key: String, _ fallback: String) -> URL {
-            environment[key].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
-                ?? home.appendingPathComponent(fallback, isDirectory: true)
+        func dir(_ configKey: String, _ envKey: String, _ fallback: String) -> URL {
+            let custom = [config[configKey], environment[envKey]].compactMap { $0 }.first { !$0.isEmpty }
+            guard let custom else { return home.appendingPathComponent(fallback, isDirectory: true) }
+            let expanded = custom == "~" ? home.path
+                : custom.hasPrefix("~/") ? home.appendingPathComponent(String(custom.dropFirst(2))).path : custom
+            return URL(fileURLWithPath: expanded, isDirectory: true)
         }
         return [
-            Root(url: dir("CLAUDE_CONFIG_DIR", ".claude").appendingPathComponent("projects", isDirectory: true), depth: 2),
-            Root(url: dir("CODEX_HOME", ".codex").appendingPathComponent("sessions", isDirectory: true), depth: 4,
+            Root(url: dir("claude_config_dir", "CLAUDE_CONFIG_DIR", ".claude").appendingPathComponent("projects", isDirectory: true),
+                 depth: 2),
+            Root(url: dir("codex_home", "CODEX_HOME", ".codex").appendingPathComponent("sessions", isDirectory: true), depth: 4,
                  newestByName: 2),
         ]
+    }
+
+    /// 從收集器的 `config.json` 只取出紀錄位置的兩個欄位（其他欄位不讀出來；讀不到或格式不對時回傳空的）
+    public static func logDirectories(fromConfig data: Data?) -> [String: String] {
+        guard let data, let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        var result: [String: String] = [:]
+        for key in ["claude_config_dir", "codex_home"] {
+            if let value = object[key] as? String, !value.isEmpty { result[key] = value }
+        }
+        return result
     }
 
     /// 最近 `activeWindow` 秒內有沒有紀錄檔被改過

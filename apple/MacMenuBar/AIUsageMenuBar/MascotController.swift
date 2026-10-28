@@ -116,7 +116,6 @@ final class MascotController {
     @ObservationIgnored private var probing = false
     /// 目前 director 依哪個動畫程度建立（彈簧是否回彈）
     @ObservationIgnored private var builtMotion = MascotMotionLevel.full
-    @ObservationIgnored private let activity = MascotActivityProbe(roots: MascotActivityProbe.defaultRoots())
     /// 視窗目前該是整張畫布（展開中或收合動畫還沒播完）；建立或移動視窗時照這個決定大小
     @ObservationIgnored private(set) var windowExpanded = false
 
@@ -299,8 +298,11 @@ final class MascotController {
     private func checkWorking() {
         guard !probing, motion.animatesBody else { return }
         probing = true
-        let probe = activity
+        let configURL = UsageStore.shared.locator.directory.appendingPathComponent("config.json")
         Task.detached(priority: .utility) {
+            // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
+            let dirs = MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
+            let probe = MascotActivityProbe(roots: MascotActivityProbe.defaultRoots(config: dirs))
             let working = probe.isWorking(now: Date())
             await MainActor.run {
                 let controller = MascotController.shared

@@ -67,6 +67,26 @@ import Testing
         #expect(fs.listed.count <= MascotActivityProbe.maxListings)
     }
 
+    @Test func collectorConfigComesFirst() {
+        // config.json 的位置優先（Finder 打開的 App 沒有 shell 的環境變數；Codex C-06）
+        let config = MascotActivityProbe.logDirectories(fromConfig: Data("""
+            {"claude_config_dir": "~/work/claude", "codex_home": "/opt/codex", "relay_url": "https://x", "n": 1}
+            """.utf8))
+        #expect(config == ["claude_config_dir": "~/work/claude", "codex_home": "/opt/codex"])
+        let roots = MascotActivityProbe.defaultRoots(config: config, environment: ["CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"],
+                                                     home: URL(fileURLWithPath: "/home/u"))
+        #expect(roots.map(\.url.path) == ["/home/u/work/claude/projects", "/opt/codex/sessions"])
+        // 假的列舉器確認走訪的是設定的位置
+        let fs = FakeLister()
+        fs.add("/opt/codex/sessions/2026", directory: true, modified: Self.now)
+        _ = MascotActivityProbe(roots: roots, lister: fs).isWorking(now: Self.now)
+        #expect(fs.listed.contains("/home/u/work/claude/projects") && fs.listed.contains("/opt/codex/sessions/2026"))
+        #expect(!fs.listed.contains { $0.hasPrefix("/c") || $0.hasPrefix("/x") })
+        // 壞掉的設定：當成沒有
+        #expect(MascotActivityProbe.logDirectories(fromConfig: Data("[1]".utf8)).isEmpty)
+        #expect(MascotActivityProbe.logDirectories(fromConfig: nil).isEmpty)
+    }
+
     @Test func environmentOverridesHome() {
         let roots = MascotActivityProbe.defaultRoots(environment: ["CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"],
                                                      home: URL(fileURLWithPath: "/home/u"))
