@@ -228,6 +228,6 @@ Windows App（`windows/`，ADR-0015）的懸浮圓環與面板沿用本節的圓
 - 互動只在瀏海面板自己的視窗裡偵測（`NotchHostingView` 的 mouseDown/Up、容器的 tracking area），不裝全域滑鼠監聽。手勢門檻照 demo（`gestures`），但換算成 60 Hz 一格（`MascotGestureDetector`），120 Hz 的滑鼠手感相同。
 - 「工作中」只列資料夾看 `.jsonl` 的修改時間（`MascotActivityProbe`，45 秒內改過），展開時每 5 秒一次；介面 `MascotDirectoryLister` 沒有讀檔的方法。
 - 角色動畫：完整／簡單（身體不動、只有眼睛眨與看滑鼠；不播過場、反應、光環，不偵測手勢，面板展開不回彈）／關閉（完全靜止、展開待著也不重畫）；三種都用狀態點的顏色顯示額度；「減少動態效果」時完整當成簡單。
-- 選單列「角色」「角色＋%」：靜止的迷你角色（不動），畫顯示的額度所屬服務的角色（百分比、狀態點與角色同一個服務），左上角狀態點同瀏海；過期時轉灰並閉上眼睛（不只靠顏色）。
+- 選單列「角色」「角色＋%」：靜止的迷你角色（不動），畫顯示的額度所屬服務的角色（百分比、狀態點與角色同一個服務），左上角狀態點同瀏海；眼睛形狀跟著狀態變，不只靠顏色：正常是膠囊、剩不到 20% 縮成小圓點、用完是 ×、過期轉灰並閉上眼睛。
 - 效能：`scripts/measure-notch-perf.sh`（展開待著 ≤ 4%、收合後 1 分鐘 ≤ 0.3%、重複開關 RSS ≤ +5 MB）。
 - 截圖：`DebugMascot` 以 ImageRenderer 產生 `notch-collapsed`、`notch-intro`、`notch-expressions`、`notch-menubar-light/dark`，列在 `scripts/snapshots.sh` 的基準裡；不截整個螢幕。

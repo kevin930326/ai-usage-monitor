@@ -539,12 +539,13 @@ enum DebugTools {
         }
     }
 
-    /// 四種狀態 × 四種樣式，放在模擬的選單列上。
+    /// 五種狀態（剩不到 20% 與用完分開）× 每種樣式，放在模擬的選單列上。
     private static func renderMenuBarIcons(to dir: URL) {
         let states: [(String, MenuBarIconContent)] = [
             ("正常", .init(provider: "claude", remainingPct: 62, timeRemaining: 70, state: .normal, label: "Claude 5 小時")),
             ("用得太快", .init(provider: "claude", remainingPct: 27, timeRemaining: 40, state: .tooFast, label: "Claude 5 小時")),
             ("剩不到 20%", .init(provider: "codex", remainingPct: 12, timeRemaining: 30, state: .critical, label: "Codex 每週")),
+            ("用完", .init(provider: "codex", remainingPct: 0, timeRemaining: 30, state: .critical, label: "Codex 每週")),
             ("資料過期", .init(provider: "claude", remainingPct: 62, timeRemaining: 70, state: .stale, label: "Claude 5 小時")),
         ]
         for scheme in [ColorScheme.light, .dark] {

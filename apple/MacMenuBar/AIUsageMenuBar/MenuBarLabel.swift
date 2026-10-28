@@ -190,8 +190,10 @@ enum MenuBarIcon {
         return image
     }
 
+    private enum CharacterIconEyes { case pill, dot, cross, closed }
+
     /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），左上角的狀態點同瀏海面板：綠正常、黃剩不到 20%、紅用完；
-    /// 用得太快右上角加提示色小點；資料過期時角色轉灰、眼睛閉成兩條線（不只靠顏色）。
+    /// 用得太快右上角加提示色小點；眼睛形狀也跟著狀態變（剩不到 20% 小圓點、用完 ×、過期閉眼），不只靠顏色。
     private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter) -> NSImage {
         let palette = MascotController.shared.baseConfig?.palette
         func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
@@ -207,19 +209,39 @@ enum MenuBarIcon {
         case .critical: c.remainingPct <= 0 ? color(palette?.status.out, .systemRed) : color(palette?.status.high, .systemYellow)
         case .normal, .tooFast: color(palette?.status.normal, .systemGreen)
         }
+        let eyes: CharacterIconEyes = switch c.state {
+        case .stale: .closed
+        case .critical: c.remainingPct <= 0 ? .cross : .dot
+        case .normal, .tooFast: .pill
+        }
         let image = NSImage(size: NSSize(width: 18, height: 16), flipped: false) { rect in
             let center = NSPoint(x: 9, y: rect.midY)
             let radius: CGFloat = 6.8
             let ball = NSBezierPath(ovalIn: NSRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
             NSGradient(colors: [light, mid, shade], atLocations: [0, 0.55, 1], colorSpace: .sRGB)?
                 .draw(in: ball, relativeCenterPosition: NSPoint(x: -0.3, y: 0.35))
-            // 兩眼：中心距約直徑 27%，直立的膠囊；過期時閉成線
-            NSColor(white: 0.08, alpha: 1).setFill()
+            // 兩眼：中心距約直徑 27%。正常是直立的膠囊；剩不到 20% 縮成小圓點、用完變成 ×、過期閉成線，
+            // 灰階下也分得出四種狀態（ADR-0008 第 1 節）
+            let ink = NSColor(white: 0.08, alpha: 1)
+            ink.setFill()
             for side in [-1.0, 1.0] {
                 let x = center.x + side * radius * 0.27
-                let eye = stale ? NSRect(x: x - 1.1, y: center.y - 0.9, width: 2.2, height: 0.9)
-                                : NSRect(x: x - 0.75, y: center.y - 2.1, width: 1.5, height: 3.2)
-                NSBezierPath(roundedRect: eye, xRadius: 0.75, yRadius: 0.75).fill()
+                switch eyes {
+                case .closed:
+                    NSBezierPath(roundedRect: NSRect(x: x - 1.1, y: center.y - 0.9, width: 2.2, height: 0.9), xRadius: 0.45, yRadius: 0.45).fill()
+                case .dot:
+                    NSBezierPath(ovalIn: NSRect(x: x - 0.9, y: center.y - 0.9, width: 1.8, height: 1.8)).fill()
+                case .cross:
+                    let cross = NSBezierPath()
+                    cross.move(to: NSPoint(x: x - 1.05, y: center.y - 1.05)); cross.line(to: NSPoint(x: x + 1.05, y: center.y + 1.05))
+                    cross.move(to: NSPoint(x: x - 1.05, y: center.y + 1.05)); cross.line(to: NSPoint(x: x + 1.05, y: center.y - 1.05))
+                    cross.lineWidth = 0.9
+                    cross.lineCapStyle = .round
+                    ink.setStroke()
+                    cross.stroke()
+                case .pill:
+                    NSBezierPath(roundedRect: NSRect(x: x - 0.75, y: center.y - 2.1, width: 1.5, height: 3.2), xRadius: 0.75, yRadius: 0.75).fill()
+                }
             }
             dot(at: NSPoint(x: center.x - radius + 1.4, y: rect.maxY - 2.6), color: status, radius: 2)
             if c.state == .tooFast { dot(at: NSPoint(x: 16, y: rect.maxY - 3), color: NSColor(UsageColors.notice), radius: 1.8) }
