@@ -217,7 +217,9 @@ internal sealed class PanelContent : Border
         right.Children.Add(Text("剩餘 · " + ResetText(item.Window, now), 12, p.Secondary));
         if (ForecastOrTooFast(item.Window, stale, now, 4) is { } note) right.Children.Add(note);
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        // DockPanel：右欄拿到剩下的寬度，預測那一行太長時換行，不會被切掉（橫向 StackPanel 給的寬度沒有上限）
+        var row = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(ring, Dock.Left);
         row.Children.Add(ring);
         row.Children.Add(right);
         return Card(row, header);
