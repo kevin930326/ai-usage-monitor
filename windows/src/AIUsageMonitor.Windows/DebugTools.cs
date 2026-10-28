@@ -109,6 +109,11 @@ internal static class DebugTools
                 var content = RingContent.From(snapshot, WindowChoice.Automatic, now);
                 Save(Path.Combine(output, $"tray-{state}-{theme}.png"), TrayIcon.RenderBitmap(content, palette, 64), failures);
             }
+            foreach (var (name, agent) in AgentStates)
+            {
+                var content = RingContent.From(UsageDecoder.Decode(DemoJson("normal", now)), WindowChoice.Automatic, now).WithAgent(agent);
+                Save(Path.Combine(output, $"tray-agent-{name}-{theme}.png"), TrayIcon.RenderBitmap(content, palette, 64), failures);
+            }
             RenderRing2(Path.Combine(output, "ring2"), palette, theme, now, failures);
             foreach (var scenario in Scenarios)
             {
@@ -157,8 +162,26 @@ internal static class DebugTools
             Shot("dock-tab", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
             Shot("dock-tab-right", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Down, RingDock.Right, 0, ticks: false, reveal: 0));
             Shot("dock-reveal", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0.6));
+            // AI 狀態（ADR-0019）：圓環、展開的膠囊（第二行是 AI 的狀態）、貼邊的標籤
+            foreach (var (name, agent) in AgentStates)
+            {
+                var content = Content("normal").WithAgent(agent);
+                Shot($"agent-{name}", Desk(dark, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+                Shot($"agent-{name}-expand", Desk(dark, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
+            }
+            Shot("agent-needs-you-tab", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
+                                             RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
+            Shot("agent-needs-you-down", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
+                                              RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
         }
     }
+
+    private static readonly (string Name, RingAgent Agent)[] AgentStates =
+    [
+        ("needs-you", new RingAgent(AgentKind.Claude, AgentState.NeedsYou, AgentNeed.Permission)),
+        ("done", new RingAgent(AgentKind.Codex, AgentState.Done, null)),
+        ("error", new RingAgent(AgentKind.Claude, AgentState.Error, null)),
+    ];
 
     /// <summary>
     /// 一個畫面放在示範桌布上（漸層＋兩團柔和的色塊，看得出半透明的玻璃）。貼邊時桌布左（右）邊就是螢幕邊緣，
