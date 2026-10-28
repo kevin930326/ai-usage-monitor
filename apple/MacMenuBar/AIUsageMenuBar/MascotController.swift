@@ -279,6 +279,8 @@ final class MascotController {
         // 彈簧的參數在建立時決定：收著時才重建（展開中等下次收合）
         if motion != builtMotion, director?.machine.isOpen == false, !windowExpanded { rebuild() }
         refresh()
+        // 脈動：開了「減少動態效果」或動畫關閉時，進行中的也立刻停
+        updatePulse()
     }
 
     /// 滑鼠在面板裡移動（畫布座標）：偵測繞圈／甩動／停留（只在這個視窗裡）。看滑鼠另外由 `pollPointer` 處理（整個螢幕）
@@ -436,12 +438,12 @@ final class MascotController {
     }
 
     /// 等你下一個指令（而且沒有更優先的狀態）：收著時每 7 秒輕輕脈動一次（1.6 秒）；
-    /// 展開、靜音或勿擾、動畫關閉、設定關掉時不脈動
+    /// 展開、靜音或勿擾、動畫關閉、系統「減少動態效果」、設定關掉時不脈動（FR-25、ADR-0010，Codex C-03）
     private func updatePulse() {
         let monitor = AgentMonitor.shared
         let settings = PanelSettings.shared
         let wanted = settings.notchWaitingPulse && NotchPanelController.shared.isShown && director?.machine.isOpen == false
-            && motion != .off && !settings.isMascotQuiet(at: Date())
+            && motion != .off && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && !settings.isMascotQuiet(at: Date())
             && monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter) == .waiting
         guard wanted != (pulseTimer != nil) else { return }
         pulseTimer?.invalidate()
