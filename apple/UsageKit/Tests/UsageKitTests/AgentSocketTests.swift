@@ -87,6 +87,44 @@ import Testing
         try await late.value
     }
 
+    /// 開著不送資料的連線不會擋住真的事件（Fable F-08）：先開 20 條，hook 送的一行照樣在 100 ms 內收到
+    @Test func silentConnectionsDoNotDelayRealEvents() async throws {
+        let dir = try Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        _ = try AgentSocket.prepare(in: dir)
+        let url = AgentSocket.socketURL(in: dir)
+        let server = try AgentSocket.listen(at: url)
+        defer { close(server) }
+        _ = fcntl(server, F_SETFL, fcntl(server, F_GETFL) | O_NONBLOCK)
+        let (stream, continuation) = AsyncStream<AgentHookMessage>.makeStream()
+        let source = AgentSocket.serve(listener: server) { message in
+            if let message { continuation.yield(message) }
+        }
+        defer { source.cancel() }
+        var silent: [Int32] = []
+        defer { silent.forEach { close($0) } }
+        for _ in 0..<20 {
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            withUnsafeMutableBytes(of: &address.sun_path) { raw in
+                _ = url.path.utf8CString.withUnsafeBytes { raw.copyMemory(from: $0) }
+            }
+            let connected = withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+            }
+            #expect(connected == 0)
+            silent.append(fd)
+        }
+        try await Task.sleep(for: .milliseconds(20))
+        let started = Date.now
+        #expect(AgentHookRunner.run(ai: .claude, input: Self.claudeEvent, directory: dir))
+        var iterator = stream.makeAsyncIterator()
+        let message = await iterator.next()
+        #expect(message?.event == .userPromptSubmit)
+        #expect(Date.now.timeIntervalSince(started) < 0.1)
+    }
+
     @Test func hookGivesUpQuicklyWhenTheAppIsNotRunning() throws {
         let dir = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

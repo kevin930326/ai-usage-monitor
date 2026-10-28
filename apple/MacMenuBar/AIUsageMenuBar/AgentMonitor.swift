@@ -39,8 +39,11 @@ final class AgentMonitor {
             return
         }
         _ = fcntl(listener, F_SETFL, fcntl(listener, F_GETFL) | O_NONBLOCK)
-        let source = Self.makeSource(listener: listener)
-        source.resume()
+        let source = AgentSocket.serve(listener: listener) { message in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { AgentMonitor.shared.handle(message) }
+            }
+        }
         self.source = source
         // 被 kill（SIGTERM）時系統不會呼叫 applicationWillTerminate：自己接住，移除 socket 後結束
         signal(SIGTERM, SIG_IGN)
@@ -51,24 +54,6 @@ final class AgentMonitor {
         }
         terminate.resume()
         terminateSource = terminate
-    }
-
-    /// 讀連線在背景佇列（每個連線最多 250 ms），解析好的事件回到主執行緒。
-    /// nonisolated：處理程式在背景佇列執行，不能繼承 MainActor 的隔離（否則執行時檢查會讓 App 當掉）
-    nonisolated private static func makeSource(listener fd: Int32) -> DispatchSourceRead {
-        let queue = DispatchQueue(label: "aum.agent-socket", qos: .utility)
-        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler { @Sendable in
-            while true {
-                let client = accept(fd, nil, nil)
-                guard client >= 0 else { break }
-                let message = AgentSocket.receive(on: client)
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { AgentMonitor.shared.handle(message) }
-                }
-            }
-        }
-        return source
     }
 
     /// App 結束：停止聽並移除 socket 檔（hook 看到沒有 socket 就立刻結束）

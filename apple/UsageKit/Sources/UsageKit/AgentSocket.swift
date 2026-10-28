@@ -15,6 +15,10 @@ public enum AgentSocket {
     public static let sendTimeoutMs: Int32 = 100
     /// App 讀一個連線的上限（毫秒）
     public static let readTimeoutMs = 250
+    /// 等待接受的連線數：開著不送資料的連線佔不滿（Fable F-08）
+    public static let backlog: Int32 = 128
+    /// 同時讀幾個連線；再多的直接關掉（hook 那邊照樣 exit 0）
+    public static let maxConcurrentReads = 32
 
     public static func folder(in directory: URL) -> URL { directory.appendingPathComponent(folderName, isDirectory: true) }
     public static func socketURL(in directory: URL) -> URL { folder(in: directory).appendingPathComponent(socketName) }
@@ -110,12 +114,40 @@ public enum AgentSocket {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
         umask(mask)
-        guard bound == 0, chmod(path, 0o600) == 0, Darwin.listen(fd, 16) == 0 else {
+        guard bound == 0, chmod(path, 0o600) == 0, Darwin.listen(fd, backlog) == 0 else {
             let code = POSIXErrorCode(rawValue: errno) ?? .EIO
             close(fd)
             throw POSIXError(code)
         }
         return fd
+    }
+
+    /// App 端：開始接受連線。每個連線交給並行佇列各自讀（最多 250 ms），開著不送資料的連線不會擋住其他連線
+    /// （Fable F-08）；解析結果（格式不對是 nil）交給 `handler`，在背景執行緒呼叫。
+    /// 監聽的 fd 要是非阻塞的；回傳的來源已經開始，停止時 `cancel()`。
+    public static func serve(listener fd: Int32, handler: @escaping @Sendable (AgentHookMessage?) -> Void) -> DispatchSourceRead {
+        let acceptQueue = DispatchQueue(label: "aum.agent-accept", qos: .utility)
+        let readQueue = DispatchQueue(label: "aum.agent-read", qos: .utility, attributes: .concurrent)
+        let slots = DispatchSemaphore(value: maxConcurrentReads)
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: acceptQueue)
+        source.setEventHandler {
+            while true {
+                let client = accept(fd, nil, nil)
+                guard client >= 0 else { break }
+                guard slots.wait(timeout: .now()) == .success else {
+                    close(client)
+                    handler(nil)
+                    continue
+                }
+                readQueue.async {
+                    let message = receive(on: client)
+                    slots.signal()
+                    handler(message)
+                }
+            }
+        }
+        source.resume()
+        return source
     }
 
     /// 讀一個連線：只接受同一個使用者，最多 1 KB、250 ms；讀到的一行交給 `AgentHookMessage.parse`
