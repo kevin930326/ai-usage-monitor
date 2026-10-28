@@ -16,6 +16,8 @@ final class AgentMonitor {
     @ObservationIgnored private var listener: Int32 = -1
     @ObservationIgnored private var source: DispatchSourceRead?
     @ObservationIgnored private var expireTimer: Timer?
+    /// 下一次檢查通知（需要你到了設定的秒數）
+    @ObservationIgnored private var noticeTimer: Timer?
     @ObservationIgnored private var socketURL: URL?
     @ObservationIgnored private var terminateSource: DispatchSourceSignal?
     /// 每秒上限只套用在「還在跑」的事件；決定狀態的事件一定處理（見 AgentRateLimiter）
@@ -81,13 +83,17 @@ final class AgentMonitor {
             return
         }
         sessions.idleAfter = Self.idleAfterMs
+        let before = sessions.sessions.first { $0.ai == message.ai && $0.id == message.session }?.stored
         // 比同一工作階段已收到的事件舊（並行讀取時較晚讀完）：丟掉
         guard sessions.apply(message, at: now) else {
             dropped += 1
             return
         }
         received += 1
+        let after = sessions.sessions.first { $0.ai == message.ai && $0.id == message.session }?.stored
         changed()
+        // 一個回合剛完成：角色揮手（收著時瀏海鼓一下）
+        if after == .done, before != .done { MascotController.shared.agentFinished() }
     }
 
     /// 使用者看過了（展開瀏海或點角色）：完成未看、出錯變成等你
@@ -103,6 +109,27 @@ final class AgentMonitor {
     private func changed() {
         scheduleExpire()
         MascotController.shared.agentStateChanged()
+        evaluateNotices()
+    }
+
+    /// 設定的通知秒數改了：重新排下一次檢查
+    func noticeSettingsChanged() {
+        evaluateNotices()
+    }
+
+    /// 送出該發的通知，並排下一次檢查（需要你還沒到設定的秒數時）；不輪詢
+    private func evaluateNotices() {
+        noticeTimer?.invalidate()
+        noticeTimer = nil
+        let at = now
+        AgentNotifier.shared.evaluate(sessions, at: at)
+        guard let next = sessions.nextNoticeCheck(after: at, policy: PanelSettings.shared.agentNoticePolicy) else { return }
+        let timer = Timer(timeInterval: max(Double(next - at) / 1000, 0.05), repeats: false) { _ in
+            MainActor.assumeIsolated { AgentMonitor.shared.evaluateNotices() }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        noticeTimer = timer
     }
 
     /// 有工作階段時每分鐘看一次：工作中太久沒事件變等你、等你變閒置、太久沒事件的移除

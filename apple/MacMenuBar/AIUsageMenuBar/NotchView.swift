@@ -9,6 +9,7 @@ struct NotchView: View {
     @Environment(MascotController.self) private var controller
     @Environment(UsageStore.self) private var store
     @Environment(PanelSettings.self) private var settings
+    @Environment(AgentMonitor.self) private var monitor
 
     /// 截圖用：固定的時間（毫秒）；nil 表示依時鐘
     var fixedTime: Int?
@@ -32,6 +33,7 @@ struct NotchView: View {
                                 heroRate: rate == .idle || rate == .breathing || rate == .gaze ? rate : nil,
                                 heroClock: { controller.time($0) })
                 }
+                .overlay { NotchPulse(start: controller.pulseStart, clock: { controller.time($0) }, shape: collapsedShape) }
             }
         }
     }
@@ -39,17 +41,83 @@ struct NotchView: View {
 
 extension NotchView {
     private var extras: NotchExtras {
-        NotchExtras(pinned: controller.pinned,
-                    quietUntil: settings.mascotQuietUntil.flatMap { $0 > store.now ? $0 : nil },
-                    hint: controller.showsHint)
+        // 時間用 store.now（每分鐘更新），列表的「多久」跟著更新；狀態變了 AgentMonitor 會讓畫面重畫
+        let now = Int64(store.now.timeIntervalSince1970 * 1000)
+        let sessions = monitor.sessions
+        let rows = sessions.ordered(at: now).map { s in
+            NotchAgentRow(id: "\(s.ai.rawValue)/\(s.id)", ai: s.ai, folder: s.folder,
+                          state: s.state(at: now, idleAfter: sessions.idleAfter), need: s.need,
+                          minutes: Int(max(0, now - s.since) / 60_000))
+        }
+        return NotchExtras(pinned: controller.pinned,
+                           quietUntil: settings.mascotQuietUntil.flatMap { $0 > store.now ? $0 : nil },
+                           hint: controller.showsHint,
+                           page: rows.isEmpty ? .overview : controller.page,
+                           agents: rows)
+    }
+
+    /// 收合時瀏海的大小（脈動畫在這個外框上）
+    private var collapsedShape: NotchShape {
+        let size = controller.director?.config.panel.collapsed
+        return NotchShape(width: size?.width ?? controller.layout.collapsedWidth,
+                          height: size?.height ?? controller.layout.collapsedHeight, corner: size?.corner ?? 10)
     }
 }
 
-/// 上緣與角色卡的小標示：保持展開（圖釘，點了取消）、靜音或勿擾到幾點、第一次展開的提示
+/// 上緣與角色卡的小標示：保持展開（圖釘，點了取消）、靜音或勿擾到幾點、第一次展開的提示；
+/// 以及 AI 的工作階段（需要你時外框變琥珀色、多個時顯示數量、展開時可以列出來）
 struct NotchExtras: Equatable {
     var pinned = false
     var quietUntil: Date?
     var hint = false
+    var page = NotchPage.overview
+    var agents: [NotchAgentRow] = []
+
+    var needsYou: Bool { agents.contains { $0.state == .needsYou } }
+    /// 收合時顯示的數量：閒置以外的工作階段，兩個以上才顯示
+    var activeCount: Int { agents.filter { $0.state != .idle }.count }
+}
+
+/// 展開時右邊那張卡
+enum NotchPage: Equatable {
+    case overview, agents
+}
+
+/// 工作階段列表的一列。資料夾名稱只在記憶體與畫面上（ADR-0017 隱私）
+struct NotchAgentRow: Equatable, Identifiable {
+    var id: String
+    var ai: AgentKind
+    var folder: String
+    var state: AgentState
+    var need: AgentNeed?
+    var minutes: Int
+}
+
+/// 需要你的琥珀色（同提醒光環「偏高」那組）
+let notchAmber = Color(red: 245 / 255, green: 190 / 255, blue: 60 / 255)
+
+/// 等你下一個指令時收合瀏海的脈動：沿著外框的一圈淡光，亮起再淡掉（1.6 秒）。只在脈動時重畫（每秒 20 次）
+struct NotchPulse: View {
+    let start: Int?
+    let clock: ((Date) -> Int)?
+    var shape = NotchShape(width: 0, height: 0, corner: 0)
+
+    var body: some View {
+        if let start, let clock {
+            TimelineView(.animation(minimumInterval: 1.0 / 20)) { context in
+                Self.glow(shape, phase: Double(clock(context.date) - start) / Double(MascotController.pulseMs))
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// 脈動的某一刻（`phase` 0…1；截圖也用這個）
+    static func glow(_ shape: NotchShape, phase: Double) -> some View {
+        let k = phase < 0 || phase > 1 ? 0 : sin(phase * .pi)
+        return shape.stroke(Color.white.opacity(0.3 * k * k), lineWidth: 3)
+            .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+    }
 }
 
 /// 瀏海的形狀：上緣貼齊螢幕頂端、下方兩角圓角
@@ -100,6 +168,15 @@ struct NotchCanvas: View {
                 .offset(y: content.offset)
             miniRing
                 .opacity(shape.miniOpacity)
+            agentCount
+                .opacity(shape.miniOpacity)
+            if extras.needsYou {
+                // 需要你：外框琥珀色（收合、展開都在；靜止，不重畫）。線畫在遮罩上，只看得到內側一半
+                NotchShape(width: shape.width, height: shape.height, corner: shape.corner)
+                    .stroke(notchAmber, lineWidth: 3)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             hero
                 .allowsHitTesting(false)
                 .accessibilityElement()
@@ -115,6 +192,7 @@ struct NotchCanvas: View {
     private var heroDescription: String {
         let mode = director.isStill ? .none : director.mode
         let activity = switch mode {
+        case .raise: "舉手，有 AI 需要你"
         case .work: "工作中"
         case .sleep: "睡著了"
         case .none: "待命"
@@ -154,6 +232,19 @@ struct NotchCanvas: View {
                            mood: director.mood(at: time),
                            sleeping: director.showsSleep, dozing: director.showsDoze, effects: director.effects,
                            ripple: director.ripple, character: character)
+    }
+
+    /// 收合時迷你角色旁的數量：兩個以上的工作階段在跑或等你時顯示；有需要你的時用琥珀色
+    @ViewBuilder
+    private var agentCount: some View {
+        if extras.activeCount >= 2 {
+            Text("\(extras.activeCount)")
+                .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(extras.needsYou ? notchAmber : Color.white.opacity(0.6))
+                .fixedSize()
+                .position(x: layout.miniX + 18, y: layout.miniY + 1)
+                .accessibilityLabel("\(extras.activeCount) 個 AI 工作階段\(extras.needsYou ? "，有需要你的" : "")")
+        }
     }
 
     /// 收合時右邊：服務色的迷你圓環與剩餘百分比（角色所代表的服務中剩最少的額度）
@@ -219,15 +310,25 @@ struct NotchContent: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: 6) {
-                NotchTab(symbol: "house.fill", label: "總覽", selected: true) {}
+                NotchTab(symbol: "house.fill", label: "總覽", selected: extras.page == .overview) {
+                    MascotController.shared.setPage(.overview)
+                }
+                if !extras.agents.isEmpty {
+                    NotchTab(symbol: "terminal", label: "AI 工作階段", selected: extras.page == .agents,
+                             tint: extras.needsYou ? notchAmber : nil) {
+                        MascotController.shared.setPage(.agents)
+                    }
+                }
                 NotchTab(symbol: "clock", label: "歷史") { AppActions.openStats?(); NSApplication.shared.activate() }
                 NotchTab(symbol: "gearshape", label: "設定") { AppActions.openSettings?(); NSApplication.shared.activate() }
             }
             .frame(height: 20)
-            .position(x: 20 + 42, y: 17)
+            .fixedSize()
+            .frame(width: 120, alignment: .leading)
+            .position(x: 20 + 60, y: 17)
             marks
                 .frame(height: 20)
-                .position(x: 112 + 30, y: 17)
+                .position(x: (extras.agents.isEmpty ? 112 : 142) + 30, y: 17)
             if extras.hint {
                 Text("右鍵點我有更多動作")
                     .font(.system(size: 10))
@@ -245,7 +346,11 @@ struct NotchContent: View {
                 RoundedRectangle(cornerRadius: 18).fill(Self.card)
                     .frame(width: 140)
                     .accessibilityHidden(true)
-                quotaCard
+                if extras.page == .agents, !extras.agents.isEmpty {
+                    agentsCard
+                } else {
+                    quotaCard
+                }
             }
             .padding(EdgeInsets(top: 34, leading: 16, bottom: 14 + 10, trailing: 16))
             .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
@@ -308,6 +413,79 @@ struct NotchContent: View {
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 18).fill(Self.card))
+    }
+
+    /// AI 工作階段：AI、資料夾名稱、狀態、多久（需要你的排最前面）。狀態用文字，不只靠顏色
+    private var agentsCard: some View {
+        let shown = extras.agents.prefix(4)
+        return VStack(alignment: .leading, spacing: 5) {
+            ForEach(shown) { row in
+                HStack(spacing: 8) {
+                    Text(row.ai == .claude ? "Claude" : "Codex")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(UsageColors.provider(row.ai.rawValue))
+                        .frame(width: 44, alignment: .leading)
+                    Text(row.folder.isEmpty ? "（沒有名稱）" : row.folder)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 4)
+                    Text(Self.stateText(row))
+                        .font(.system(size: 11, weight: row.state == .needsYou ? .semibold : .regular))
+                        .foregroundStyle(Self.stateColor(row.state))
+                    Text(Self.duration(row.minutes))
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(Color(red: 0x6f / 255, green: 0x6f / 255, blue: 0x7d / 255))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(minWidth: 40, alignment: .trailing)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if extras.agents.count > shown.count {
+                Text("還有 \(extras.agents.count - shown.count) 個")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Self.secondary)
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Self.card))
+    }
+
+    static func stateText(_ row: NotchAgentRow) -> String {
+        switch row.state {
+        case .needsYou:
+            switch row.need {
+            case .permission: "等你允許"
+            case .question: "有問題問你"
+            case .plan: "等你確認計畫"
+            default: "需要你"
+            }
+        case .error: "出錯了"
+        case .working: "工作中"
+        case .done: "完成（未看）"
+        case .waiting: "等你下指令"
+        case .idle: "閒置"
+        }
+    }
+
+    static func stateColor(_ state: AgentState) -> Color {
+        switch state {
+        case .needsYou: notchAmber
+        case .error: Color(red: 240 / 255, green: 80 / 255, blue: 80 / 255)
+        case .done: Color(red: 63 / 255, green: 208 / 255, blue: 122 / 255)
+        case .working: Color(red: 0xe6 / 255, green: 0xe6 / 255, blue: 0xee / 255)
+        case .waiting, .idle: secondary
+        }
+    }
+
+    static func duration(_ minutes: Int) -> String {
+        if minutes < 1 { return "剛剛" }
+        if minutes < 60 { return "\(minutes) 分" }
+        return minutes % 60 == 0 ? "\(minutes / 60) 小時" : "\(minutes / 60) 小時 \(minutes % 60) 分"
     }
 
     @ViewBuilder
@@ -375,6 +553,8 @@ struct NotchTab: View {
     let symbol: String
     let label: String
     var selected = false
+    /// 需要你時 AI 工作階段的分頁用琥珀色
+    var tint: Color?
     let action: () -> Void
 
     var body: some View {
@@ -383,8 +563,8 @@ struct NotchTab: View {
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: 24, height: 20)
                 .background(Capsule().fill(selected ? Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255) : .clear))
-                .foregroundStyle(selected ? Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255)
-                                          : Color(red: 0x77 / 255, green: 0x77 / 255, blue: 0x8a / 255))
+                .foregroundStyle(tint ?? (selected ? Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255)
+                                                   : Color(red: 0x77 / 255, green: 0x77 / 255, blue: 0x8a / 255)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

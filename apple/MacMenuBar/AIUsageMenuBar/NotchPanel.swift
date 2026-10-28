@@ -157,7 +157,8 @@ final class NotchContainerView: NSView {
     private let hosting = NotchHostingView(rootView: AnyView(NotchView()
         .environment(MascotController.shared)
         .environment(UsageStore.shared)
-        .environment(PanelSettings.shared)))
+        .environment(PanelSettings.shared)
+        .environment(AgentMonitor.shared)))
     private var tracking: NSTrackingArea?
 
     override init(frame: NSRect) {

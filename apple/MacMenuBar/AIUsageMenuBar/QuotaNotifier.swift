@@ -109,9 +109,16 @@ extension QuotaNotifier: UNUserNotificationCenterDelegate {
 
     /// 點通知：打開面板，對應的卡片亮一下（ADR-0010 第四階段）
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let card = response.notification.request.content.userInfo["card"] as? String
+        let info = response.notification.request.content.userInfo
+        let card = info["card"] as? String
+        let agent = info["agent"] as? Bool == true
         await MainActor.run {
-            AppActions.openPanel(highlight: card)
+            // AI 狀態的通知：展開瀏海並保持展開，直接看到工作階段列表（瀏海關掉時改開面板）
+            if agent, NotchPanelController.shared.isShown {
+                MascotController.shared.setPinned(true)
+            } else {
+                AppActions.openPanel(highlight: card)
+            }
         }
     }
 }

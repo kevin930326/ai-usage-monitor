@@ -178,6 +178,15 @@ import Testing
         #expect(sessions.nextNoticeCheck(after: 9_000_000, policy: off) == nil)
     }
 
+    /// 出錯難過；完成未看只在額度正常時開心；其他照額度
+    @Test func agentMoodKeepsQuotaWarnings() {
+        #expect(MascotMood.agent(.error, quota: .out) == .sad)
+        #expect(MascotMood.agent(.done, quota: .normal) == .happy)
+        #expect(MascotMood.agent(.done, quota: .worried) == .worried)
+        #expect(MascotMood.agent(.working, quota: .stale) == .stale)
+        #expect(MascotMood.agent(nil, quota: .normal) == .normal)
+    }
+
     @Test func installedEventsAreHandled() {
         for ai in AgentKind.allCases {
             #expect(!AgentHookEvent.installed(for: ai).isEmpty)

@@ -123,6 +123,9 @@ final class PanelSettings {
         static let mascotSleepMinutes = "notch.sleepMinutes"
         static let mascotQuietUntil = "notch.quietUntil"
         static let notchHintShown = "notch.hintShown"
+        static let agentNeedsYouSeconds = "agent.notifyNeedsYouSeconds"
+        static let agentLongTaskMinutes = "agent.notifyLongTaskMinutes"
+        static let notchWaitingPulse = "notch.waitingPulse"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -257,6 +260,11 @@ final class PanelSettings {
         mascotSleepMinutes = Self.sleepMinuteChoices.contains(minutes) ? minutes : 5
         mascotQuietUntil = defaults.object(forKey: Key.mascotQuietUntil) as? Date
         notchHintShown = defaults.bool(forKey: Key.notchHintShown)
+        let seconds = defaults.object(forKey: Key.agentNeedsYouSeconds) as? Int ?? 20
+        agentNeedsYouSeconds = Self.needsYouSecondChoices.contains(seconds) ? seconds : 20
+        let taskMinutes = defaults.object(forKey: Key.agentLongTaskMinutes) as? Int ?? 3
+        agentLongTaskMinutes = Self.longTaskMinuteChoices.contains(taskMinutes) ? taskMinutes : 3
+        notchWaitingPulse = defaults.object(forKey: Key.notchWaitingPulse) as? Bool ?? true
     }
 
     /// 瀏海面板（ADR-0016）：預設開啟；關掉時選單列圖示與面板照常
@@ -317,6 +325,37 @@ final class PanelSettings {
     /// 第一次展開瀏海時的提示（右鍵有更多）已經顯示過
     var notchHintShown: Bool {
         didSet { defaults.set(notchHintShown, forKey: Key.notchHintShown) }
+    }
+
+    /// 0 表示關閉
+    static let needsYouSecondChoices = [0, 10, 20, 30, 60, 120]
+    static let longTaskMinuteChoices = [0, 1, 3, 5, 10, 20]
+
+    /// AI 需要你超過幾秒還沒處理就發系統通知（預設 20；0 關閉）
+    var agentNeedsYouSeconds: Int {
+        didSet {
+            defaults.set(agentNeedsYouSeconds, forKey: Key.agentNeedsYouSeconds)
+            AgentMonitor.shared.noticeSettingsChanged()
+        }
+    }
+
+    /// 跑超過幾分鐘的任務完成時發系統通知（預設 3；0 關閉）
+    var agentLongTaskMinutes: Int {
+        didSet { defaults.set(agentLongTaskMinutes, forKey: Key.agentLongTaskMinutes) }
+    }
+
+    /// AI 等你下一個指令時，收合的瀏海輕微脈動（預設開）
+    var notchWaitingPulse: Bool {
+        didSet {
+            defaults.set(notchWaitingPulse, forKey: Key.notchWaitingPulse)
+            MascotController.shared.agentStateChanged()
+        }
+    }
+
+    /// 通知的門檻（毫秒；關閉時是 Int64.max，永遠不到）
+    var agentNoticePolicy: AgentNoticePolicy {
+        AgentNoticePolicy(needsYouAfter: agentNeedsYouSeconds > 0 ? Int64(agentNeedsYouSeconds) * 1000 : .max,
+                          longTask: agentLongTaskMinutes > 0 ? Int64(agentLongTaskMinutes) * 60_000 : .max)
     }
 
     func isMascotQuiet(at now: Date) -> Bool {

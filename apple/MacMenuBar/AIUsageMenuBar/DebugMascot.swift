@@ -15,6 +15,9 @@ enum DebugMascot {
         var time: Int
         /// 額度的情境：剩不到 20%、資料過期（迷你圓環與額度列的顏色）
         var quota: Quota = .normal
+        /// AI 工作階段（外框、數量、列表）與等你時的脈動（0…1）
+        var extras = NotchExtras()
+        var pulse: Double?
     }
 
     enum Quota { case normal, low, stale }
@@ -54,8 +57,15 @@ enum DebugMascot {
             return snapshot
         }
         func canvas(_ shot: Shot) -> some View {
-            NotchCanvas(director: director(shot), time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
-                        character: shot.character, gazeOverride: (0, 0))
+            let d = director(shot)
+            let size = d.config.panel.collapsed
+            return NotchCanvas(director: d, time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
+                               character: shot.character, extras: shot.extras, gazeOverride: (0, 0))
+                .overlay {
+                    if let pulse = shot.pulse {
+                        NotchPulse.glow(NotchShape(width: size.width, height: size.height, corner: size.corner), phase: pulse)
+                    }
+                }
         }
         func label(_ text: String) -> some View {
             Text(text).font(.system(size: 11)).foregroundStyle(Color(white: 0.75)).frame(width: 580, alignment: .leading)
@@ -126,6 +136,29 @@ enum DebugMascot {
             // 右鍵選單的「表情」（同一套眼睛與眉毛也用在額度與之後的 AI 狀態）
             expression("face-\(mood.rawValue)", at: 1000) { $0.requestFace(mood, at: 1000) }
         }
+        // AI 狀態（mascot2 第 2 部分）：需要你（舉手、琥珀外框、數量）、收著時完成（鼓一下、揮手）、
+        // 等你下指令的脈動、展開的工作階段列表、出錯（難過）
+        func row(_ ai: AgentKind, _ folder: String, _ state: AgentState, need: AgentNeed? = nil, minutes: Int) -> NotchAgentRow {
+            NotchAgentRow(id: "\(ai.rawValue)/\(folder)", ai: ai, folder: folder, state: state, need: need, minutes: minutes)
+        }
+        let needsRows = [row(.claude, "ai-usage-monitor", .needsYou, need: .permission, minutes: 2),
+                         row(.codex, "web-app", .working, minutes: 14)]
+        let manyRows = [row(.claude, "ai-usage-monitor", .needsYou, need: .question, minutes: 0),
+                        row(.codex, "billing-service", .error, minutes: 3),
+                        row(.claude, "web-app", .working, minutes: 74),
+                        row(.codex, "notes", .done, minutes: 1),
+                        row(.claude, "dotfiles", .waiting, minutes: 9)]
+        let agents: [Shot] = [
+            Shot(name: "collapsed-needs-you", setup: { $0.setNeedsYou(true, at: 0) }, time: 2000,
+                 extras: NotchExtras(agents: needsRows)),
+            Shot(name: "collapsed-cheer", setup: { $0.advance(to: 1000); $0.cheer(at: 1000) }, time: 1700),
+            Shot(name: "collapsed-waiting-pulse", setup: { _ in }, time: 2000,
+                 extras: NotchExtras(agents: [row(.claude, "ai-usage-monitor", .waiting, minutes: 1)]), pulse: 0.5),
+            Shot(name: "expanded-agents", setup: { $0.setNeedsYou(true, at: 0); $0.open(at: 0, intro: false) }, time: 1500,
+                 extras: NotchExtras(page: .agents, agents: manyRows)),
+            Shot(name: "expanded-agent-error", setup: { $0.setMood(.sad); $0.open(at: 0, intro: false) }, time: 1500,
+                 extras: NotchExtras(agents: [row(.codex, "billing-service", .error, minutes: 3)])),
+        ]
         // 有瀏海的 Mac（實體瀏海 185 寬）與沒有瀏海時的假瀏海
         let notch = NotchLayout(notchWidth: 185, notchHeight: 32, hasNotch: true)
         let screens = [
@@ -133,17 +166,18 @@ enum DebugMascot {
             Shot(name: "fake-collapsed", layout: .fake, setup: { _ in }, time: 1000),
         ]
 
-        let all = collapsed + expanded + intro + expressions + screens
+        let all = collapsed + expanded + intro + expressions + agents + screens
         for shot in all {
             write(canvas(shot).background(Color(white: 0.16)), dir.appendingPathComponent("mascot-\(shot.name).png"))
         }
 
         // 合成的對照圖（截圖基準）
-        func sheet(_ shots: [Shot], height: Double = 190) -> some View {
+        func sheet(_ shots: [Shot], height: Double = 190, collapsedHeight: Double? = nil) -> some View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(shots.enumerated()), id: \.offset) { _, shot in
                     label(shot.name)
-                    canvas(shot).frame(width: 580, height: height, alignment: .top).clipped()
+                    canvas(shot).frame(width: 580, height: shot.name.hasPrefix("collapsed") ? collapsedHeight ?? height : height,
+                                       alignment: .top).clipped()
                 }
             }
             .padding(10)
@@ -152,6 +186,7 @@ enum DebugMascot {
         write(sheet(collapsed, height: 40), dir.appendingPathComponent("notch-collapsed.png"))
         write(sheet(expanded + intro), dir.appendingPathComponent("notch-intro.png"))
         write(sheet(expressions), dir.appendingPathComponent("notch-expressions.png"))
+        write(sheet(agents, collapsedHeight: 44), dir.appendingPathComponent("notch-agents.png"))
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }
