@@ -28,8 +28,11 @@ public static class AgentSummary
             var mine = ordered.Where(s => s.Ai == ai).ToList();
             if (mine.Count == 0) continue;
             var top = mine[0];
-            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(top.State(now, sessions.IdleAfter))}\"," +
-                     $"\"sessions\":{mine.Count.ToString(CultureInfo.InvariantCulture)},\"since\":{top.Since.ToString(CultureInfo.InvariantCulture)}}}");
+            var state = top.State(now, sessions.IdleAfter);
+            // 同一個狀態有幾個工作階段時取最早進入的：哪一個最近有事件不影響彙總（Fable F-01）
+            var since = mine.Where(s => s.State(now, sessions.IdleAfter) == state).Min(s => s.Since);
+            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(state)}\"," +
+                     $"\"sessions\":{mine.Count.ToString(CultureInfo.InvariantCulture)},\"since\":{since.ToString(CultureInfo.InvariantCulture)}}}");
         }
         return Encoding.UTF8.GetBytes($"{{\"v\":{Version},\"ais\":[{string.Join(",", rows)}]}}");
     }

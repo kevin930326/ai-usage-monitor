@@ -1993,6 +1993,73 @@
    ]
   },
   {
+   "name": "summary-stable-with-two-working",
+   "idle_after_ms": 300000,
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 2500,
+     "e": "summary"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3100,
+     "e": "summary"
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 4100,
+     "e": "summary"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5100,
+     "e": "summary"
+    }
+   ]
+  },
+  {
    "name": "summary-idle-and-error",
    "idle_after_ms": 60000,
    "events": [
