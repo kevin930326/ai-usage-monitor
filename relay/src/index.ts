@@ -64,7 +64,12 @@ export const LIMITS = {
   providers: 8, windows: 16, plan: 64, error: 500, id: 64, label: 64, maxPct: 1000,
   // 重置次數卷：張數上限與明細（依到期時間分組）筆數上限，和收集器的 MAX_RESET_CREDITS／MAX_RESET_CREDIT_DETAILS 相同
   resetCredits: 1000, resetCreditDetails: 16,
+  // 額度預測的倍數、服務事故（ADR-0018）：和收集器的 SNAPSHOT_INCIDENTS／MAX_TEXT 相同
+  faster: 1000, incidents: 3, incidentName: 120,
 };
+const IMPACTS = ["none", "minor", "major", "critical", "maintenance"];
+// 事故連結只收兩個官方狀態頁的事故頁
+const INCIDENT_URL = /^https:\/\/status\.(claude|openai)\.com\/incidents\/[A-Za-z0-9_-]{1,64}$/;
 const PROVIDER_KEY = /^[a-z0-9_-]{1,32}$/;
 // 收集器輸出整秒的 ISO 8601；不收小數秒，iOS 17／macOS 14 的 ISO8601DateFormatter 解不出來
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/;
@@ -101,7 +106,37 @@ function sanitizeWindow(w: unknown): Result<Fields> {
     if (typeof w.hidden !== "boolean") return fail("hidden 必須是布林值");
     window.hidden = w.hidden;
   }
+  const forecast = sanitizeForecast(w.forecast);
+  if (forecast) window.forecast = forecast;
   return { ok: true, value: window };
+}
+
+/** 選填的額度預測 `{exhausts_at, urgent, faster?}`（ADR-0018 第 2 節）。附加資訊：格式不符時丟掉這個欄位，
+ *  不擋下整份快照。 */
+function sanitizeForecast(f: unknown): Fields | null {
+  if (!isObject(f) || !isDate(f.exhausts_at) || typeof f.urgent !== "boolean") return null;
+  const forecast: Fields = { exhausts_at: f.exhausts_at, urgent: f.urgent };
+  if (typeof f.faster === "number" && Number.isFinite(f.faster) && f.faster > 0 && f.faster <= LIMITS.faster) {
+    forecast.faster = f.faster;
+  }
+  return forecast;
+}
+
+/** 選填的進行中事故 `[{name, impact, url?, started_at?}]`（ADR-0018 第 4 節）。附加資訊：不是陣列時丟掉欄位、
+ *  格式不符的項目略過，不擋下整份快照；空陣列保留（代表查過、沒有事故）。 */
+function sanitizeIncidents(list: unknown): Fields[] | null {
+  if (!Array.isArray(list)) return null;
+  const incidents: Fields[] = [];
+  for (const i of list) {
+    if (incidents.length >= LIMITS.incidents) break;
+    if (!isObject(i) || typeof i.name !== "string" || i.name === "" || !isText(i.name, LIMITS.incidentName)) continue;
+    if (typeof i.impact !== "string" || !IMPACTS.includes(i.impact)) continue;
+    const incident: Fields = { name: i.name, impact: i.impact };
+    if (typeof i.url === "string" && INCIDENT_URL.test(i.url)) incident.url = i.url;
+    if (isDate(i.started_at)) incident.started_at = i.started_at;
+    incidents.push(incident);
+  }
+  return incidents;
 }
 
 /** 選填的重置次數卷：`{available, credits: [{expires_at, count}]}`（依到期時間分組；沒有 count 的舊格式當 1 張），
@@ -150,6 +185,8 @@ function sanitizeProvider(p: unknown): Result<Fields> {
     if (!resetCredits.ok) return resetCredits;
     provider.reset_credits = resetCredits.value;
   }
+  const incidents = sanitizeIncidents(p.incidents);
+  if (incidents) provider.incidents = incidents;
   return { ok: true, value: provider };
 }
 

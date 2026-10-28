@@ -3,7 +3,7 @@ import Foundation
 /// 額度預測（ADR-0018 第 1 節）：照近期速度推算「約幾點幾分用完」，以及比過去 7 天同時段快幾倍。
 /// 只在資料足夠、而且會在重置前用完時才有值；資料不足時不退回平均速度（不猜）。
 /// 同一套規則在 `UsageCore/QuotaForecast.cs` 與收集器的 `forecast.py`，`fixtures/forecast/` 三邊跑同一份 golden。
-public struct QuotaForecast: Equatable, Sendable, Codable {
+public struct QuotaForecast: Hashable, Sendable, Codable {
     /// 距離用完不到這麼久算緊急（紅色）
     public static let urgentWithin: TimeInterval = 3600
     /// 比平常快這麼多倍以上才顯示倍數
@@ -50,6 +50,22 @@ public struct QuotaForecast: Equatable, Sendable, Codable {
     }
 }
 
+public extension QuotaForecast {
+    /// 畫面用的預測：有本機歷史（Mac）時自己算；沒有（iPhone）時用收集器寫在快照裡的，
+    /// 但過期、已經過了、或不在重置前的不用，緊急與否照現在的時間重算
+    static func current(window: UsageWindow, provider: String, history: QuotaHistory?, stale: Bool, now: Date) -> QuotaForecast? {
+        if let history {
+            return QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now)
+        }
+        guard !stale, !window.hidden, var forecast = window.forecast, forecast.exhaustsAt > now,
+              let resetsAt = window.resetsAt, forecast.exhaustsAt < resetsAt, window.effectiveUsedPct(at: now) < 100 else {
+            return nil
+        }
+        forecast.urgent = forecast.exhaustsAt.timeIntervalSince(now) < urgentWithin
+        return forecast
+    }
+}
+
 public extension QuotaHistory {
     /// 平常的速度：過去 7 天每一天同一段回看範圍（往前推整天數）的速度，各天的資料門檻同近期速度
     /// （至少 4 筆、跨度足夠）；至少 3 天有資料時取中位數，否則 nil。跨過重置的那一段不算消耗。
@@ -63,10 +79,10 @@ public extension QuotaHistory {
             guard span.count >= Self.recentMinimumSamples, let first = span.first, let last = span.last else { continue }
             let seconds = last.ts.timeIntervalSince(first.ts)
             guard seconds >= Self.recentMinimumSpan(windowID: windowID) else { continue }
-            let consumed = zip(span, span.dropFirst()).reduce(0.0) { sum, pair in
+            let used = zip(span, span.dropFirst()).reduce(0.0) { sum, pair in
                 Self.isReset(from: pair.0, to: pair.1) ? sum : sum + max(pair.1.usedPct - pair.0.usedPct, 0)
             }
-            rates.append(consumed / seconds)
+            rates.append(used / seconds)
         }
         guard rates.count >= QuotaForecast.baselineMinimumDays else { return nil }
         rates.sort()

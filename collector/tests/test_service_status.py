@@ -79,7 +79,7 @@ class UpdateTest(unittest.TestCase):
             self.calls.append((url, headers))
             if "openai" in url:
                 raise ProviderError("網路錯誤")
-            return summary()
+            return {"incidents": []} if "incidents" in url else summary()
         self.patch = mock.patch.object(service_status.http, "request_json", side_effect=fake)
         self.patch.start()
 
@@ -96,14 +96,18 @@ class UpdateTest(unittest.TestCase):
         self.assertIsNone(data["providers"]["codex"]["indicator"])
         if sys.platform != "win32":  # Windows 沒有 POSIX 權限位元（%LOCALAPPDATA% 的 ACL 只有使用者本人）
             self.assertEqual(stat.S_IMODE(os.stat(self.path).st_mode), 0o600)
-        self.assertEqual([c[1] for c in self.calls], [{}, {}])  # 不帶任何標頭（密鑰、cookie）
+        self.assertEqual([c[1] for c in self.calls], [{}, {}, {}])  # 不帶任何標頭（密鑰、cookie）
+        # summary.json 失敗的服務不再查事故清單
         self.assertEqual([c[0] for c in self.calls], ["https://status.claude.com/api/v2/summary.json",
+                                                      "https://status.claude.com/api/v2/incidents/unresolved.json",
                                                       "https://status.openai.com/api/v2/summary.json"])
+        self.assertTrue(data["providers"]["claude"]["incidents_checked"])
+        self.assertFalse(data["providers"]["codex"]["incidents_checked"])
 
     def test_rate_limited_unless_providers_change(self):
         service_status.update(["claude"], self.path, now=NOW)
         self.assertFalse(service_status.update(["claude"], self.path, now=NOW + timedelta(seconds=60)))
-        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(len(self.calls), 2)
         self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW + timedelta(seconds=61)))
         self.assertTrue(service_status.update(["claude", "codex"], self.path, now=NOW + timedelta(seconds=61 + 240)))
         # 時鐘倒退：照常抓取
@@ -138,3 +142,119 @@ class UpdateTest(unittest.TestCase):
             service_status.update_safely(["claude"], self.path)
         self.assertIn("PermissionError", err.getvalue())
         self.assertNotIn("/secret/path", err.getvalue())
+
+
+def incident(i, name, status="investigating", impact="minor", components=None, **extra):
+    """假的事故（Statuspage 有 components；incident.io 沒有），加上不該保留的更新內文"""
+    data = {"id": i, "name": name, "status": status, "impact": impact, "created_at": "2026-10-24T02:10:00.000Z",
+            "started_at": "2026-10-24T02:05:00.000Z", "shortlink": "https://stspg.io/x",
+            "incident_updates": [{"body": "long body text that must not be stored"}], **extra}
+    if components is not None:
+        data["components"] = [{"name": n} for n in components]
+    return data
+
+
+class IncidentsTest(unittest.TestCase):
+    def test_claude_keeps_related_or_unlisted(self):
+        data = {"incidents": [
+            incident("abc123", "Elevated errors on Claude Code", impact="major", components=["Claude Code"]),
+            incident("def456", "Console is slow", components=["Claude Console (platform.claude.com)"]),
+            incident("ghi789", "Something odd", components=[]),
+            incident("../evil", "Bad id", components=["claude.ai"]),
+        ]}
+        result = service_status.parse_incidents("claude", data)
+        self.assertEqual([i["name"] for i in result], ["Elevated errors on Claude Code", "Something odd", "Bad id"])
+        self.assertEqual(result[0], {"name": "Elevated errors on Claude Code", "impact": "major",
+                                     "url": "https://status.claude.com/incidents/abc123",
+                                     "started_at": "2026-10-24T02:05:00Z"})
+        self.assertIsNone(result[2]["url"])
+        dumped = json.dumps(result)
+        for leaked in ("long body", "stspg.io", "evil"):
+            self.assertNotIn(leaked, dumped)
+
+    def test_openai_filters_resolved(self):
+        data = {"incidents": [
+            incident("01J", "Codex errors", started_at=None),
+            incident("01K", "Fixed", status="resolved"),
+            incident("01L", "Postmortem", status="postmortem"),
+            incident("01M", "Resolved but status stale", resolved_at="2026-10-24T02:30:00Z"),
+            incident("01N", "Weird", impact="apocalyptic", started_at="soon", created_at="yesterday"),
+        ]}
+        result = service_status.parse_incidents("codex", data)
+        self.assertEqual(result, [
+            {"name": "Codex errors", "impact": "minor", "url": "https://status.openai.com/incidents/01J",
+             "started_at": "2026-10-24T02:10:00Z"},
+            {"name": "Weird", "impact": "none", "url": "https://status.openai.com/incidents/01N", "started_at": None},
+        ])
+
+    def test_bad_format_raises(self):
+        for bad in ([], {}, {"incidents": "x"}):
+            with self.assertRaises(ProviderError):
+                service_status.parse_incidents("codex", bad)
+
+    def test_incident_failure_keeps_summary(self):
+        def fake(url, headers, timeout=15):
+            if "incidents" in url:
+                raise TimeoutError("/secret")
+            return summary("minor", incidents=[("From summary", "investigating", "minor")])
+        with mock.patch.object(service_status.http, "request_json", side_effect=fake):
+            result = service_status.fetch("claude")
+        self.assertEqual(result["indicator"], "minor")
+        self.assertFalse(result["incidents_checked"])
+        self.assertEqual(result["incidents"], [{"name": "From summary", "impact": "minor"}])
+
+
+class AnnotateTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.path = Path(self.dir.name) / "service-status.json"
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def write(self, providers, updated=NOW):
+        self.path.write_text(json.dumps({"schema_version": 1, "updated_at": service_status.iso_utc(updated),
+                                         "providers": providers}))
+
+    def snapshot(self):
+        return {"providers": {"claude": {"error": None, "windows": []}, "codex": {"error": "x", "windows": []}}}
+
+    def test_adds_checked_incidents_capped(self):
+        items = [{"name": f"Incident {i}", "impact": "major", "url": f"https://status.claude.com/incidents/i{i}",
+                  "started_at": "2026-10-24T02:05:00Z"} for i in range(5)]
+        items[1]["url"] = "https://evil.example/incidents/x"
+        items[2]["started_at"] = "2026-10-24T02:05:00"  # 沒有時區
+        self.write({"claude": {"error": None, "incidents_checked": True, "incidents": items},
+                    "codex": {"error": None, "incidents_checked": True, "incidents": []}})
+        snap = self.snapshot()
+        service_status.annotate(snap, self.path, now=NOW + timedelta(minutes=5))
+        self.assertEqual(snap["providers"]["claude"]["incidents"], [
+            {"name": "Incident 0", "impact": "major", "url": "https://status.claude.com/incidents/i0",
+             "started_at": "2026-10-24T02:05:00Z"},
+            {"name": "Incident 1", "impact": "major", "started_at": "2026-10-24T02:05:00Z"},
+            {"name": "Incident 2", "impact": "major", "url": "https://status.claude.com/incidents/i2"},
+        ])
+        # 額度收集失敗的服務也放（狀態頁與額度無關），沒有事故時是空陣列
+        self.assertEqual(snap["providers"]["codex"]["incidents"], [])
+
+    def test_omits_when_unchecked_failed_stale_or_missing(self):
+        cases = [
+            ({"claude": {"error": None, "incidents_checked": False, "incidents": [{"name": "x", "impact": "minor"}]}}, NOW),
+            ({"claude": {"error": "網路錯誤", "incidents_checked": False, "incidents": []}}, NOW),
+            ({"claude": {"error": None, "incidents_checked": True, "incidents": []}}, NOW - timedelta(minutes=20)),
+            ({"claude": {"error": None, "incidents_checked": True, "incidents": []}}, NOW + timedelta(minutes=5)),
+        ]
+        for providers, updated in cases:
+            with self.subTest(providers=providers, updated=updated):
+                self.write(providers, updated)
+                snap = self.snapshot()
+                service_status.annotate(snap, self.path, now=NOW)
+                self.assertNotIn("incidents", snap["providers"]["claude"])
+                self.assertNotIn("incidents", snap["providers"]["codex"])
+        self.path.unlink()
+        snap = self.snapshot()
+        service_status.annotate(snap, self.path, now=NOW)
+        self.assertNotIn("incidents", snap["providers"]["claude"])
+        self.path.write_text("not json")
+        service_status.annotate(snap, self.path, now=NOW)
+        self.assertNotIn("incidents", snap["providers"]["claude"])

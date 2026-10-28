@@ -6,7 +6,7 @@ namespace AIUsageMonitor.Core;
 /// <summary>
 /// 收集器輸出的快照（docs/02-architecture.md 第 3 節），對應 UsageKit 的 <c>UsageSnapshot</c>。
 /// 解析規則與 Swift 的 <c>UsageDecoder</c> 相同：先檢查 <c>schema_version</c>，必要欄位缺少或型別不對時整份視為格式錯誤；
-/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>）格式不對時當成沒有。
+/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>、<c>incidents</c>）格式不對時當成沒有。
 /// </summary>
 public sealed record UsageSnapshot(int SchemaVersion, DateTimeOffset UpdatedAt, IReadOnlyDictionary<string, ProviderUsage> Providers,
                                    LocalStatus? LocalStatus = null)
@@ -80,10 +80,29 @@ public sealed record LocalStatus(string? HistoryPaused, int? DiskFreeMB, DateTim
     public bool LowDisk => HistoryPaused == "low_disk";
 }
 
-public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<UsageWindow> Windows)
+public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<UsageWindow> Windows,
+                                   IReadOnlyList<ServiceIncident>? Incidents = null)
 {
     /// <summary>預設顯示的額度（排除各模型等次要額度，FR-14）</summary>
     public IReadOnlyList<UsageWindow> VisibleWindows => Windows.Where(w => !w.Hidden).ToList();
+}
+
+/// <summary>
+/// usage.json 裡的進行中事故（ADR-0018 第 4 節），對應 UsageKit 的 <c>ServiceIncident</c>：只有名稱、等級、事故頁與開始時間。
+/// </summary>
+public sealed record ServiceIncident(string Name, string Impact, string? Url = null, DateTimeOffset? StartedAt = null)
+{
+    /// <summary>只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結</summary>
+    public static readonly IReadOnlySet<string> AllowedHosts = new HashSet<string> { "status.claude.com", "status.openai.com" };
+
+    public Uri? Link => LinkOf(Url);
+
+    public static Uri? LinkOf(string? text) =>
+        text is not null && Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
+        && AllowedHosts.Contains(uri.Host) && uri.IsDefaultPort && uri.UserInfo.Length == 0
+        && uri.AbsolutePath.StartsWith("/incidents/", StringComparison.Ordinal)
+        // Uri 會把大寫主機轉成小寫；原文也要是小寫，同 Swift 的 URL.host
+        && text.StartsWith($"https://{uri.Host}/", StringComparison.Ordinal) ? uri : null;
 }
 
 /// <summary>某個服務的某個額度（<c>ProviderWindow</c>）。</summary>
@@ -163,7 +182,33 @@ public static class UsageDecoder
     {
         if (e.ValueKind != JsonValueKind.Object) throw new FormatException();
         var windows = Required(e, "windows", JsonValueKind.Array).EnumerateArray().Select(DecodeWindow).ToList();
-        return new ProviderUsage(NullableString(e, "plan"), NullableString(e, "error"), windows);
+        return new ProviderUsage(NullableString(e, "plan"), NullableString(e, "error"), windows, DecodeIncidents(e));
+    }
+
+    /// <summary>選填的事故：不是陣列或任何一項格式不對時當成沒有（同 Swift 的 <c>try? decodeIfPresent</c>）</summary>
+    private static IReadOnlyList<ServiceIncident>? DecodeIncidents(JsonElement e)
+    {
+        if (!e.TryGetProperty("incidents", out var list) || list.ValueKind != JsonValueKind.Array) return null;
+        var result = new List<ServiceIncident>();
+        foreach (var i in list.EnumerateArray())
+        {
+            if (i.ValueKind != JsonValueKind.Object || !i.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String
+                || !i.TryGetProperty("impact", out var impact) || impact.ValueKind != JsonValueKind.String) return null;
+            string? url = null;
+            if (i.TryGetProperty("url", out var u) && u.ValueKind != JsonValueKind.Null)
+            {
+                if (u.ValueKind != JsonValueKind.String) return null;
+                url = u.GetString();
+            }
+            DateTimeOffset? started = null;
+            if (i.TryGetProperty("started_at", out var st) && st.ValueKind != JsonValueKind.Null)
+            {
+                if (st.ValueKind != JsonValueKind.String || !TryParseIso(st.GetString()!, out var d)) return null;
+                started = d;
+            }
+            result.Add(new ServiceIncident(name.GetString()!, impact.GetString()!, url, started));
+        }
+        return result;
     }
 
     private static UsageWindow DecodeWindow(JsonElement e)

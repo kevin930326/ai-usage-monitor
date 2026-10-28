@@ -1,7 +1,8 @@
 """服務狀態（FR-45、ADR-0008 第 2 節第 8 項）：讀 Anthropic 與 OpenAI 的公開狀態頁，寫入本機 `service-status.json`。
 
-- 只讀公開的 Statuspage `summary.json`，不帶任何密鑰或 cookie、不跟隨到其他主機的重新導向。
-- 結果只存在本機（0600），不放進快照、不上傳；Mac App 讀這個檔案，App 本身不連網。
+- 只讀公開的狀態頁 `summary.json` 與事故清單（ADR-0018 第 4 節），不帶任何密鑰或 cookie、不跟隨到其他主機的重新導向。
+- 結果寫在本機（0600）；Mac App 讀這個檔案，App 本身不連網。進行中事故的精簡版（名稱、等級、連結、開始時間）
+  另外由 `annotate` 放進 usage.json 的 `providers.*.incidents`，Windows 與 iPhone 也看得到（狀態頁是公開資訊）。
 - 收集器每 5 分鐘執行一次；按「更新」可能更頻繁，兩次抓取至少間隔 `MIN_INTERVAL` 秒。
 - 只保留畫面需要的欄位（整體狀態、異常的元件名稱、進行中的事件名稱），長度與數量都有上限；失敗只記錯誤類別。
 """
@@ -16,7 +17,7 @@ from pathlib import Path
 
 from . import http, local_store
 from .log import log
-from .models import ProviderError, iso_utc
+from .models import ProviderError, iso_utc, parse_iso
 from .paths import APP_SUPPORT_DIR
 
 STATUS_PATH = APP_SUPPORT_DIR / "service-status.json"
@@ -29,6 +30,19 @@ PAGES = {
     "claude": "https://status.claude.com",
     "codex": "https://status.openai.com",
 }
+# 事故清單：Claude（Statuspage）有 unresolved.json；OpenAI（incident.io）沒有，summary.json 也沒有事故，
+# 只能讀最近的事故（含已解決）自己篩
+INCIDENTS = {
+    "claude": "/api/v2/incidents/unresolved.json",
+    "codex": "/api/v2/incidents.json",
+}
+# Claude 的事故只算影響這些元件的（名稱包含其中一個字串；沒列元件的也算）。OpenAI 的事故沒有元件資訊，全部都算
+INCIDENT_COMPONENTS = {
+    "claude": ("Claude Code", "Claude API", "claude.ai"),
+}
+# 放進 usage.json 的事故數量上限、新鮮度（上一次查詢超過這麼久就不放）
+SNAPSHOT_INCIDENTS = 3
+SNAPSHOT_MAX_AGE = 15 * 60
 # 與這個工具相關的元件（名稱包含其中一個字串時，異常會標示「可能影響」）
 RELATED = {
     "claude": ("Claude Code", "Claude API"),
@@ -85,16 +99,69 @@ def parse(provider: str, summary: dict) -> dict:
     }
 
 
-def fetch(provider: str) -> dict:
-    """抓一個服務的狀態頁。任何失敗（網路、讀取逾時、格式）只影響這個服務，錯誤只記固定訊息或類別。"""
+def _incident_id(value: object) -> str | None:
+    """事故 ID 只收英數字、底線與連字號（組成事故頁網址用）"""
+    if isinstance(value, str) and 0 < len(value) <= 64 and all(c.isascii() and (c.isalnum() or c in "_-") for c in value):
+        return value
+    return None
+
+
+def _aware(value: object) -> datetime | None:
+    """有時區的 ISO 8601 時間；沒有時區或格式不符為 None"""
     try:
-        return parse(provider, http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT))
+        dt = parse_iso(value) if isinstance(value, str) else None
+    except ValueError:
+        return None
+    return dt if dt is not None and dt.tzinfo is not None else None
+
+
+def _aware_iso(value: object) -> str | None:
+    dt = _aware(value)
+    return iso_utc(dt) if dt else None
+
+
+def parse_incidents(provider: str, data: dict) -> list[dict]:
+    """事故清單縮成 `[{name, impact, url, started_at}]`：只留進行中的、相關的；格式不符的項目略過。"""
+    if not isinstance(data, dict) or not isinstance(data.get("incidents"), list):
+        raise ProviderError("事故清單格式不符")
+    related = INCIDENT_COMPONENTS.get(provider)
+    result: list[dict] = []
+    for i in data["incidents"]:
+        if not isinstance(i, dict) or i.get("status") in ("resolved", "postmortem") or i.get("resolved_at"):
+            continue
+        components = [c.get("name") for c in _items(i.get("components")) if isinstance(c, dict) and isinstance(c.get("name"), str)]
+        if related and components and not any(key in name for name in components for key in related):
+            continue
+        name = _text(i.get("name"))
+        if not name or len(result) >= MAX_ITEMS:
+            continue
+        impact = i.get("impact") if i.get("impact") in INDICATORS else "none"
+        incident_id = _incident_id(i.get("id"))
+        started_at = _aware_iso(i.get("started_at")) or _aware_iso(i.get("created_at"))
+        result.append({"name": name, "impact": impact,
+                       "url": f"{PAGES[provider]}/incidents/{incident_id}" if incident_id else None,
+                       "started_at": started_at})
+    return result
+
+
+def fetch(provider: str) -> dict:
+    """抓一個服務的狀態頁與事故清單。任何失敗（網路、讀取逾時、格式）只影響這個服務，錯誤只記固定訊息或類別。
+    事故清單失敗時保留 summary.json 的結果，`incidents_checked` 為 False（不放進 usage.json）。"""
+    try:
+        result = parse(provider, http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT))
+        try:
+            result["incidents"] = parse_incidents(
+                provider, http.request_json(f"{PAGES[provider]}{INCIDENTS[provider]}", {}, timeout=TIMEOUT))
+            result["incidents_checked"] = True
+        except Exception:  # noqa: BLE001 — 事故清單是附加資訊；不記例外內容
+            result["incidents_checked"] = False
+        return result
     except ProviderError as e:
         error = str(e)[:MAX_TEXT]  # 收集器自己的訊息，不含回應內容
     except Exception as e:  # noqa: BLE001 — 例如讀取回應時 TimeoutError；不記例外內容
         error = f"狀態頁讀取失敗（{type(e).__name__}）"
     return {"indicator": None, "description": None, "components": [], "incidents": [], "page": PAGES[provider],
-            "error": error}
+            "error": error, "incidents_checked": False}
 
 
 def _read(path: Path) -> dict | None:
@@ -144,3 +211,36 @@ def update_safely(providers: list[str], path: Path = STATUS_PATH) -> None:
         update(providers, path)
     except Exception as e:  # noqa: BLE001 — 服務狀態是附加資訊
         log(f"略過服務狀態（{type(e).__name__}）")
+
+
+def annotate(snapshot: dict, path: Path = STATUS_PATH, now: datetime | None = None) -> None:
+    """把上一次查到的進行中事故放進快照每個服務的 `incidents`（最多 3 筆）。查詢失敗、太舊或讀不到時不加這個欄位
+    （不是空陣列），App 照舊。狀態頁在收集的最後才查（不拖慢 usage.json），所以事故最多晚一次收集出現。"""
+    now = now or datetime.now(timezone.utc)
+    data = _read(path)
+    if not data:
+        return
+    updated = _aware(data.get("updated_at"))
+    if updated is None or not 0 <= (now - updated).total_seconds() <= SNAPSHOT_MAX_AGE:
+        return
+    for name, p in (snapshot.get("providers") or {}).items():
+        status = (data.get("providers") or {}).get(name)
+        if not isinstance(status, dict) or status.get("error") is not None or status.get("incidents_checked") is not True:
+            continue
+        incidents = []
+        for i in _items(status.get("incidents"))[:SNAPSHOT_INCIDENTS]:
+            if isinstance(i, dict) and _text(i.get("name")):
+                entry = {"name": _text(i["name"]), "impact": i.get("impact") if i.get("impact") in INDICATORS else "none"}
+                if isinstance(i.get("url"), str) and i["url"].startswith(PAGES[name] + "/incidents/"):
+                    entry["url"] = i["url"]
+                if _aware_iso(i.get("started_at")):
+                    entry["started_at"] = _aware_iso(i.get("started_at"))
+                incidents.append(entry)
+        p["incidents"] = incidents
+
+
+def annotate_safely(snapshot: dict, path: Path = STATUS_PATH) -> None:
+    try:
+        annotate(snapshot, path)
+    except Exception as e:  # noqa: BLE001 — 事故是附加資訊
+        log(f"略過服務事故（{type(e).__name__}）")

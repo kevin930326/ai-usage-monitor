@@ -65,6 +65,58 @@ import Testing
         #expect(again == snapshot)
     }
 
+    // MARK: - ADR-0018：預測與事故（選填）
+
+    @Test func decodesForecastAndIncidents() throws {
+        let data = try Self.load("usage-forecast-incidents.json")
+        let claude = try #require(data.providers["claude"])
+        #expect(claude.windows[0].forecast == QuotaForecast(exhaustsAt: updatedAt.addingTimeInterval(40 * 60), urgent: true, faster: 2.1))
+        #expect(claude.windows[1].forecast?.faster == nil)
+        #expect(claude.incidents == [ServiceIncident(name: "Elevated errors on Claude Code", impact: "major",
+                                                     url: "https://status.claude.com/incidents/abc123",
+                                                     startedAt: updatedAt.addingTimeInterval(-20 * 60))])
+        #expect(claude.incidents?.first?.link?.absoluteString == "https://status.claude.com/incidents/abc123")
+        #expect(data.providers["codex"]?.incidents == [])
+        #expect(data.providers["codex"]?.windows[0].forecast == nil)
+        // 舊的快照沒有這兩個欄位
+        #expect(snapshot.providers["claude"]?.incidents == nil)
+        #expect(try UsageDecoder.decode(UsageEncoder.encode(data)) == data)
+    }
+
+    @Test func badOptionalFieldsAreIgnored() throws {
+        let json = #"{"schema_version":1,"updated_at":"2026-10-21T03:00:00Z","providers":{"claude":{"plan":null,"error":null,"#
+            + #""windows":[{"id":"five_hour","label":"5 小時","used_pct":1,"resets_at":null,"forecast":{"urgent":"yes"}}],"#
+            + #""incidents":"down"}}}"#
+        let data = try UsageDecoder.decode(Data(json.utf8))
+        #expect(data.providers["claude"]?.windows[0].forecast == nil)
+        #expect(data.providers["claude"]?.incidents == nil)
+    }
+
+    @Test func incidentLinksOnlyForStatusPages() {
+        for bad in ["http://status.claude.com/incidents/x", "https://evil.example/incidents/x", "https://status.claude.com/x",
+                    "https://status.claude.com.evil.example/incidents/x", "https://u@status.openai.com/incidents/x",
+                    "https://status.openai.com:8443/incidents/x", "javascript:alert(1)"] {
+            #expect(ServiceIncident.link(bad) == nil, "\(bad)")
+        }
+        #expect(ServiceIncident.link("https://status.openai.com/incidents/01J") != nil)
+    }
+
+    @Test func snapshotForecastOnPhone() throws {
+        let data = try Self.load("usage-forecast-incidents.json")
+        let window = try #require(data.providers["claude"]?.windows[1])
+        // 沒有歷史：用快照的，緊急與否照現在重算
+        let later = updatedAt.addingTimeInterval(30 * 3600)
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: nil, stale: false, now: later)?.urgent == true)
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: nil, stale: false, now: updatedAt)?.urgent == false)
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: nil, stale: true, now: updatedAt) == nil)
+        // 預計時間已經過了
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: nil, stale: false,
+                                      now: updatedAt.addingTimeInterval(31 * 3600)) == nil)
+        // 有歷史（Mac）：自己算，資料不足就沒有
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: QuotaHistory(samples: []), stale: false,
+                                      now: updatedAt) == nil)
+    }
+
     // MARK: - 整合審查 D-i：只有 Codex（plan null、超過 100%）、沒有任何服務
 
     @Test func codexOnlyOverHundredPercent() throws {

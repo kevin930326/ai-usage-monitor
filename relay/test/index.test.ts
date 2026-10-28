@@ -128,6 +128,37 @@ describe("POST /usage 欄位驗證（C-12）", () => {
     assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.reset_credits, resetCredits);
   });
 
+  it("預測與事故只保留白名單欄位，格式不符時丟掉欄位或項目、不擋下快照（ADR-0018）", async () => {
+    const forecast = { exhausts_at: "2026-10-21T04:00:00Z", urgent: true, faster: 2.1, note: "leak" };
+    const incidents = [
+      { name: "Elevated errors", impact: "major", url: "https://status.claude.com/incidents/abc", started_at: "2026-10-21T02:00:00Z", body: "leak" },
+      { name: "Bad link", impact: "minor", url: "https://evil.example/incidents/x", started_at: "yesterday" },
+      { name: "", impact: "minor" },
+      { name: "Bad impact", impact: "apocalyptic" },
+      "x",
+      { name: "Third", impact: "none" },
+      { name: "Fourth", impact: "none" },
+    ];
+    assert.equal((await post(snapshot({ windows: [{ ...WINDOW, forecast }], incidents }))).status, 204);
+    const saved = (await (await call("GET", "read-secret")).json()).providers.claude;
+    assert.deepEqual(saved.windows[0].forecast, { exhausts_at: "2026-10-21T04:00:00Z", urgent: true, faster: 2.1 });
+    assert.deepEqual(saved.incidents, [
+      { name: "Elevated errors", impact: "major", url: "https://status.claude.com/incidents/abc", started_at: "2026-10-21T02:00:00Z" },
+      { name: "Bad link", impact: "minor" },
+      { name: "Third", impact: "none" },
+    ]);
+    for (const [bad, key] of [[{ urgent: true }, "forecast"], [{ exhausts_at: "2026-10-21T04:00:00Z", urgent: "yes" }, "forecast"]] as const) {
+      assert.equal((await post(snapshot({ windows: [{ ...WINDOW, forecast: bad }], incidents: "down" }))).status, 204);
+      const again = (await (await call("GET", "read-secret")).json()).providers.claude;
+      assert.ok(!(key in again.windows[0]));
+      assert.ok(!("incidents" in again));
+    }
+    // 倍數不合理時只丟倍數
+    assert.equal((await post(snapshot({ windows: [{ ...WINDOW, forecast: { ...forecast, faster: -1 } }] }))).status, 204);
+    assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.windows[0].forecast,
+      { exhausts_at: "2026-10-21T04:00:00Z", urgent: true });
+  });
+
   it("沒有明細的重置卷存成空陣列；沒有或 null 的 reset_credits 不保存", async () => {
     assert.equal((await post(snapshot({ reset_credits: { available: 2 } }))).status, 204);
     assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.reset_credits, { available: 2, credits: [] });
