@@ -13,7 +13,11 @@ enum DebugMascot {
         var layout = NotchLayout.fake
         var setup: (inout MascotDirector) -> Void
         var time: Int
+        /// 額度的情境：剩不到 20%、資料過期（迷你圓環與額度列的顏色）
+        var quota: Quota = .normal
     }
+
+    enum Quota { case normal, low, stale }
 
     static func render(to dir: URL, snapshot: UsageSnapshot?, now: Date, write: (any View, URL) -> Void) {
         guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else {
@@ -30,8 +34,23 @@ enum DebugMascot {
             d.advance(to: shot.time)
             return d
         }
+        func quotaSnapshot(_ quota: Quota) -> UsageSnapshot? {
+            guard var snapshot else { return nil }
+            switch quota {
+            case .normal: break
+            case .low:
+                // Claude 的每個額度剩 12%
+                if var claude = snapshot.providers["claude"] {
+                    claude.windows = claude.windows.map { var w = $0; w.usedPct = 88; return w }
+                    snapshot.providers["claude"] = claude
+                }
+            case .stale:
+                snapshot.updatedAt = now.addingTimeInterval(-3 * 3600)
+            }
+            return snapshot
+        }
         func canvas(_ shot: Shot) -> some View {
-            NotchCanvas(director: director(shot), time: shot.time, layout: shot.layout, snapshot: snapshot, now: now,
+            NotchCanvas(director: director(shot), time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
                         character: shot.character, gazeOverride: (0, 0))
         }
         func label(_ text: String) -> some View {
@@ -46,10 +65,20 @@ enum DebugMascot {
                                       character: character, setup: { $0.setStatus(level, at: 0) }, time: 2000))
             }
         }
+        // 剩不到 20%（紅）、資料過期（灰、虛線）
+        for quota in [Quota.low, .stale] {
+            collapsed.append(Shot(name: "collapsed-claude-\(quota == .low ? "low" : "stale")",
+                                  setup: { $0.setStatus(quota == .low ? 1 : 0, at: 0) }, time: 2000, quota: quota))
+        }
         // 展開（不播過場、已經停在角色卡）
-        let expanded = [MascotCharacter.claude, .codex].map { character in
+        var expanded = [MascotCharacter.claude, .codex].map { character in
             Shot(name: "expanded-\(character.rawValue)", character: character,
                  setup: { $0.open(at: 0, intro: false) }, time: 1500)
+        }
+        for quota in [Quota.low, .stale] {
+            expanded.append(Shot(name: "expanded-claude-\(quota == .low ? "low" : "stale")",
+                                 setup: { $0.setStatus(quota == .low ? 1 : 0, at: 0); $0.open(at: 0, intro: false) },
+                                 time: 1500, quota: quota))
         }
         // 過場的六個時間點
         let intro = [0, 300, 1200, 2600, 3990, 4700].map { ms in

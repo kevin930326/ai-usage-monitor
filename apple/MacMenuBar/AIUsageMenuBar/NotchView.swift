@@ -94,12 +94,13 @@ struct NotchCanvas: View {
     private var miniRing: some View {
         let item = snapshot.flatMap { NotchQuota.tightest(in: $0, provider: character.provider, now: now) }
         let remaining = item.map { Int($0.effectiveRemainingPct(at: now).rounded()) }
+        let stale = snapshot?.isStale(now: now) ?? false
         HStack(spacing: 3) {
             ZStack {
-                Circle().stroke(Color.white.opacity(0.18), lineWidth: 2.2)
+                Circle().stroke(Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 2.2, dash: stale ? [1.8, 1.6] : []))
                 Circle()
                     .trim(from: 0, to: Double(remaining ?? 0) / 100)
-                    .stroke(UsageColors.provider(character.provider), style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                    .stroke(ringColor(item), style: StrokeStyle(lineWidth: 2.2, lineCap: stale ? .butt : .round, dash: stale ? [1.8, 1.6] : []))
                     .rotationEffect(.degrees(-90))
             }
             .frame(width: 13, height: 13)
@@ -109,7 +110,13 @@ struct NotchCanvas: View {
         }
         .frame(width: 44, alignment: .leading)
         .position(x: layout.ringX - 6.5 + 22, y: layout.miniY)
-        .accessibilityLabel("\(character.title) 剩 \(remaining.map(String.init) ?? "–")%")
+        .accessibilityLabel("\(character.title) 剩 \(remaining.map(String.init) ?? "–")%\(stale ? "，資料已過期" : "")")
+    }
+
+    /// 迷你圓環的顏色：同選單列圖示（過期灰、剩不到 20% 紅、其他服務色）；過期時另改成虛線，不只靠顏色
+    private func ringColor(_ item: UsageWindow?) -> Color {
+        guard let item, let snapshot else { return UsageColors.provider(character.provider) }
+        return UsageColors.bar(item, provider: character.provider, stale: snapshot.isStale(now: now), now: now)
     }
 }
 
@@ -204,8 +211,10 @@ struct NotchContent: View {
             .padding(.bottom, 2)
             if let usage, usage.error == nil {
                 let windows = usage.visibleWindows
+                let stale = snapshot?.isStale(now: now) ?? false
                 ForEach(Array(windows.prefix(2).enumerated()), id: \.element.id) { index, window in
-                    row(window, tint: tint, primary: index == 0)
+                    // 同面板的進度條規則（FR-16）：過期灰、剩不到 20% 紅、其他服務色
+                    row(window, tint: UsageColors.bar(window, provider: provider, stale: stale, now: now), primary: index == 0)
                 }
                 if let reset = windows.first?.resetsAt, let text = ResetCountdown.text(until: reset, now: now) {
                     Text("\(text)後重置")
