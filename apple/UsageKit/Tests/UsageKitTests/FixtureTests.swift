@@ -112,9 +112,14 @@ import Testing
         // 預計時間已經過了
         #expect(QuotaForecast.current(window: window, provider: "claude", history: nil, stale: false,
                                       now: updatedAt.addingTimeInterval(31 * 3600)) == nil)
-        // 有歷史（Mac）：自己算，資料不足就沒有
-        #expect(QuotaForecast.current(window: window, provider: "claude", history: QuotaHistory(samples: []), stale: false,
-                                      now: updatedAt) == nil)
+        // 有歷史（Mac）但算不出來：用快照的（同一套規則）；快照也沒有就沒有
+        let sparse = QuotaHistory(samples: [QuotaSample(ts: updatedAt, provider: "claude", windowID: "weekly", usedPct: 60,
+                                                        resetsAt: window.resetsAt)])
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: sparse, stale: false, now: updatedAt)
+                == window.forecast)
+        var plain = window
+        plain.forecast = nil
+        #expect(QuotaForecast.current(window: plain, provider: "claude", history: sparse, stale: false, now: updatedAt) == nil)
     }
 
     // MARK: - 整合審查 D-i：只有 Codex（plan null、超過 100%）、沒有任何服務

@@ -84,4 +84,19 @@ import Testing
             #expect(expected == actual, "\(actual.name)：預期 \(String(describing: expected.result))，實際 \(String(describing: actual.result))")
         }
     }
+
+    @Test func text() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Taipei"))
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-28T04:00:00Z"))  // 週三 12:00
+        func line(_ hours: Double, faster: Double? = nil) -> String {
+            QuotaForecast(exhaustsAt: now.addingTimeInterval(hours * 3600), urgent: false, faster: faster).line(now: now, calendar: calendar)
+        }
+        #expect(line(2.5) == "照目前速度約 14:30 用完")
+        #expect(line(12.5, faster: 2.1) == "照目前速度約明天 00:30 用完・比平常快 2.1 倍")
+        #expect(line(48) == "照目前速度約週五 12:00 用完")
+        #expect(line(1, faster: 1.5) == "照目前速度約 13:00 用完・比平常快 1.5 倍")
+        let short = QuotaForecast(exhaustsAt: now.addingTimeInterval(12.5 * 3600), urgent: false, faster: 2.1)
+        #expect(short.shortLine(now: now, calendar: calendar) == "約明天 00:30 用完・快 2.1 倍")
+    }
 }

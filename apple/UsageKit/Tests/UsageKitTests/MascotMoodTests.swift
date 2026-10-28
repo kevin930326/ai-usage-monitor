@@ -17,6 +17,25 @@ import Testing
         #expect(MascotMood.quota(level: 2, unavailable: true) == .stale)
     }
 
+    @Test func forecastAndIncidentMoods() throws {
+        // ADR-0018 第 3 節：閉眼 > 用完 > 生病 > 擔心（預測會用完或剩不到 20%）> 正常
+        #expect(MascotMood.quota(level: 0, unavailable: false, runsOut: true) == .worried)
+        #expect(MascotMood.quota(level: 0, unavailable: false, incident: true, runsOut: true) == .sick)
+        #expect(MascotMood.quota(level: 2, unavailable: false, incident: true) == .out)
+        #expect(MascotMood.quota(level: 2, unavailable: true, incident: true) == .stale)
+        let data = try FixtureTests.load("usage-forecast-incidents.json")
+        let now = data.updatedAt
+        #expect(MascotMood.hasIncident(data, provider: "claude"))
+        #expect(!MascotMood.hasIncident(data, provider: "codex"))
+        #expect(MascotMood.runsOut(data, provider: "claude", now: now))
+        #expect(!MascotMood.runsOut(data, provider: "codex", now: now))
+        // 過期的快照不算預測
+        #expect(!MascotMood.runsOut(data, provider: "claude", now: now.addingTimeInterval(3600)))
+        var maintenance = data
+        maintenance.providers["claude"]?.incidents = [ServiceIncident(name: "Scheduled", impact: "maintenance")]
+        #expect(!MascotMood.hasIncident(maintenance, provider: "claude"))
+    }
+
     @Test func moodEyesDoNotBlink() throws {
         var d = MascotDirector(config: try Self.config(), seed: 3, startTime: 0)
         d.open(at: 0, intro: false)

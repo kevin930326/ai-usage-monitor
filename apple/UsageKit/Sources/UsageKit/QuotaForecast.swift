@@ -51,11 +51,13 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
 }
 
 public extension QuotaForecast {
-    /// 畫面用的預測：有本機歷史（Mac）時自己算；沒有（iPhone）時用收集器寫在快照裡的，
-    /// 但過期、已經過了、或不在重置前的不用，緊急與否照現在的時間重算
+    /// 畫面用的預測：有本機歷史（Mac 面板）時自己算（比收集器每 5 分鐘一次即時）；算不出來、或沒有歷史（iPhone、
+    /// 瀏海與角色不讀資料庫）時用收集器寫在快照裡的（同一套規則，最多 5 分鐘前）。快照的過期、已經過了、
+    /// 或不在重置前的不用，緊急與否照現在的時間重算
     static func current(window: UsageWindow, provider: String, history: QuotaHistory?, stale: Bool, now: Date) -> QuotaForecast? {
-        if let history {
-            return QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now)
+        if let history, !history.samples.isEmpty,
+           let local = QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now) {
+            return local
         }
         guard !stale, !window.hidden, var forecast = window.forecast, forecast.exhaustsAt > now,
               let resetsAt = window.resetsAt, forecast.exhaustsAt < resetsAt, window.effectiveUsedPct(at: now) < 100 else {
@@ -63,6 +65,41 @@ public extension QuotaForecast {
         }
         forecast.urgent = forecast.exhaustsAt.timeIntervalSince(now) < urgentWithin
         return forecast
+    }
+}
+
+public extension QuotaForecast {
+    /// 「照目前速度約 14:32 用完」；不是今天時「照目前速度約明天 09:05 用完」「…約週五 18:00 用完」（本機時區）
+    func text(now: Date, calendar: Calendar = .current) -> String {
+        let clock = Self.clock(exhaustsAt, now: now, calendar: calendar)
+        return "照目前速度約\(clock.first?.isNumber == true ? " " : "")\(clock) 用完"
+    }
+
+    /// 「比平常快 2.1 倍」；沒有倍數時 nil
+    var fasterText: String? {
+        faster.map { "比平常快 \(String(format: "%.1f", $0)) 倍" }
+    }
+
+    /// 瀏海與小地方的短說法：「約 14:32 用完・快 2.1 倍」
+    func shortLine(now: Date, calendar: Calendar = .current) -> String {
+        let clock = Self.clock(exhaustsAt, now: now, calendar: calendar)
+        let head = "約\(clock.first?.isNumber == true ? " " : "")\(clock) 用完"
+        return faster.map { "\(head)・快 \(String(format: "%.1f", $0)) 倍" } ?? head
+    }
+
+    /// 一行的完整說法：「照目前速度約 14:32 用完・比平常快 2.1 倍」
+    func line(now: Date, calendar: Calendar = .current) -> String {
+        [text(now: now, calendar: calendar), fasterText].compactMap { $0 }.joined(separator: "・")
+    }
+
+    /// 「14:32」「明天 09:05」「週五 18:00」
+    static func clock(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
+        let time = String(format: "%02d:%02d", calendar.component(.hour, from: date), calendar.component(.minute, from: date))
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
+        if days <= 0 { return time }
+        if days == 1 { return "明天 \(time)" }
+        let weekday = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"][calendar.component(.weekday, from: date) - 1]
+        return "\(weekday) \(time)"
     }
 }
 

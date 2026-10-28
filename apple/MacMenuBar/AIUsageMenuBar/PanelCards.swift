@@ -140,8 +140,10 @@ struct RingCardContent: View {
     @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { item.window.effectiveRemainingPct(at: now) }
-    /// 「約 N 分鐘後用完」有歷史時用近期速度，不足時退回平均速度（ADR-0008 第 4 節）
-    private var pace: UsagePace? { UsagePace(window: item.window, provider: item.provider, history: history, stale: stale, now: now) }
+    /// 「照目前速度約 14:32 用完」：只用近期速度，資料不足時不顯示（ADR-0018 第 1 節）
+    private var forecast: QuotaForecast? {
+        QuotaForecast.current(window: item.window, provider: item.provider, history: history, stale: stale, now: now)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -169,8 +171,8 @@ struct RingCardContent: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if let pace, pace.isTooFast {
-                    PaceBadge(pace: pace, now: now)
+                if let forecast {
+                    QuotaForecastLine(forecast: forecast, now: now)
                         .padding(.top, 2)
                 }
             }
@@ -229,31 +231,24 @@ struct PanelResetText: View {
     }
 }
 
-/// 「用得較快，約 N 分鐘後用完」（提示色，ADR-0008 第 4 節）。
-struct PaceBadge: View {
-    let pace: UsagePace
+/// 「照目前速度約 14:32 用完・比平常快 2.1 倍」（ADR-0018 第 3 節）：不到 60 分鐘紅色，其他提示色；
+/// 顏色以外一律有文字。取代原本的「用得較快，約 N 分鐘後用完」。
+struct QuotaForecastLine: View {
+    let forecast: QuotaForecast
     let now: Date
-    var compact = false
+
+    private var color: Color { forecast.urgent ? UsageColors.critical : UsageColors.notice }
 
     var body: some View {
-        HStack(spacing: 5) {
-            if !compact {
-                Circle().fill(UsageColors.notice).frame(width: 7, height: 7)
-            }
-            Text(text)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            Text(forecast.line(now: now))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(UsageColors.notice)
-        .padding(.horizontal, compact ? 0 : 8)
-        .padding(.vertical, compact ? 0 : 3)
-        .background(compact ? Color.clear : UsageColors.notice.opacity(0.12), in: Capsule())
-    }
-
-    private var text: String {
-        guard let at = pace.exhaustsAt else { return "用得較快" }
-        let minutes = max(Int((at.timeIntervalSince(now) / 60).rounded()), 1)
-        if compact { return "用得較快" }
-        return minutes >= 120 ? "用得較快，約 \(minutes / 60) 小時後用完" : "用得較快，約 \(minutes) 分鐘後用完"
+        .foregroundStyle(color)
     }
 }
 
@@ -344,7 +339,7 @@ struct ResetCreditsLine: View {
     }
 }
 
-/// 一個額度：名稱、剩餘 %、進度條（含預期進度標記）、重置倒數、用得較快的提示。
+/// 一個額度：名稱、剩餘 %、進度條（含預期進度標記）、重置倒數、會在重置前用完時的預測。
 struct QuotaRow: View {
     let window: UsageWindow
     let provider: String
@@ -357,7 +352,9 @@ struct QuotaRow: View {
     @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { window.effectiveRemainingPct(at: now) }
-    private var pace: UsagePace? { UsagePace(window: window, provider: provider, history: history, stale: stale, now: now) }
+    private var forecast: QuotaForecast? {
+        QuotaForecast.current(window: window, provider: provider, history: history, stale: stale, now: now)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -376,15 +373,12 @@ struct QuotaRow: View {
             .frame(height: 7)
             // 資料更新時只動變化的那一條：值沒變的進度條不會有動畫
             .animation(animates ? PanelTiming.barUpdate : nil, value: remaining)
-            HStack(spacing: 4) {
-                PanelResetText(window: window, now: now)
-                if let pace, pace.isTooFast {
-                    Text("·")
-                    PaceBadge(pace: pace, now: now, compact: true)
-                }
+            PanelResetText(window: window, now: now)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let forecast {
+                QuotaForecastLine(forecast: forecast, now: now)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
     }
