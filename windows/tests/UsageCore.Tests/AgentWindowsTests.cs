@@ -254,8 +254,9 @@ public sealed class AgentWindowsTests : IDisposable
         only.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(me, System.Security.AccessControl.FileSystemRights.FullControl,
                                                                                   System.Security.AccessControl.AccessControlType.Allow));
         new FileInfo(file).SetAccessControl(only);
+        // 比較「不繼承（P）」與存取規則；「AI」只表示 ACL 是怎麼傳播來的，以安全描述元建立的檔案不會有（D:PAI → D:P）
         string Sddl(string path) => new FileInfo(path).GetAccessControl(System.Security.AccessControl.AccessControlSections.Access)
-            .GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access);
+            .GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access).Replace("D:PAI(", "D:P(");
         var expected = Sddl(file);
         var result = AgentHookFiles.Connect(file, AgentKind.Claude, Exe, DateTime.Now);
         Assert.Equal(expected, Sddl(file));
