@@ -74,7 +74,7 @@ internal sealed class AppHost : IDisposable
             if (panel is { IsActive: false }) panel.SafeClose();
         };
         fullscreen.Start();
-        agents.Changed += Refresh;
+        agents.Changed += RefreshIndicators;
         agents.Notify += (title, body) => tray.Notify(title, body);
         agents.Start();
         store.Start();
@@ -113,6 +113,14 @@ internal sealed class AppHost : IDisposable
         ring?.SetContent(content, Details, AppPalette);
         tray.Update(content, TrayPalette);
         panel?.SetModel(Model);
+    }
+
+    /// <summary>AI 狀態改變：只更新圓環與系統匣（內容沒變不重畫）。面板不重建，捲動位置與焦點不受工具事件影響（Codex C-04）</summary>
+    private void RefreshIndicators()
+    {
+        var content = Content;
+        ring?.SetContent(content, Details, AppPalette);
+        tray.Update(content, TrayPalette);
     }
 
     private PanelModel Model => new(store.Snapshot, store.Error, now, hint);
