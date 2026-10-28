@@ -178,14 +178,22 @@ class IncidentsTest(unittest.TestCase):
             incident("01K", "Fixed", status="resolved"),
             incident("01L", "Postmortem", status="postmortem"),
             incident("01M", "Resolved but status stale", resolved_at="2026-10-24T02:30:00Z"),
-            incident("01N", "Weird", impact="apocalyptic", started_at="soon", created_at="yesterday"),
+            incident("01N", "Weird API", impact="apocalyptic", started_at="soon", created_at="yesterday"),
         ]}
         result = service_status.parse_incidents("codex", data)
         self.assertEqual(result, [
             {"name": "Codex errors", "impact": "minor", "url": "https://status.openai.com/incidents/01J",
              "started_at": "2026-10-24T02:10:00Z"},
-            {"name": "Weird", "impact": "none", "url": "https://status.openai.com/incidents/01N", "started_at": None},
+            {"name": "Weird API", "impact": "none", "url": "https://status.openai.com/incidents/01N", "started_at": None},
         ])
+
+    def test_openai_keeps_only_codex_related_names(self):
+        names = ["Degraded performance in ChatGPT, Codex, and APIs", "Elevated Responses API errors",
+                 "Elevated error rates for Ads POST requests", "Help Center Chat Support Degraded",
+                 "Rapid codexy apiary"]
+        data = {"incidents": [incident(f"01{n}", name) for n, name in enumerate(names)]}
+        result = service_status.parse_incidents("codex", data)
+        self.assertEqual([i["name"] for i in result], names[:2])
 
     def test_bad_format_raises(self):
         for bad in ([], {}, {"incidents": "x"}):

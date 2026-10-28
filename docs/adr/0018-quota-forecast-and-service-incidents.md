@@ -49,7 +49,7 @@
 
 - 收集器每次執行時查兩個官方狀態頁（Mac 與 Windows 的收集器是同一份 Python，兩邊都會做）：
   - Claude：`https://status.claude.com/api/v2/incidents/unresolved.json`（Statuspage；`status.anthropic.com` 已 301 轉到這裡）。只算影響 `Claude Code`、`Claude API`、`claude.ai` 的事故；沒列元件的也算。
-  - OpenAI：`https://status.openai.com/api/v2/incidents.json`（incident.io；沒有 `unresolved.json`，`summary.json` 沒有事故），篩 `status` 不是 `resolved`、`postmortem` 的。OpenAI 的事故沒有元件資訊，全部都算。
+  - OpenAI：`https://status.openai.com/api/v2/incidents.json`（incident.io；沒有 `unresolved.json`，`summary.json` 沒有事故），篩 `status` 不是 `resolved`、`postmortem` 的。OpenAI 的事故沒有元件資訊，只算名稱提到 Codex、API 或 Responses 的（整字、不分大小寫）；廣告、客服、ChatGPT 連線器之類的不讓 Codex 角色生病。
   - 元件狀態照舊讀 `summary.json`（兩邊都有）。
 - 結果除了照舊寫 `service-status.json`（Mac 面板的詳細卡片；多了 `incidents_checked` 與事故的 `url`、`started_at`），也把**精簡版**寫進 usage.json 每個服務的選填欄位 `incidents`：`[{"name": "...", "impact": "minor", "url": "https://status.claude.com/incidents/<id>", "started_at": "..."}]`，最多 3 筆、名稱 120 字以內。查詢失敗、事故清單讀不到或上一次查詢超過 15 分鐘時**不輸出這個欄位**（不是空陣列；空陣列代表查過、沒有事故），額度收集照常、結束碼不變。狀態頁照舊在收集的最後才查（不拖慢 usage.json 與上傳），所以 usage.json 放的是**上一次**查到的結果，事故最多晚一次收集（約 5 分鐘）出現。
 - 為什麼放進 usage.json（FR-45 原本只放本機）：狀態頁是公開資訊，不含使用者的任何資料；不放進去 Windows 與 iPhone 就看不到。只放名稱、等級、連結、開始時間，不放事故的更新內文。

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -36,9 +37,14 @@ INCIDENTS = {
     "claude": "/api/v2/incidents/unresolved.json",
     "codex": "/api/v2/incidents.json",
 }
-# Claude 的事故只算影響這些元件的（名稱包含其中一個字串；沒列元件的也算）。OpenAI 的事故沒有元件資訊，全部都算
+# Claude 的事故只算影響這些元件的（名稱包含其中一個字串；沒列元件的也算）
 INCIDENT_COMPONENTS = {
     "claude": ("Claude Code", "Claude API", "claude.ai"),
+}
+# OpenAI 的事故沒有元件資訊（2026-10-29 實查），只算名稱提到 Codex、API 或 Responses 的；
+# 其他（廣告、客服、ChatGPT 的連線器等）不讓 Codex 角色生病
+INCIDENT_NAME = {
+    "codex": re.compile(r"\b(codex|apis?|responses)\b", re.IGNORECASE),
 }
 # 放進 usage.json 的事故數量上限、新鮮度（上一次查詢超過這麼久就不放）
 SNAPSHOT_INCIDENTS = 3
@@ -135,6 +141,9 @@ def parse_incidents(provider: str, data: dict) -> list[dict]:
             continue
         name = _text(i.get("name"))
         if not name or len(result) >= MAX_ITEMS:
+            continue
+        pattern = INCIDENT_NAME.get(provider)
+        if pattern and not pattern.search(name):
             continue
         impact = i.get("impact") if i.get("impact") in INDICATORS else "none"
         incident_id = _incident_id(i.get("id"))
