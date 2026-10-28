@@ -58,6 +58,24 @@ import Testing
         #expect(d.isIntro == false)
     }
 
+    /// 收合途中 AI 完成：揮手後仍回到迷你位置與大小，不停在半路被裁掉（Codex C-01）
+    @Test func cheerDuringCloseStillEndsAtMiniPose() throws {
+        let config = try Self.config()
+        for delay in [50, 150, 300] {
+            var d = MascotDirector(config: config, startTime: 0)
+            d.open(at: 0, intro: false)
+            d.advance(to: 3000)
+            d.close(at: 3000)
+            d.advance(to: 3000 + delay)
+            d.cheer(at: 3000 + delay)
+            d.advance(to: 9000)
+            let end = d.pose(at: 9000), mini = d.scripts.collapsedPose(mode: .none)
+            for prop in [MascotProp.x, .y, .r, .sc] {
+                #expect(abs(end[prop] - mini[prop]) < 0.01, "延遲 \(delay) ms：\(prop) 是 \(end[prop])，應為 \(mini[prop])")
+            }
+        }
+    }
+
     @Test func poseIsContinuousWhenSegmentsChange() throws {
         let config = try Self.config()
         var d = MascotDirector(config: config, startTime: 0)

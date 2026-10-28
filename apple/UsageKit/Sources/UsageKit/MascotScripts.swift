@@ -109,6 +109,10 @@ public struct MascotScripts: Sendable {
                 .lx: r.left[0], .ly: r.left[1], .lz: r.left[2], .rx: r.right[0], .ry: r.right[1], .rz: r.right[2]]
     }
 
+    /// 收合時滑回迷你位置的屬性（`close` 與收合途中的 `collapsedCheer` 共用；揮手會動的手、頭的角度另外處理）
+    private static let closeProps: [MascotProp] = [.x, .y, .r, .sc, .sway, .glow, .tint, .dot, .sx, .sy, .jump, .orbit, .shiver,
+                                                   .blush, .type, .kb, .breathe]
+
     /// 收著時換姿勢會動到的屬性（`collapsedRest`、`close`、揮手後回位共用）
     private static let collapsedProps: [MascotProp] = [.pitch, .dash, .yaw, .roll, .hands, .wave,
                                                        .lx, .ly, .lz, .rx, .ry, .rz]
@@ -123,9 +127,12 @@ public struct MascotScripts: Sendable {
         return s
     }
 
-    /// 收著時 AI 完成：迷你角色舉起右手揮一下，再回到目前模式的姿勢（瀏海鼓一下由 `MascotPanelSpring.bump` 計算）
+    /// 收著時 AI 完成：迷你角色舉起右手揮一下，再回到目前模式的姿勢（瀏海鼓一下由 `MascotPanelSpring.bump` 計算）。
+    /// 收合途中完成時，位置、大小與其他收合時會變的屬性照樣滑回迷你位置（Codex C-01）
     public func collapsedCheer(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
         var s = MascotScript(start: start, base: base)
+        let mini = collapsedPose(mode: mode)
+        s.to(Dictionary(uniqueKeysWithValues: Self.closeProps.map { ($0, mini[$0]) }), config.panel.closeGlideMs, .inOut)
         let wave = config.poses.cheerWaveMs
         s.to([.hands: 1, .pitch: 0, .dash: 0], 200, .back)
         s.to([.wave: 1], 200)
@@ -143,8 +150,7 @@ public struct MascotScripts: Sendable {
         var s = MascotScript(start: start, base: base)
         let mini = collapsedPose(mode: mode)
         var target: [MascotProp: Double] = [:]
-        for prop in [MascotProp.x, .y, .r, .sc, .hands, .wave, .sway, .glow, .tint, .dot, .dash, .pitch, .yaw, .roll,
-                     .sx, .sy, .jump, .orbit, .shiver, .blush, .type, .kb, .breathe] + (mode == .raise ? Self.collapsedProps : []) {
+        for prop in Self.closeProps + [.hands, .wave, .dash, .pitch, .yaw, .roll] + (mode == .raise ? Self.collapsedProps : []) {
             target[prop] = mini[prop]
         }
         s.to(target, config.panel.closeGlideMs, .inOut)
