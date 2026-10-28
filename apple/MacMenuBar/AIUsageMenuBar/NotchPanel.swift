@@ -55,7 +55,8 @@ final class NotchPanelController {
         guard let panel, let screen = Self.targetScreen() else { return }
         let layout = Self.layout(for: screen)
         MascotController.shared.setLayout(layout)
-        panel.place(on: screen, layout: layout, expanded: MascotController.shared.director?.machine.isOpen ?? false)
+        // 和控制器記錄的大小一致（收著時的提醒動畫也算展開中），之後的 setExpanded 才不會漏掉（Codex C-03）
+        panel.place(on: screen, layout: layout, expanded: MascotController.shared.windowExpanded)
     }
 
     static func targetScreen() -> NSScreen? {

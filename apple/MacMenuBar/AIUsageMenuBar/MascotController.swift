@@ -73,7 +73,8 @@ final class MascotController {
     @ObservationIgnored private var deadlineTimer: Timer?
     @ObservationIgnored private var rateTimer: Timer?
     @ObservationIgnored private var closeTimer: Timer?
-    @ObservationIgnored private var windowExpanded = false
+    /// 視窗目前該是整張畫布（展開中或收合動畫還沒播完）；建立或移動視窗時照這個決定大小
+    @ObservationIgnored private(set) var windowExpanded = false
 
     init(configData: Data? = MascotController.bundledConfig()) {
         baseConfig = configData.flatMap { try? MascotConfig.decode($0) }
