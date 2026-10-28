@@ -115,6 +115,19 @@ public class AgentGoldenTests
         Assert.Equal(message, AgentHookMessage.Parse(data));
     }
 
+    /// <summary>通知關閉（門檻 long.MaxValue）：不發、也不排下一次檢查，不會溢位</summary>
+    [Fact]
+    public void DisabledNoticesNeverFire()
+    {
+        var sessions = new AgentSessions(300_000);
+        var off = new AgentNoticePolicy(long.MaxValue, long.MaxValue);
+        sessions.Apply(new AgentHookMessage(AgentKind.Claude, AgentHookEvent.UserPromptSubmit, null, "0123456789abcdef", 0, ""), 0);
+        sessions.Apply(new AgentHookMessage(AgentKind.Claude, AgentHookEvent.PermissionRequest, AgentNeed.Permission, "0123456789abcdef",
+                                            1000, ""), 1_000_000);
+        Assert.Empty(AgentNotices.Due(sessions, 9_000_000, off));
+        Assert.Null(AgentNotices.NextCheck(sessions, 9_000_000, off));
+    }
+
     [Fact]
     public void ActivityPrefersHookAndFallsBackPerAgent()
     {

@@ -436,12 +436,12 @@ public static class AgentNotices
         return list;
     }
 
-    /// <summary>下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 null</summary>
+    /// <summary>下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 null。門檻是 long.MaxValue（關閉）時不會溢位</summary>
     public static long? NextCheck(AgentSessions sessions, long now, AgentNoticePolicy policy)
     {
         long? next = null;
         foreach (var s in sessions.Sessions)
-            if (s.Stored == AgentState.NeedsYou && now - s.Since < policy.NeedsYouAfter)
+            if (s.Stored == AgentState.NeedsYou && now - s.Since < policy.NeedsYouAfter && s.Since <= long.MaxValue - policy.NeedsYouAfter)
                 next = Math.Min(next ?? long.MaxValue, s.Since + policy.NeedsYouAfter);
         return next;
     }

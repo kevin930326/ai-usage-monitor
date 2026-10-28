@@ -167,6 +167,17 @@ import Testing
         #expect(sessions.activity(at: 4000 + 300_000, fallback: [.claude: (true, true), .codex: (false, true)]) == (false, false))
     }
 
+    /// 通知關閉（門檻 Int64.max）：不發、也不排下一次檢查，不會溢位
+    @Test func disabledNoticesNeverFire() {
+        var sessions = AgentSessions(idleAfter: 300_000)
+        let off = AgentNoticePolicy(needsYouAfter: .max, longTask: .max)
+        sessions.apply(AgentHookMessage(ai: .claude, event: .userPromptSubmit, need: nil, session: "0123456789abcdef", time: 0, folder: ""), at: 0)
+        sessions.apply(AgentHookMessage(ai: .claude, event: .permissionRequest, need: .permission, session: "0123456789abcdef",
+                                        time: 1000, folder: ""), at: 1_000_000)
+        #expect(sessions.notices(at: 9_000_000, policy: off).isEmpty)
+        #expect(sessions.nextNoticeCheck(after: 9_000_000, policy: off) == nil)
+    }
+
     @Test func installedEventsAreHandled() {
         for ai in AgentKind.allCases {
             #expect(!AgentHookEvent.installed(for: ai).isEmpty)

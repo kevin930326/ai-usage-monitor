@@ -501,9 +501,13 @@ extension AgentSessions {
         }
     }
 
-    /// 下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 nil
+    /// 下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 nil。門檻是 `Int64.max`（關閉）時不會溢位
     public func nextNoticeCheck(after now: Int64, policy: AgentNoticePolicy) -> Int64? {
         sessions.filter { $0.stored == .needsYou && now - $0.since < policy.needsYouAfter }
-            .map { $0.since + policy.needsYouAfter }.min()
+            .compactMap { s in
+                let (at, overflow) = s.since.addingReportingOverflow(policy.needsYouAfter)
+                return overflow ? nil : at
+            }
+            .min()
     }
 }
