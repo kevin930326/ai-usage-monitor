@@ -28,6 +28,7 @@ internal static class RingDrawing
         {
             dc.DrawEllipse(p.Notice, null, new Point(13.6 * k, 2.6 * k), 2.4 * k, 2.4 * k);
         }
+        AgentOverlay.DrawTray(dc, c.Agent, k, p);
     }
 
     /// <summary>外圈＋內圈（面板主圓環也用這個）。<paramref name="appear"/> 是打開面板時描繪的進度 0…1</summary>

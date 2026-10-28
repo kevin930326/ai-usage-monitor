@@ -9,7 +9,7 @@ using AIUsageMonitor.Core;
 namespace AIUsageMonitor.Windows;
 
 /// <summary>
-/// 把各部分接起來：資料（UsageStore）、懸浮圓環、系統匣、全螢幕偵測、面板與設定。
+/// 把各部分接起來：資料（UsageStore）、AI 狀態（AgentMonitor）、懸浮圓環、系統匣、全螢幕偵測、面板與設定。
 /// 整個 App 只有一個每分鐘的計時器（對齊整分鐘）：更新圓環與系統匣（內容沒變不重畫）、面板開著時更新倒數。
 /// </summary>
 internal sealed class AppHost : IDisposable
@@ -21,6 +21,8 @@ internal sealed class AppHost : IDisposable
     private readonly FullscreenWatcher fullscreen;
     private readonly CollectorTrigger trigger;
     private readonly DispatcherTimer minute;
+    private readonly AgentMonitor agents;
+    private readonly AgentHookInstaller hooks = new();
     private RingWindow? ring;
     private PanelWindow? panel;
     private SettingsWindow? settingsWindow;
@@ -38,12 +40,14 @@ internal sealed class AppHost : IDisposable
         fullscreen = new FullscreenWatcher(dispatcher, () => ring?.Handle ?? IntPtr.Zero);
         minute = new DispatcherTimer(DispatcherPriority.Background, dispatcher);
         minute.Tick += (_, _) => OnMinute();
+        agents = new AgentMonitor(dispatcher, DataPaths.Home, settings);
     }
 
     private Palette AppPalette => new(SystemLook.IsDark(settings.Appearance));
     private Palette TrayPalette => new(SystemLook.TaskbarIsDark);
 
-    private RingContent Content => RingContent.From(store.Snapshot, settings.RingWindow, now);
+    private RingContent Content => RingContent.From(store.Snapshot, settings.RingWindow, now)
+        .WithAgent(RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
     private RingDetails Details => RingDetails.From(store.Snapshot, settings.RingWindow, now);
 
     public void Start()
@@ -70,6 +74,9 @@ internal sealed class AppHost : IDisposable
             if (panel is { IsActive: false }) panel.SafeClose();
         };
         fullscreen.Start();
+        agents.Changed += Refresh;
+        agents.Notify += (title, body) => tray.Notify(title, body);
+        agents.Start();
         store.Start();
         ApplyDisplayMode();
         ScheduleMinute();
@@ -90,8 +97,12 @@ internal sealed class AppHost : IDisposable
     {
         if (minute.Interval != TimeSpan.FromMinutes(1)) minute.Interval = TimeSpan.FromMinutes(1);
         store.Poll();
+        agents.Tick();
         Refresh();
     }
+
+    /// <summary>aum-hook.exe 寫好事件檔、觸發了具名事件</summary>
+    public void AgentEvent() => agents.Pump();
 
     // ---------- 畫面 ----------
 
@@ -217,6 +228,8 @@ internal sealed class AppHost : IDisposable
             panel.Activate();
             return;
         }
+        // 打開面板＝看過了：完成未看與出錯的徽章拿掉
+        agents.MarkSeen();
         now = Clock.Now;
         var window = new PanelWindow(Model, AppPalette);
         window.RefreshRequested += () => _ = RefreshAsync();
@@ -321,7 +334,7 @@ internal sealed class AppHost : IDisposable
             settingsWindow.Activate();
             return;
         }
-        settingsWindow = new SettingsWindow(settings, store.Snapshot, Clock.Now, OnSettingsChanged);
+        settingsWindow = new SettingsWindow(settings, store.Snapshot, Clock.Now, OnSettingsChanged, hooks);
         settingsWindow.Closed += (_, _) => settingsWindow = null;
         settingsWindow.Show();
         settingsWindow.Activate();
@@ -331,6 +344,7 @@ internal sealed class AppHost : IDisposable
     {
         SettingsFile.Save(settings);
         if (settings.LaunchAtLogin != Autostart.IsEnabled) Autostart.Set(settings.LaunchAtLogin);
+        agents.SettingsChanged();
         ApplyDisplayMode();
         ApplyLook();
     }
@@ -353,6 +367,7 @@ internal sealed class AppHost : IDisposable
         ring?.Close();
         ring = null;
         fullscreen.Dispose();
+        agents.Dispose();
         store.Dispose();
         tray.Dispose();
     }

@@ -12,6 +12,7 @@ namespace AIUsageMonitor.Windows;
 /// <summary>
 /// 單一執行個體與命令（ADR-0015 識別字）：Mutex 確認只有一個在跑；第二個執行個體以具名事件請第一個
 /// 打開面板（.show）、收起面板（.hide，效能量測）或結束（.quit，安裝腳本更新時），然後自己結束。等待事件不輪詢。
+/// aum-hook.exe 以同一個 Mutex 判斷 App 在不在跑，寫好事件檔後觸發 .agent 叫醒 App（ADR-0019 第 1 節）。
 /// </summary>
 internal sealed class SingleInstance : IDisposable
 {
@@ -22,6 +23,7 @@ internal sealed class SingleInstance : IDisposable
     private readonly EventWaitHandle show = new(false, EventResetMode.AutoReset, Prefix + ".show");
     private readonly EventWaitHandle hide = new(false, EventResetMode.AutoReset, Prefix + ".hide");
     private readonly EventWaitHandle quit = new(false, EventResetMode.AutoReset, Prefix + ".quit");
+    private readonly EventWaitHandle agent = new(false, EventResetMode.AutoReset, Prefix + ".agent");
     private RegisteredWaitHandle[] waits = [];
 
     public bool IsFirst { get; }
@@ -44,11 +46,11 @@ internal sealed class SingleInstance : IDisposable
         }).Set();
     }
 
-    public void Listen(Dispatcher dispatcher, Action onShow, Action onHide, Action onQuit)
+    public void Listen(Dispatcher dispatcher, Action onShow, Action onHide, Action onQuit, Action onAgent)
     {
         RegisteredWaitHandle Register(WaitHandle handle, Action action) =>
             ThreadPool.RegisterWaitForSingleObject(handle, (_, _) => dispatcher.BeginInvoke(action), null, Timeout.Infinite, false);
-        waits = [Register(show, onShow), Register(hide, onHide), Register(quit, onQuit)];
+        waits = [Register(show, onShow), Register(hide, onHide), Register(quit, onQuit), Register(agent, onAgent)];
     }
 
     public void Dispose()
@@ -59,6 +61,7 @@ internal sealed class SingleInstance : IDisposable
         show.Dispose();
         hide.Dispose();
         quit.Dispose();
+        agent.Dispose();
     }
 }
 

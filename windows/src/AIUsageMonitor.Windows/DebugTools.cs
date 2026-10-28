@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using AIUsageMonitor.Core;
@@ -229,7 +230,7 @@ internal static class DebugTools
     private static BitmapSource SettingsShot(bool dark, DateTimeOffset now)
     {
         var settings = new AppSettings { Appearance = dark ? Appearance.Dark : Appearance.Light };
-        var window = new SettingsWindow(settings, UsageDecoder.Decode(DemoJson("normal", now)), now, () => { })
+        var window = new SettingsWindow(settings, UsageDecoder.Decode(DemoJson("normal", now)), now, () => { }, new AgentHookInstaller())
         {
             WindowStartupLocation = WindowStartupLocation.Manual,
             Left = -20000,
@@ -239,7 +240,8 @@ internal static class DebugTools
         };
         window.Show();
         window.UpdateLayout();
-        var content = (FrameworkElement)window.Content;
+        // 設定放在捲動區域裡：截圖畫裡面完整的內容
+        var content = (FrameworkElement)((ScrollViewer)window.Content).Content;
         // RenderTargetBitmap 依元素的位移（Margin）畫：大小要含邊距，否則右邊與下面被裁掉
         var margin = content.Margin;
         var bitmap = Bitmap(content, content.ActualWidth + margin.Left + margin.Right, content.ActualHeight + margin.Top + margin.Bottom,

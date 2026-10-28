@@ -48,7 +48,7 @@ public partial class App : Application
         NativeMethods.SetCurrentProcessExplicitAppUserModelID(SingleInstance.Id);
         host = new AppHost(Dispatcher);
         host.Start();
-        instance.Listen(Dispatcher, host.ShowPanel, host.HidePanel, host.Quit);
+        instance.Listen(Dispatcher, host.ShowPanel, host.HidePanel, host.Quit, host.AgentEvent);
         if (args.Contains("--show-panel")) host.ShowPanel();
     }
 
