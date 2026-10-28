@@ -75,7 +75,9 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 **本機彙總**：每台電腦的 App 把彙總狀態寫到本機 `agent-state.json`：`{"v":1, "ais":[{"ai","state","sessions","since"}]}`
 （AI、最高狀態、工作階段數、進入這個狀態的時間；同一個狀態有幾個工作階段時取最早進入的，哪一個最近有事件不影響彙總），不含資料夾、工作階段 ID 或任何內容。狀態改變時寫並觸發同步（1 秒內的多次改變合併成一次觸發）；內容一樣時每 5 分鐘重寫一次、不觸發
 （收集器把 10 分鐘沒更新的檔當成 App 沒在跑）；App 正常結束時寫「全部閒置」並觸發。
-彙總規則與「本機＋遠端合併顯示」放進 `fixtures/agent/cases.json` 的 `summary`、`remote` 兩組 golden，Swift、C#、Python 三邊跑（F-13）。
+彙總規則與「本機＋遠端合併顯示」放進 `fixtures/agent/cases.json` 的 `summary`、`remote` 兩組 golden，由 Swift、C# 兩邊跑同一份（F-13）。
+Python 不重算彙總：只確認 Swift、C# 產生的 summary 原樣通過 `read_state`；收集器自己的規則（驗證 agent-state.json、把中繼回應轉成 agent-remote.json）在
+`sync-cases.json` → `sync-golden.json`，只有 Python 跑。Swift、C# 還沒有讀回 `sync-golden.json` 的 relay 結果的測試（Fable 總審查 F-05，列在工作資料夾的 BACKLOG）。
 
 **只同步狀態的入口**（F-02）：`python -m usage_collector agent-sync`：只讀 `agent-state.json`、只連 `/agents/state`，不跑 CLI、不上傳 `/usage`，
 不用「立即更新」的節流（`CollectorKicks`），自己最短 60 秒一次（等候後重讀 `agent-state.json`，送出的是最新的狀態）。
