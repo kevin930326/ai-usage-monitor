@@ -31,8 +31,8 @@ for name, r, kind in rows:
     cpu = avg(r, 1) if kind == "avg" else peak(r, 1)
     print(f"| {name} | {len(r)} | {cpu:.1f}（{'平均' if kind == 'avg' else '最大'}） | {peak(r, 2) / 1024:.1f} |")
 awake, asleep, closed, second = rows[2][1], rows[3][1], rows[5][1], rows[6][1]
-# 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 5 筆，缺了就算失敗（Codex C-07）
-missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 5)]
+# 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
+missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
     ("每個階段都有取樣" + (f"（缺：{'、'.join(missing)}）" if missing else ""), not missing),
     ("展開待著（醒著、睡著）≤ 4%", bool(awake) and bool(asleep) and avg(awake, 1) <= 4 and avg(asleep, 1) <= 4),

@@ -53,12 +53,14 @@ enum MascotMotionLevel: String, CaseIterable, Identifiable {
     var movesEyes: Bool { self != .off }
 }
 
-/// 重畫的頻率（ADR-0016 第 6 節）：收合而且沒在動時完全停止；展開待著每秒 30 次；動畫中每秒 60 次
+/// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、看滑鼠、工作）每秒 30 次、睡著 12 次；動畫中每秒 60 次
 enum MascotRenderRate: Equatable {
-    case stopped, idle, animating
+    case stopped, breathing, idle, animating
 
     var interval: Double {
         switch self {
+        // 睡著只有慢慢的呼吸（一次約 4 秒）與飄起來的 z：每秒 12 次就夠
+        case .breathing: 1.0 / 12
         case .stopped, .idle: 1.0 / 30
         case .animating: 1.0 / 60
         }
@@ -99,7 +101,7 @@ final class MascotController {
     private(set) var layout = NotchLayout.fake
     private(set) var director: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
-    /// 停止重畫時畫的那一刻（毫秒）：停下來的那一格是靜止後的畫面，不會停在眨眼一半
+    /// 不在動畫中時，面板形狀與額度卡固定畫的那一刻（毫秒）；完全停止時角色也畫這一刻，不會停在眨眼一半
     private(set) var stoppedAt = 0
     /// 這次啟動後是否已經播過過場（「只有第一次」）
     private(set) var playedIntro = false
@@ -367,13 +369,14 @@ final class MascotController {
             }
         }
         let animating = director.isAnimating(at: now)
-        // 展開待著：眨眼、視線追滑鼠、睡覺、工作中才以每秒 30 次重畫；畫面靜止時停止，到下一次眨眼再開始。
+        // 展開待著：眨眼、視線追滑鼠、工作中以每秒 30 次、睡著以 12 次重畫；畫面靜止時停止，到下一次眨眼再開始。
         // 動畫關閉時展開待著也不重畫（沒有眨眼、看滑鼠）
         let live = director.isLive && motion.movesEyes
         let idleMoving = live && director.isIdleMoving(at: now)
-        let rate: MascotRenderRate = animating ? .animating : (idleMoving ? .idle : .stopped)
+        let breathing = director.mode == .sleep && !director.isStill && director.blink(at: now) == 0
+        let rate: MascotRenderRate = animating ? .animating : (idleMoving ? (breathing ? .breathing : .idle) : .stopped)
         if rate != renderRate {
-            if rate == .stopped { stoppedAt = now }
+            if rate != .animating { stoppedAt = now }
             renderRate = rate
         }
         // 收合動畫播完才把視窗縮回瀏海大小（展開時是整張畫布）
