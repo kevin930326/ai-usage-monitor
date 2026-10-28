@@ -427,7 +427,7 @@ public static class AgentNotices
         var list = new List<AgentNotice>();
         foreach (var s in sessions.Ordered(now))
         {
-            var key = $"{AgentNames.Name(s.Ai)}/{s.Id}/{AgentNames.Name(s.Stored)}@{s.Since.ToString(CultureInfo.InvariantCulture)}";
+            var key = Key(s);
             if (s.Stored == AgentState.NeedsYou && now - s.Since >= policy.NeedsYouAfter)
                 list.Add(new AgentNotice(s.Ai, AgentNoticeKind.NeedsYou, s.Need, key));
             else if (s.Stored == AgentState.Done && s.TurnStart is { } start && s.Since - start >= policy.LongTask)
@@ -435,6 +435,13 @@ public static class AgentNotices
         }
         return list;
     }
+
+    /// <summary>工作階段＋狀態＋進入時間：同一段狀態只通知一次</summary>
+    public static string Key(AgentSession s) =>
+        $"{AgentNames.Name(s.Ai)}/{s.Id}/{AgentNames.Name(s.Stored)}@{s.Since.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>目前還存在的狀態的 key（不在裡面的已發紀錄可以丟掉）</summary>
+    public static HashSet<string> Keys(AgentSessions sessions, long now) => [.. sessions.Ordered(now).Select(Key)];
 
     /// <summary>下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 null。門檻是 long.MaxValue（關閉）時不會溢位</summary>
     public static long? NextCheck(AgentSessions sessions, long now, AgentNoticePolicy policy)

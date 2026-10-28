@@ -71,6 +71,16 @@ public sealed record RingContent(string Provider, int RemainingPct, int? TimeRem
     /// <summary>沒有資料時：灰色虛線的空圓環</summary>
     public static readonly RingContent Empty = new("", 0, null, RingState.Stale, "還沒有額度資料（usage.json）", "還沒有額度資料");
 
+    /// <summary>要你注意的 AI 狀態（ADR-0019）：圓環畫外框或徽章，提示與螢幕閱讀器的文字放在最前面</summary>
+    public RingAgent? Agent { get; init; }
+
+    public RingContent WithAgent(RingAgent? agent) => agent is null ? this with { Agent = null } : this with
+    {
+        Agent = agent,
+        Tooltip = $"{agent.Title}：{agent.Detail}\n{Tooltip}",
+        AccessibilityText = $"{agent.Title}，{agent.Detail}。{AccessibilityText}",
+    };
+
     public static RingContent From(UsageSnapshot? snapshot, WindowChoice choice, DateTimeOffset now)
     {
         if (snapshot?.Window(choice, now) is not { } item) return Empty;

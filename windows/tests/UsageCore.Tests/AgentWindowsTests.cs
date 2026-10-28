@@ -171,4 +171,168 @@ public sealed class AgentWindowsTests : IDisposable
         var b = AgentInbox.FileName(DateTimeOffset.FromUnixTimeMilliseconds(1000), "00000000");
         Assert.True(string.CompareOrdinal(a, b) < 0);
     }
+
+    // MARK: - 設定檔的讀寫
+
+    private string Config(string name) => Path.Combine(home, "fake-claude", name);
+
+    [Fact]
+    public void ConnectBacksUpAndDisconnectRestores()
+    {
+        var file = Config("settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, """{"model":"x"}""");
+        var now = new DateTime(2026, 10, 29, 9, 30, 0);
+        var connected = AgentHookFiles.Connect(file, AgentKind.Claude, Exe, now);
+        Assert.True(connected.Written);
+        Assert.Equal(file + ".aum-backup-20261029-093000", connected.Backup);
+        Assert.Equal("""{"model":"x"}""", File.ReadAllText(connected.Backup!));
+        Assert.Equal(AgentHookStatus.Installed, AgentHookFiles.Status(file, AgentKind.Claude, Exe, exeExists: true));
+        // 已經連接好：不寫、不多一份備份
+        Assert.False(AgentHookFiles.Connect(file, AgentKind.Claude, Exe, now).Written);
+        var removed = AgentHookFiles.Disconnect(file, now);
+        Assert.Equal(file + ".aum-backup-20261029-093000-2", removed.Backup);
+        Assert.Equal("x", (string?)Json(File.ReadAllBytes(file))["model"]);
+        Assert.False(AgentHookFiles.Disconnect(file, now).Written);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(file)!, ".*.tmp"));
+    }
+
+    [Fact]
+    public void MissingFileIsCreatedWithoutBackup()
+    {
+        var file = Config("hooks.json");
+        var result = AgentHookFiles.Connect(file, AgentKind.Codex, Exe, DateTime.Now);
+        Assert.True(result.Written);
+        Assert.Null(result.Backup);
+        Assert.Equal(AgentHookStatus.NotInstalled, AgentHookFiles.Status(Config("none.json"), AgentKind.Codex, Exe, exeExists: true));
+    }
+
+    [Fact]
+    public void MissingHookProgramNeedsRepair()
+    {
+        var file = Config("settings.json");
+        AgentHookFiles.Connect(file, AgentKind.Claude, Exe, DateTime.Now);
+        var status = AgentHookFiles.Status(file, AgentKind.Claude, Exe, exeExists: false);
+        Assert.True(status.NeedsRepair && status.WrongPath);
+    }
+
+    [Fact]
+    public void KeepsOnlyTheNewestBackups()
+    {
+        var file = Config("settings.json");
+        var now = new DateTime(2026, 10, 29, 9, 0, 0);
+        AgentHookFiles.Connect(file, AgentKind.Claude, Exe, now);
+        for (var i = 1; i <= 5; i++)
+        {
+            AgentHookFiles.Disconnect(file, now.AddSeconds(i * 2));
+            AgentHookFiles.Connect(file, AgentKind.Claude, Exe, now.AddSeconds(i * 2 + 1));
+        }
+        var backups = Directory.GetFiles(Path.GetDirectoryName(file)!, "settings.json.aum-backup-*").Select(Path.GetFileName).Order().ToList();
+        Assert.Equal(["settings.json.aum-backup-20261029-090009", "settings.json.aum-backup-20261029-090010", "settings.json.aum-backup-20261029-090011"], backups);
+    }
+
+    [Fact]
+    public void ChangedBetweenReadAndReplaceIsMergedAgain()
+    {
+        var file = Config("settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, """{"a":1}""");
+        var once = true;
+        AgentHookFiles.Connect(file, AgentKind.Claude, Exe, DateTime.Now, () =>
+        {
+            if (!once) return;
+            once = false;
+            File.WriteAllText(file, """{"a":1,"b":2}""");
+        });
+        var root = Json(File.ReadAllBytes(file));
+        Assert.Equal(2, (int?)root["b"]);
+        Assert.NotNull(root["hooks"]);
+        // 一直被改：放棄，不覆蓋
+        var other = Config("other.json");
+        Assert.Throws<AgentHookConfigException>(() =>
+            AgentHookFiles.Connect(other, AgentKind.Claude, Exe, DateTime.Now, () => File.WriteAllText(other, Guid.NewGuid().ToString())));
+    }
+
+    [Fact]
+    public void ConfigDirectoryFollowsTheCollector()
+    {
+        const string user = @"C:\Users\me";
+        static string? NoEnv(string _) => null;
+        static string? Env(string name) => name == "CLAUDE_CONFIG_DIR" ? @"D:\claude" : name == "CODEX_HOME" ? "~/codex" : null;
+        Assert.Equal(Path.Combine(user, ".claude"), AgentHookFiles.ConfigDirectory(AgentKind.Claude, null, NoEnv, user));
+        Assert.Equal(@"D:\claude", AgentHookFiles.ConfigDirectory(AgentKind.Claude, null, Env, user));
+        Assert.Equal(Path.Combine(user, "codex"), AgentHookFiles.ConfigDirectory(AgentKind.Codex, null, Env, user));
+        var config = Bytes("""{"claude_config_dir":"E:\\cc","codex_home":""}""");
+        Assert.Equal(@"E:\cc", AgentHookFiles.ConfigDirectory(AgentKind.Claude, config, Env, user));
+        Assert.Equal(Path.Combine(user, "codex"), AgentHookFiles.ConfigDirectory(AgentKind.Codex, config, Env, user));
+        Assert.Equal(Path.Combine(user, ".codex"), AgentHookFiles.ConfigDirectory(AgentKind.Codex, Bytes("not json"), NoEnv, user));
+    }
+
+    [Theory]
+    [InlineData("[features]\nhooks = false\n", true)]
+    [InlineData("[features]\r\ncodex_hooks = false # 舊名\r\n", true)]
+    [InlineData("features.hooks = false\n", true)]
+    [InlineData("[features]\nhooks = true\n", false)]
+    [InlineData("[other]\nhooks = false\n", false)]
+    [InlineData("# [features]\nhooks = false\n", false)]
+    public void CodexFeatureFlag(string toml, bool disabled)
+    {
+        Assert.Equal(disabled, AgentHookFiles.CodexHooksDisabled(Bytes(toml)));
+    }
+
+    // MARK: - 圓環與通知
+
+    private static AgentHookMessage Event(AgentHookEvent e, long t, AgentNeed? need = null, AgentKind ai = AgentKind.Claude) =>
+        new(ai, e, need, "0123456789abcdef", t, "");
+
+    [Fact]
+    public void RingShowsOnlyWhatNeedsAttention()
+    {
+        var sessions = new AgentSessions(600_000);
+        sessions.Apply(Event(AgentHookEvent.UserPromptSubmit, 1), 1_000);
+        Assert.Null(RingAgent.From(sessions, 2_000));
+        sessions.Apply(Event(AgentHookEvent.PermissionRequest, 2), 2_000);
+        var agent = RingAgent.From(sessions, 3_000)!;
+        Assert.Equal(new RingAgent(AgentKind.Claude, AgentState.NeedsYou, AgentNeed.Permission), agent);
+        Assert.Equal("Claude Code 需要你", agent.Title);
+        Assert.Equal("等你允許一個動作", agent.Detail);
+        var content = RingContent.Empty.WithAgent(agent);
+        Assert.StartsWith("Claude Code 需要你：等你允許一個動作\n", content.Tooltip);
+        Assert.NotEqual(RingContent.Empty, content);
+        sessions.Apply(Event(AgentHookEvent.Stop, 3), 3_000);
+        Assert.Equal(AgentState.Done, RingAgent.From(sessions, 4_000)!.State);
+        sessions.MarkSeen(5_000);
+        Assert.Null(RingAgent.From(sessions, 6_000));
+    }
+
+    [Fact]
+    public void NoticeLogSendsOncePerState()
+    {
+        var sessions = new AgentSessions(600_000);
+        var policy = new AgentNoticePolicy(NeedsYouAfter: 20_000);
+        var log = new AgentNoticeLog();
+        sessions.Apply(Event(AgentHookEvent.PermissionRequest, 1), 0);
+        Assert.Empty(log.Take(sessions, 10_000, policy));
+        var first = Assert.Single(log.Take(sessions, 20_000, policy));
+        Assert.Equal(("Claude Code 需要你", "等你允許一個動作"), AgentText.Notice(first, 3));
+        Assert.Empty(log.Take(sessions, 30_000, policy));
+        // 批准後又要求一次：新的一段狀態，再發一次
+        sessions.Apply(Event(AgentHookEvent.PostToolUse, 2), 31_000);
+        sessions.Apply(Event(AgentHookEvent.PermissionRequest, 3), 32_000);
+        Assert.Single(log.Take(sessions, 52_000, policy));
+        Assert.Equal(("Codex 完成了", "跑了 5 分鐘以上的任務完成了"),
+                     AgentText.Notice(new AgentNotice(AgentKind.Codex, AgentNoticeKind.Done, null, "k"), 5));
+    }
+
+    [Fact]
+    public void SettingsKeepOnlyKnownChoices()
+    {
+        var settings = AppSettings.Parse("""{"agent_needs_you_seconds":30,"agent_long_task_minutes":7}""");
+        Assert.Equal(30, settings.AgentNeedsYouSeconds);
+        Assert.Equal(3, settings.AgentLongTaskMinutes);
+        settings.AgentNeedsYouSeconds = 0;
+        Assert.Equal(long.MaxValue, settings.AgentNoticePolicy.NeedsYouAfter);
+        Assert.Equal(180_000, settings.AgentNoticePolicy.LongTask);
+        Assert.Equal(0, AppSettings.Parse(settings.Serialize()).AgentNeedsYouSeconds);
+    }
 }

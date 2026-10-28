@@ -35,10 +35,21 @@ public sealed class AppSettings
     public bool DockToEdge { get; set; } = true;
     /// <summary>圓環外圍顯示 60 格刻度（這個額度週期過了多少時間）</summary>
     public bool RingTicks { get; set; }
+    /// <summary>AI 需要你超過幾秒發通知（0＝關閉；ADR-0019，同 Mac）</summary>
+    public int AgentNeedsYouSeconds { get; set; } = 20;
+    /// <summary>跑超過幾分鐘的任務完成時發通知（0＝關閉）</summary>
+    public int AgentLongTaskMinutes { get; set; } = 3;
     public List<SavedPosition> Positions { get; set; } = [];
     public List<DateTimeOffset> CollectorKicks { get; set; } = [];
 
     private JsonObject extra = [];
+
+    public static readonly int[] NeedsYouSecondChoices = [0, 10, 20, 30, 60, 120];
+    public static readonly int[] LongTaskMinuteChoices = [0, 1, 3, 5, 10, 20];
+
+    public AgentNoticePolicy AgentNoticePolicy => new(
+        AgentNeedsYouSeconds > 0 ? AgentNeedsYouSeconds * 1000L : long.MaxValue,
+        AgentLongTaskMinutes > 0 ? AgentLongTaskMinutes * 60_000L : long.MaxValue);
 
     public bool ShowsRing => DisplayMode != DisplayMode.Tray;
     public bool ShowsTray => DisplayMode != DisplayMode.Ring;
@@ -71,6 +82,8 @@ public sealed class AppSettings
         settings.Appearance = Enum(root["appearance"], Appearance.System);
         settings.DockToEdge = Bool(root["dock_to_edge"]) ?? true;
         settings.RingTicks = Bool(root["ring_ticks"]) ?? false;
+        settings.AgentNeedsYouSeconds = Choice(Number(root["agent_needs_you_seconds"]), NeedsYouSecondChoices, 20);
+        settings.AgentLongTaskMinutes = Choice(Number(root["agent_long_task_minutes"]), LongTaskMinuteChoices, 3);
         if (root["positions"] is JsonArray positions)
         {
             foreach (var p in positions.OfType<JsonObject>())
@@ -110,6 +123,8 @@ public sealed class AppSettings
             ["appearance"] = Name(Appearance),
             ["dock_to_edge"] = DockToEdge,
             ["ring_ticks"] = RingTicks,
+            ["agent_needs_you_seconds"] = AgentNeedsYouSeconds,
+            ["agent_long_task_minutes"] = AgentLongTaskMinutes,
             ["positions"] = new JsonArray([.. Positions.Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["x"] = p.X, ["y"] = p.Y, ["used"] = p.Used })]),
             ["collector_kicks"] = new JsonArray([.. CollectorKicks.Select(k => (JsonNode)JsonValue.Create(k.ToUnixTimeSeconds()))]),
         };
@@ -120,9 +135,12 @@ public sealed class AppSettings
     private static readonly HashSet<string> Known =
     [
         "schema", "display_mode", "ring_window", "ring_size", "opacity", "hide_in_fullscreen", "launch_at_login", "appearance",
-        "dock_to_edge", "ring_ticks",
+        "dock_to_edge", "ring_ticks", "agent_needs_you_seconds", "agent_long_task_minutes",
         "positions", "collector_kicks",
     ];
+
+    private static int Choice(double? value, int[] choices, int fallback) =>
+        value is { } v && choices.Contains((int)v) && v == Math.Floor(v) ? (int)v : fallback;
 
     private static string Name<T>(T value) where T : struct, Enum => value.ToString().ToLowerInvariant();
 
