@@ -90,7 +90,7 @@ public enum MascotMood: String, Sendable, CaseIterable {
 
     /// 服務狀態頁有進行中、有影響的事故（minor 以上；維護與 none 不算）
     public static func hasIncident(_ snapshot: UsageSnapshot?, provider: String) -> Bool {
-        snapshot?.providers[provider]?.incidents?.contains { ["minor", "major", "critical"].contains($0.impact) } ?? false
+        snapshot?.providers[provider]?.incidents?.contains(where: \.isDisruption) ?? false
     }
 
     /// 這個服務有任何可見額度預測會在重置前用完（瀏海與角色不讀資料庫，用快照裡收集器算好的）

@@ -101,6 +101,11 @@ import Testing
         #expect(ServiceIncident.link("https://status.openai.com/incidents/01J") != nil)
     }
 
+    @Test func onlyMinorOrWorseIsDisruption() {
+        for impact in ["minor", "major", "critical"] { #expect(ServiceIncident(name: "x", impact: impact).isDisruption) }
+        for impact in ["none", "maintenance", "apocalyptic"] { #expect(!ServiceIncident(name: "x", impact: impact).isDisruption) }
+    }
+
     @Test func snapshotForecastOnPhone() throws {
         let data = try Self.load("usage-forecast-incidents.json")
         let window = try #require(data.providers["claude"]?.windows[1])

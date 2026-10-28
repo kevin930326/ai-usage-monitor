@@ -99,6 +99,11 @@ public struct ServiceIncident: Codable, Hashable, Sendable {
         case startedAt = "started_at"
     }
 
+    /// 會影響使用的等級（minor 以上）；維護與 none 不算服務異常（瀏海、表情、iPhone 共用，同 C# 的 `IsDisruption`）
+    public static let disruptionImpacts: Set<String> = ["minor", "major", "critical"]
+
+    public var isDisruption: Bool { Self.disruptionImpacts.contains(impact) }
+
     /// 只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結
     public static let allowedHosts: Set<String> = ["status.claude.com", "status.openai.com"]
 

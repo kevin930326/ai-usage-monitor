@@ -188,8 +188,9 @@ private struct ProviderSection: View {
 
     var body: some View {
         Section {
-            // 服務狀態頁的事故（ADR-0018 第 4 節）：額度讀取失敗時也顯示；連結只接受官方狀態頁
-            ForEach(Array((provider.incidents ?? []).enumerated()), id: \.offset) { _, incident in
+            // 服務狀態頁的事故（ADR-0018 第 4 節）：只顯示 minor 以上（維護不算異常）；額度讀取失敗時也顯示；
+            // 連結只接受官方狀態頁
+            ForEach(Array((provider.incidents ?? []).filter(\.isDisruption).enumerated()), id: \.offset) { _, incident in
                 IncidentRow(incident: incident)
             }
             if let error = provider.error {

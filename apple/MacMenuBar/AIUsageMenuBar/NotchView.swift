@@ -351,8 +351,7 @@ enum NotchQuota {
 
     /// 第一個有影響的事故（同角色生病的規則）
     static func incident(in snapshot: UsageSnapshot?, provider: String) -> ServiceIncident? {
-        guard MascotMood.hasIncident(snapshot, provider: provider) else { return nil }
-        return snapshot?.providers[provider]?.incidents?.first { ["minor", "major", "critical"].contains($0.impact) }
+        snapshot?.providers[provider]?.incidents?.first(where: \.isDisruption)
     }
 
     /// 額度的等級：出錯或用完 2、剩不到 20% 1、其他 0（同通知「剩不到 20%」的門檻）
