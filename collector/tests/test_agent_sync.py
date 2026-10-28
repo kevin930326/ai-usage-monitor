@@ -251,6 +251,43 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(1, len(self.relay.uploads()))
         self.assertFalse(lock.exists())
 
+    def test_turned_off_while_waiting_sends_and_writes_nothing(self):
+        # 等候 60 秒間隔時關掉同步：不送、不重建 forget 刪掉的檔（Codex C-02）
+        self.write_state()
+        self.run_sync()
+        self.remote.unlink()
+        self.write_state(STATE.replace("needsYou", "working"))
+
+        def turned_off(_):
+            self.config.write_text(json.dumps({"agent_sync": False, "relay_url": URL}), encoding="utf-8")
+
+        with mock.patch("usage_collector.agent_sync.time.sleep", turned_off):
+            self.run_sync(NOW + 20)
+        self.assertEqual(1, len(self.relay.uploads()))
+        self.assertFalse(self.remote.exists())
+
+    def test_turned_off_during_download_does_not_write(self):
+        self.write_state()
+        original = self.relay.__call__
+
+        def off_then_answer(url, headers, body=None, timeout=15):
+            if body is None:
+                self.config.write_text(json.dumps({"agent_sync": False, "relay_url": URL}), encoding="utf-8")
+            return original(url, headers, body, timeout)
+
+        with mock.patch("usage_collector.agent_sync.request_json", off_then_answer):
+            self.run_sync()
+        self.assertFalse(self.remote.exists())
+
+    def test_forget_waits_for_a_running_sync(self):
+        self.remote.write_text("{}", encoding="utf-8")
+        lock = self.dir / agent_sync.LOCK_FILE
+        lock.touch()
+        with mock.patch("usage_collector.agent_sync.time.sleep", lambda _: lock.unlink()):
+            agent_sync.forget(self.remote)
+        self.assertFalse(self.remote.exists())
+        self.assertFalse(lock.exists())
+
     def test_never_raises(self):
         with mock.patch("usage_collector.agent_sync.run", side_effect=RuntimeError("boom /Users/me")), \
                 mock.patch("usage_collector.agent_sync.log") as log:

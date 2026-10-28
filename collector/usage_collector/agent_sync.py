@@ -233,8 +233,10 @@ def _own_ids(conn: sqlite3.Connection) -> set[str]:
 
 # MARK: - 上傳與下載
 
-def upload(conn: sqlite3.Connection, url: str, now: int, read_body: Callable[[int], dict]) -> bool:
-    """回傳是否真的送出。`read_body(now)` 讀這台的彙總；等候 60 秒的間隔後再讀一次，送出的是最新的狀態"""
+def upload(conn: sqlite3.Connection, url: str, now: int, read_body: Callable[[int], dict],
+           enabled: Callable[[], bool] = lambda: True) -> bool:
+    """回傳是否真的送出。`read_body(now)` 讀這台的彙總；等候 60 秒的間隔後再讀一次，送出的是最新的狀態。
+    等候期間關掉同步（`enabled()` 變成 False）就不送"""
     if now < _meta_int(conn, "agent_upload_next_at"):
         return False
     body = read_body(now)
@@ -252,6 +254,8 @@ def upload(conn: sqlite3.Connection, url: str, now: int, read_body: Callable[[in
         # 狀態剛改變又改變：等到滿 60 秒再送最新的（不丟掉這次改變）
         time.sleep(MIN_INTERVAL - (now - last))
         now += MIN_INTERVAL - (now - last)
+        if not enabled():
+            return False
         body = read_body(now)
         digest = hashlib.sha256(encode(body).encode()).hexdigest()[:32]
     try:
@@ -264,7 +268,8 @@ def upload(conn: sqlite3.Connection, url: str, now: int, read_body: Callable[[in
     return True
 
 
-def download(conn: sqlite3.Connection, url: str, now: int, path: Path | None = None) -> bool:
+def download(conn: sqlite3.Connection, url: str, now: int, path: Path | None = None,
+             enabled: Callable[[], bool] = lambda: True) -> bool:
     if now < _meta_int(conn, "agent_download_next_at") or 0 <= now - _meta_int(conn, "agent_download_at") < MIN_INTERVAL:
         return False
     read_key = credentials.read(credentials.READ_KEY)
@@ -278,6 +283,8 @@ def download(conn: sqlite3.Connection, url: str, now: int, path: Path | None = N
     remote = remote_file(response, _own_ids(conn), now * 1000)
     if remote is None:
         _failed(conn, "download", now, ProviderError("回應格式不對"))
+        return False
+    if not enabled():  # 下載期間關掉同步：不重建 forget 刪掉的檔
         return False
     write_remote(remote, path or REMOTE_PATH)
     _set_meta(conn, agent_download_at=now, agent_download_next_at=0)
@@ -312,6 +319,9 @@ def run(path: Path | None = None, now: int | None = None, config_path: Path | No
 
 
 def _run_locked(path: Path, url: str, now: int, config_path: Path | None, running: Callable[[], bool]) -> None:
+    def enabled() -> bool:
+        return load_config(config_path) is not None
+
     with history._private_files():
         conn = history.connect(path)
         try:
@@ -319,8 +329,8 @@ def _run_locked(path: Path, url: str, now: int, config_path: Path | None, runnin
             if not history.meta(conn, "relay_device_id"):
                 return
             # 自動提交（isolation_level=None）：等候與連線時不鎖住資料庫，Token 統計照常寫入
-            upload(conn, url, now, lambda t: local_body(t, running))
-            download(conn, url, now)
+            upload(conn, url, now, lambda t: local_body(t, running), enabled)
+            download(conn, url, now, enabled=enabled)
         finally:
             conn.close()
 
@@ -336,11 +346,14 @@ def run_safely(path: Path | None = None) -> None:
 
 
 def forget(path: Path | None = None) -> None:
-    """關閉同步時刪除本機的其他電腦狀態（`set-tier2.sh --no-agent-sync`／`--disable`）；中繼上的不動，30 分鐘後自然不顯示"""
-    try:
-        (path or REMOTE_PATH).unlink()
-    except FileNotFoundError:
-        pass
+    """關閉同步時刪除本機的其他電腦狀態（`set-tier2.sh --no-agent-sync`／`--disable`）；中繼上的不動，30 分鐘後自然不顯示。
+    呼叫前設定已經關掉：先等進行中的同步結束（它寫檔前會再看一次設定），再刪"""
+    path = path or REMOTE_PATH
+    with sync_lock(path.parent):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
 
 
 @contextmanager
