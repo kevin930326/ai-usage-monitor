@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import tempfile
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,9 +62,10 @@ MAX_TEXT = 120
 
 
 def _text(value: object) -> str | None:
-    """只收短的單行文字（狀態頁的名稱與說明）"""
+    """只收短的單行文字（狀態頁的名稱與說明）；去掉控制字元與格式字元（NUL、RLO 之類的方向控制、零寬字元）"""
     if not isinstance(value, str):
         return None
+    value = "".join(" " if c.isspace() else c for c in value if unicodedata.category(c) not in ("Cc", "Cf") or c.isspace())
     value = " ".join(value.split())
     return value[:MAX_TEXT] if value else None
 

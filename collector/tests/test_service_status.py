@@ -195,6 +195,10 @@ class IncidentsTest(unittest.TestCase):
         result = service_status.parse_incidents("codex", data)
         self.assertEqual([i["name"] for i in result], names[:2])
 
+    def test_names_drop_control_and_format_characters(self):
+        data = {"incidents": [incident("01J", "Codex\u202e errors\u200b\x00\n now")]}
+        self.assertEqual(service_status.parse_incidents("codex", data)[0]["name"], "Codex errors now")
+
     def test_bad_format_raises(self):
         for bad in ([], {}, {"incidents": "x"}):
             with self.assertRaises(ProviderError):

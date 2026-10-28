@@ -124,12 +124,16 @@ function sanitizeForecast(f: unknown): Fields | null {
 
 /** 選填的進行中事故 `[{name, impact, url?, started_at?}]`（ADR-0018 第 4 節）。附加資訊：不是陣列時丟掉欄位、
  *  格式不符的項目略過，不擋下整份快照；空陣列保留（代表查過、沒有事故）。 */
+/** 控制字元與格式字元（NUL、換行、RLO 之類的方向控制、零寬字元）：事故名稱有這些就丟掉那一筆 */
+const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/u;
+
 function sanitizeIncidents(list: unknown): Fields[] | null {
   if (!Array.isArray(list)) return null;
   const incidents: Fields[] = [];
   for (const i of list) {
     if (incidents.length >= LIMITS.incidents) break;
-    if (!isObject(i) || typeof i.name !== "string" || i.name === "" || !isText(i.name, LIMITS.incidentName)) continue;
+    if (!isObject(i) || typeof i.name !== "string" || i.name === "" || !isText(i.name, LIMITS.incidentName)
+      || CONTROL_OR_FORMAT.test(i.name)) continue;
     if (typeof i.impact !== "string" || !IMPACTS.includes(i.impact)) continue;
     const incident: Fields = { name: i.name, impact: i.impact };
     if (typeof i.url === "string" && INCIDENT_URL.test(i.url)) incident.url = i.url;
