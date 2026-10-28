@@ -63,7 +63,7 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 ### 3. 安裝與移除
 
-- 設定的「AI 狀態」區塊（瀏海面板之後）有 Claude Code 與 Codex 兩列：按鈕旁邊一直寫著會改的檔案（`~/.claude/settings.json`、`~/.codex/hooks.json`）與加上的事件，按鈕依狀態是「連接」「修好／移除」或「移除」。
+- 設定的「AI 狀態」區塊（瀏海面板之後）有 Claude Code 與 Codex 兩列：按鈕旁邊一直寫著會改的檔案（預設 `~/.claude/settings.json`、`~/.codex/hooks.json`；資料夾照收集器的規則，`config.json` 的 `claude_config_dir`／`codex_home` 優先，再來是環境變數，和 Windows、活動偵測一致）與加上的事件，按鈕依狀態是「連接」「修好／移除」或「移除」。
 - 每個 hook 項目：`{"hooks": [{"type": "command", "command": "'<App>/Contents/Helpers/aum-hook' claude 2>/dev/null || true", "timeout": 3}]}`（不設 matcher；路徑用單引號包起來，經 shell 也安全；逾時 3 秒是 Codex `SessionEnd`、`Interrupt` 的上限）。
 - 設定檔是符號連結（例如 dotfiles 管理）時，讀、備份、寫都對連結指向的檔案做：原子寫入會把連結本身換成一般檔案，讀到的權限也會是連結的 0755。
 - 修改前先把原檔複製成 `<檔名>.aum-backup-<年月日-時分秒>`（放在真正的檔案旁邊；同一秒第二次加序號，不覆蓋舊備份；建立時就用原檔的權限）；每個設定檔只留最新的 3 份我們的備份（設定檔可能有金鑰，副本不無限累積）。以原子方式寫入並保留原檔權限。檔案不是合法 JSON、或 `hooks` 不是物件時**不改**，只提示。

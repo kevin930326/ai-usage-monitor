@@ -193,10 +193,18 @@ internal static class AgentSyncTrigger
 {
     private const string TaskName = @"\AIUsageMonitor\AgentSync";
     private static bool running;
+    private static bool pending;
 
+    /// <summary>狀態接連改變時（例如很多工具事件）合併成 1 秒後執行一次，不會每個事件都開一個 schtasks（Fable F-01）</summary>
     public static async void Run()
     {
-        if (AppMode.Isolated || running) return;
+        if (AppMode.Isolated || running || pending) return;
+        pending = true;
+        await Task.Delay(1000);
+        // App 結束時已經由 TakePending 送出：不重複
+        if (!pending) return;
+        pending = false;
+        if (running) return;
         running = true;
         try
         {
@@ -207,6 +215,14 @@ internal static class AgentSyncTrigger
         {
             running = false;
         }
+    }
+
+    /// <summary>App 結束時：取走還沒送出的合併觸發（之後延遲的那次不再送），回傳有沒有</summary>
+    public static bool TakePending()
+    {
+        var had = pending;
+        pending = false;
+        return had;
     }
 
     /// <summary>App 結束時：不等結果（結束前送出就好）</summary>

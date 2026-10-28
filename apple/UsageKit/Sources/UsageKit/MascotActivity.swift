@@ -72,6 +72,17 @@ public struct MascotActivityProbe: Sendable {
     public static func defaultRoots(config: [String: String] = [:],
                                     environment: [String: String] = ProcessInfo.processInfo.environment,
                                     home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> [Root] {
+        let dirs = configDirectories(config: config, environment: environment, home: home)
+        return [
+            Root(url: dirs.claude.appendingPathComponent("projects", isDirectory: true), depth: 2),
+            Root(url: dirs.codex.appendingPathComponent("sessions", isDirectory: true), depth: 4, newestByName: 2),
+        ]
+    }
+
+    /// Claude Code 與 Codex 的設定資料夾，優先序同上。hook 的安裝也用這個（Fable 總審查 F-02：和收集器、Windows 一致）
+    public static func configDirectories(config: [String: String] = [:],
+                                         environment: [String: String] = ProcessInfo.processInfo.environment,
+                                         home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> (claude: URL, codex: URL) {
         func dir(_ configKey: String, _ envKey: String, _ fallback: String) -> URL {
             let custom = [config[configKey], environment[envKey]].compactMap { $0 }.first { !$0.isEmpty }
             guard let custom else { return home.appendingPathComponent(fallback, isDirectory: true) }
@@ -79,12 +90,7 @@ public struct MascotActivityProbe: Sendable {
                 : custom.hasPrefix("~/") ? home.appendingPathComponent(String(custom.dropFirst(2))).path : custom
             return URL(fileURLWithPath: expanded, isDirectory: true)
         }
-        return [
-            Root(url: dir("claude_config_dir", "CLAUDE_CONFIG_DIR", ".claude").appendingPathComponent("projects", isDirectory: true),
-                 depth: 2),
-            Root(url: dir("codex_home", "CODEX_HOME", ".codex").appendingPathComponent("sessions", isDirectory: true), depth: 4,
-                 newestByName: 2),
-        ]
+        return (dir("claude_config_dir", "CLAUDE_CONFIG_DIR", ".claude"), dir("codex_home", "CODEX_HOME", ".codex"))
     }
 
     /// 從收集器的 `config.json` 只取出紀錄位置的兩個欄位（其他欄位不讀出來；讀不到或格式不對時回傳空的）

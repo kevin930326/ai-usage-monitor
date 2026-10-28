@@ -859,7 +859,7 @@
         "0 summary {\"v\":1,\"ais\":[]}",
         "1000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@1000]",
         "2000 claude UserPromptSubmit → top=claude/bbbb [claude/bbbb/proj:working@2000, claude/aaaa/proj:working@1000]",
-        "2500 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":2000}]}",
+        "2500 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":1000}]}",
         "3000 claude PermissionRequest → top=claude/bbbb [claude/bbbb/proj:needsYou(permission)@3000, claude/aaaa/proj:working@1000]",
         "4000 codex SessionStart → top=claude/bbbb [claude/bbbb/proj:needsYou(permission)@3000, claude/aaaa/proj:working@1000, codex/cccc/proj:waiting@4000]",
         "5000 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":3000},{\"ai\":\"codex\",\"state\":\"waiting\",\"sessions\":1,\"since\":4000}]}",
@@ -870,6 +870,20 @@
         "500001 claude SessionEnd → top=codex/cccc [codex/cccc/proj:idle@4000]",
         "500002 codex SessionEnd → top=none []",
         "500003 summary {\"v\":1,\"ais\":[]}"
+      ]
+    },
+    {
+      "name" : "summary-stable-with-two-working",
+      "result" : [
+        "1000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@1000]",
+        "2000 claude UserPromptSubmit → top=claude/bbbb [claude/bbbb/proj:working@2000, claude/aaaa/proj:working@1000]",
+        "2500 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":1000}]}",
+        "3000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@1000, claude/bbbb/proj:working@2000]",
+        "3100 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":1000}]}",
+        "4000 claude PostToolUse → top=claude/bbbb [claude/bbbb/proj:working@2000, claude/aaaa/proj:working@1000]",
+        "4100 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":1000}]}",
+        "5000 claude PreToolUse → top=claude/aaaa [claude/aaaa/proj:working@1000, claude/bbbb/proj:working@2000]",
+        "5100 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":1000}]}"
       ]
     },
     {

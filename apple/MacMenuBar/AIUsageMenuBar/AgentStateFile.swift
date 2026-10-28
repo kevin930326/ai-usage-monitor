@@ -16,6 +16,8 @@ final class AgentStateFile {
 
     private var last: Data?
     private var timer: Timer?
+    /// 合併中的同步觸發（1 秒內只觸發一次）
+    private var kickPending = false
 
     private var url: URL { UsageStore.shared.locator.directory.appendingPathComponent(AgentSummary.fileName) }
 
@@ -46,9 +48,16 @@ final class AgentStateFile {
     func stop() {
         timer?.invalidate()
         timer = nil
-        guard last != nil, last != AgentSummary.empty, write(AgentSummary.empty) else { return }
-        last = AgentSummary.empty
-        kick()
+        // 還有沒送出的合併觸發時也要送（最後一個工作階段剛結束就關 App：檔案已是全部閒置，Codex C-01）
+        let pending = kickPending
+        kickPending = false
+        if last != nil, last != AgentSummary.empty, write(AgentSummary.empty) {
+            last = AgentSummary.empty
+        } else if !pending {
+            return
+        }
+        // App 正要結束：馬上觸發，不等合併
+        kickNow()
     }
 
     private func write(_ data: Data) -> Bool {
@@ -62,8 +71,20 @@ final class AgentStateFile {
         }
     }
 
-    /// 觸發 AI 狀態同步；測試（`AI_USAGE_MONITOR_HOME`）時不觸發真的 launchd 工作
+    /// 狀態接連改變時（例如很多工具事件）合併成 1 秒後觸發一次，不會每個事件都開一個 launchctl（Fable F-01）
     private func kick() {
+        guard !kickPending else { return }
+        kickPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            // stop() 已經送出時不重複
+            guard let self, self.kickPending else { return }
+            self.kickPending = false
+            self.kickNow()
+        }
+    }
+
+    /// 觸發 AI 狀態同步；測試（`AI_USAGE_MONITOR_HOME`）時不觸發真的 launchd 工作
+    private func kickNow() {
         guard !UsageStore.shared.usesCustomHome else { return }
         let label = CollectorService.shared.syncKickLabel
         let process = Process()

@@ -11,14 +11,16 @@ public enum AgentSummary {
     public static let version = 1
     public static let fileName = "agent-state.json"
 
-    /// 這台電腦的彙總，鍵的順序固定（Swift、C# 輸出相同）。沒有工作階段的 AI 不列
+    /// 這台電腦的彙總，鍵的順序固定（Swift、C# 輸出相同）。沒有工作階段的 AI 不列；`since` 是最高狀態的工作階段中最早進入的
     public static func encoded(_ sessions: AgentSessions, at now: Int64) -> Data {
         let ordered = sessions.ordered(at: now)
         let rows = AgentKind.allCases.compactMap { ai -> String? in
             let mine = ordered.filter { $0.ai == ai }
             guard let top = mine.first else { return nil }
             let state = top.state(at: now, idleAfter: sessions.idleAfter)
-            return "{\"ai\":\"\(ai.rawValue)\",\"state\":\"\(state.rawValue)\",\"sessions\":\(mine.count),\"since\":\(top.since)}"
+            // 同一個狀態有幾個工作階段時取最早進入的：哪一個最近有事件不影響彙總，不會每個工具事件就改一次（Fable F-01）
+            let since = mine.filter { $0.state(at: now, idleAfter: sessions.idleAfter) == state }.map(\.since).min() ?? top.since
+            return "{\"ai\":\"\(ai.rawValue)\",\"state\":\"\(state.rawValue)\",\"sessions\":\(mine.count),\"since\":\(since)}"
         }
         return Data("{\"v\":\(version),\"ais\":[\(rows.joined(separator: ","))]}".utf8)
     }

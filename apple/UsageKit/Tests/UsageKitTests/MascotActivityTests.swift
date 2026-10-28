@@ -79,6 +79,12 @@ import Testing
         let roots = MascotActivityProbe.defaultRoots(config: config, environment: ["CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"],
                                                      home: URL(fileURLWithPath: "/home/u"))
         #expect(roots.map(\.url.path) == ["/home/u/work/claude/projects", "/opt/codex/sessions"])
+        // hook 的設定檔（AgentHookInstaller）也在同樣的資料夾（Fable 總審查 F-02）
+        let dirs = MascotActivityProbe.configDirectories(config: config, environment: ["CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"],
+                                                         home: URL(fileURLWithPath: "/home/u"))
+        #expect(dirs.claude.path == "/home/u/work/claude" && dirs.codex.path == "/opt/codex")
+        let fallback = MascotActivityProbe.configDirectories(config: [:], environment: [:], home: URL(fileURLWithPath: "/home/u"))
+        #expect(fallback.claude.path == "/home/u/.claude" && fallback.codex.path == "/home/u/.codex")
         // 假的列舉器確認走訪的是設定的位置
         let fs = FakeLister()
         fs.add("/opt/codex/sessions/2026", directory: true, modified: Self.now)
