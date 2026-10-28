@@ -428,8 +428,9 @@ final class MascotController {
         if AgentMonitor.shared.sessions.isEmpty { page = .overview }
     }
 
-    /// 一個回合完成：展開時揮手；收著時瀏海鼓一下、迷你角色揮手。靜音、勿擾時不動
+    /// 一個回合完成：展開時揮手；收著時瀏海鼓一下、迷你角色揮手。靜音、勿擾時不動；瀏海沒顯示時不排任何動畫（NFR-8，Codex C-02）
     func agentFinished() {
+        guard NotchPanelController.shared.isShown else { return }
         let quiet = PanelSettings.shared.isMascotQuiet(at: Date())
         mutate { $0.cheer(at: time(), react: !quiet) }
     }
