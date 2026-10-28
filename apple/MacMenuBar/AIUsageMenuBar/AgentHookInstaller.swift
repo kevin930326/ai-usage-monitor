@@ -23,27 +23,37 @@ final class AgentHookInstaller {
     private(set) var message: [AgentKind: String] = [:]
 
     /// 測試、示範、截圖：用資料夾裡的假家目錄
-    var home: URL {
+    private var testing: Bool {
         var testing = UsageFileLocator.isTestEnvironment() || UsageStore.shared.usesCustomHome
         #if DEBUG
         testing = testing || DebugTools.isDemo
         #endif
-        return testing ? UsageStore.shared.locator.directory : FileManager.default.homeDirectoryForCurrentUser
+        return testing
     }
 
-    /// 各 AI 的設定檔（畫面顯示時把家目錄寫成 ~）
+    var home: URL {
+        testing ? UsageStore.shared.locator.directory : FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    /// 各 AI 的設定檔。資料夾照收集器的規則：`config.json` 的 `claude_config_dir`／`codex_home` 優先，
+    /// 再來是環境變數與預設位置（同 Windows 與活動偵測；Fable 總審查 F-02）。測試時不讀 config.json
     func file(for ai: AgentKind) -> URL {
+        let config = testing ? [:] : MascotActivityProbe.logDirectories(
+            fromConfig: try? Data(contentsOf: UsageStore.shared.locator.directory.appendingPathComponent("config.json")))
+        let dirs = MascotActivityProbe.configDirectories(config: config, environment: testing ? [:] : ProcessInfo.processInfo.environment,
+                                                         home: home)
         switch ai {
-        case .claude: home.appendingPathComponent(".claude/settings.json")
-        case .codex: home.appendingPathComponent(".codex/hooks.json")
+        case .claude: return dirs.claude.appendingPathComponent("settings.json")
+        case .codex: return dirs.codex.appendingPathComponent("hooks.json")
         }
     }
 
+    /// 畫面顯示的路徑（家目錄寫成 ~）
     func displayPath(for ai: AgentKind) -> String {
-        switch ai {
-        case .claude: "~/.claude/settings.json"
-        case .codex: "~/.codex/hooks.json"
-        }
+        // 測試、截圖時的家目錄是假的，一樣寫成 ~（畫面不出現暫存資料夾的路徑）
+        let path = file(for: ai).path
+        let home = self.home.path
+        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
     }
 
     /// hook 程式在 App 包裡的位置；App 被移動時會變，狀態因此變成「需要修好」
@@ -65,7 +75,7 @@ final class AgentHookInstaller {
                 states[ai] = .unreadable
             }
         }
-        let toml = try? Data(contentsOf: home.appendingPathComponent(".codex/config.toml"))
+        let toml = try? Data(contentsOf: file(for: .codex).deletingLastPathComponent().appendingPathComponent("config.toml"))
         codexDisabled = AgentHookFiles.codexHooksDisabled(configTOML: toml)
     }
 
