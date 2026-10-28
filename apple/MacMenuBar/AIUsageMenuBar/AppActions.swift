@@ -12,6 +12,8 @@ import UsageKit
 enum AppActions {
     /// 打開完整統計視窗（由 SwiftUI 的 `openWindow` 提供；選單列標籤出現時設定）
     static var openStats: (() -> Void)?
+    /// 右鍵選單（選單列圖示、瀏海）的結束項目
+    static let quitTitle = "結束 AI 用量"
     /// 打開設定視窗（由 SwiftUI 的 `openSettings` 提供）
     static var openSettings: (() -> Void)?
     /// 打開設定精靈（FR-54；由 SwiftUI 的 `openWindow` 提供）
@@ -34,8 +36,26 @@ enum AppActions {
         }
     }
 
-    /// 打開（或關閉）選單列面板，與點選單列圖示相同。
+    /// 快捷鍵：瀏海面板開著（或選單列圖示關著）時切換瀏海下方的完整面板，否則同點選單列圖示（ADR-0008 第 9 節）
     static func togglePanel() {
+        // 已經開著的那一個先關（Fable F-05）
+        if FullPanelController.shared.isOpen {
+            FullPanelController.shared.close()
+            return
+        }
+        if PanelVisibility.isVisible {
+            toggleMenuBarPanel()
+            return
+        }
+        if NotchPanelController.shared.isShown || !PanelSettings.shared.menuBarIconShown {
+            FullPanelController.shared.toggle()
+            return
+        }
+        toggleMenuBarPanel()
+    }
+
+    /// 打開（或關閉）選單列面板，與點選單列圖示相同。
+    static func toggleMenuBarPanel() {
         guard let button = statusButton() else {
             UsageStore.log("status item button not found")
             return
@@ -49,8 +69,11 @@ enum AppActions {
         pendingHighlight = cardID
         if PanelVisibility.isVisible {
             NotificationCenter.default.post(name: PanelVisibility.highlightRequested, object: nil)
+        } else if !PanelSettings.shared.menuBarIconShown {
+            // 選單列圖示關著：點通知改開瀏海下方的完整面板
+            FullPanelController.shared.open()
         } else {
-            togglePanel()
+            toggleMenuBarPanel()
         }
     }
 
@@ -98,7 +121,7 @@ enum AppActions {
             openSettings?()
         })
         menu.addItem(.separator())
-        menu.addItem(ClosureMenuItem(title: "結束 AI 用量", key: "q") { NSApplication.shared.terminate(nil) })
+        menu.addItem(ClosureMenuItem(title: AppActions.quitTitle, key: "q") { NSApplication.shared.terminate(nil) })
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 5), in: button)
     }
 }
@@ -106,7 +129,9 @@ enum AppActions {
 /// 面板是否看得見（`PanelView` 依視窗的可見狀態更新），以及「卡片亮一下」的請求。
 @MainActor
 enum PanelVisibility {
-    static var isVisible = false
+    /// 看得見的面板數（選單列面板與瀏海下方的完整面板是兩個 `PanelView`，各自開關，Fable F-05）
+    static var visibleCount = 0
+    static var isVisible: Bool { visibleCount > 0 }
     static let highlightRequested = Notification.Name("AUMPanelHighlightRequested")
 }
 

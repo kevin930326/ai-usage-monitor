@@ -13,6 +13,8 @@ struct PanelView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
+    /// 完整面板開在哪個螢幕：高度上限照那個螢幕（Fable F-11）；選單列面板是 nil
+    @Environment(\.panelScreenHeight) private var panelScreenHeight
 
     /// Debug 截圖工具直接指定動畫進度；一般執行時為 nil，由面板自己驅動
     var fixedMotion: PanelMotion?
@@ -21,6 +23,8 @@ struct PanelView: View {
 
     @State private var motion = PanelMotion.settled
     @State private var visible = false
+    /// 這個面板有沒有算進 `PanelVisibility.visibleCount`：重複的通知不重複算，畫面拆掉時一定扣回（Codex C-02）
+    @State private var counted = false
     @State private var refreshHint: RefreshHint?
     @State private var resetSignature: [String: [String: Date]] = [:]
     /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
@@ -42,28 +46,43 @@ struct PanelView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: 360)
-            .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
+            .frame(maxHeight: (panelScreenHeight ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
             .fixedSize(horizontal: false, vertical: true)
             .modifier(behavior)
+            .onDisappear { releaseVisibility() }
         } else {
             content.frame(width: 360).modifier(behavior)
+                .onDisappear { releaseVisibility() }
         }
+    }
+
+    /// 畫面被拆掉（完整面板關閉時釋放）：可見度的 `onChange` 不一定來得及跑，這裡把計數扣回、關資料庫（Codex C-02）
+    private func releaseVisibility() {
+        guard counted else { return }
+        counted = false
+        PanelVisibility.visibleCount = max(0, PanelVisibility.visibleCount - 1)
+        stopAnimations()
+        if !PanelVisibility.isVisible { historyStore.close() }
     }
 
     private var behavior: PanelBehavior {
         PanelBehavior(
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
             visible: $visible, onVisibleChange: { isVisible in
-                PanelVisibility.isVisible = isVisible && fixedMotion == nil
+                if fixedMotion == nil, isVisible != counted {
+                    counted = isVisible
+                    PanelVisibility.visibleCount = max(0, PanelVisibility.visibleCount + (isVisible ? 1 : -1))
+                }
                 if isVisible {
                     // 只在面板看得見時開啟資料庫並查詢（ADR-0009 第 7 節）
                     historyStore.open(now: store.now)
                     playAppear()
                     // 點通知打開面板：捲到對應的卡片並亮一下（減少動態效果時只捲動）
-                    playPendingHighlight()
+                    playPendingHighlight(visibleNow: true)
                 } else {
                     stopAnimations()
-                    historyStore.close()
+                    // 另一個面板還開著時不關（共用同一個資料庫連線）
+                    if !PanelVisibility.isVisible { historyStore.close() }
                 }
             },
             snapshot: store.snapshot, now: store.now, history: historyStore.history.including(store.snapshot),
@@ -140,7 +159,7 @@ struct PanelView: View {
             playStatusPulse()
         case "highlight":
             AppActions.pendingHighlight = PanelSection.quota.rawValue
-            playPendingHighlight()
+            playPendingHighlight(visibleNow: true)
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break
@@ -249,8 +268,9 @@ struct PanelView: View {
     }
 
     /// 點通知打開面板：捲到對應的卡片，卡片亮一下（0.6 秒）。減少動態效果時只捲動
-    private func playPendingHighlight() {
-        guard let id = AppActions.pendingHighlight else { return }
+    private func playPendingHighlight(visibleNow: Bool? = nil) {
+        // 收起來的那個面板（視圖還在）不要搶走請求（Fable F-10）
+        guard visibleNow ?? visible, let id = AppActions.pendingHighlight else { return }
         AppActions.pendingHighlight = nil
         guard let section = PanelSection(rawValue: id), settings.visibleSections.contains(section) else { return }
         scrollTarget = section
@@ -323,7 +343,8 @@ struct PanelView: View {
 
     private func showStatsWindow() {
         NSApplication.shared.activate()
-        openWindow(id: StatsWindowView.windowID)
+        // 完整面板（ADR-0008 第 9 節）放在 SwiftUI 的場景之外，環境裡的 openWindow 打不開視窗：用選單列標籤借來的（Codex C-01）
+        if let open = AppActions.openStats { open() } else { openWindow(id: StatsWindowView.windowID) }
     }
 
     /// 切換走勢的額度：新曲線重新由左往右描繪（舊曲線交叉淡出）。
@@ -474,7 +495,7 @@ struct PanelView: View {
 
     private func showSettings() {
         NSApplication.shared.activate()
-        openSettings()
+        if let open = AppActions.openSettings { open() } else { openSettings() }
     }
 
     /// 打開面板：圓環與用量條從 0 長到目前位置，預期標記稍後淡入。
@@ -650,4 +671,9 @@ struct PanelPillButtonStyle: ButtonStyle {
             .padding(.vertical, 5)
             .background(Color.primary.opacity(configuration.isPressed ? 0.14 : 0.07), in: Capsule())
     }
+}
+
+extension EnvironmentValues {
+    /// 面板所在螢幕的可見高度（完整面板用；nil 時用主螢幕）
+    @Entry var panelScreenHeight: Double?
 }

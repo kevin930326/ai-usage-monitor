@@ -539,7 +539,7 @@ struct NotchContent: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            HStack(spacing: 6) {
+            HStack(spacing: NotchTab.spacing) {
                 NotchTab(symbol: "house.fill", label: "總覽", selected: extras.page == .overview) {
                     MascotController.shared.setPage(.overview)
                 }
@@ -549,16 +549,17 @@ struct NotchContent: View {
                         MascotController.shared.setPage(.agents)
                     }
                 }
+                NotchTab(symbol: "rectangle.portrait.and.arrow.forward", label: "完整面板") { FullPanelController.shared.open() }
                 NotchTab(symbol: "clock", label: "歷史") { AppActions.openStats?(); NSApplication.shared.activate() }
                 NotchTab(symbol: "gearshape", label: "設定") { AppActions.openSettings?(); NSApplication.shared.activate() }
             }
             .frame(height: 20)
             .fixedSize()
-            .frame(width: 120, alignment: .leading)
-            .position(x: 20 + 60, y: 17)
+            .frame(width: tabsWidth, alignment: .leading)
+            .position(x: 20 + tabsWidth / 2, y: 17)
             marks
                 .frame(height: 20)
-                .position(x: (extras.hasAgentPage ? 142 : 112) + 30, y: 17)
+                .position(x: 20 + tabsWidth + 8 + 30, y: 17)
             updated
                 .frame(height: 20)
                 .position(x: NotchLayout.canvasWidth - 20 - 50, y: 17)
@@ -620,6 +621,12 @@ struct NotchContent: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(level.accessibilityText)
         .help(level.accessibilityText)
+    }
+
+    /// 上緣分頁列的寬度：總覽、完整面板、歷史、設定，有 AI 工作階段時多一個
+    private var tabsWidth: Double {
+        let count = extras.hasAgentPage ? 5.0 : 4.0
+        return count * NotchTab.width + (count - 1) * NotchTab.spacing
     }
 
     /// 保持展開的圖釘（點了取消並在滑鼠不在面板上時收合）、靜音／勿擾到幾點
@@ -894,6 +901,9 @@ struct NotchContent: View {
 
 /// 上緣的分頁按鈕（總覽在瀏海裡；歷史、設定打開現有的視窗）
 struct NotchTab: View {
+    static let width = 22.0
+    static let spacing = 4.0
+
     let symbol: String
     let label: String
     var selected = false
@@ -905,7 +915,7 @@ struct NotchTab: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
-                .frame(width: 24, height: 20)
+                .frame(width: Self.width, height: 20)
                 .background(Capsule().fill(selected ? Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255) : .clear))
                 .foregroundStyle(tint ?? (selected ? Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255)
                                                    : Color(red: 0x77 / 255, green: 0x77 / 255, blue: 0x8a / 255)))

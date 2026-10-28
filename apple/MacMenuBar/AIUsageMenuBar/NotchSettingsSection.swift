@@ -5,6 +5,8 @@ struct NotchSettingsSection: View {
     @Environment(PanelSettings.self) private var settings
     /// 系統的「減少動態效果」（開著時「完整」當成「簡單」，設定頁要明確寫出來）
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 想同時關掉瀏海面板與選單列圖示時的說明
+    @State private var note: String?
 
     var body: some View {
         @Bindable var settings = settings
@@ -12,8 +14,24 @@ struct NotchSettingsSection: View {
             Text("瀏海面板").font(.headline)
             SwitchRow(title: "顯示瀏海面板",
                       detail: "滑鼠移到螢幕上方的瀏海會展開，顯示角色與額度；沒有瀏海的螢幕在選單列中間畫一個。選單列圖示與面板照常使用",
-                      isOn: $settings.notchEnabled)
+                      isOn: Binding(get: { settings.notchEnabled }, set: { on in
+                          if !on, !settings.canDisableNotch {
+                              note = "選單列圖示關著：瀏海面板是唯一的入口，不能也關掉。先在上面打開「顯示選單列圖示」。"
+                              return
+                          }
+                          note = nil
+                          settings.notchEnabled = on
+                      }))
+            if let note {
+                Label(note, systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if settings.notchEnabled {
+                SwitchRow(title: "點瀏海直接打開完整面板",
+                          detail: "點收合的瀏海（中間那一塊）打開和選單列一樣的完整面板；滑過仍是原本的展開",
+                          isOn: $settings.notchClickOpensPanel)
                 Text("角色").font(.subheadline.weight(.semibold)).padding(.top, 4)
                 FlowChips(choices: MascotCharacter.allCases.map { ($0, $0.title) }, selected: settings.mascotCharacter) {
                     settings.mascotCharacter = $0

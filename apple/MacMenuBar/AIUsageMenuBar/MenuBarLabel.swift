@@ -16,11 +16,13 @@ struct MenuBarLabel: View {
 
     var body: some View {
         icon
-            // 右鍵選單與快捷鍵在 SwiftUI 之外，借用這裡的 openWindow／openSettings（選單列標籤一直存在）
+            // 右鍵選單、瀏海與快捷鍵在 SwiftUI 之外，借用這裡的 openWindow／openSettings
             .onAppear {
                 AppActions.openStats = { [openWindow] in openWindow(id: StatsWindowView.windowID) }
                 AppActions.openSettings = { [openSettings] in openSettings() }
                 AppActions.openWizard = { [openWindow] in openWindow(id: SetupWizardView.windowID) }
+                // 選單列圖示設成不顯示時，啟動時先放出來一下取得這些動作，之後收起（Fable F-01）
+                settings.windowActionsReady = true
                 SetupWizardModel.openIfNeeded()
             }
     }

@@ -13,6 +13,8 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     /// ImageRenderer 畫不出 AppKit 的捲動視圖，截圖時關掉捲動
     var scrolls = true
+    /// 想同時關掉選單列圖示與瀏海面板時的說明
+    @State private var iconNote: String?
 
     var body: some View {
         if scrolls {
@@ -56,6 +58,22 @@ struct SettingsView: View {
     private var menuBarSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("選單列圖示").font(.headline)
+            SwitchRow(title: "顯示選單列圖示",
+                      detail: "關掉後只靠瀏海：滑過展開、點瀏海上緣的「完整面板」或按快捷鍵打開完整面板，右鍵點瀏海有設定與結束",
+                      isOn: Binding(get: { settings.menuBarIconShown }, set: { shown in
+                          if !shown, !settings.canHideMenuBarIcon {
+                              iconNote = "瀏海面板關著：選單列圖示是唯一的入口，不能也關掉。先在下面打開「顯示瀏海面板」。"
+                              return
+                          }
+                          iconNote = nil
+                          settings.menuBarIconShown = shown
+                      }))
+            if let iconNote {
+                Label(iconNote, systemImage: "exclamationmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(MenuBarIconStyle.allCases) { style in
                     StyleTile(style: style, preview: previewContent, character: settings.mascotCharacter,

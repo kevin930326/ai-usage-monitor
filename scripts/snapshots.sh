@@ -25,7 +25,7 @@ PLATFORMS=${SNAPSHOT_PLATFORMS:-mac ios}
 RENDER_NOW=2026-10-21T04:00:00Z
 export TZ=Asia/Taipei
 LANG_ARGS=(-AppleLanguages "(zh-Hant-TW)" -AppleLocale zh_TW)
-MAC_SET=(panel-light panel-dark stats-window-light stats-window-dark stats-window-cache-read-light stats-window-cache-read-dark
+MAC_SET=(panel-light panel-dark fullpanel-light fullpanel-dark stats-window-light stats-window-dark stats-window-cache-read-light stats-window-cache-read-dark
          settings-light settings-dark
          menubar-icons-light menubar-icons-dark wizard-light wizard-dark
          tier2-card-revoked-device-light tier2-card-revoked-device-dark tier2-card-deleted-device-light tier2-card-deleted-device-dark
