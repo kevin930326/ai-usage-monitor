@@ -71,7 +71,7 @@ public struct MascotActivityProbe: Sendable {
     /// 從 Finder 打開的 App 不會繼承 shell 的環境變數，所以要看收集器的設定。
     public static func defaultRoots(config: [String: String] = [:],
                                     environment: [String: String] = ProcessInfo.processInfo.environment,
-                                    home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [Root] {
+                                    home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> [Root] {
         func dir(_ configKey: String, _ envKey: String, _ fallback: String) -> URL {
             let custom = [config[configKey], environment[envKey]].compactMap { $0 }.first { !$0.isEmpty }
             guard let custom else { return home.appendingPathComponent(fallback, isDirectory: true) }

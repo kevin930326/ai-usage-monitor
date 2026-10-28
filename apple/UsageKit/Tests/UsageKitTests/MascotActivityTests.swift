@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Glibc)
+import Glibc
+#endif
 import Testing
 @testable import UsageKit
 
@@ -103,7 +106,8 @@ import Testing
         try Data("secret\n".utf8).write(to: log)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: log.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: log.path) }
-        #expect((try? Data(contentsOf: log)) == nil)   // 確實讀不到
+        // 確實讀不到（root 不受權限限制，Linux 的 CI 容器以 root 執行時略過這個前提）
+        if getuid() != 0 { #expect((try? Data(contentsOf: log)) == nil) }
         let probe = MascotActivityProbe(roots: [.init(url: tmp.appendingPathComponent("projects"), depth: 2)])
         #expect(probe.isWorking(now: Date()))
         #expect(!probe.isWorking(now: Date().addingTimeInterval(120)))
