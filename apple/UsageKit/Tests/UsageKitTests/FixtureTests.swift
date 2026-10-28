@@ -106,6 +106,16 @@ import Testing
         for impact in ["none", "maintenance", "apocalyptic"] { #expect(!ServiceIncident(name: "x", impact: impact).isDisruption) }
     }
 
+    @Test func incidentPageSkipsMaintenance() {
+        let status = ProviderStatus(indicator: "major", incidents: [
+            .init(name: "維護", impact: "maintenance", url: "https://status.claude.com/incidents/m"),
+            .init(name: "沒有連結", impact: "major", url: nil),
+            .init(name: "異常", impact: "major", url: "https://status.claude.com/incidents/a"),
+        ])
+        #expect(status.disruptionLink?.absoluteString == "https://status.claude.com/incidents/a")
+        #expect(ProviderStatus(indicator: "maintenance", incidents: [status.incidents[0]]).disruptionLink == nil)
+    }
+
     @Test func snapshotForecastOnPhone() throws {
         let data = try Self.load("usage-forecast-incidents.json")
         let window = try #require(data.providers["claude"]?.windows[1])

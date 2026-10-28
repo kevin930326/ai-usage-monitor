@@ -52,6 +52,13 @@ public struct ProviderStatus: Decodable, Equatable, Sendable {
         public var impact: String
         /// 事故頁（收集器從狀態頁的事故清單組成；舊版的 service-status.json 沒有）
         public var url: String?
+
+        public var isDisruption: Bool { ServiceIncident.disruptionImpacts.contains(impact) }
+    }
+
+    /// 「事故頁」按鈕要開的：第一筆 minor 以上、有官方事故頁的事故（維護不算）
+    public var disruptionLink: URL? {
+        incidents.lazy.filter(\.isDisruption).compactMap { ServiceIncident.link($0.url) }.first
     }
 
     /// none／minor／major／critical／maintenance；抓不到時為 nil（看 `error`）

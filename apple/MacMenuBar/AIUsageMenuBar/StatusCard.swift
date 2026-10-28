@@ -24,7 +24,7 @@ struct ServiceStatusRow: Equatable, Identifiable {
         snapshot.orderedProviderKeys.map { key in
             ServiceStatusRow(provider: key, health: ServiceStatusSummary.health(status, provider: key, now: now),
                              quotaExhausted: ServiceStatusSummary.quotaExhausted(snapshot, provider: key, now: now),
-                             incidentURL: status?.providers[key]?.incidents.lazy.compactMap { ServiceIncident.link($0.url) }.first)
+                             incidentURL: status?.providers[key]?.disruptionLink)
         }
     }
 
