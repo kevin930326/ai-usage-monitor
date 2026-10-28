@@ -51,17 +51,27 @@ final class AgentMonitor {
         }
         self.source = source
         // 被 kill（SIGTERM）時系統不會呼叫 applicationWillTerminate：自己接住，移除 socket 後結束
-        signal(SIGTERM, SIG_IGN)
-        let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        terminate.setEventHandler {
-            MainActor.assumeIsolated { AgentMonitor.shared.stop() }
-            exit(0)
-        }
-        terminate.resume()
-        terminateSource = terminate
+        // 在背景佇列接、先移除 socket：主執行緒卡住時 2 秒後自己結束，SIGTERM 不會被吞掉（Fable 總審查 F-03）
+        terminateSource = Self.makeTerminateSource(socketPath: socketURL?.path ?? "")
         // 跨裝置的 AI 狀態（ADR-0019 第 2 節）：先寫一次現在的（全部閒置），之後改變時寫
         AgentStateFile.shared.start()
         AgentStateFile.shared.update(sessions, at: now)
+    }
+
+    /// 不在主執行緒上的處理器（nonisolated）：從 @MainActor 方法裡建立的閉包會被當成主執行緒專用，在背景佇列執行會當掉
+    private nonisolated static func makeTerminateSource(socketPath: String) -> DispatchSourceSignal {
+        signal(SIGTERM, SIG_IGN)
+        let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global(qos: .utility))
+        terminate.setEventHandler { @Sendable in
+            if !socketPath.isEmpty { unlink(socketPath) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { AgentMonitor.shared.stop() }
+                exit(0)
+            }
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) { _exit(0) }
+        }
+        terminate.resume()
+        return terminate
     }
 
     /// App 結束：停止聽並移除 socket 檔（hook 看到沒有 socket 就立刻結束）
