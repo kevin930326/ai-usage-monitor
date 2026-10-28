@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UsageKit
 import UsageKitUI
@@ -96,27 +97,78 @@ struct NotchAgentRow: Equatable, Identifiable {
 /// 需要你的琥珀色（同提醒光環「偏高」那組）
 let notchAmber = Color(red: 245 / 255, green: 190 / 255, blue: 60 / 255)
 
-/// 等你下一個指令時收合瀏海的脈動：沿著外框的一圈淡光，亮起再淡掉（1.6 秒）。只在脈動時重畫（每秒 20 次）
+/// 等你下一個指令時收合瀏海的脈動：沿著外框的一圈淡光，亮起再淡掉（1.6 秒）。
+/// 交給 Core Animation 做（繪圖伺服器跑動畫，App 不用每格重畫）：收著時每 7 秒一次，平均 CPU 要在 0.3% 以下
 struct NotchPulse: View {
     let start: Int?
     let clock: ((Date) -> Int)?
     var shape = NotchShape(width: 0, height: 0, corner: 0)
 
     var body: some View {
-        if let start, let clock {
-            TimelineView(.animation(minimumInterval: 1.0 / 20)) { context in
-                Self.glow(shape, phase: Double(clock(context.date) - start) / Double(MascotController.pulseMs))
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        if let start {
+            PulseLayer(start: start, shape: shape)
+                .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
+    }
+
+    /// 脈動的亮度（`phase` 0…1）：sin² 亮起再淡掉，最亮 0.3
+    static func opacity(phase: Double) -> Double {
+        let k = phase < 0 || phase > 1 ? 0 : sin(phase * .pi)
+        return 0.3 * k * k
     }
 
     /// 脈動的某一刻（`phase` 0…1；截圖也用這個）
     static func glow(_ shape: NotchShape, phase: Double) -> some View {
-        let k = phase < 0 || phase > 1 ? 0 : sin(phase * .pi)
-        return shape.stroke(Color.white.opacity(0.3 * k * k), lineWidth: 3)
+        shape.stroke(Color.white.opacity(opacity(phase: phase)), lineWidth: 3)
             .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+    }
+}
+
+/// 脈動的外框：CAShapeLayer 加一次透明度的關鍵影格動畫（`start` 換了才再加）
+private struct PulseLayer: NSViewRepresentable {
+    let start: Int
+    let shape: NotchShape
+
+    final class View: NSView {
+        let line = CAShapeLayer()
+        var start: Int?
+
+        override init(frame: NSRect) {
+            super.init(frame: frame)
+            wantsLayer = true
+            line.fillColor = nil
+            line.strokeColor = NSColor.white.cgColor
+            line.lineWidth = 3
+            line.opacity = 0
+            layer?.addSublayer(line)
+        }
+
+        required init?(coder: NSCoder) { nil }
+
+        override var isFlipped: Bool { true }
+    }
+
+    func makeNSView(context: Context) -> View { View() }
+
+    func updateNSView(_ view: View, context: Context) {
+        let bounds = CGRect(x: 0, y: 0, width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+        // 圖層座標的原點在左下：翻成瀏海形狀用的左上原點
+        var flip = CGAffineTransform(translationX: 0, y: bounds.height).scaledBy(x: 1, y: -1)
+        let path = shape.path(in: bounds).cgPath
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        view.line.frame = bounds
+        view.line.path = view.layer?.isGeometryFlipped == true ? path : path.copy(using: &flip)
+        CATransaction.commit()
+        guard view.start != start else { return }
+        view.start = start
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        animation.values = (0...16).map { NotchPulse.opacity(phase: Double($0) / 16) }
+        animation.duration = Double(MascotController.pulseMs) / 1000
+        animation.calculationMode = .linear
+        view.line.add(animation, forKey: "pulse")
     }
 }
 
