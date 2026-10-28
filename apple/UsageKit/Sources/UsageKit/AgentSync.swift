@@ -34,6 +34,16 @@ public struct RemoteAgent: Sendable, Equatable {
     public var state: AgentState
     public var sessions: Int
 
+    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int) {
+        self.device = device
+        self.ai = ai
+        self.state = state
+        self.sessions = sessions
+    }
+
+    /// 列表用（同一台同一個 AI 只有一列）
+    public var id: String { "\(device)/\(ai.rawValue)" }
+
     /// 「桌機：Claude Code 需要你」
     public var text: String {
         let name = ai == .claude ? "Claude Code" : "Codex"

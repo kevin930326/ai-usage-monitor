@@ -24,6 +24,8 @@ final class UsageStore {
     private(set) var errorMessage: String?
     /// 收集器寫的服務狀態（FR-45）；沒有檔案或讀不懂時為 nil
     private(set) var serviceStatus: ServiceStatusFile?
+    /// 其他電腦的 AI 狀態（ADR-0019 第 2 節；收集器寫的 `agent-remote.json`）：30 分鐘內、要顯示的狀態，依狀態排序
+    private(set) var remoteAgents: [RemoteAgent] = []
     /// 每分鐘更新，讓選單列在沒有新資料時也能轉灰或顯示已重置
     private(set) var now = RenderClock.now
 
@@ -52,6 +54,8 @@ final class UsageStore {
         DebugTools.perfMark("minute-tick")
         #endif
         now = RenderClock.now
+        // 時間經過：超過 30 分鐘的其他電腦不再顯示
+        loadRemoteAgents()
         if source == nil {
             // 監看失效：輪詢讀檔，並在資料夾出現後重新監看
             watchDirectory()
@@ -64,6 +68,7 @@ final class UsageStore {
 
     func reload() {
         loadServiceStatus()
+        loadRemoteAgents()
         // 讀檔失敗與恢復都要更新角色的表情（閉眼／照額度；Codex C-04）
         let failedBefore = errorMessage != nil
         defer { if failedBefore != (errorMessage != nil) { MascotController.shared.updateStatus() } }
@@ -87,6 +92,14 @@ final class UsageStore {
         let url = locator.directory.appendingPathComponent(ServiceStatusFile.fileName)
         let loaded = (try? Data(contentsOf: url)).flatMap(ServiceStatusFile.decode)
         if loaded != serviceStatus { serviceStatus = loaded }
+    }
+
+    /// 很小（最多 64 KB），資料夾有變動或每分鐘重讀；內容相同時不觸發畫面更新
+    private func loadRemoteAgents() {
+        let url = locator.directory.appendingPathComponent(RemoteAgents.fileName)
+        let localNow = Int64(Date.now.timeIntervalSince1970 * 1000)
+        let loaded = (try? Data(contentsOf: url)).map { RemoteAgents.parse($0, localNow: localNow) } ?? []
+        if loaded != remoteAgents { remoteAgents = loaded }
     }
 
     private func watchDirectory() {

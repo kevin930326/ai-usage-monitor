@@ -75,6 +75,14 @@ final class CollectorService {
     var builtinLabel: String { "\(bundleID).collector" }
     private var plistName: String { "\(builtinLabel).plist" }
     private var service: SMAppService { SMAppService.agent(plistName: plistName) }
+    /// AI 狀態同步（ADR-0019 第 2 節）：和收集器一起註冊與解除，沒有排程，App 寫了 agent-state.json 後觸發
+    nonisolated static func syncLabel(bundleID: String) -> String { "\(bundleID).agent-sync" }
+    var syncLabel: String { Self.syncLabel(bundleID: bundleID) }
+    private var syncService: SMAppService { SMAppService.agent(plistName: "\(syncLabel).plist") }
+    /// `install-launchd.sh` 的 AI 狀態同步
+    nonisolated static let legacySyncLabel = "\(legacyLabel).agent-sync"
+    /// 觸發 AI 狀態同步用的 label（同 `kickLabel`：內建的啟用時用內建的，否則 install-launchd.sh 的）
+    var syncKickLabel: String { state == .enabled ? syncLabel : Self.legacySyncLabel }
 
     /// 內嵌的 Python（`scripts/bundle-collector.sh` 放進去）
     var runtimeURL: URL { bundle.bundleURL.appendingPathComponent("Contents/Resources/python/bin/python3.13") }
@@ -184,11 +192,13 @@ final class CollectorService {
         case .enabled where defaults.string(forKey: Self.registeredPathKey) != bundle.bundleURL.path:
             // 換了位置（或升級前沒記錄）：launchd 記的是舊路徑，解除再註冊才會生效
             UsageStore.log("builtin collector: app moved, re-registering")
-            try? await service.unregister()
+            await unregisterServices()
             await register()
         case .enabled:
             // 每次打開重新偵測登入狀態：之後才登入的服務在下一次收集時就會啟用
             await runSetup()
+            // 從還沒有 AI 狀態同步的版本升級：補註冊
+            if syncService.status == .notRegistered { registerSync() }
         default:
             break
         }
@@ -228,6 +238,7 @@ final class CollectorService {
     private func registerService() -> Bool {
         do {
             try service.register()
+            registerSync()
             defaults.set(bundle.bundleURL.path, forKey: Self.registeredPathKey)
             defaults.set(false, forKey: Self.userDisabledKey)
             return true
@@ -238,12 +249,28 @@ final class CollectorService {
         }
     }
 
+    /// AI 狀態同步跟著收集器註冊；失敗只記日誌（收集器照常，只是不會即時同步，5 分鐘一輪仍會同步）
+    private func registerSync() {
+        do {
+            try syncService.register()
+        } catch {
+            UsageStore.log("agent sync register failed: \((error as NSError).code)")
+        }
+    }
+
+    /// 收集器與 AI 狀態同步一起解除（同步解除失敗不影響）
+    private func unregisterServices() async {
+        try? await service.unregister()
+        try? await syncService.unregister()
+    }
+
     /// 停用內建的收集器（資料不刪）；之後不再自動註冊
     func disable() async {
         busy = true
         defer { busy = false }
         do {
             try await service.unregister()
+            try? await syncService.unregister()
             defaults.set(true, forKey: Self.userDisabledKey)
             errorText = nil
         } catch {
@@ -281,7 +308,7 @@ final class CollectorService {
         }
         guard service.status == .enabled else {
             // 例如被「登入項目」擋下：內建的不會執行，撤回註冊、保留舊的
-            try? await service.unregister()
+            await unregisterServices()
             errorText = "內建收集器需要在「系統設定 › 一般 › 登入項目與延伸功能」允許背景執行，沒有遷移；\(kept)"
             await refresh()
             return
@@ -301,7 +328,7 @@ final class CollectorService {
                     trashed = resulting as URL?
                 }
             } catch {
-                try? await service.unregister()
+                await unregisterServices()
                 errorText = "無法移走舊的排程設定（\(plist.lastPathComponent)），沒有遷移；\(kept)"
                 await refresh()
                 return
@@ -321,7 +348,7 @@ final class CollectorService {
                 if let trashed { restored = (try? FileManager.default.moveItem(at: trashed, to: plist)) != nil }
                 if restored {
                     // 放回去了：撤回內建的，舊的照常（已載入時 bootstrap 會失敗，不影響）
-                    try? await service.unregister()
+                    await unregisterServices()
                     _ = await Self.launchctl(["bootstrap", "gui/\(getuid())", plist.path])
                     errorText = "無法停止舊的收集器，沒有遷移；\(kept)"
                     UsageStore.log("builtin collector: legacy job still loaded after bootout, migration reverted")
@@ -359,7 +386,9 @@ final class CollectorService {
         guard CommandLine.arguments.contains("--unregister-collector") else { return }
         let id = Bundle.main.bundleIdentifier ?? "io.github.kevin930326.AIUsageMenuBar"
         let service = SMAppService.agent(plistName: "\(id).collector.plist")
+        let sync = SMAppService.agent(plistName: "\(syncLabel(bundleID: id)).plist")
         do {
+            if sync.status != .notRegistered && sync.status != .notFound { try? sync.unregister() }
             if service.status != .notRegistered && service.status != .notFound { try service.unregister() }
             print("unregistered")
             exit(0)

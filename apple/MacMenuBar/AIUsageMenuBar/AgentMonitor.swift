@@ -59,6 +59,9 @@ final class AgentMonitor {
         }
         terminate.resume()
         terminateSource = terminate
+        // 跨裝置的 AI 狀態（ADR-0019 第 2 節）：先寫一次現在的（全部閒置），之後改變時寫
+        AgentStateFile.shared.start()
+        AgentStateFile.shared.update(sessions, at: now)
     }
 
     /// App 結束：停止聽並移除 socket 檔（hook 看到沒有 socket 就立刻結束）
@@ -71,6 +74,7 @@ final class AgentMonitor {
         listener = -1
         if let socketURL { unlink(socketURL.path) }
         socketURL = nil
+        AgentStateFile.shared.stop()
     }
 
     private func handle(_ message: AgentHookMessage?) {
@@ -115,6 +119,7 @@ final class AgentMonitor {
 
     private func changed() {
         scheduleExpire()
+        AgentStateFile.shared.update(sessions, at: now)
         MascotController.shared.agentStateChanged()
         evaluateNotices()
     }
