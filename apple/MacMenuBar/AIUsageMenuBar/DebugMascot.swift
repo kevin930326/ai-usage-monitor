@@ -25,7 +25,7 @@ enum DebugMascot {
         var loopPhase: Double?
     }
 
-    enum Quota { case normal, low, stale, forecast, incident }
+    enum Quota { case normal, low, stale, forecast, forecastWeekly, incident }
 
     static func render(to dir: URL, snapshot: UsageSnapshot?, now: Date, write: (any View, URL) -> Void) {
         guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else {
@@ -69,6 +69,18 @@ enum DebugMascot {
                         guard let resets = w.resetsAt, !w.hidden else { return w }
                         let at = now.addingTimeInterval(min(resets.timeIntervalSince(now) * 0.6, w.id == "five_hour" ? 40 * 60 : 20 * 3600))
                         w.forecast = QuotaForecast(exhaustsAt: at, urgent: false, faster: w.id == "five_hour" ? 2.1 : nil)
+                        return w
+                    }
+                    snapshot.providers["claude"] = claude
+                }
+            case .forecastWeekly:
+                // 只有每週會在重置前用完、還有一天以上：黃色那一行
+                if var claude = snapshot.providers["claude"] {
+                    claude.windows = claude.windows.map { w in
+                        var w = w
+                        guard w.id == "weekly", let resets = w.resetsAt, !w.hidden else { return w }
+                        w.forecast = QuotaForecast(exhaustsAt: now.addingTimeInterval(min(resets.timeIntervalSince(now) * 0.6, 30 * 3600)),
+                                                   urgent: false, faster: nil)
                         return w
                     }
                     snapshot.providers["claude"] = claude
@@ -236,6 +248,7 @@ enum DebugMascot {
         write(VStack(spacing: 0) {
             sheet([
                 Shot(name: "expanded-claude-forecast", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .forecast),
+                Shot(name: "expanded-claude-forecast-weekly", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .forecastWeekly),
                 Shot(name: "expanded-claude-incident", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .incident),
             ])
             sheet([
