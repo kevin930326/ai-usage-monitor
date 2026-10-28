@@ -270,10 +270,12 @@ internal sealed class RingWindow : Window
     private void Place(PixelRect rect)
     {
         stage = rect;
+        // 先移過去：跨到 DPI 不同的螢幕時 WPF 依 WM_DPICHANGED 改大小，之後再以新的 DPI 設 DIP 大小、對齊一次
+        NativeMethods.PlaceWindow(Handle, rect);
         var scale = monitor?.Scale ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
         Width = rect.Width / scale;
         Height = rect.Height / scale;
-        NativeMethods.PlaceWindow(Handle, rect);
+        if (NativeMethods.WindowRect(Handle) != rect) NativeMethods.PlaceWindow(Handle, rect);
         surface.InvalidateVisual();
     }
 
