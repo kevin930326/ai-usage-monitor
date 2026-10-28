@@ -135,6 +135,40 @@ import Testing
         #expect(QuotaForecast.current(window: window, provider: "claude", history: .empty, stale: false, now: updatedAt) == nil)
     }
 
+    /// Codex C-01：收集器先寫快照、再寫歷史。新一輪的快照配上舊一輪的歷史時不能預測；同一輪時併入後的結果才對
+    @Test func snapshotJoinsHistoryBeforeForecasting() {
+        let now = updatedAt
+        let oldReset = now.addingTimeInterval(2 * 3600)
+        let newReset = now.addingTimeInterval(5 * 3600)
+        let old = [60.0, 45, 30, 15].enumerated().map { i, minutes in
+            QuotaSample(ts: now.addingTimeInterval(-minutes * 60), provider: "claude", windowID: "five_hour",
+                        usedPct: 30 + Double(i) * 10, resetsAt: oldReset)
+        }
+        let history = QuotaHistory(samples: old)
+        // 提前重置：新一輪只有快照這一筆，資料不足
+        let reset = UsageWindow(id: "five_hour", label: "5 小時", usedPct: 10, resetsAt: newReset)
+        let resetSnapshot = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [reset])])
+        #expect(QuotaForecast(window: reset, provider: "claude", history: history, stale: false, now: now) != nil)
+        #expect(QuotaForecast.current(window: reset, provider: "claude", history: history.including(resetSnapshot),
+                                      stale: false, now: now) == nil)
+        // 同一輪的一般用量增加：快照成為最後一筆，從快照的時間起算
+        let same = UsageWindow(id: "five_hour", label: "5 小時", usedPct: 70, resetsAt: oldReset)
+        let sameSnapshot = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [same])])
+        let joined = history.including(sameSnapshot)
+        #expect(joined.samples.count == old.count + 1)
+        #expect(joined.samples.last?.usedPct == 70)
+        #expect(QuotaForecast.current(window: same, provider: "claude", history: joined, stale: false, now: now)?.exhaustsAt
+                == now.addingTimeInterval(30 / (40.0 / 3600)))
+        // 歷史已經有同一次收集的樣本：不重複
+        #expect(joined.including(sameSnapshot).samples.count == joined.samples.count)
+        // 有錯誤的服務、隱藏的額度不併入
+        let broken = UsageSnapshot(updatedAt: now.addingTimeInterval(600), providers: [
+            "claude": ProviderUsage(error: "x", windows: [same]),
+            "codex": ProviderUsage(windows: [UsageWindow(id: "five_hour", label: "5 小時", usedPct: 5, hidden: true)]),
+        ])
+        #expect(history.including(broken).samples.count == old.count)
+    }
+
     // MARK: - 整合審查 D-i：只有 Codex（plan null、超過 100%）、沒有任何服務
 
     @Test func codexOnlyOverHundredPercent() throws {
