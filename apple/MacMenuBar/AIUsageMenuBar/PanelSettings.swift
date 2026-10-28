@@ -108,6 +108,9 @@ final class PanelSettings {
         static let notifyCreditExpiring = "notify.creditExpiring"
         static let notifyAskedAtLaunch = "notify.askedAtLaunch"
         static let hotKey = "hotKey.panel"
+        static let notchEnabled = "notch.enabled"
+        static let mascotCharacter = "notch.character"
+        static let notchIntro = "notch.intro"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -233,6 +236,30 @@ final class PanelSettings {
         notifyReset = defaults.bool(forKey: Key.notifyReset)
         notifyCreditExpiring = defaults.object(forKey: Key.notifyCreditExpiring) as? Bool ?? true
         hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
+        notchEnabled = defaults.object(forKey: Key.notchEnabled) as? Bool ?? true
+        mascotCharacter = defaults.string(forKey: Key.mascotCharacter).flatMap(MascotCharacter.init) ?? .claude
+        notchIntro = defaults.string(forKey: Key.notchIntro).flatMap(NotchIntroChoice.init) ?? .firstOnly
+    }
+
+    /// 瀏海面板（ADR-0016）：預設開啟；關掉時選單列圖示與面板照常
+    var notchEnabled: Bool {
+        didSet {
+            defaults.set(notchEnabled, forKey: Key.notchEnabled)
+            NotchPanelController.shared.apply()
+        }
+    }
+
+    /// 瀏海裡的角色（一次只顯示一隻）
+    var mascotCharacter: MascotCharacter {
+        didSet {
+            defaults.set(mascotCharacter.rawValue, forKey: Key.mascotCharacter)
+            MascotController.shared.updateStatus()
+        }
+    }
+
+    /// 過場：每次展開／只有第一次（預設）／關閉
+    var notchIntro: NotchIntroChoice {
+        didSet { defaults.set(notchIntro.rawValue, forKey: Key.notchIntro) }
     }
 
     var visibleSections: [PanelSection] {

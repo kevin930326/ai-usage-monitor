@@ -34,6 +34,8 @@ struct SettingsView: View {
             Divider()
             menuBarSection
             Divider()
+            NotchSettingsSection()
+            Divider()
             panelSection
             Divider()
             HistorySettingsSection(store: history, interactive: scrolls)

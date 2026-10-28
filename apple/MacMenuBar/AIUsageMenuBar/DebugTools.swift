@@ -55,6 +55,10 @@ enum DebugTools {
                 renderWizard(to: url)
                 renderStats(to: url)
                 renderStatus(to: url)
+                // 瀏海面板與角色（ADR-0016）：瀏海一律是黑色，只輸出一份；模擬選單列的那張有淺色、深色
+                DebugMascot.render(to: url, snapshot: sample(), now: RenderClock.now) { view, file in
+                    write(AnyView(view), scheme: .dark, to: file)
+                }
             }
             let only = env["AUM_RENDER_ANIMS"].map { Set($0.split(separator: ",").map(String.init)) }
             if env["AUM_RENDER_FRAMES"] == "1" { renderAnimations(to: url, only: only) }
