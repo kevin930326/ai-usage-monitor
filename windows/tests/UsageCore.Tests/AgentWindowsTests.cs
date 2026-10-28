@@ -198,6 +198,44 @@ public sealed class AgentWindowsTests : IDisposable
     }
 
     [Fact]
+    public void BackupAndReplacementKeepThePermissions()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            KeepsTheDaclOnWindows();
+            return;
+        }
+        var file = Config("settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "{}");
+        File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        var result = AgentHookFiles.Connect(file, AgentKind.Claude, Exe, DateTime.Now);
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(file));
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(result.Backup!));
+    }
+
+    /// <summary>原檔只有自己能讀（不繼承資料夾）：備份與換上的檔案也一樣</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private void KeepsTheDaclOnWindows()
+    {
+        var file = Config("settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, "{}");
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var only = new System.Security.AccessControl.FileSecurity();
+        only.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        only.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(me, System.Security.AccessControl.FileSystemRights.FullControl,
+                                                                                  System.Security.AccessControl.AccessControlType.Allow));
+        new FileInfo(file).SetAccessControl(only);
+        string Sddl(string path) => new FileInfo(path).GetAccessControl(System.Security.AccessControl.AccessControlSections.Access)
+            .GetSecurityDescriptorSddlForm(System.Security.AccessControl.AccessControlSections.Access);
+        var expected = Sddl(file);
+        var result = AgentHookFiles.Connect(file, AgentKind.Claude, Exe, DateTime.Now);
+        Assert.Equal(expected, Sddl(file));
+        Assert.Equal(expected, Sddl(result.Backup!));
+    }
+
+    [Fact]
     public void MissingFileIsCreatedWithoutBackup()
     {
         var file = Config("hooks.json");

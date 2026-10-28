@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.AccessControl;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -129,7 +130,11 @@ public static class AgentHookFiles
         catch (DirectoryNotFoundException) { return null; }
     }
 
-    /// <summary>先備份原檔（同一秒內第二次就加序號，不覆蓋舊備份），再寫暫存檔、以取代的方式換上（同一個資料夾，原子）</summary>
+    /// <summary>
+    /// 先備份原檔（同一秒內第二次就加序號，不覆蓋舊備份），再寫暫存檔、以取代的方式換上（同一個資料夾，原子）。
+    /// 設定檔可能有金鑰：備份與暫存檔先建立成空檔、套上原檔的權限（Windows 的 DACL；其他系統的檔案模式），之後才寫入內容，
+    /// 換上的檔案因此和原檔一樣，不會繼承資料夾較寬鬆的權限（Codex C-01）
+    /// </summary>
     private static string? Write(byte[] data, string file, byte[]? old, DateTime now)
     {
         var folder = Path.GetDirectoryName(file)!;
@@ -140,14 +145,14 @@ public static class AgentHookFiles
             var candidate = BackupPath(file, now);
             for (var n = 2; File.Exists(candidate); n++) candidate = BackupPath(file, now) + "-" + n.ToString(CultureInfo.InvariantCulture);
             // CreateNew：同時有另一個寫入時不覆蓋對方的備份
-            using (var stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write)) stream.Write(old);
+            WriteWithPermissionsOf(file, candidate, old);
             backup = candidate;
             PruneBackups(file);
         }
         var temp = Path.Combine(folder, "." + Path.GetFileName(file) + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp");
-        File.WriteAllBytes(temp, data);
         try
         {
+            WriteWithPermissionsOf(old is null ? null : file, temp, data);
             File.Move(temp, file, overwrite: true);
         }
         catch
@@ -156,6 +161,26 @@ public static class AgentHookFiles
             throw;
         }
         return backup;
+    }
+
+    /// <summary>
+    /// 以 CreateNew 建立 <paramref name="target"/>，權限和 <paramref name="source"/> 相同後才寫入內容（沒有原檔時用預設權限）。
+    /// Windows 在建立檔案的同時就套上原檔的 DACL（沒有任何時刻是較寬鬆的權限）
+    /// </summary>
+    private static void WriteWithPermissionsOf(string? source, string target, byte[] data)
+    {
+        if (source is not null && OperatingSystem.IsWindows())
+        {
+            var original = new FileInfo(source).GetAccessControl(AccessControlSections.Access);
+            var copy = new FileSecurity();
+            copy.SetSecurityDescriptorSddlForm(original.GetSecurityDescriptorSddlForm(AccessControlSections.Access), AccessControlSections.Access);
+            using var created = new FileInfo(target).Create(FileMode.CreateNew, FileSystemRights.Write, FileShare.None, 4096, FileOptions.None, copy);
+            created.Write(data);
+            return;
+        }
+        using var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write);
+        if (source is not null && !OperatingSystem.IsWindows()) File.SetUnixFileMode(target, File.GetUnixFileMode(source));
+        stream.Write(data);
     }
 
     /// <summary>只刪我們命名樣式的備份，留最新的幾份（時間可以照字串排序；同一秒的序號排在後面）</summary>
