@@ -329,7 +329,8 @@ struct PanelView: View {
 
     private func showStatsWindow() {
         NSApplication.shared.activate()
-        openWindow(id: StatsWindowView.windowID)
+        // 完整面板（ADR-0008 第 9 節）放在 SwiftUI 的場景之外，環境裡的 openWindow 打不開視窗：用選單列標籤借來的（Codex C-01）
+        if let open = AppActions.openStats { open() } else { openWindow(id: StatsWindowView.windowID) }
     }
 
     /// 切換走勢的額度：新曲線重新由左往右描繪（舊曲線交叉淡出）。
@@ -480,7 +481,7 @@ struct PanelView: View {
 
     private func showSettings() {
         NSApplication.shared.activate()
-        openSettings()
+        if let open = AppActions.openSettings { open() } else { openSettings() }
     }
 
     /// 打開面板：圓環與用量條從 0 長到目前位置，預期標記稍後淡入。
