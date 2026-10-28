@@ -97,6 +97,7 @@ _TASK_COLUMNS = """
 # - seen_ids.file_key：Codex 的回應 ID 由哪個檔案計入；該檔重算時一併移除，才能重新計入
 # - seen_tasks：已計入的任務與當時的秒數。任務跨兩次掃描時補差額；重掃、--resume 副本不重複計算
 # - record_days：每天每個服務的主數字，不套用保留期間；單日最高與連續天數這兩項個人紀錄以它計算
+# - level_days（ADR-0020，開檔時補建）：每天這台＋下載到的其他電腦合併的主數字，取較大值、不套用保留期間；角色等級以它計算
 _V2_TABLES = (
     f"""CREATE TABLE IF NOT EXISTS daily_tokens (
          device_id TEXT NOT NULL,

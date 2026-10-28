@@ -76,6 +76,7 @@ CREATE TABLE records (key TEXT PRIMARY KEY, value INTEGER NOT NULL, day TEXT);
 CREATE TABLE record_days (day TEXT NOT NULL, provider TEXT NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (day, provider));
 -- 同上，tokens 含 cache_read（FR-60；單日最高（含快取）以它計算）
 CREATE TABLE record_days_cached (day TEXT NOT NULL, provider TEXT NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY (day, provider));
+CREATE TABLE level_days (day TEXT PRIMARY KEY, tokens INTEGER NOT NULL);  -- ADR-0020：開檔時補建，不升版本
 
 -- 掃描進度：每個紀錄檔讀到哪裡
 CREATE TABLE scan_state (
@@ -194,14 +195,14 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 | 項目 | 規則 |
 |---|---|
-| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`、`record_days_cached`（個人紀錄）與 `seen_ids`、`seen_tasks`、`file_tokens`（這三張由去重時間窗管理）。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
+| 保留期間 | 設定中選 7 天／30 天／90 天／1 年／永久，**預設 1 年**；存在 `history.sqlite3` 的 `meta.retention_days`（`0`＝永久），不寫 `config.json`（避免與安裝腳本的寫入互相覆蓋）。套用到 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`。**不套用**到 `records`、`record_days`、`record_days_cached`（個人紀錄）、`level_days`（角色等級，ADR-0020）與 `seen_ids`、`seen_tasks`、`file_tokens`（這三張由去重時間窗管理）。首次掃描讀到已超過保留期間（或每小時資料 90 天）的紀錄時不寫進 `daily_tokens`／`hourly_tokens`，只計入個人紀錄 |
 | 檔案大小 | 刪除只把頁面放回 freelist；收集器每天清理後，到期（30 天，或可回收的空間超過 20% 且至少 1 MB）且磁碟剩餘空間夠（資料庫大小的 2 倍＋64 MB）時 `VACUUM` 並 `wal_checkpoint(TRUNCATE)`（2026-10-26 修訂，[ADR-0014](0014-long-term-operation.md) LT-14） |
 | 延長保留期間 | 已刪除的日子不能畫成 0：App 寫入 `meta.token_days_from`（`YYYY-MM-DD`，實際還有每日 Token 的第一天），取舊期間的起點與 `daily_tokens` 最早一天較早的一個（收集器停過時實際刪到的地方比舊期間的起點早，還在的資料不能藏起來）；只往後移。App 以它與目前保留期間起點較晚的一個作為「保留期間以前」的邊界 |
 | 縮短保留期間 | App 立即刪除超出的資料；收集器每天第一次執行時也會依 `meta` 再刪一次 |
 | 降採樣 | `quota_samples` 與 `collector_runs` 超過 35 天的資料降為每小時一筆（`quota_samples` 保留該小時最後一筆；`collector_runs` 保留該小時的執行次數），讓最近 4 週的額度消耗與「沒有紀錄」判斷維持 5 分鐘解析度；`hourly_tokens` 超過 90 天刪除（`daily_tokens` 已有同樣的加總） |
 | 完整統計視窗 | 一年熱力圖需要 ≥ 1 年的保留期間；較短時只畫保留範圍內的部分並註明「保留期間 N 天」。累計 Token、單日最高、最長任務、最長連續天數讀 `records`，不受保留期間影響 |
 | 匯出 CSV | 設定中按「匯出額度 CSV」或「匯出 Token CSV」→ 系統儲存對話框，由使用者選位置。額度：每小時的額度歷史（`ts,provider,window_id,used_pct,resets_at`）；Token：這台電腦的 `daily_tokens`（`day,provider,model,input_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,task_count,task_seconds,longest_task_seconds`，四種 Token 分開，`day` 是本機日期）。不含 `device_id`、`scan_state`、`seen_ids`、`file_tokens`、`meta` |
-| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`，`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建（清除剛好落在收集器一輪中間時，那一輪在交易外判斷沒變而略過的檔案已沒有掃描進度，收集器不標記首次掃描完成、不設略過界，下一輪照常完整重建；ADR-0014 總檢查 F-02） |
+| 清除歷史 | 確認對話框後刪除 `quota_samples`、`collector_runs`、`daily_tokens`、`hourly_tokens`、`records`、`record_days`、`record_days_cached`、`level_days`（ADR-0020：之後其他電腦的日子會重新下載計入），`meta.token_days_from` 記為今天，執行 `VACUUM`；**保留** `scan_state`、`seen_ids`、`seen_tasks` 與 `file_tokens`（`file_tokens` 對應的加總已清除，重算時改為只清空不扣除），避免下次收集把仍在對話紀錄中的舊資料重新算回來。若收集器正在寫入，該次寫入的列可能在清除後出現（接受）。另提供「清除並重新掃描」：連同掃描進度與去重表（`scan_state`、`seen_ids`、`seen_tasks`、`file_tokens`）一起清除、刪除 `meta.token_days_from`，從現有對話紀錄重建（清除剛好落在收集器一輪中間時，那一輪在交易外判斷沒變而略過的檔案已沒有掃描進度，收集器不標記首次掃描完成、不設略過界，下一輪照常完整重建；ADR-0014 總檢查 F-02） |
 | 解除安裝 | `collector/scripts/uninstall-launchd.sh` 詢問是否一併刪除 `history.sqlite3`（含 `-wal`、`-shm`，預設不刪）；README 的隱私章節列出所有檔案：`history.sqlite3*`、App 的 UserDefaults（面板設定、通知狀態）、第二層的裝置寫入密鑰（Keychain） |
 
 估計大小：額度歷史 4 個額度 × 288 筆／天，35 天後降為每小時，一年約 8 萬列；Token 統計每年數千列；`seen_ids` 只留 90 天的時間窗（ADR-0014 LT-01，約 10 萬列）；10 年的總佔用與實測數字見 ADR-0014「10 年總佔用」。

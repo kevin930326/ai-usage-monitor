@@ -11,8 +11,9 @@
 
 改格式時三邊的測試會一起失敗；`schema_version` 的變更規則見 FR-13。
 
-## logic、mascot、forecast
+## logic、mascot、forecast、level
 
 - `forecast/`：額度預測（ADR-0018 第 1 節），Swift、C# 與收集器的 Python 跑同一份；golden 由 Swift 產生（`AUM_UPDATE_GOLDEN=1 swift test --filter ForecastGoldenTests`）。
+- `level/`：角色等級（ADR-0020 第 2、3 節），Swift 與 C# 跑同一份；golden 由 Swift 產生（`AUM_UPDATE_GOLDEN=1 swift test --filter LevelGoldenTests`）。`runs` 是連續的日子（從 `from` 起 `count` 天）。
 - `logic/`：Mac（UsageKit）與 Windows（UsageCore）的計算一致性（ADR-0015 第 4 節）。
 - `mascot/`：角色狀態機的事件串與播放紀錄（ADR-0016 第 3 節）。時間參數讀 `shared/mascot-anim.json`；golden 由 Swift 產生（`AUM_UPDATE_GOLDEN=1 swift test --filter MascotGoldenTests`），C# 的 `MascotGoldenTests` 比對同一份。
