@@ -240,6 +240,21 @@ import Testing
         #expect(!d.isAnimating(at: 22_500))
     }
 
+    @Test func stillCharacterDoesNotShowSleep() throws {
+        // 簡單／關閉：狀態機照樣睡著，但不畫 z（Fable F-01）；完整時才畫
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.setStill(true, at: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 15_000)
+        #expect(d.mode == .sleep)
+        #expect(!d.showsSleep)
+        d.setStill(false, at: 15_000)
+        #expect(d.showsSleep)
+        d.close(at: 16_000)
+        #expect(!d.showsSleep)
+    }
+
     @Test func becomingStillStopsAReaction() throws {
         let config = try Self.config()
         var d = MascotDirector(config: config, startTime: 0)

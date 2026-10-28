@@ -106,7 +106,8 @@ final class MascotController {
     /// 這次啟動後是否已經播過過場（「只有第一次」）
     private(set) var playedIntro = false
 
-    @ObservationIgnored private let epoch = Date()
+    /// 啟動時的系統開機時間（秒）；時間基準用它而不是牆鐘，改系統時間或校時倒退時動畫不會卡住
+    @ObservationIgnored private let epoch = ProcessInfo.processInfo.systemUptime
     @ObservationIgnored private var deadlineTimer: Timer?
     @ObservationIgnored private var rateTimer: Timer?
     @ObservationIgnored private var closeTimer: Timer?
@@ -115,9 +116,14 @@ final class MascotController {
     @ObservationIgnored private var gestures: MascotGestureDetector?
     /// 按下時落在角色上（放開時才當成點擊）
     @ObservationIgnored private var pressedOnCharacter = false
+    /// 正在列舉紀錄資料夾（同時最多一個；卡在無回應的網路磁碟時不再另開，不會累積執行緒）
     @ObservationIgnored private var probing = false
+    /// 每次收合或重建遞增：上一輪的列舉結果回來時直接丟掉，不覆寫較新的狀態（Codex C-01、C-02）
+    @ObservationIgnored private var probeGeneration = 0
     /// 目前 director 依哪個動畫程度建立（彈簧是否回彈）
     @ObservationIgnored private var builtMotion = MascotMotionLevel.full
+    /// 目前 director 依哪個版面建立；展開中換螢幕時等收合後再重建（Fable F-03）
+    @ObservationIgnored private var builtLayout: NotchLayout?
     /// 視窗目前該是整張畫布（展開中或收合動畫還沒播完）；建立或移動視窗時照這個決定大小
     @ObservationIgnored private(set) var windowExpanded = false
 
@@ -136,16 +142,19 @@ final class MascotController {
         Bundle.main.url(forResource: "mascot-anim", withExtension: "json").flatMap { try? Data(contentsOf: $0) }
     }
 
-    /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）
-    func time(_ date: Date = Date()) -> Int {
-        Int((date.timeIntervalSince(epoch) * 1000).rounded())
+    /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）。以開機時間計，
+    /// `date`（TimelineView 給的牆鐘時刻）只取它和現在的差，系統時間倒退不影響（Fable F-02）
+    func time(_ date: Date? = nil) -> Int {
+        let uptime = ProcessInfo.processInfo.systemUptime + (date?.timeIntervalSinceNow ?? 0)
+        return Int(((uptime - epoch) * 1000).rounded())
     }
 
     /// 依版面調整設定（迷你角色的位置、收合時的大小）後重建；換螢幕時呼叫
     func setLayout(_ layout: NotchLayout) {
         guard layout != self.layout || director == nil else { return }
         self.layout = layout
-        rebuild()
+        // 展開中（含收合動畫）不重建，不然滑鼠還在面板裡卻縮回瀏海；收合後在 refresh 重建
+        if !windowExpanded { rebuild() }
     }
 
     private func rebuild() {
@@ -156,6 +165,7 @@ final class MascotController {
         // 簡單、關閉（含減少動態效果）：面板展開不回彈
         if motion != .full { config.panel.openSpring.dampingRatio = 1 }
         builtMotion = motion
+        builtLayout = layout
         director = MascotDirector(config: config, startTime: time(), statusLevel: director?.machine.statusLevel ?? 0)
         director?.setStill(!motion.animatesBody, at: time())
         gestures = MascotGestureDetector(config: config)
@@ -295,11 +305,13 @@ final class MascotController {
     private func stopWorkChecks() {
         workTimer?.invalidate()
         workTimer = nil
+        probeGeneration += 1
     }
 
     private func checkWorking() {
         guard !probing, motion.animatesBody else { return }
         probing = true
+        let generation = probeGeneration
         let dataDirectory = UsageStore.shared.locator.directory
         let configURL = dataDirectory.appendingPathComponent("config.json")
         // 測試、截圖與量測：只看暫存資料夾裡的紀錄，不碰真的 ~/.claude、~/.codex
@@ -309,7 +321,8 @@ final class MascotController {
         #endif
         Task.detached(priority: .utility) {
             // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
-            let dirs = MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
+            // 測試與示範：不讀 config.json，只看暫存資料夾（示範模式沒設 AI_USAGE_MONITOR_HOME 時 config.json 是真的，Fable F-04）
+            let dirs = testing ? [:] : MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
             let roots = testing
                 ? MascotActivityProbe.defaultRoots(config: dirs, environment: [:], home: dataDirectory)
                 : MascotActivityProbe.defaultRoots(config: dirs)
@@ -318,6 +331,7 @@ final class MascotController {
             await MainActor.run {
                 let controller = MascotController.shared
                 controller.probing = false
+                guard generation == controller.probeGeneration else { return }
                 guard controller.director?.machine.isOpen == true,
                       (controller.director?.machine.mode == .work) != working else { return }
                 controller.mutate { $0.setWorking(working, at: controller.time()) }
@@ -388,7 +402,7 @@ final class MascotController {
             windowExpanded = expanded
             NotchPanelController.shared.setExpanded(expanded)
             // 收合動畫播完：動畫程度在展開中改過的話，現在重建
-            if !expanded, motion != builtMotion {
+            if !expanded, motion != builtMotion || layout != builtLayout {
                 rebuild()
                 return
             }
