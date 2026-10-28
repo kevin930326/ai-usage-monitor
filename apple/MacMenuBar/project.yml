@@ -30,6 +30,9 @@ targets:
       # 角色的共用動畫設定（ADR-0016 第 3 節），和 Windows 共用同一份
       - path: ../../shared/mascot-anim.json
         buildPhase: resources
+      # 角色外觀（ADR-0021），Windows 之後共用
+      - path: ../../shared/mascot-looks.json
+        buildPhase: resources
     dependencies:
       - package: UsageKit
         product: UsageKit

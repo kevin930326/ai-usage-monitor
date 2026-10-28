@@ -118,6 +118,7 @@ final class PanelSettings {
         static let hotKey = "hotKey.panel"
         static let notchEnabled = "notch.enabled"
         static let mascotCharacter = "notch.character"
+        static let mascotLook = "notch.look"
         static let notchIntro = "notch.intro"
         static let mascotMotion = "notch.motion"
         static let mascotFollowPointer = "notch.followPointer"
@@ -260,6 +261,7 @@ final class PanelSettings {
         hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
         notchEnabled = defaults.object(forKey: Key.notchEnabled) as? Bool ?? true
         mascotCharacter = defaults.string(forKey: Key.mascotCharacter).flatMap(MascotCharacter.init) ?? .claude
+        mascotLook = defaults.string(forKey: Key.mascotLook)
         notchIntro = defaults.string(forKey: Key.notchIntro).flatMap(NotchIntroChoice.init) ?? .firstOnly
         mascotMotion = defaults.string(forKey: Key.mascotMotion).flatMap(MascotMotionLevel.init) ?? .full
         mascotFollowPointer = defaults.object(forKey: Key.mascotFollowPointer) as? Bool ?? true
@@ -287,6 +289,14 @@ final class PanelSettings {
         didSet {
             defaults.set(mascotCharacter.rawValue, forKey: Key.mascotCharacter)
             MascotController.shared.updateStatus()
+        }
+    }
+
+    /// 角色外觀（ADR-0021）：`shared/mascot-looks.json` 的代號；nil 是跟著服務（預設）
+    var mascotLook: String? {
+        didSet {
+            defaults.set(mascotLook, forKey: Key.mascotLook)
+            MascotController.shared.lookChanged()
         }
     }
 

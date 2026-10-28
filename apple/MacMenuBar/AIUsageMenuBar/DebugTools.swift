@@ -615,6 +615,22 @@ enum DebugTools {
                     .frame(height: 24)
                     .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
                 }
+                // 角色外觀（ADR-0021）：角色樣式用各外觀的靜態圖
+                ForEach(MascotController.shared.looks?.looks ?? [], id: \.id) { look in
+                    HStack(spacing: 18) {
+                        Text(look.name).font(.caption).frame(width: 56, alignment: .leading)
+                        ForEach(states, id: \.0) { title, content in
+                            HStack(spacing: 6) {
+                                MenuBarIconView(content: content, style: .character, look: look).font(.system(size: 13))
+                                Text(title).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            .frame(width: 120, alignment: .leading)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 24)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+                }
             }
             .padding(12)
             .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.9))

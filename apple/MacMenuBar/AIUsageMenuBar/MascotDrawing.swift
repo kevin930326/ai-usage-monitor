@@ -34,6 +34,10 @@ struct MascotFrame {
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
+    /// 角色外觀（ADR-0021）；nil 是跟著服務色
+    var look: MascotLook?
+    /// 特效的時間（毫秒）；nil 時特效畫靜態的一格（收合閒置、動畫簡單或關閉、減少動態效果）
+    var effectTime: Int?
 }
 
 /// 角色的繪製（數值同 notch-demo.html 的 drawHero、drawWave、drawFX）。只依 `MascotFrame` 畫，不保存狀態。
@@ -69,7 +73,20 @@ struct MascotPainter {
     }
 
     private func glowColor(_ frame: MascotFrame) -> [Double] {
-        mix(config.palette.white.glow, frame.character.tint(config.palette).glow, frame.pose[.tint])
+        mix(config.palette.white.glow, frame.look?.glow ?? frame.character.tint(config.palette).glow, frame.pose[.tint])
+    }
+
+    /// 身體三階漸層的目標色：服務色、外觀的三階或特效主色的三階；直線漸層、線框、霓虹沒有（過場時先畫白色）
+    private func bodyTint(_ frame: MascotFrame) -> (light: [Double], mid: [Double], shade: [Double])? {
+        guard let look = frame.look else {
+            let tint = frame.character.tint(config.palette)
+            return (tint.light, tint.mid, tint.shade)
+        }
+        switch look.style {
+        case .solid: return (look.light ?? [], look.mid ?? [], look.shade ?? [])
+        case .led, .pixel, .ascii: return look.effectTint
+        case .linear, .neon, .wire: return nil
+        }
     }
 
     private func statusColor(_ level: Double) -> [Double] {
@@ -148,12 +165,14 @@ struct MascotPainter {
         let y = h[.y] + sin(now / 480) * 1.4 * u + h[.jump] * R + R * (1 - sy)
         let yaw = h[.yaw] + frame.gazeYaw * h[.follow] + 0.5 * h[.orbit] * cos(now / 150)
         let pitch = h[.pitch] + frame.gazePitch * h[.follow] + 0.32 * h[.orbit] * sin(now / 150)
-        let tint = frame.character.tint(config.palette)
         let white = config.palette.white
+        let look = frame.look
+        let target = bodyTint(frame)
 
         if h[.glow] > 0 {
             let gc = glowColor(frame)
-            let g = Gradient(stops: [.init(color: color(gc, hero.glow.alpha * h[.glow]), location: 0),
+            let alpha = min(0.6, hero.glow.alpha * h[.glow] * (look?.glowScale ?? 1))
+            let g = Gradient(stops: [.init(color: color(gc, alpha), location: 0),
                                      .init(color: color(gc, 0), location: 1)])
             let rect = CGRect(x: x - R * 3.3, y: y - R * 3.3, width: R * 6.6, height: R * 6.6)
             context.fill(Path(rect), with: .radialGradient(g, center: CGPoint(x: x, y: y),
@@ -162,8 +181,9 @@ struct MascotPainter {
 
         func sphere(_ cx: Double, _ cy: Double, _ r: Double, alpha: Double = 1, in g: inout GraphicsContext) {
             guard r > 0.05 else { return }
-            let t = h[.tint]
-            let stops = [mix(white.light, tint.light, t), mix(white.mid, tint.mid, t), mix(white.shade, tint.shade, t)]
+            let t = target == nil ? 0 : h[.tint]
+            let to = target ?? (white.light, white.mid, white.shade)
+            let stops = [mix(white.light, to.light, t), mix(white.mid, to.mid, t), mix(white.shade, to.shade, t)]
             let b = hero
             g.withCGContext { cg in
                 guard let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
@@ -209,16 +229,47 @@ struct MascotPainter {
             }
         }
         func drawHand(_ p: Hand, in g: inout GraphicsContext) {
-            sphere(x + p.x * R * sx, y + p.y * R * sy, R * hero.hand.radius * p.s * min(max(h[.hands] * 1.3, 0), 1),
-                   alpha: min(max(h[.hands] * 2, 0), 1), in: &g)
+            let cx = x + p.x * R * sx, cy = y + p.y * R * sy, r = R * hero.hand.radius * p.s * min(max(h[.hands] * 1.3, 0), 1)
+            let alpha = min(max(h[.hands] * 2, 0), 1)
+            var drawn = false
+            if let look, look.style.isEffect || look.style == .linear, h[.tint] > 0.99, r > 0.05 {
+                g.withCGContext { cg in
+                    cg.setAlpha(alpha)
+                    drawn = MascotLookRenderer.drawHand(look, center: CGPoint(x: cx, y: cy), radius: r, in: cg)
+                }
+            }
+            if !drawn { sphere(cx, cy, r, alpha: alpha, in: &g) }
         }
         for p in hands where p.z < 0 { drawHand(p, in: &context) }
 
         // 身體（以底部為支點的壓扁已算在 y 裡）
+        // 表情：動畫沒有指定眼睛（膠囊）、也沒在睡覺或閉眼時，眼睛與眉毛照平常的表情（額度：擔心的小圓點、用完的 ×、過期閉眼）
+        let showsMood = frame.eyes == .pill && h[.dash] < 0.5
+        let eyes = showsMood ? (frame.mood.eyes ?? .pill) : frame.eyes
+        let dash = max(h[.dash], frame.blink, showsMood ? frame.mood.lid : 0)
+        // 外觀的眼睛顏色；nil 表示身體已經畫了膠囊眼（LED、像素）
+        let lookEyes = MascotLookRenderer.eyes(for: h[.tint] > 0.99 ? look : nil, radius: R, pill: eyes == .pill)
+        let ink = color(lookEyes?.color ?? MascotLookRenderer.ink)
+
         var body = context
         body.translateBy(x: x, y: y)
         body.scaleBy(x: sx, y: sy)
-        sphere(0, 0, R, in: &body)
+        // 格子特效只畫格子（格子之間要看得到瀏海的黑色），過場中先畫漸變的球
+        if look == nil || look?.style == .solid || h[.tint] < 0.99 { sphere(0, 0, R, in: &body) }
+        if let look, look.style != .solid, h[.tint] > 0.01 {
+            // 外觀的身體；過場時從白色漸變過去
+            let face = MascotLookRenderer.Face(yaw: yaw, pitch: pitch, eye: hero.eye,
+                                               pillOpen: eyes == .pill ? h[.open] * (1 - dash) : nil)
+            let t = h[.tint]
+            body.withCGContext { cg in
+                if t < 0.99 {
+                    cg.setAlpha(t)
+                    cg.beginTransparencyLayer(auxiliaryInfo: nil)
+                }
+                MascotLookRenderer.drawBody(look, radius: R, face: face, time: frame.effectTime, in: cg)
+                if t < 0.99 { cg.endTransparencyLayer() }
+            }
+        }
 
         // 臉：依 yaw／pitch 投影到球面
         let cr = cos(roll), sr = sin(roll)
@@ -229,22 +280,18 @@ struct MascotPainter {
             return (x + ex * cr - ey * sr, y + ex * sr + ey * cr, min(max((cz - 0.05) / 0.25, 0), 1),
                     max(0.2, abs(cos(ye))), max(0.2, cos(pe)))
         }
-        if h[.blush] > 0.01 {
+        let blush = max(h[.blush], look?.blush == true ? 0.9 * h[.tint] : 0)
+        if blush > 0.01 {
             for s in [-1.0, 1.0] {
                 guard let p = project(yaw + s * 0.52, pitch - 0.32) else { continue }
                 var g = context
-                g.opacity = 0.55 * h[.blush] * p.a
+                g.opacity = 0.55 * blush * p.a
                 g.translateBy(x: p.x, y: p.y)
                 g.rotate(by: .radians(roll))
                 let rx = R * 0.17 * p.fx, ry = R * 0.09
                 g.fill(Path(ellipseIn: CGRect(x: -rx, y: -ry, width: 2 * rx, height: 2 * ry)), with: .color(Color(red: 1, green: 0.47, blue: 0.59)))
             }
         }
-        let ink = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x12 / 255)
-        // 表情：動畫沒有指定眼睛（膠囊）、也沒在睡覺或閉眼時，眼睛與眉毛照平常的表情（額度：擔心的小圓點、用完的 ×、過期閉眼）
-        let showsMood = frame.eyes == .pill && h[.dash] < 0.5
-        let eyes = showsMood ? (frame.mood.eyes ?? .pill) : frame.eyes
-        let dash = max(h[.dash], frame.blink, showsMood ? frame.mood.lid : 0)
         if showsMood, frame.mood.brow != .none {
             let b = hero.brow
             let tilt = switch frame.mood.brow {
@@ -266,10 +313,12 @@ struct MascotPainter {
                 g.stroke(path, with: .color(ink), style: StrokeStyle(lineWidth: R * b.thickness, lineCap: .round))
             }
         }
-        for s in [-1.0, 1.0] {
+        for s in [-1.0, 1.0] where lookEyes != nil {
             guard let p = project(yaw + s * hero.eye.yaw, pitch + hero.eye.pitch) else { continue }
             var g = context
             g.opacity = p.a
+            // ASCII、線框、霓虹的眼睛會發光
+            if lookEyes?.glow == true { g.addFilter(.shadow(color: ink, radius: R * 0.15)) }
             g.translateBy(x: p.x, y: p.y)
             g.rotate(by: .radians(roll))
             let round = StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round)
@@ -337,7 +386,7 @@ struct MascotPainter {
             for i in 0..<7 {
                 let on = sin(now / 62 + Double(i) * 1.7) > 0.75
                 let rect = CGRect(x: kx - kw * 0.36 + Double(i) * kw * 0.12, y: ky - kh * 0.05, width: kw * 0.07, height: kh * 0.22)
-                g.fill(Path(rect), with: .color(on ? color(tint.glow, 0.95) : .white.opacity(0.25)))
+                g.fill(Path(rect), with: .color(on ? color(look?.glow ?? frame.character.tint(config.palette).glow, 0.95) : .white.opacity(0.25)))
             }
         }
 

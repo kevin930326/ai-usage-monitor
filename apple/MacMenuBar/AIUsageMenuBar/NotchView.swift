@@ -19,7 +19,7 @@ struct NotchView: View {
         if let director = controller.director {
             if let fixedTime {
                 NotchCanvas(director: director, time: fixedTime, layout: controller.layout, snapshot: store.snapshot,
-                            now: store.now, character: settings.mascotCharacter, extras: extras)
+                            now: store.now, character: settings.mascotCharacter, extras: extras, look: controller.look)
             } else {
                 // 面板形狀與額度卡只在動畫中（展開、收合、提醒）逐格重畫；展開待著與睡著時只有角色的 Canvas
                 // 自己的 TimelineView 在跑，不必每格重建文字與卡片
@@ -30,8 +30,10 @@ struct NotchView: View {
                                 layout: controller.layout,
                                 snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter,
                                 extras: extras,
+                                look: controller.look,
+                                effectsLive: controller.effectsLive,
                                 motion: controller.motion,
-                                heroRate: rate == .idle || rate == .breathing || rate == .gaze ? rate : nil,
+                                heroRate: rate == .idle || rate == .breathing || rate == .gaze || rate == .effect ? rate : nil,
                                 heroClock: { controller.time($0) })
                 }
                 .overlay { NotchPulse(active: controller.pulsing, shape: collapsedShape) }
@@ -209,6 +211,10 @@ struct NotchCanvas: View {
     let now: Date
     let character: MascotCharacter
     var extras = NotchExtras()
+    /// 角色外觀（ADR-0021）；nil 是跟著服務色
+    var look: MascotLook?
+    /// 外觀的特效在動（否則畫靜態的一格）
+    var effectsLive = false
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
     /// 動畫程度：簡單時不畫粒子；關閉時也不眨眼、不看滑鼠
@@ -269,21 +275,27 @@ struct NotchCanvas: View {
     @ViewBuilder
     private var hero: some View {
         if let heroRate, let heroClock {
-            TimelineView(.animation(minimumInterval: heroRate.interval)) { context in
-                heroCanvas(at: heroClock(context.date))
+            // 收合時特效在動：連看滑鼠也最多每秒 12 次
+            let interval = effectsLive && !director.machine.isOpen ? max(heroRate.interval, MascotRenderRate.effect.interval)
+                : heroRate.interval
+            TimelineView(.animation(minimumInterval: interval)) { context in
+                let now = heroClock(context.date)
+                // 只有特效在動：角色本身停在那一刻（收合時工作中的姿勢不動，ADR-0021）
+                heroCanvas(at: heroRate == .effect ? time : now, effectTime: effectsLive ? now : nil)
             }
         } else {
-            heroCanvas(at: time)
+            heroCanvas(at: time, effectTime: effectsLive ? time : nil)
         }
     }
 
-    private func heroCanvas(at time: Int) -> some View {
+    private func heroCanvas(at time: Int, effectTime: Int?) -> some View {
         Canvas(rendersAsynchronously: false) { context, _ in
-            MascotPainter(config: director.config).draw(frame(at: time), in: &context, particles: motion.drawsParticles)
+            MascotPainter(config: director.config).draw(frame(at: time, effectTime: effectTime), in: &context,
+                                                        particles: motion.drawsParticles)
         }
     }
 
-    private func frame(at time: Int) -> MascotFrame {
+    private func frame(at time: Int, effectTime: Int? = nil) -> MascotFrame {
         let still = !motion.movesEyes
         let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
@@ -291,7 +303,7 @@ struct NotchCanvas: View {
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            mood: director.mood(at: time),
                            sleeping: director.showsSleep, dozing: director.showsDoze, effects: director.effects,
-                           ripple: director.ripple, character: character)
+                           ripple: director.ripple, character: character, look: look, effectTime: effectTime)
     }
 
     /// 收合時迷你角色旁的數量：兩個以上的工作階段在跑或等你時顯示；有需要你的時用琥珀色

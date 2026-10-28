@@ -51,11 +51,13 @@ enum MascotMotionLevel: String, CaseIterable, Identifiable {
     var animatesBody: Bool { self == .full }
     /// 眼睛會動：眨眼、看滑鼠
     var movesEyes: Bool { self != .off }
+    /// 外觀的特效會動（ADR-0021）；簡單、關閉與「減少動態效果」時是靜態的一格
+    var animatesEffects: Bool { self == .full }
 }
 
 /// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、看滑鼠、工作）每秒 30 次、睡著 12 次；動畫中每秒 60 次
 enum MascotRenderRate: Equatable {
-    case stopped, breathing, gaze, idle, animating
+    case stopped, effect, breathing, gaze, idle, animating
 
     var interval: Double {
         switch self {
@@ -63,6 +65,8 @@ enum MascotRenderRate: Equatable {
         case .breathing: 1.0 / 10
         // 只有視線在追游標（展開或收合）：每秒 15 次（游標位置本身每秒只讀約 12 次）
         case .gaze: 1.0 / 15
+        // 只有外觀的特效在動（收合時 AI 工作中、展開待著）：每秒 12 次（ADR-0021）
+        case .effect: 1.0 / 12
         case .stopped, .idle: 1.0 / 30
         case .animating: 1.0 / 60
         }
@@ -100,6 +104,10 @@ final class MascotController {
 
     /// 共用設定檔（App 資源）；讀不到時瀏海面板不顯示
     let baseConfig: MascotConfig?
+    /// 角色外觀清單（App 資源，ADR-0021）；讀不到時只有「跟著服務」
+    let looks: MascotLooks?
+    /// 外觀的特效正在動（AI 工作中，或展開時）；否則畫靜態的一格
+    private(set) var effectsLive = false
     private(set) var layout = NotchLayout.fake
     private(set) var director: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
@@ -148,6 +156,8 @@ final class MascotController {
     init(configData: Data? = MascotController.bundledConfig()) {
         baseConfig = configData.flatMap { try? MascotConfig.decode($0) }
         if baseConfig == nil { UsageStore.log("mascot-anim.json missing or invalid; notch panel disabled") }
+        looks = Self.bundledLooks().flatMap { try? MascotLooks.decode($0) }
+        if looks == nil { UsageStore.log("mascot-looks.json missing or invalid; only the service colors") }
         rebuild()
         // 系統的「減少動態效果」改變時跟著換（Codex C-01）
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -159,6 +169,16 @@ final class MascotController {
     static func bundledConfig() -> Data? {
         Bundle.main.url(forResource: "mascot-anim", withExtension: "json").flatMap { try? Data(contentsOf: $0) }
     }
+
+    static func bundledLooks() -> Data? {
+        Bundle.main.url(forResource: "mascot-looks", withExtension: "json").flatMap { try? Data(contentsOf: $0) }
+    }
+
+    /// 設定裡選的外觀；nil 是跟著服務（沒選、或清單裡已經沒有這個代號）
+    var look: MascotLook? { looks?.look(PanelSettings.shared.mascotLook) }
+
+    /// 外觀改了：特效要不要動可能跟著變
+    func lookChanged() { refresh() }
 
     /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）。以開機時間計，
     /// `date`（TimelineView 給的牆鐘時刻）只取它和現在的差，系統時間倒退不影響（Fable F-02）
@@ -670,8 +690,14 @@ final class MascotController {
         // 只有視線在轉（沒在眨眼、工作、睡覺）：低頻率
         let gazeOnly = idleMoving && !breathing && director.blink(at: now) == 0
             && !(live && !director.isStill && director.mode == .work)
-        let rate: MascotRenderRate = animating ? .animating
+        // 外觀的特效（ADR-0021，ADR-0010 的例外）：展開時、或收合時 AI 工作中才動，每秒最多 12 次；
+        // 收合閒置、睡著時停在靜態的一格
+        let effects = motion.animatesEffects && look?.style.animates == true
+            && (director.machine.isOpen || (director.mode == .work && !director.isStill))
+        if effects != effectsLive { effectsLive = effects }
+        var rate: MascotRenderRate = animating ? .animating
             : !idleMoving ? .stopped : breathing ? .breathing : gazeOnly ? .gaze : .idle
+        if effects, rate == .stopped || rate == .breathing { rate = .effect }
         if rate != renderRate {
             if rate != .animating { stoppedAt = now }
             renderRate = rate

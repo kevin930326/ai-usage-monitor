@@ -29,7 +29,8 @@ struct MenuBarLabel: View {
     private var icon: some View {
         if let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) {
             let content = MenuBarIconContent(item: item, snapshot: snapshot, now: store.now, isLeast: settings.iconWindow == .automatic)
-            MenuBarIconView(content: content, style: settings.iconStyle, character: settings.mascotCharacter)
+            MenuBarIconView(content: content, style: settings.iconStyle, character: settings.mascotCharacter,
+                            look: MascotController.shared.looks?.look(settings.mascotLook))
         } else {
             Image(systemName: "gauge.with.dots.needle.0percent")
         }
@@ -99,6 +100,8 @@ struct MenuBarIconView: View {
     let content: MenuBarIconContent
     let style: MenuBarIconStyle
     var character: MascotCharacter = .claude
+    /// 角色外觀（ADR-0021）：選單列用它的靜態圖
+    var look: MascotLook?
 
     var body: some View {
         HStack(spacing: 3) {
@@ -109,9 +112,9 @@ struct MenuBarIconView: View {
                 Image(nsImage: MenuBarIcon.image(content, style: style))
                 Text("\(content.remainingPct)%").monospacedDigit()
             case .character:
-                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter))
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter, look: look))
             case .characterPercent:
-                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter))
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter, look: look))
                 Text("\(content.remainingPct)%").monospacedDigit()
             case .percent:
                 Text("\(content.remainingPct)%").monospacedDigit()
@@ -141,13 +144,17 @@ enum MenuBarIcon {
         var content: MenuBarIconContent
         var style: MenuBarIconStyle
         var character: MascotCharacter?
+        var look: String?
     }
 
-    static func image(_ content: MenuBarIconContent, style: MenuBarIconStyle, character: MascotCharacter? = nil) -> NSImage {
-        let key = Key(content: content, style: style, character: style.showsCharacter ? character ?? .claude : nil)
+    static func image(_ content: MenuBarIconContent, style: MenuBarIconStyle, character: MascotCharacter? = nil,
+                      look: MascotLook? = nil) -> NSImage {
+        let key = Key(content: content, style: style, character: style.showsCharacter ? character ?? .claude : nil,
+                      look: style.showsCharacter ? look?.id : nil)
         if let cached = cache[key] { return cached }
         if cache.count > 64 { cache.removeAll() }
-        let image = key.character.map { drawCharacter(content, character: $0) } ?? draw(content, style: style)
+        let image = key.character.map { drawCharacter(content, character: $0, look: key.look == nil ? nil : look) }
+            ?? draw(content, style: style)
         cache[key] = image
         return image
     }
@@ -211,16 +218,20 @@ enum MenuBarIcon {
     /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），額度用眼睛的形狀表示（同瀏海面板，沒有狀態點）：
     /// 正常膠囊、剩不到 20% 或預測會用完小圓點、用完 ×、事故半閉眼加冷汗、過期閉眼並轉灰，不只靠顏色；
     /// 表情和瀏海用同一個 `MascotMood`。用得太快右上角加提示色小點。
-    private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter) -> NSImage {
+    /// 選了外觀時用外觀的靜態畫面（ADR-0021）：三階的直接換色，其他的照瀏海的畫法；資料過期時仍是灰白
+    private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter, look: MascotLook?) -> NSImage {
         let palette = MascotController.shared.baseConfig?.palette
         func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
             guard let rgb, rgb.count == 3 else { return fallback }
             return NSColor(srgbRed: rgb[0] / 255, green: rgb[1] / 255, blue: rgb[2] / 255, alpha: 1)
         }
         let stale = c.state == .stale
+        let look = stale ? nil : look
         let tint = palette.map { stale ? $0.white : character.tint($0) }
         let fallback = NSColor(UsageColors.provider(character.provider))
-        let light = color(tint?.light, fallback), mid = color(tint?.mid, fallback), shade = color(tint?.shade, fallback)
+        let solid = look?.style == .solid
+        let light = color(solid ? look?.light : tint?.light, fallback), mid = color(solid ? look?.mid : tint?.mid, fallback)
+        let shade = color(solid ? look?.shade : tint?.shade, fallback)
         let mood = c.mood
         let eyes: CharacterIconEyes = switch mood {
         case .stale: .closed
@@ -233,11 +244,23 @@ enum MenuBarIcon {
             let center = NSPoint(x: 9, y: rect.midY)
             let radius: CGFloat = 6.8
             let ball = NSBezierPath(ovalIn: NSRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
-            NSGradient(colors: [light, mid, shade], atLocations: [0, 0.55, 1], colorSpace: .sRGB)?
-                .draw(in: ball, relativeCenterPosition: NSPoint(x: -0.3, y: 0.35))
+            if let look, look.style != .solid, let eye = MascotController.shared.baseConfig?.hero.eye,
+               let cg = NSGraphicsContext.current?.cgContext {
+                // 外觀的畫法是 y 往下、中心在原點；眼睛照下面圖示自己的畫法（表情）
+                cg.saveGState()
+                cg.translateBy(x: center.x, y: center.y)
+                cg.scaleBy(x: 1, y: -1)
+                let face = MascotLookRenderer.Face(yaw: 0, pitch: 0, eye: eye, pillOpen: nil)
+                MascotLookRenderer.drawBody(look, radius: radius, face: face, time: nil, in: cg)
+                cg.restoreGState()
+            } else {
+                NSGradient(colors: [light, mid, shade], atLocations: [0, 0.55, 1], colorSpace: .sRGB)?
+                    .draw(in: ball, relativeCenterPosition: NSPoint(x: -0.3, y: 0.35))
+            }
             // 兩眼：中心距約直徑 27%。正常是直立的膠囊；剩不到 20% 縮成小圓點、用完變成 ×、過期閉成線，
             // 灰階下也分得出四種狀態（ADR-0008 第 1 節）
-            let ink = NSColor(white: 0.08, alpha: 1)
+            let eyeColor = MascotLookRenderer.eyes(for: look, radius: radius, pill: false)?.color
+            let ink = look == nil ? NSColor(white: 0.08, alpha: 1) : color(eyeColor, NSColor(white: 0.08, alpha: 1))
             ink.setFill()
             for side in [-1.0, 1.0] {
                 let x = center.x + side * radius * 0.27

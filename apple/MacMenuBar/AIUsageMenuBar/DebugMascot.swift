@@ -18,6 +18,9 @@ enum DebugMascot {
         /// AI 工作階段（外框、數量、列表）與等你時的脈動（0…1）
         var extras = NotchExtras()
         var pulse: Double?
+        /// 角色外觀（ADR-0021）與特效是否在動（動的話畫 `time` 那一格）
+        var look: MascotLook?
+        var effectsLive = false
     }
 
     enum Quota { case normal, low, stale, forecast, incident }
@@ -80,7 +83,8 @@ enum DebugMascot {
             let d = director(shot)
             let size = d.config.panel.collapsed
             return NotchCanvas(director: d, time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
-                               character: shot.character, extras: shot.extras, gazeOverride: (0, 0))
+                               character: shot.character, extras: shot.extras, look: shot.look, effectsLive: shot.effectsLive,
+                               gazeOverride: (0, 0))
                 .overlay {
                     if let pulse = shot.pulse {
                         NotchPulse.glow(NotchShape(width: size.width, height: size.height, corner: size.corner), phase: pulse)
@@ -240,6 +244,18 @@ enum DebugMascot {
             // 第一次展開的提示（出現時不顯示等級，位置相同）
             Shot(name: "expanded-hint", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(hint: true, level: level)),
         ]), dir.appendingPathComponent("notch-level.png"))
+        // ADR-0021：每個外觀展開（特效動到某一格）與收合（AI 工作中的某一格、閒置的靜態）
+        if let data = MascotController.bundledLooks(), let looks = try? MascotLooks.decode(data) {
+            write(sheet(looks.looks.map { look in
+                Shot(name: "expanded-look-\(look.id)", setup: { $0.open(at: 0, intro: false) }, time: 1500,
+                     look: look, effectsLive: look.style.animates)
+            }), dir.appendingPathComponent("notch-looks-expanded.png"))
+            write(sheet(looks.looks.flatMap { look in
+                [Shot(name: "collapsed-look-\(look.id)-work", setup: { $0.setWorking(true, at: 0) }, time: 2000,
+                      look: look, effectsLive: look.style.animates),
+                 Shot(name: "collapsed-look-\(look.id)-idle", setup: { _ in }, time: 2000, look: look)]
+            }, height: 40), dir.appendingPathComponent("notch-looks-collapsed.png"))
+        }
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }
