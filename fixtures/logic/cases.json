@@ -7736,6 +7736,255 @@
     ],
     "retention_days": 7
    }
+  },
+  {
+   "name": "tokens-streak-history",
+   "now": "2026-11-10T04:00:00Z",
+   "time_zone": "Asia/Taipei",
+   "data": {
+    "days": [
+     {
+      "day": "2026-10-01",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-02",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-03",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-11-09",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-11-10",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-02",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      }
+     },
+     {
+      "day": "2026-10-04",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-05",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-06",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-20",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-21",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-10-23",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-11-08",
+      "provider": "codex",
+      "model": "gpt",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     },
+     {
+      "day": "2026-10-22",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 1000,
+       "cache_write": 0,
+       "cache_read": 5000,
+       "output": 100,
+       "reasoning": 0
+      },
+      "device": "dev-laptop"
+     }
+    ],
+    "retention_days": 0,
+    "records": {
+     "longest_streak_days": {
+      "value": 3,
+      "day": "2026-10-03"
+     },
+     "longest_streak_days:claude": {
+      "value": 3,
+      "day": "2026-10-03"
+     },
+     "longest_streak_days:codex": {
+      "value": 1,
+      "day": "2026-10-02"
+     }
+    },
+    "record_days": {
+     "2026-10-01": {
+      "claude": 1
+     },
+     "2026-10-02": {
+      "claude": 1,
+      "codex": 1
+     },
+     "2026-10-03": {
+      "claude": 1
+     },
+     "2026-11-09": {
+      "claude": 1
+     },
+     "2026-11-10": {
+      "claude": 1
+     }
+    },
+    "devices": [
+     {
+      "id": "self-id",
+      "name": "MacBook",
+      "last_upload": "2026-11-10T03:50:00Z",
+      "is_self": true
+     },
+     {
+      "id": "dev-desk",
+      "name": "桌機",
+      "last_upload": "2026-11-10T01:00:00Z"
+     },
+     {
+      "id": "dev-laptop",
+      "name": "筆電",
+      "last_upload": "2026-11-09T01:00:00Z"
+     }
+    ]
+   }
   }
  ]
 }
