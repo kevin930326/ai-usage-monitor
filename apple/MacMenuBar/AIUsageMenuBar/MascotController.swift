@@ -109,6 +109,7 @@ final class MascotController {
     @ObservationIgnored private var rateTimer: Timer?
     @ObservationIgnored private var closeTimer: Timer?
     @ObservationIgnored private var workTimer: Timer?
+    @ObservationIgnored private var hoverTimer: Timer?
     @ObservationIgnored private var gestures: MascotGestureDetector?
     /// 按下時落在角色上（放開時才當成點擊）
     @ObservationIgnored private var pressedOnCharacter = false
@@ -190,6 +191,8 @@ final class MascotController {
         closeTimer = nil
         stopWorkChecks()
         gestures?.reset()
+        hoverTimer?.invalidate()
+        hoverTimer = nil
         if pressedOnCharacter {
             pressedOnCharacter = false
             mutate { $0.release(at: time()) }
@@ -225,6 +228,27 @@ final class MascotController {
         mutate {
             $0.move(at: t, dx: point.x - pose[.x], dy: point.y - pose[.y])
             if let gesture { $0.gesture(gesture, at: t) }
+        }
+        scheduleHoverCheck()
+    }
+
+    /// 停在角色上不動時沒有移動事件：在停留到期時檢查一次（Codex C-04）
+    private func scheduleHoverCheck() {
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+        guard let deadline = gestures?.hoverDeadline else { return }
+        hoverTimer = oneShot(after: deadline - time()) { $0.hoverDue() }
+    }
+
+    private func hoverDue() {
+        hoverTimer = nil
+        guard let director else { return }
+        let machine = director.machine
+        let canDetect = motion.detectsGestures && machine.isOpen && !machine.isIntro && !machine.isBusy
+            && !machine.isHolding && machine.mode != .sleep
+        let t = time()
+        if let gesture = gestures?.checkHover(at: t, canDetect: canDetect) {
+            mutate { $0.gesture(gesture, at: t) }
         }
     }
 

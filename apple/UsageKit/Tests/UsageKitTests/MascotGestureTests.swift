@@ -119,4 +119,25 @@ import Testing
         #expect(d.hits(CGPoint(x: 100 + 33 * 1.19, y: 100), center: Self.center, radius: 33))
         #expect(!d.hits(CGPoint(x: 100 + 33 * 1.21, y: 100), center: Self.center, radius: 33))
     }
+
+    @Test func restingWithoutFurtherMovesStillMakesShy() throws {
+        // 移入後完全不動：沒有移動事件，靠 hoverDeadline 排的檢查觸發（Codex C-04）
+        var d = try Self.detector()
+        #expect(d.move(to: CGPoint(x: 104, y: 99), at: 1000, center: Self.center, radius: 33, canDetect: true) == nil)
+        let deadline = try #require(d.hoverDeadline)
+        #expect(deadline == 1801)
+        #expect(d.checkHover(at: 1500, canDetect: true) == nil)
+        #expect(d.checkHover(at: deadline, canDetect: true) == .hover)
+        #expect(d.hoverDeadline == nil)
+        // 提前移出：不觸發
+        var out = try Self.detector()
+        _ = out.move(to: CGPoint(x: 104, y: 99), at: 1000, center: Self.center, radius: 33, canDetect: true)
+        _ = out.move(to: CGPoint(x: 170, y: 99), at: 1300, center: Self.center, radius: 33, canDetect: true)
+        #expect(out.hoverDeadline == nil)
+        #expect(out.checkHover(at: 1801, canDetect: true) == nil)
+        // 忙碌中：不觸發
+        var busy = try Self.detector()
+        _ = busy.move(to: CGPoint(x: 104, y: 99), at: 1000, center: Self.center, radius: 33, canDetect: true)
+        #expect(busy.checkHover(at: 1801, canDetect: false) == nil)
+    }
 }

@@ -96,6 +96,21 @@ public struct MascotGestureDetector: Sendable {
         return nil
     }
 
+    /// 停在角色上時，何時該觸發害羞（滑鼠完全不動就沒有移動事件，呼叫端在這個時間排一次 `checkHover`）
+    public var hoverDeadline: Int? { hoverStart.map { $0 + hoverShyMs + 1 } }
+
+    /// 到了停留的時間：滑鼠一直停在角色上（中間沒有移出）就觸發害羞
+    public mutating func checkHover(at time: Int, canDetect: Bool) -> MascotGesture? {
+        guard let hoverStart else { return nil }
+        guard canDetect else {
+            self.hoverStart = nil
+            return nil
+        }
+        guard time - hoverStart > hoverShyMs else { return nil }
+        self.hoverStart = nil
+        return .hover
+    }
+
     /// 滑鼠離開面板：全部重來
     public mutating func reset() { reset(keepingX: false) }
 
