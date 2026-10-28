@@ -165,7 +165,7 @@ enum DebugTools {
             return CGPoint(x: screen.midX + cos(a) * screen.width * 0.35, y: screen.midY + sin(a) * screen.height * 0.3)
         }
         mascot.followPointerChanged()
-        let close = 40.0
+        let close = 55.0
         schedule([
             (0, "launch", {}),
             (10, "notch-open", { mascot.pointerEntered() }),
@@ -173,6 +173,14 @@ enum DebugTools {
             // Claude 與 Codex 都閒置：睡著（呼吸）
             (22, "notch-sleep", { mascot.mutate { $0.setAgentIdle(true, at: mascot.time()) } }),
             (32, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
+            // 第二輪新增的動畫：每個各播一次，只記錄播放中的峰值（ADR-0010 第 3 節，Codex 第二輪 C-04）
+            // 間隔 3 秒（最長的表情 2.2 秒），每個至少有 2 筆每秒一次的取樣
+            (35, "notch-nod", { mascot.mutate { $0.request(.nod, at: mascot.time()) } }),
+            (38, "notch-tilt", { mascot.mutate { $0.request(.tilt, at: mascot.time()) } }),
+            (41, "notch-giggle", { mascot.mutate { $0.request(.giggle, at: mascot.time()) } }),
+            (44, "notch-look", { mascot.mutate { $0.request(.look, at: mascot.time()) } }),
+            (47, "notch-pinch", { mascot.mutate { $0.request(.pinch, at: mascot.time()) } }),
+            (50, "notch-face", { mascot.mutate { $0.requestFace(.happy, at: mascot.time()) } }),
             (close, "notch-close", { mascot.closeNow() }),
             // 收著、睡著：游標移動時臉不跟著轉，不重畫
             (close + 5, "gaze-move-asleep", { moving = true }),
@@ -188,13 +196,22 @@ enum DebugTools {
         ])
     }
 
+    /// 量測時間表開始的時間（沒在量測時是 nil）
+    private static var perfStart: Date?
+
+    /// 量測中才記：App 自己的定時工作（例如每分鐘的時鐘更新）也記標記，報表才分得出來是哪裡在吃 CPU
+    static func perfMark(_ name: String) {
+        guard let perfStart else { return }
+        UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(perfStart), name))
+    }
+
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {
-        let start = Date.now
+        perfStart = Date.now
         for (offset, name, action) in steps {
             DispatchQueue.main.asyncAfter(deadline: .now() + offset) {
                 MainActor.assumeIsolated {
                     action()
-                    UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(start), name))
+                    perfMark(name)
                 }
             }
         }

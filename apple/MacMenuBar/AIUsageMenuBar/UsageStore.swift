@@ -48,6 +48,9 @@ final class UsageStore {
     }
 
     private func tick() {
+        #if DEBUG
+        DebugTools.perfMark("minute-tick")
+        #endif
         now = RenderClock.now
         if source == nil {
             // 監看失效：輪詢讀檔，並在資料夾出現後重新監看
