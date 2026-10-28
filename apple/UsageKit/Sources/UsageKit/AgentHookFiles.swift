@@ -10,6 +10,9 @@ public enum AgentHookFiles {
         case unchanged
     }
 
+    /// 每個設定檔最多留幾份我們的備份（設定檔可能有金鑰，副本不無限累積；Fable F-11）
+    public static let keepBackups = 3
+
     /// 連接或修好：合併我們的 hook，寫入前先備份
     public static func connect(file: URL, ai: AgentKind, command: String, now: Date = .now) throws -> Result {
         let file = resolved(file)
@@ -96,9 +99,27 @@ public enum AgentHookFiles {
                 throw CocoaError(.fileWriteUnknown)
             }
             backup = candidate
+            pruneBackups(of: file, manager: manager)
         }
         try data.write(to: file, options: .atomic)
         if let permissions { try? manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: file.path) }
         return backup
+    }
+
+    /// 只刪我們命名樣式的備份，留最新的幾份（檔名的時間可以照字串排序；同一秒的序號排在後面）
+    private static func pruneBackups(of file: URL, manager: FileManager) {
+        let folder = file.deletingLastPathComponent()
+        let prefix = file.lastPathComponent + ".aum-backup-"
+        guard let names = try? manager.contentsOfDirectory(atPath: folder.path) else { return }
+        let ours = names.filter { $0.hasPrefix(prefix) }.sorted { a, b in
+            let (x, y) = (a.dropFirst(prefix.count), b.dropFirst(prefix.count))
+            // 「時間」與「時間-序號」：先比時間，再比序號
+            let (xt, yt) = (x.prefix(15), y.prefix(15))
+            if xt != yt { return xt < yt }
+            return (Int(x.dropFirst(16)) ?? 1) < (Int(y.dropFirst(16)) ?? 1)
+        }
+        for name in ours.dropLast(keepBackups) {
+            try? manager.removeItem(at: folder.appendingPathComponent(name))
+        }
     }
 }

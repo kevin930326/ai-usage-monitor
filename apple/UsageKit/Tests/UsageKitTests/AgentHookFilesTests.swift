@@ -93,6 +93,28 @@ import Testing
         #expect(try AgentHookFiles.status(file: file, ai: .claude, command: command) == .installed)
     }
 
+    /// 備份只留最新的 3 份，別人的檔案不動（Fable F-11）
+    @Test func keepsOnlyTheNewestBackups() throws {
+        let manager = FileManager.default
+        try manager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: file)
+        let other = file.deletingLastPathComponent().appendingPathComponent("settings.json.bak")
+        try Data("{}".utf8).write(to: other)
+        var backups: [URL] = []
+        for i in 0..<5 {
+            let at = now.addingTimeInterval(Double(i))
+            if case .written(let b?) = try AgentHookFiles.connect(file: file, ai: .claude, command: command, now: at) { backups.append(b) }
+            if case .written(let b?) = try AgentHookFiles.disconnect(file: file, now: at) { backups.append(b) }
+        }
+        #expect(backups.count == 10)
+        let left = try self.backups().sorted()
+        #expect(left.count == AgentHookFiles.keepBackups)
+        // 最後一次（第 5 秒的移除）的備份一定還在；舊的被刪
+        #expect(left.contains(backups.last!.lastPathComponent))
+        #expect(!left.contains(backups.first!.lastPathComponent))
+        #expect(manager.fileExists(atPath: other.path))
+    }
+
     @Test func codexHooksDisabledReadsOnlyTheFeatureFlag() {
         func disabled(_ text: String) -> Bool { AgentHookFiles.codexHooksDisabled(configTOML: Data(text.utf8)) }
         #expect(!AgentHookFiles.codexHooksDisabled(configTOML: nil))
