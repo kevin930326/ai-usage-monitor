@@ -121,7 +121,7 @@ final class MascotController {
     @ObservationIgnored private var closeTimer: Timer?
     @ObservationIgnored private var workTimer: Timer?
     @ObservationIgnored private var gazeTimer: Timer?
-    /// 上一次讀到的游標位置（螢幕座標）與連續沒動的次數（沒動一陣子就降低讀取頻率）
+    /// 上一次游標相對角色的位置與連續沒變的次數（沒變一陣子就降低讀取頻率）
     @ObservationIgnored private var lastPointer: CGPoint?
     @ObservationIgnored private var pointerStillTicks = 0
     /// 睡著時輪詢降到每秒 1 次
@@ -509,21 +509,23 @@ final class MascotController {
         #if DEBUG
         if let debugPointer { pointer = debugPointer() }
         #endif
-        guard pointer != lastPointer else {
+        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else { return }
+        let t = time()
+        let pose = director.pose(at: t)
+        // 畫布座標：左上為原點、y 往下；螢幕座標：左下為原點、y 往上。
+        // 比較的是「游標相對角色」的位置：游標沒動但角色移動（展開、收合、換螢幕）時也會重新對準（Codex 第二輪 C-02）
+        let dx = pointer.x - (origin.x + pose[.x])
+        let dy = (origin.y - pointer.y) - pose[.y]
+        let relative = CGPoint(x: dx, y: dy)
+        guard relative != lastPointer else {
             pointerStillTicks += 1
-            // 游標停住 1 秒：降到每秒 4 次
+            // 游標與角色都停住 1 秒：降到每秒 4 次
             if pointerStillTicks == 12 { scheduleGaze(interval: 0.25) }
             return
         }
         if pointerStillTicks >= 12 { scheduleGaze(interval: 1.0 / 12) }
         pointerStillTicks = 0
-        lastPointer = pointer
-        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else { return }
-        let t = time()
-        let pose = director.pose(at: t)
-        // 畫布座標：左上為原點、y 往下；螢幕座標：左下為原點、y 往上
-        let dx = pointer.x - (origin.x + pose[.x])
-        let dy = (origin.y - pointer.y) - pose[.y]
+        lastPointer = relative
         if director.look(at: t, dx: dx, dy: dy, threshold: Self.gazeThreshold) {
             self.director = director
             refresh()
