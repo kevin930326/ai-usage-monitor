@@ -5,7 +5,7 @@
 #   scripts/measure-look-perf.sh [Debug 版 AIUsageMenuBar.app] [輸出資料夾] [代號 …]
 #
 # 代號預設是 none（跟著服務）、每個會動的特效、像素與一個漸層。使用假資料與獨立的 demo 設定，不讀真實資料。
-# 門檻（每段開始後 5～28 秒的平均）：收合工作中 ≤ 1%、收合睡著 ≤ 0.5%、收合閒置 ≤ 0.3%；未通過時以非零結束。
+# 門檻（每段開始後 5～28 秒的平均，包含每分鐘的更新；計算在 look-perf-summary.py）：收合工作中 ≤ 1%、收合睡著 ≤ 0.5%、收合閒置 ≤ 0.3%；未通過時以非零結束。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 APP=${1:-$ROOT/build/verify/DerivedData/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app}
@@ -34,25 +34,6 @@ for LOOK in "${LOOKS[@]}"; do
     sleep 1
   done
   rm -rf "$HOME_DIR"
-  python3 - "$OUT/$LOOK.tsv" "$OUT/$LOOK.log" "$LOOK" <<'PY' || STATUS=1
-import re, sys
-samples = [tuple(map(float, l.split())) for l in open(sys.argv[1]) if l.strip()]
-log = open(sys.argv[2]).read()
-marks = {m.group(2): float(m.group(1)) for m in re.finditer(r"perf-mark ([\d.]+) (\S+)", log)}
-ticks = [float(t) for t in re.findall(r"perf-mark ([\d.]+) minute-tick", log)]
-def avg(a, b):
-    rows = [s[1] for s in samples if a <= s[0] < b and not any(t <= s[0] < t + 2 for t in ticks)]
-    return sum(rows) / len(rows) if rows else float("nan")
-try:
-    w, s, i, o = marks["look-work"], marks["look-sleep"], marks["look-idle"], marks["look-open"]
-except KeyError as missing:
-    print(f"| {sys.argv[3]} | 缺少標記 {missing} | | | |")
-    sys.exit(1)
-work, sleep, idle, opened = avg(w + 5, w + 28), avg(s + 5, s + 28), avg(i + 5, i + 28), avg(o + 5, o + 14)
-ok = work <= 1.0 and sleep <= 0.5 and idle <= 0.3
-mark = lambda v, limit: f"{v:.2f}%" + ("" if v <= limit else " ❌")
-print(f"| {sys.argv[3]} | {mark(work, 1.0)} | {mark(sleep, 0.5)} | {mark(idle, 0.3)} | {opened:.2f}% |")
-sys.exit(0 if ok else 1)
-PY
+  python3 "$ROOT/scripts/look-perf-summary.py" "$OUT/$LOOK.tsv" "$OUT/$LOOK.log" "$LOOK" || STATUS=1
 done
 exit $STATUS
