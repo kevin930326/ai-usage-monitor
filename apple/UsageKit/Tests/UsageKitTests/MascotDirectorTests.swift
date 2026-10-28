@@ -254,4 +254,40 @@ import Testing
         let after = d.pose(at: 4000)
         for prop in [MascotProp.hands, .orbit, .sway, .shiver] { #expect(abs(after[prop]) < 0.001) }
     }
+
+    @Test func becomingStillDuringIntroEndsOnTheCard() throws {
+        // 過場途中改成靜止：角色到卡片、服務色與狀態點都在、過場結束（Codex 第二輪 C-01）
+        let config = try Self.config()
+        for at in [300, 1200, 4500] {
+            var d = MascotDirector(config: config, startTime: 0)
+            d.open(at: 0, intro: true)
+            d.advance(to: at)
+            let before = d.pose(at: at)
+            d.setStill(true, at: at)
+            #expect(d.pose(at: at) == before)
+            #expect(!d.isIntro && d.ripple == nil)
+            d.advance(to: at + 3000)
+            let end = d.pose(at: at + 3000)
+            #expect(abs(end[.x] - config.hero.card.x) < 0.01 && abs(end[.y] - config.hero.card.y) < 0.01, "\(at)")
+            #expect(abs(end[.r] - config.hero.card.radius) < 0.01 && end[.tint] == 1 && end[.dot] == 1, "\(at)")
+            #expect(d.content(at: at + 3000).opacity == 1)
+        }
+    }
+
+    @Test func workPoseComesBackAfterFullMotionReturns() throws {
+        // 工作中 → 簡單 → 完整：恢復低頭敲鍵盤（Codex 第二輪 C-02）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.setWorking(true, at: 1000)
+        d.advance(to: 3000)
+        d.setStill(true, at: 3000)
+        d.advance(to: 5000)
+        #expect(d.pose(at: 5000)[.kb] == 0)
+        d.setStill(false, at: 5000)
+        d.advance(to: 8000)
+        let pose = d.pose(at: 8000)
+        #expect(abs(pose[.pitch] - config.poses.work.pitch) < 0.001 && pose[.kb] == 1 && pose[.type] == 1)
+        #expect(abs(pose[.x] - config.hero.card.x) < 0.01)
+    }
 }

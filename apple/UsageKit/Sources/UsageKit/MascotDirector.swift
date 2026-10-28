@@ -159,13 +159,20 @@ public struct MascotDirector: Sendable {
     public mutating func setStill(_ still: Bool, at time: Int) {
         guard still != isStill else { return }
         isStill = still
-        guard still else { return }
-        effects = []
-        ripple = nil
-        let pose = script.pose(at: time)
-        if machine.isOpen {
-            use(scripts.rest(start: time, from: pose, mode: .none))
+        if still {
+            effects = []
+            ripple = nil
         }
+        guard machine.isOpen else { return }
+        let pose = script.pose(at: time)
+        if still, isIntro {
+            // 過場途中改成靜止：直接收尾，角色滑到卡片、內容出現（Codex 第二輪 C-01）
+            isIntro = false
+            if contentShownAt.map({ $0 > time }) ?? true { contentShownAt = time }
+        }
+        // 從現在的姿勢滑到卡片：靜止時是平常的姿勢；恢復時接回狀態機目前的模式（工作、睡覺；第二輪 C-01、C-02）
+        use(scripts.settle(start: time, from: pose, mode: still ? .none : machine.mode))
+        quickOpening = true
     }
 
     private mutating func use(_ next: MascotScript) {
