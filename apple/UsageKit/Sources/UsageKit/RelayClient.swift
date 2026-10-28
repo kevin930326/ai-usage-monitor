@@ -59,6 +59,18 @@ public struct RelayClient: Sendable {
         self.init(baseURL: url, readToken: readToken, session: session)
     }
 
+    /// 其他電腦的 AI 狀態（ADR-0019 第 2 節，`GET /agents/state`）。中繼沒打開（404）、逾時或任何錯誤時 nil：
+    /// 畫面不顯示這一區，額度照常
+    public func fetchAgents(localNow: Int64) async -> [RemoteAgent]? {
+        var request = URLRequest(url: baseURL.appending(path: "agents/state"))
+        request.setValue("Bearer \(readToken)", forHTTPHeaderField: "Authorization")
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = 10
+        guard let (data, response) = try? await session.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return RemoteAgents.parseRelay(data, localNow: localNow)
+    }
+
     public func fetch() async throws -> UsageSnapshot {
         var request = URLRequest(url: baseURL.appending(path: "usage"))
         request.setValue("Bearer \(readToken)", forHTTPHeaderField: "Authorization")

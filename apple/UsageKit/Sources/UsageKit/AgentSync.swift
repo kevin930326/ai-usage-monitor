@@ -100,6 +100,17 @@ public enum RemoteAgents {
         }
     }
 
+    /// iPhone 直接讀中繼的 `GET /agents/state`（`{"now","devices":[{"device_id","name","ais","updated_at"}]}`）：
+    /// 剛下載完，經過的時間是 0；其他規則同 `parse`。iPhone 不是裝置，所有電腦都列出
+    public static func parseRelay(_ data: Data, localNow: Int64) -> [RemoteAgent] {
+        guard data.count <= 64 * 1024,
+              var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        root["v"] = 1
+        root["fetched_at"] = NSNumber(value: localNow)
+        guard let wrapped = try? JSONSerialization.data(withJSONObject: root) else { return [] }
+        return parse(wrapped, localNow: localNow)
+    }
+
     /// 控制字元與格式字元拿掉、前後空白去掉、最多 32 個 Unicode 純量（同 C# 的 Rune、Python 的字元）
     static func cleanName(_ name: String) -> String {
         let kept = name.unicodeScalars.filter { !($0.properties.generalCategory == .control || $0.properties.generalCategory == .format) }

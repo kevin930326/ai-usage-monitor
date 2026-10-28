@@ -141,6 +141,23 @@ import Testing
                 && golden.sessions.count == output.sessions.count && golden.remote.count == output.remote.count, "golden.json 與 cases.json 的情境數不同")
     }
 
+    /// iPhone 直接讀中繼的回應：剛下載（經過 0），所有電腦都列出，30 分鐘以前的不列
+    @Test func relayResponseOnPhone() {
+        let now: Int64 = 1_800_000_000_000
+        let raw = """
+        {"now":\(now),"devices":[
+          {"device_id":"a","name":"桌機","updated_at":\(now - 60_000),"ais":[{"ai":"claude","state":"needsYou","sessions":1,"since":1}]},
+          {"device_id":"b","name":"舊筆電","updated_at":\(now - 31 * 60_000),"ais":[{"ai":"codex","state":"working","sessions":1,"since":1}]},
+          {"device_id":"c","name":"工作 PC","updated_at":\(now),"ais":[{"ai":"codex","state":"idle","sessions":0,"since":1}]}
+        ]}
+        """
+        let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now + 5_000)
+        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1)])
+        #expect(list.first?.text == "桌機：Claude Code 需要你")
+        #expect(RemoteAgents.parseRelay(Data("[]".utf8), localNow: now).isEmpty)
+        #expect(RemoteAgents.parseRelay(Data("{\"devices\":[]}".utf8), localNow: now).isEmpty)
+    }
+
     /// 隱私：擷取的結果只有事件、種類、ID、資料夾名稱，提示與工具內容不會出現在任何欄位
     @Test func extractDropsContent() throws {
         let input = try JSONDecoder().decode(Input.self, from: Data(contentsOf: Self.folder.appendingPathComponent("cases.json")))
