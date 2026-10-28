@@ -112,5 +112,12 @@
   },
   {
     "name" : "weekly-too-short"
+  },
+  {
+    "name" : "last-sample-before-now",
+    "result" : {
+      "exhausts_in_min" : 116,
+      "urgent" : false
+    }
   }
 ]

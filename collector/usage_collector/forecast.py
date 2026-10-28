@@ -117,8 +117,10 @@ def forecast(window_id: str, used_pct: float, resets_at: float | None, hidden: b
     rate = recent_rate(samples, window_id, now)
     if rate is None or rate <= 0:
         return None
-    at = now + (100 - used) / rate
-    if at >= resets_at:
+    # 以最後一筆樣本的時間為起點（收集器的最後一筆就是這次收集，等於 now）
+    base = max((s.ts for s in samples if s.ts <= now), default=now)
+    at = base + (100 - used) / rate
+    if at <= now or at >= resets_at:
         return None
     faster = None
     usual = usual_rate(samples, window_id, now)

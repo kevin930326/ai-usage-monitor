@@ -22,8 +22,10 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
             || QuotaHistory.RecentLookback(window.Id) is null) return null;
         var used = window.EffectiveUsedPct(now);
         if (used >= 100 || history.RecentRate(provider, window.Id, now) is not { } rate || rate <= 0) return null;
-        var at = now.AddSeconds((100 - used) / rate);
-        if (at >= resetsAt) return null;
+        // 以最後一筆樣本的時間為起點：兩次收集之間不會每分鐘往後漂一分鐘
+        var last = history.SamplesFor(provider, window.Id).LastOrDefault(s => s.Ts <= now);
+        var at = (last?.Ts ?? now).AddSeconds((100 - used) / rate);
+        if (at <= now || at >= resetsAt) return null;
         double? faster = null;
         if (UsualRate(history, provider, window.Id, now) is { } usual && usual > 0)
         {

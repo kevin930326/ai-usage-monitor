@@ -38,8 +38,10 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
         guard used < 100, let rate = history.recentRate(provider: provider, windowID: window.id, now: now), rate > 0 else {
             return nil
         }
-        let at = now.addingTimeInterval((100 - used) / rate)
-        guard at < resetsAt else { return nil }
+        // 以最後一筆樣本的時間為起點：兩次收集之間不會每分鐘往後漂一分鐘（畫面每分鐘重算）
+        let base = history.samples(provider: provider, windowID: window.id).last { $0.ts <= now }?.ts ?? now
+        let at = base.addingTimeInterval((100 - used) / rate)
+        guard at > now, at < resetsAt else { return nil }
         exhaustsAt = at
         urgent = at.timeIntervalSince(now) < Self.urgentWithin
         faster = history.usualRate(provider: provider, windowID: window.id, now: now).flatMap { usual in
@@ -51,13 +53,12 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
 }
 
 public extension QuotaForecast {
-    /// 畫面用的預測：有本機歷史（Mac 面板）時自己算（比收集器每 5 分鐘一次即時）；算不出來、或沒有歷史（iPhone、
-    /// 瀏海與角色不讀資料庫）時用收集器寫在快照裡的（同一套規則，最多 5 分鐘前）。快照的過期、已經過了、
-    /// 或不在重置前的不用，緊急與否照現在的時間重算
+    /// 畫面用的預測：有本機歷史（Mac 面板）時只用自己算的，算不出來就不顯示（資料不足時不猜，不退回快照）；
+    /// 沒有歷史（iPhone、瀏海與角色不讀資料庫）時用收集器寫在快照裡的（同一套規則，最多 5 分鐘前）。
+    /// 快照的過期、已經過了、或不在重置前的不用，緊急與否照現在的時間重算
     static func current(window: UsageWindow, provider: String, history: QuotaHistory?, stale: Bool, now: Date) -> QuotaForecast? {
-        if let history, !history.samples.isEmpty,
-           let local = QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now) {
-            return local
+        if let history, !history.samples.isEmpty {
+            return QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now)
         }
         guard !stale, !window.hidden, var forecast = window.forecast, forecast.exhaustsAt > now,
               let resetsAt = window.resetsAt, forecast.exhaustsAt < resetsAt, window.effectiveUsedPct(at: now) < 100 else {

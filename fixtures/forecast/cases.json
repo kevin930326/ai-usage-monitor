@@ -741,6 +741,24 @@
      "end": 40
     }
    ]
+  },
+  {
+   "name": "last-sample-before-now",
+   "note": "最後一筆在 4 分鐘前（兩次收集之間）：以最後一筆的時間起算，不隨現在漂移；剩 40.1 點、每分鐘 1/3 點，116.3 分鐘後用完",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 59.9,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -64,
+     "to_min": -4,
+     "every_min": 5,
+     "start": 40,
+     "end": 60
+    }
+   ]
   }
  ]
 }
