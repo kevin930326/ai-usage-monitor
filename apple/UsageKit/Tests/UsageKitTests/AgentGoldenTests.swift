@@ -152,9 +152,18 @@ import Testing
         ]}
         """
         let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now + 5_000)
-        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1)])
+        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1, id: "0/claude")])
         #expect(list.first?.text == "桌機：Claude Code 需要你")
         #expect(RemoteAgents.parseRelay(Data("[]".utf8), localNow: now).isEmpty)
+        // 同名的兩台：列表識別不同
+        let twins = """
+        {"now":\(now),"devices":[
+          {"device_id":"a","name":"MacBook","updated_at":\(now),"ais":[{"ai":"claude","state":"working","sessions":1,"since":1}]},
+          {"device_id":"b","name":"MacBook","updated_at":\(now),"ais":[{"ai":"claude","state":"working","sessions":1,"since":1}]}
+        ]}
+        """
+        let ids = RemoteAgents.parseRelay(Data(twins.utf8), localNow: now).map(\.id)
+        #expect(ids.count == 2 && Set(ids).count == 2)
         #expect(RemoteAgents.parseRelay(Data("{\"devices\":[]}".utf8), localNow: now).isEmpty)
     }
 

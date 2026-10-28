@@ -33,16 +33,16 @@ public struct RemoteAgent: Sendable, Equatable {
     public var ai: AgentKind
     public var state: AgentState
     public var sessions: Int
+    /// 列表用：檔案裡第幾台＋AI（裝置名稱可能重複，不能當識別）
+    public var id: String
 
-    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int) {
+    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil) {
         self.device = device
         self.ai = ai
         self.state = state
         self.sessions = sessions
+        self.id = id ?? "\(device)/\(ai.rawValue)"
     }
-
-    /// 列表用（同一台同一個 AI 只有一列）
-    public var id: String { "\(device)/\(ai.rawValue)" }
 
     /// 「桌機：Claude Code 需要你」
     public var text: String {
@@ -79,7 +79,8 @@ public enum RemoteAgents {
               let devices = root["devices"] as? [Any] else { return [] }
         let elapsed = max(0, localNow - fetched)
         var list: [RemoteAgent] = []
-        for case let device as [String: Any] in devices.prefix(maxDevices) {
+        for (index, item) in devices.prefix(maxDevices).enumerated() {
+            guard let device = item as? [String: Any] else { continue }
             guard let name = device["name"] as? String, let updated = int(device["updated_at"]),
                   let ais = device["ais"] as? [Any] else { continue }
             let clean = cleanName(name)
@@ -90,7 +91,7 @@ public enum RemoteAgents {
                       let state = (row["state"] as? String).flatMap(AgentState.init(rawValue:)),
                       let sessions = int(row["sessions"]), (0...32).contains(sessions) else { continue }
                 seen.insert(ai)
-                if shown.contains(state) { list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions))) }
+                if shown.contains(state) { list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)")) }
             }
         }
         return list.sorted { a, b in
