@@ -72,7 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await CollectorService.shared.start() }
             AppActions.installRightClickMenu()
             // 截圖與示範模式不註冊（不搶正式 App 的快捷鍵，Fable F-20）
-            if !DebugTools.isDemo { GlobalHotKey.shared.apply(PanelSettings.shared.hotKey) }
+            #if DEBUG
+            let registersHotKey = !DebugTools.isDemo
+            #else
+            let registersHotKey = true
+            #endif
+            if registersHotKey { GlobalHotKey.shared.apply(PanelSettings.shared.hotKey) }
             // 瀏海面板（ADR-0016）：設定預設開啟
             NotchPanelController.shared.apply()
             // 瀏海其實沒顯示（設定檔讀不到）又關了選單列圖示：把圖示放回來，不會兩個入口都沒有（Fable F-12）
