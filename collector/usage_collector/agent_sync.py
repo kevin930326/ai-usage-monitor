@@ -23,7 +23,8 @@ import sys
 import tempfile
 import time
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import credentials, history
@@ -49,6 +50,9 @@ AIS = ("claude", "codex")
 STATES = ("needsYou", "error", "working", "done", "waiting", "idle")
 WINDOWS_MUTEX = "Local\\io.github.kevin930326.AIUsageMonitor.Windows"
 EMPTY = {"v": VERSION, "ais": []}
+LOCK_FILE = ".agent-sync.lock"
+LOCK_WAIT = 150  # 秒：另一個同步（App 觸發的與 5 分鐘一輪的）最多等 60 秒間隔＋上傳、下載各 30 秒
+STALE_LOCK = 300  # 秒：鎖檔超過這麼久當成上一個程序被強制結束
 
 
 # MARK: - 格式（golden）
@@ -300,7 +304,14 @@ def run(path: Path | None = None, now: int | None = None, config_path: Path | No
     if url is None:
         return
     path = path or history.HISTORY_PATH
-    now = int(time.time()) if now is None else now
+    with sync_lock(path.parent) as locked:
+        if not locked:
+            return
+        # 拿到鎖之後才看時間與狀態：等過另一個同步，節流的時間與要送的內容都要是新的
+        _run_locked(path, url, int(time.time()) if now is None else now, config_path, running)
+
+
+def _run_locked(path: Path, url: str, now: int, config_path: Path | None, running: Callable[[], bool]) -> None:
     with history._private_files():
         conn = history.connect(path)
         try:
@@ -330,6 +341,40 @@ def forget(path: Path | None = None) -> None:
         (path or REMOTE_PATH).unlink()
     except FileNotFoundError:
         pass
+
+
+@contextmanager
+def sync_lock(directory: Path, wait: float = LOCK_WAIT) -> Iterator[bool]:
+    """跨程序互斥（`O_EXCL` 建立鎖檔，Mac 與 Windows 都能用）：App 觸發的同步與 5 分鐘一輪的不同時讀寫進度、不並行上傳。
+    另一個程序拿著時每秒再試，等 `wait` 秒還拿不到回傳 False"""
+    lock = directory / LOCK_FILE
+    waited = 0.0
+    while True:
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+            break
+        except FileExistsError:
+            try:
+                if time.time() - lock.stat().st_mtime >= STALE_LOCK:
+                    lock.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                pass
+        except OSError:
+            yield False
+            return
+        if waited >= wait:
+            yield False
+            return
+        time.sleep(1)
+        waited += 1
+    try:
+        yield True
+    finally:
+        try:
+            lock.unlink()
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

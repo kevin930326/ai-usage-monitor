@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -220,6 +221,35 @@ class SyncTests(unittest.TestCase):
         self.remote.unlink()
         self.run_sync(NOW + 120)
         self.assertFalse(self.remote.exists())
+
+    def test_another_sync_in_progress_is_waited_for(self):
+        # 另一個同步拿著鎖：等它結束才讀進度與狀態，送出的是等完後的最新狀態（Codex C-01）
+        lock = self.dir / agent_sync.LOCK_FILE
+        lock.touch()
+        self.write_state()
+
+        def other_finishes(_):
+            self.write_state(STATE.replace("needsYou", "done"))
+            lock.unlink(missing_ok=True)
+
+        with mock.patch("usage_collector.agent_sync.time.sleep", other_finishes):
+            self.run_sync()
+        self.assertEqual("done", self.relay.uploads()[-1]["ais"][0]["state"])
+        self.assertFalse(lock.exists())
+
+    def test_lock_held_too_long_skips_and_stale_lock_is_taken(self):
+        lock = self.dir / agent_sync.LOCK_FILE
+        lock.touch()
+        self.write_state()
+        self.run_sync()
+        self.assertEqual([], self.relay.calls)
+        self.assertEqual(agent_sync.LOCK_WAIT, len(self.sleeps))
+        self.assertTrue(lock.exists())  # 別人的鎖不刪
+        old = time.time() - agent_sync.STALE_LOCK - 1
+        os.utime(lock, (old, old))
+        self.run_sync()
+        self.assertEqual(1, len(self.relay.uploads()))
+        self.assertFalse(lock.exists())
 
     def test_never_raises(self):
         with mock.patch("usage_collector.agent_sync.run", side_effect=RuntimeError("boom /Users/me")), \
