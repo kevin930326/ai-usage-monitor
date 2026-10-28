@@ -139,4 +139,15 @@ import Testing
             #expect(!text.contains(api), "MascotActivity.swift 用了 \(api)")
         }
     }
+
+    @Test func activeWithinMinutesForSleep() {
+        // 睡覺：Claude 與 Codex 都超過設定的分鐘數沒動
+        let fs = FakeLister()
+        fs.add("/home/u/.claude/projects/app", directory: true, modified: Self.now.addingTimeInterval(-200))
+        fs.add("/home/u/.claude/projects/app/s1.jsonl", modified: Self.now.addingTimeInterval(-200))
+        let probe = MascotActivityProbe(roots: Self.roots, lister: fs)
+        #expect(!probe.isWorking(now: Self.now))
+        #expect(probe.isActive(within: 300, now: Self.now))
+        #expect(!probe.isActive(within: 120, now: Self.now))
+    }
 }

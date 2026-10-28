@@ -173,8 +173,17 @@ class SetupIphoneTests(unittest.TestCase):
                     except OSError:
                         break
             self.assertIn("▀".encode(), out)
+            # macOS 的 bash 3.2 印出 read -p 的提示後才開始讀：訊號剛好落在中間時會被擱著，讀取照樣等下去
+            # （使用者再按一次 Ctrl-C 就會結束）。測試沒看到結束就每秒重送一次，最多 10 秒
             os.kill(pid, sig)
+            resend = time.time() + 10
             while True:
+                ready = select.select([fd], [], [], 1)[0]
+                if not ready:
+                    if time.time() > resend:
+                        break
+                    os.kill(pid, sig)
+                    continue
                 try:
                     chunk = os.read(fd, 65536)
                 except OSError:

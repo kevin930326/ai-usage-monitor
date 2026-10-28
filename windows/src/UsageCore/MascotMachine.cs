@@ -7,16 +7,38 @@ namespace AIUsageMonitor.Core;
 // 同一串事件一定排出同樣的播放順序。和 Mac 的 UsageKit/MascotMachine.swift 是同一份規則，兩邊以
 // fixtures/mascot 的 golden 比對；改規則時兩邊一起改。
 
-/// <summary>動畫（一次只播一個）</summary>
-public enum MascotAnimation { Hop, Wave, Dizzy, Shy, Scared, Squeeze, Wake, Alert }
+/// <summary>動畫（一次只播一個）。選單的「表情」每個表情是各自的動畫（FaceHappy…），排隊與取代照一般規則，
+/// 播到才換表情（Codex C-02）</summary>
+public enum MascotAnimation
+{
+    Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Squeeze, Wake, Alert,
+    FaceHappy, FaceWorried, FaceSad, FaceSick, FaceSurprised, FaceOut, FaceStale,
+}
 
-/// <summary>按鈕或狀態觸發的動畫：播放中就排隊，只保留最後一個</summary>
-public enum MascotRequest { Hop, Wave, Dizzy, Shy, Scared, Sleep, Alert }
+/// <summary>按鈕（右鍵選單）或狀態觸發的動畫：播放中就排隊，只保留最後一個。短反應（Hop、Wave、Nod、Tilt、Giggle、Look）
+/// 也是單擊的隨機反應；Pinch 是選單的「捏一下」，Face… 是選單的「表情」（每個表情各自一個要求）</summary>
+public enum MascotRequest
+{
+    Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Alert,
+    FaceHappy, FaceWorried, FaceSad, FaceSick, FaceSurprised, FaceOut, FaceStale,
+}
+
+public static class MascotRequests
+{
+    /// <summary>單擊時隨機挑的短反應（可以被連點 5 下打斷）</summary>
+    public static readonly IReadOnlyList<MascotRequest> Taps =
+        [MascotRequest.Hop, MascotRequest.Wave, MascotRequest.Nod, MascotRequest.Tilt, MascotRequest.Giggle, MascotRequest.Look];
+
+    public static MascotAnimation Animation(this MascotRequest request) => Enum.Parse<MascotAnimation>(request.ToString());
+
+    public static MascotAnimationKind Kind(this MascotRequest request) =>
+        Taps.Contains(request) ? MascotAnimationKind.Tap : MascotAnimationKind.Long;
+}
 
 /// <summary>手勢：播放中直接忽略。繞圈 → 轉暈、甩動 → 嚇到、停留 → 害羞</summary>
 public enum MascotGesture { Circle, Shake, Hover }
 
-/// <summary>模式和動畫是兩回事：動畫播完回到目前模式的姿勢</summary>
+/// <summary>模式和動畫是兩回事：動畫播完回到目前模式的姿勢。模式由 AI 的狀態決定（工作中優先於睡覺），不看滑鼠</summary>
 public enum MascotMode { None, Sleep, Work }
 
 /// <summary>短反應可以被連點 5 下打斷，長動畫中的點擊不計次</summary>
@@ -40,7 +62,6 @@ public sealed record MascotTiming
     [JsonPropertyName("click_window_ms"), JsonRequired] public required int ClickWindowMs { get; init; }
     [JsonPropertyName("clicks_for_dizzy"), JsonRequired] public required int ClicksForDizzy { get; init; }
     [JsonPropertyName("hold_ms"), JsonRequired] public required int HoldMs { get; init; }
-    [JsonPropertyName("sleep_after_idle_ms"), JsonRequired] public required int SleepAfterIdleMs { get; init; }
     [JsonPropertyName("intro_interactive_ms"), JsonRequired] public required int IntroInteractiveMs { get; init; }
     [JsonPropertyName("durations_ms"), JsonRequired] public required Dictionary<string, int> DurationsMs { get; init; }
 
@@ -53,9 +74,13 @@ public sealed record MascotTiming
     /// <summary>動畫長度；捏扁是放開後的長度</summary>
     public int Duration(MascotAnimation animation)
     {
-        var key = animation == MascotAnimation.Squeeze ? "squeeze_release" : MascotNames.Name(animation);
-        return DurationsMs.TryGetValue(key, out var ms) ? ms : 1000;
+        return DurationsMs.TryGetValue(DurationKey(animation), out var ms) ? ms : 1000;
     }
+
+    /// <summary>設定檔裡的長度鍵（捏扁是放開後的長度；表情都用 face）</summary>
+    public static string DurationKey(MascotAnimation animation) =>
+        animation == MascotAnimation.Squeeze ? "squeeze_release"
+            : animation.ToString().StartsWith("Face", StringComparison.Ordinal) ? "face" : MascotNames.Name(animation);
 }
 
 /// <summary>播放中的動畫；End 為 null 表示按住捏扁中（放開後才有結束時間）</summary>
@@ -88,20 +113,18 @@ public readonly record struct MascotLogEntry(long Time, MascotEvent Event)
 
 public sealed class MascotMachine
 {
-    private enum Step { End, Queued, Hold, Intro, Sleep }
+    private enum Step { End, Queued, Hold, Intro }
 
     private readonly List<MascotLogEntry> log = [];
     private readonly List<long> clicks = [];
     private long? holdArmAt;
     private bool justReleased;
-    private long lastActivity;
 
     /// <summary>statusLevel 是啟動時已知的額度狀態（不會因此鼓一下或播提醒）</summary>
     public MascotMachine(MascotTiming timing, long startTime = 0, int statusLevel = 0)
     {
         Timing = timing;
         Now = startTime;
-        lastActivity = startTime;
         StatusLevel = statusLevel;
     }
 
@@ -124,6 +147,10 @@ public sealed class MascotMachine
     /// <summary>最近一次動畫結束、回到模式姿勢的時間（畫面用來做 .32 秒的回位）</summary>
     public long? RestedAt { get; private set; }
     public IReadOnlyList<MascotLogEntry> Log => log;
+    /// <summary>AI 正在跑（工作中）</summary>
+    public bool IsWorking { get; private set; }
+    /// <summary>Claude 與 Codex 都閒置超過設定的時間（睡覺）；工作中優先</summary>
+    public bool IsAgentIdle { get; private set; }
 
     public bool IsIntro => IntroUntil is not null;
     public bool IsBusy => Playing is not null || RestUntil is not null;
@@ -135,15 +162,9 @@ public sealed class MascotMachine
     /// <summary>只保留最後幾行紀錄（App 長時間執行時用；golden 不需要）</summary>
     public void TrimLog(int keeping = 0) => log.RemoveRange(0, Math.Max(log.Count - keeping, 0));
 
-    /// <summary>10 秒沒有操作（移動、點擊、按住、放開）就睡著：只在面板展開、沒有動畫、沒有排隊、平常模式時</summary>
-    private long? SleepDeadline =>
-        IsOpen && !IsIntro && !IsBusy && !IsHolding && holdArmAt is null && Mode == MascotMode.None && Queued is null
-            ? Math.Max(lastActivity + Timing.SleepAfterIdleMs, Now)
-            : null;
-
     // ── 時間 ──
 
-    /// <summary>處理到 time 之前到期的所有事（動畫結束、排隊開始、按住成立、過場結束、睡著）；時間不會倒退</summary>
+    /// <summary>處理到 time 之前到期的所有事（動畫結束、排隊開始、按住成立、過場結束）；時間不會倒退</summary>
     public void Advance(long time)
     {
         while (NextDue(time) is (var at, var step))
@@ -155,7 +176,6 @@ public sealed class MascotMachine
                 case Step.Queued: StartPending(); break;
                 case Step.Hold: ArmHold(); break;
                 case Step.Intro: FinishIntro(); break;
-                case Step.Sleep: EnterSleep(); break;
             }
         }
         Now = Math.Max(Now, time);
@@ -180,7 +200,6 @@ public sealed class MascotMachine
         Consider(RestUntil, Step.Queued);
         Consider(holdArmAt, Step.Hold);
         Consider(IntroUntil, Step.Intro);
-        Consider(SleepDeadline, Step.Sleep);
         return best;
     }
 
@@ -192,7 +211,6 @@ public sealed class MascotMachine
         if (IsOpen) return;
         IsOpen = true;
         clicks.Clear();
-        lastActivity = time;
         if (intro) IntroUntil = time + Timing.IntroInteractiveMs;
         Record(new MascotEvent.Open(intro));
     }
@@ -212,7 +230,6 @@ public sealed class MascotMachine
         holdArmAt = null;
         justReleased = false;
         clicks.Clear();
-        if (Mode == MascotMode.Sleep) SetMode(MascotMode.None);
         Record(new MascotEvent.Close());
     }
 
@@ -223,12 +240,6 @@ public sealed class MascotMachine
         if (!IsOpen)
         {
             Record(new MascotEvent.Drop(request));
-            return;
-        }
-        // 工作中不會睡著
-        if (request == MascotRequest.Sleep && Mode == MascotMode.Work)
-        {
-            Record(new MascotEvent.Ignore(MascotNames.Name(request)));
             return;
         }
         if (IsIntro || IsBusy || IsHolding)
@@ -265,16 +276,15 @@ public sealed class MascotMachine
     {
         time = Begin(time);
         if (!IsOpen || IsIntro) return;
-        lastActivity = time;
         if (justReleased)
         {
             justReleased = false;
             return;
         }
-        // 睡覺時點一下：先叫醒
-        if (Mode == MascotMode.Sleep)
+        // 睡覺時點一下：叫醒一下（播完回到睡覺的姿勢；睡不睡由 AI 的狀態決定）
+        if (Mode == MascotMode.Sleep && !IsBusy)
         {
-            Wake();
+            Start(MascotAnimation.Wake, MascotAnimationKind.Long);
             return;
         }
         // 長動畫（含按住、回位中）裡的點擊不計次
@@ -301,7 +311,6 @@ public sealed class MascotMachine
     {
         time = Begin(time);
         if (!IsOpen || IsIntro || IsBusyWithLong) return;
-        lastActivity = time;
         justReleased = false;
         holdArmAt = time + Timing.HoldMs;
     }
@@ -309,7 +318,6 @@ public sealed class MascotMachine
     public void Release(long time)
     {
         time = Begin(time);
-        lastActivity = time;
         holdArmAt = null;
         if (!IsHolding) return;
         IsHolding = false;
@@ -321,32 +329,36 @@ public sealed class MascotMachine
         }
     }
 
-    /// <summary>滑鼠在面板裡移動：睡覺時叫醒（按住中不算）</summary>
-    public void Move(long time)
-    {
-        time = Begin(time);
-        lastActivity = time;
-        if (Mode != MascotMode.Sleep || !IsOpen || IsIntro || IsHolding) return;
-        Wake();
-    }
+    /// <summary>滑鼠在面板裡移動：只推進時間。睡不睡由 AI 的狀態決定，動滑鼠不會叫醒</summary>
+    public void Move(long time) => Begin(time);
 
-    /// <summary>工作中：狀態立即生效（姿勢在沒有動畫時馬上換）</summary>
+    /// <summary>工作中：狀態立即生效（姿勢在沒有動畫時馬上換）；工作中優先於睡覺</summary>
     public void SetWorking(bool working, long time)
     {
         Begin(time);
-        if (working && Mode != MascotMode.Work) SetMode(MascotMode.Work);
-        else if (!working && Mode == MascotMode.Work) SetMode(MascotMode.None);
+        IsWorking = working;
+        UpdateMode();
     }
 
-    /// <summary>額度狀態（0 正常、1 偏高、2 用完或出錯）：狀態點立即換色，提醒動畫排隊；收著時改成瀏海鼓一下；
-    /// 回到正常只換色，排隊中的提醒也丟掉</summary>
-    public void SetStatus(int level, long time)
+    /// <summary>Claude 與 Codex 都閒置超過設定的時間：睡覺（面板收著也算，迷你角色顯示睡著的姿勢）</summary>
+    public void SetAgentIdle(bool idle, long time)
+    {
+        Begin(time);
+        IsAgentIdle = idle;
+        UpdateMode();
+    }
+
+    private void UpdateMode() => SetMode(IsWorking ? MascotMode.Work : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
+
+    /// <summary>額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；
+    /// 回到正常只換表情，排隊中的提醒也丟掉。react 為 false（靜音、勿擾）時只換表情、不播也不鼓</summary>
+    public void SetStatus(int level, long time, bool react = true)
     {
         time = Begin(time);
         if (level == StatusLevel) return;
         StatusLevel = level;
         Record(new MascotEvent.Status(level));
-        if (level <= 0)
+        if (level <= 0 || !react)
         {
             if (Queued == MascotRequest.Alert) DropQueued();
             if (Pending == MascotRequest.Alert) DropPending();
@@ -356,40 +368,21 @@ public sealed class MascotMachine
         else Record(new MascotEvent.Bump());
     }
 
-    // ── 內部 ──
-
-    private void Run(MascotRequest request)
+    /// <summary>開始靜音或勿擾：排隊或待播的額度提醒丟掉（之後的狀態改變以 react: false 只換表情；Codex C-03）</summary>
+    public void Silence(long time)
     {
-        if (Mode == MascotMode.Sleep && request != MascotRequest.Sleep) SetMode(MascotMode.None);
-        RestUntil = null;
-        switch (request)
-        {
-            case MascotRequest.Sleep:
-                // 工作中不會睡著（排隊時還不是工作中，播到時才開始工作的也一樣）
-                if (Mode == MascotMode.Work)
-                {
-                    Record(new MascotEvent.Ignore(MascotNames.Name(request)));
-                    return;
-                }
-                if (Playing is { } playing) Record(new MascotEvent.Interrupt(playing.Animation));
-                Playing = null;
-                EnterSleep();
-                break;
-            case MascotRequest.Hop: Start(MascotAnimation.Hop, MascotAnimationKind.Tap); break;
-            case MascotRequest.Wave: Start(MascotAnimation.Wave, MascotAnimationKind.Tap); break;
-            case MascotRequest.Dizzy: Start(MascotAnimation.Dizzy, MascotAnimationKind.Long); break;
-            case MascotRequest.Shy: Start(MascotAnimation.Shy, MascotAnimationKind.Long); break;
-            case MascotRequest.Scared: Start(MascotAnimation.Scared, MascotAnimationKind.Long); break;
-            case MascotRequest.Alert: Start(MascotAnimation.Alert, MascotAnimationKind.Long); break;
-        }
+        Begin(time);
+        if (Queued == MascotRequest.Alert) DropQueued();
+        if (Pending == MascotRequest.Alert) DropPending();
     }
 
-    private void Wake()
+    // ── 內部 ──
+
+    /// <summary>睡覺中也照樣播（每個動畫從中性姿勢開始），播完回到睡覺的姿勢</summary>
+    private void Run(MascotRequest request)
     {
         RestUntil = null;
-        DropPending();
-        SetMode(MascotMode.None);
-        Start(MascotAnimation.Wake, MascotAnimationKind.Long);
+        Start(request.Animation(), request.Kind());
     }
 
     /// <summary>每個動畫開始前先歸零（畫面依 Playing.Start 從中性姿勢開始），被取代的記為 interrupt</summary>
@@ -444,8 +437,6 @@ public sealed class MascotMachine
         IsHolding = true;
         RestUntil = null;
         DropPending();
-        // 睡覺時被捏：先回到平常
-        if (Mode == MascotMode.Sleep) SetMode(MascotMode.None);
         Start(MascotAnimation.Squeeze, MascotAnimationKind.Hold);
     }
 
@@ -456,13 +447,6 @@ public sealed class MascotMachine
         if (Queued is not { } next) return;
         Queued = null;
         Run(next);
-    }
-
-    private void EnterSleep()
-    {
-        if (!IsOpen || IsIntro) return;
-        RestUntil = null;
-        SetMode(MascotMode.Sleep);
     }
 
     private void DropQueued()

@@ -56,6 +56,8 @@ public enum MascotEase: String, Sendable, Codable {
 /// 眼睛樣式（閉眼「– –」以 `dash` 參數表示，不是另一種樣式）
 public enum MascotEyes: String, Sendable {
     case pill, happy, dot, xx, spiral
+    /// ×（額度用完）
+    case cross
 }
 
 /// 角色身邊的小特效

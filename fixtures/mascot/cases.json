@@ -1,5 +1,5 @@
 {
-  "_comment": "角色狀態機的 golden 輸入（ADR-0016）：每個情境是一串依時間排列的事件（毫秒）。Swift（UsageKit MascotGoldenTests）以 AUM_UPDATE_GOLDEN=1 產生 golden.json，C#（UsageCore.Tests MascotGoldenTests）必須排出同樣的紀錄。時間參數讀 shared/mascot-anim.json。",
+  "_comment": "角色狀態機的 golden 輸入（ADR-0016；睡覺由 idle 事件（AI 閒置）決定，不看滑鼠）：每個情境是一串依時間排列的事件（毫秒）。Swift（UsageKit MascotGoldenTests）以 AUM_UPDATE_GOLDEN=1 產生 golden.json，C#（UsageCore.Tests MascotGoldenTests）必須排出同樣的紀錄。時間參數讀 shared/mascot-anim.json。",
   "cases": [
     {
       "name": "wave-then-dizzy-button-queues",
@@ -302,8 +302,8 @@
       ]
     },
     {
-      "name": "sleep-then-move-wakes",
-      "note": "10 秒沒動滑鼠睡著；睡覺時動滑鼠叫醒（.9 秒），之後再 10 秒又睡著",
+      "name": "agent-idle-sleeps-move-does-not-wake",
+      "note": "Claude 與 Codex 都閒置（App 依設定的分鐘數判斷）就睡；動滑鼠不會叫醒；點一下叫醒一下（.9 秒）後回到睡覺；AI 開始動了才醒",
       "events": [
         {
           "t": 0,
@@ -312,25 +312,40 @@
         },
         {
           "t": 3000,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 4000,
           "e": "move"
         },
         {
-          "t": 15000,
+          "t": 9000,
           "e": "move"
         },
         {
-          "t": 15100,
-          "e": "move"
+          "t": 10000,
+          "e": "click",
+          "choice": "hop"
         },
         {
-          "t": 26000,
+          "t": 12000,
+          "e": "advance"
+        },
+        {
+          "t": 13000,
+          "e": "idle",
+          "on": false
+        },
+        {
+          "t": 14000,
           "e": "advance"
         }
       ]
     },
     {
-      "name": "sleep-request-and-alert-wakes",
-      "note": "按鈕要求睡覺；睡覺中的提醒先醒來（模式回到平常）再播",
+      "name": "alert-while-asleep-returns-to-sleep",
+      "note": "睡覺中的提醒照樣播（從中性姿勢開始），播完回到睡覺；睡覺中的手勢忽略",
       "events": [
         {
           "t": 0,
@@ -339,8 +354,8 @@
         },
         {
           "t": 100,
-          "e": "request",
-          "name": "sleep"
+          "e": "idle",
+          "on": true
         },
         {
           "t": 2000,
@@ -360,7 +375,7 @@
     },
     {
       "name": "work-mode-returns-to-work-pose",
-      "note": "工作中模式下播反應後回到工作姿勢；工作中不會睡著",
+      "note": "工作中模式下播反應後回到工作姿勢",
       "events": [
         {
           "t": 0,
@@ -399,12 +414,17 @@
     },
     {
       "name": "work-starts-during-sleep",
-      "note": "睡覺時開始工作：直接換成工作中；工作結束後回到平常",
+      "note": "睡覺時開始工作：直接換成工作中（工作優先）；工作結束後仍閒置就回到睡覺，AI 不再閒置才回到平常",
       "events": [
         {
           "t": 0,
           "e": "open",
           "intro": false
+        },
+        {
+          "t": 500,
+          "e": "idle",
+          "on": true
         },
         {
           "t": 10500,
@@ -417,7 +437,12 @@
           "on": false
         },
         {
-          "t": 11000,
+          "t": 12000,
+          "e": "idle",
+          "on": false
+        },
+        {
+          "t": 12000,
           "e": "advance"
         }
       ]
@@ -604,7 +629,7 @@
     },
     {
       "name": "close-clears-everything",
-      "note": "收合時：播放中的停止、排隊丟掉、睡覺改回平常；再展開從頭開始",
+      "note": "收合時：播放中的停止、排隊丟掉；再展開從頭開始（睡覺由 AI 狀態決定，收合不改）",
       "events": [
         {
           "t": 0,
@@ -713,21 +738,35 @@
       ]
     },
     {
-      "name": "same-ms-end-before-sleep",
-      "note": "同一毫秒：動畫結束後同一刻滿 10 秒就睡著（end < sleep）",
+      "name": "sleep-persists-while-collapsed",
+      "note": "收著時閒置也會睡（迷你角色閉眼）；展開、收合都維持睡覺；收著時醒來也立即生效",
       "events": [
         {
           "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 1000,
           "e": "open",
           "intro": false
         },
         {
-          "t": 9100,
-          "e": "click",
-          "choice": "hop"
+          "t": 2000,
+          "e": "close"
         },
         {
-          "t": 20000,
+          "t": 3000,
+          "e": "idle",
+          "on": false
+        },
+        {
+          "t": 4000,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 5000,
           "e": "advance"
         }
       ]
@@ -805,12 +844,17 @@
     },
     {
       "name": "press-while-asleep",
-      "note": "睡覺時按住：先回到平常再捏扁；按住中移動不會叫醒、也不會卡住",
+      "note": "睡覺時按住：從睡覺的姿勢直接捏扁；放開回彈後回到睡覺；按住中移動不影響",
       "events": [
         {
           "t": 0,
           "e": "open",
           "intro": false
+        },
+        {
+          "t": 100,
+          "e": "idle",
+          "on": true
         },
         {
           "t": 12000,
@@ -866,8 +910,8 @@
       ]
     },
     {
-      "name": "sleep-request-ignored-while-working",
-      "note": "工作中按睡覺：忽略，仍是工作中",
+      "name": "idle-ignored-while-working",
+      "note": "工作中又閒置（例如另一個 AI 沒在跑）：工作優先，仍是工作中；工作結束才睡",
       "events": [
         {
           "t": 0,
@@ -881,12 +925,17 @@
         },
         {
           "t": 200,
-          "e": "request",
-          "name": "sleep"
+          "e": "idle",
+          "on": true
         },
         {
           "t": 1000,
           "e": "move"
+        },
+        {
+          "t": 15000,
+          "e": "working",
+          "on": false
         },
         {
           "t": 15000,
@@ -895,8 +944,8 @@
       ]
     },
     {
-      "name": "click-wakes-and-activity-delays-sleep",
-      "note": "睡覺時點一下先叫醒；點擊、按住、放開都算操作，不會放開後馬上睡著",
+      "name": "click-wakes-briefly-then-sleeps-again",
+      "note": "睡覺時點一下叫醒一下；叫醒播放中的點擊不計次；放開後那一下點擊不算",
       "events": [
         {
           "t": 0,
@@ -904,7 +953,17 @@
           "intro": false
         },
         {
+          "t": 500,
+          "e": "idle",
+          "on": true
+        },
+        {
           "t": 10500,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 10700,
           "e": "click",
           "choice": "hop"
         },
@@ -913,8 +972,13 @@
           "e": "press"
         },
         {
-          "t": 23000,
+          "t": 12000,
           "e": "release"
+        },
+        {
+          "t": 12000,
+          "e": "click",
+          "choice": "wave"
         },
         {
           "t": 30000,
@@ -923,8 +987,8 @@
       ]
     },
     {
-      "name": "queued-sleep-ignored-after-work-starts",
-      "note": "排隊的睡覺：播到時已經是工作中就忽略（排隊中開始工作、回位等待中開始工作）",
+      "name": "new-tap-reactions-and-menu-requests",
+      "note": "新的短反應（點頭、歪頭、偷笑、東張西望）是 tap 類，可被連點 5 下打斷；選單的捏一下、表情是長動畫、照按鈕規則排隊",
       "events": [
         {
           "t": 0,
@@ -934,51 +998,56 @@
         {
           "t": 0,
           "e": "click",
-          "choice": "hop"
+          "choice": "nod"
         },
         {
           "t": 100,
           "e": "request",
-          "name": "sleep"
+          "name": "pinch"
         },
         {
           "t": 200,
-          "e": "working",
-          "on": true
+          "e": "request",
+          "name": "facesick"
         },
         {
           "t": 3000,
           "e": "advance"
         },
         {
-          "t": 3100,
-          "e": "working",
-          "on": false
+          "t": 5000,
+          "e": "click",
+          "choice": "tilt"
         },
         {
-          "t": 3100,
+          "t": 5100,
+          "e": "click",
+          "choice": "giggle"
+        },
+        {
+          "t": 5200,
+          "e": "click",
+          "choice": "look"
+        },
+        {
+          "t": 5300,
           "e": "click",
           "choice": "hop"
         },
         {
-          "t": 3200,
-          "e": "request",
-          "name": "sleep"
+          "t": 5400,
+          "e": "click",
+          "choice": "wave"
         },
         {
-          "t": 4050,
-          "e": "working",
-          "on": true
-        },
-        {
-          "t": 6000,
+          "t": 9000,
           "e": "advance"
         }
       ]
     },
     {
       "name": "queue-continues-after-pending-cancelled",
-      "note": "待播的提醒因回到正常被取消、或待播的是睡覺：後面排隊的照樣在回位後播，不會卡住",
+      "note": "待播的提醒因回到正常被取消：後面排隊的照樣在回位後播，不會卡住",
       "events": [
         {
           "t": 0,
@@ -1008,24 +1077,138 @@
         {
           "t": 4000,
           "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "quiet-status-changes-face-only",
+      "note": "靜音或勿擾時額度狀態改變：只換表情（status），不播提醒、收著時也不鼓一下",
+      "events": [
+        {
+          "t": 0,
+          "e": "status",
+          "level": 1,
+          "react": false
         },
         {
-          "t": 4000,
-          "e": "click",
-          "choice": "hop"
+          "t": 100,
+          "e": "open",
+          "intro": false
         },
         {
-          "t": 4100,
+          "t": 200,
+          "e": "status",
+          "level": 2,
+          "react": false
+        },
+        {
+          "t": 300,
+          "e": "status",
+          "level": 0,
+          "react": false
+        },
+        {
+          "t": 2000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "menu-faces-queue",
+      "note": "選單的表情各自是一個要求：播放中的不被換掉，排隊只留最後一個（Codex C-02）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
           "e": "request",
-          "name": "sleep"
+          "name": "facehappy"
         },
         {
-          "t": 4950,
+          "t": 300,
+          "e": "request",
+          "name": "facesick"
+        },
+        {
+          "t": 500,
+          "e": "request",
+          "name": "facesad"
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "silence-drops-queued-and-pending-alert",
+      "note": "開始靜音或勿擾：排隊與待播的提醒丟掉，一般的動作照播（Codex C-03）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 200,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 300,
+          "e": "silence"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        },
+        {
+          "t": 6000,
           "e": "request",
           "name": "wave"
         },
         {
-          "t": 8000,
+          "t": 6100,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 6100,
+          "e": "request",
+          "name": "nod"
+        },
+        {
+          "t": 8400,
+          "e": "advance"
+        },
+        {
+          "t": 8500,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 8600,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 9100,
+          "e": "silence"
+        },
+        {
+          "t": 12000,
           "e": "advance"
         }
       ]

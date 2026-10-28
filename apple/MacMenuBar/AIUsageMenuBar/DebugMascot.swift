@@ -31,6 +31,10 @@ enum DebugMascot {
             config.panel.collapsed.height = shot.layout.collapsedHeight
             var d = MascotDirector(config: config, seed: 7, startTime: 0)
             shot.setup(&d)
+            // 沒有指定表情時照額度：過期閉眼、剩不到 20% 擔心、用完 ×
+            if d.mood == .normal {
+                d.setMood(.quota(level: d.machine.statusLevel, unavailable: shot.quota == .stale))
+            }
             d.advance(to: shot.time)
             return d
         }
@@ -57,7 +61,7 @@ enum DebugMascot {
             Text(text).font(.system(size: 11)).foregroundStyle(Color(white: 0.75)).frame(width: 580, alignment: .leading)
         }
 
-        // 收合：Claude、Codex，三種狀態點
+        // 收合：Claude、Codex，三種額度表情（正常膠囊、擔心的小圓點＋眉毛、用完 ×）
         var collapsed: [Shot] = []
         for character in MascotCharacter.allCases {
             for level in 0...2 {
@@ -70,6 +74,11 @@ enum DebugMascot {
             collapsed.append(Shot(name: "collapsed-claude-\(quota == .low ? "low" : "stale")",
                                   setup: { $0.setStatus(quota == .low ? 1 : 0, at: 0) }, time: 2000, quota: quota))
         }
+        // 收著時 Claude 與 Codex 都閒置：迷你角色閉眼低頭（靜止）
+        for character in MascotCharacter.allCases {
+            collapsed.append(Shot(name: "collapsed-\(character.rawValue)-sleep", character: character,
+                                  setup: { $0.setAgentIdle(true, at: 0) }, time: 2000))
+        }
         // 展開（不播過場、已經停在角色卡）
         var expanded = [MascotCharacter.claude, .codex].map { character in
             Shot(name: "expanded-\(character.rawValue)", character: character,
@@ -80,6 +89,8 @@ enum DebugMascot {
                                  setup: { $0.setStatus(quota == .low ? 1 : 0, at: 0); $0.open(at: 0, intro: false) },
                                  time: 1500, quota: quota))
         }
+        expanded.append(Shot(name: "expanded-claude-out", setup: { $0.setStatus(2, at: 0); $0.open(at: 0, intro: false) },
+                             time: 1500))
         // 過場的六個時間點
         let intro = [0, 300, 1200, 2600, 3990, 4700].map { ms in
             Shot(name: "intro-\(ms)", setup: { $0.open(at: 0, intro: true) }, time: ms)
@@ -95,18 +106,26 @@ enum DebugMascot {
         let expressions: [Shot] = [
             expression("hop", at: 300) { $0.request(.hop, at: 1000) },
             expression("wave", at: 700) { $0.request(.wave, at: 1000) },
+            expression("nod", at: 260) { $0.request(.nod, at: 1000) },
+            expression("tilt", at: 500) { $0.request(.tilt, at: 1000) },
+            expression("giggle", at: 400) { $0.request(.giggle, at: 1000) },
+            expression("look", at: 650) { $0.request(.look, at: 1000) },
+            expression("pinch", at: 250) { $0.request(.pinch, at: 1000) },
             expression("dizzy", at: 1200) { $0.request(.dizzy, at: 1000) },
             expression("shy", at: 700) { $0.request(.shy, at: 1000) },
             expression("shy-peek", at: 1200) { $0.request(.shy, at: 1000) },
             expression("scared", at: 700) { $0.request(.scared, at: 1000) },
             expression("squeeze", at: 600) { $0.press(at: 1000) },
-            expression("sleep", at: 11_000) { _ in },
-            expression("wake", at: 11_200) { $0.advance(to: 11_000); $0.move(at: 11_000, dx: 0, dy: 0) },
+            expression("sleep", at: 2000) { $0.setAgentIdle(true, at: 1000) },
+            expression("wake", at: 2200) { $0.setAgentIdle(true, at: 1000); $0.click(at: 2000, choice: .hop) },
             expression("work", at: 800) { $0.setWorking(true, at: 1000) },
             expression("alert-high", at: 250) { $0.setStatus(1, at: 1000) },
             expression("alert-out", at: 250) { $0.setStatus(2, at: 1000) },
             Shot(name: "expr-collapsed-alert", setup: { $0.setStatus(1, at: 1000) }, time: 1350),
-        ]
+        ] + MascotMood.allCases.filter { $0 != .normal }.map { mood in
+            // 右鍵選單的「表情」（同一套眼睛與眉毛也用在額度與之後的 AI 狀態）
+            expression("face-\(mood.rawValue)", at: 1000) { $0.requestFace(mood, at: 1000) }
+        }
         // 有瀏海的 Mac（實體瀏海 185 寬）與沒有瀏海時的假瀏海
         let notch = NotchLayout(notchWidth: 185, notchHeight: 32, hasNotch: true)
         let screens = [
@@ -136,6 +155,56 @@ enum DebugMascot {
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }
+        // 右鍵選單：和真的選單同一份項目（`NotchMenu.entries`），完整與簡單、靜音中各一份
+        let quiet = now.addingTimeInterval(3600)
+        let menus: [(String, [NotchMenu.Entry])] = [
+            ("完整", NotchMenu.entries(animates: true, simple: false, pinned: false, quietUntil: nil)),
+            ("保持展開、靜音中", NotchMenu.entries(animates: true, simple: false, pinned: true, quietUntil: quiet)),
+            ("簡單", NotchMenu.entries(animates: false, simple: true, pinned: false, quietUntil: nil)),
+        ]
+        for scheme in [ColorScheme.light, .dark] {
+            write(menuSheet(menus, scheme: scheme), dir.appendingPathComponent("notch-menu-\(scheme == .dark ? "dark" : "light").png"))
+        }
+    }
+
+    /// 右鍵選單的樣子（系統選單的字級與間距；ImageRenderer 畫不出 NSMenu，所以照同一份項目畫）
+    private static func menuSheet(_ menus: [(String, [NotchMenu.Entry])], scheme: ColorScheme) -> some View {
+        let primary = scheme == .dark ? Color.white : Color.black
+        return HStack(alignment: .top, spacing: 16) {
+            ForEach(Array(menus.enumerated()), id: \.offset) { _, menu in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(menu.0).font(.system(size: 11)).foregroundStyle(primary.opacity(0.6))
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(menu.1.enumerated()), id: \.offset) { _, entry in
+                            switch entry {
+                            case .header(let title):
+                                Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(primary.opacity(0.5))
+                                    .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 2)
+                            case .separator:
+                                Rectangle().fill(primary.opacity(0.12)).frame(height: 1).padding(.vertical, 5).padding(.horizontal, 10)
+                            case .note(let title):
+                                Text(title).font(.system(size: 13)).foregroundStyle(primary.opacity(0.35))
+                                    .padding(.horizontal, 10).frame(height: 22)
+                            case .item(let title, let enabled, let checked, _):
+                                HStack(spacing: 4) {
+                                    Text(checked ? "✓" : "").font(.system(size: 12, weight: .semibold)).frame(width: 12)
+                                    Text(title).font(.system(size: 13))
+                                }
+                                .foregroundStyle(primary.opacity(enabled ? 0.9 : 0.35))
+                                .padding(.leading, 4).padding(.trailing, 20).frame(height: 22)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 5)
+                    .frame(width: 250, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(scheme == .dark ? Color(white: 0.17) : Color(white: 0.96)))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(primary.opacity(0.12)))
+                }
+            }
+        }
+        .padding(14)
+        .background(scheme == .dark ? Color(white: 0.08) : Color(white: 0.86))
+        .environment(\.colorScheme, scheme)
     }
 
     /// 放在模擬的選單列上（淺色、深色），看假瀏海和實體瀏海兩側的樣子

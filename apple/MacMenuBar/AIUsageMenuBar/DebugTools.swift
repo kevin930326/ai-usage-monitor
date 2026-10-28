@@ -154,13 +154,40 @@ enum DebugTools {
     /// 瀏海面板（ADR-0016 第 6 節）：展開含過場、待著、播反應、收合，收合後 1 分鐘、再開關一次比較記憶體
     private static func runNotchPerfSchedule() {
         let mascot = MascotController.shared
-        let close = 40.0
+        mascot.debugSkipsActivity = true
+        // 游標固定在螢幕中間（不動）；量「游標移動」時繞圓移動（只換假的位置，不移動真的游標）
+        let screen = NSScreen.main?.frame ?? .zero
+        var moving = false
+        let started = Date.now
+        mascot.debugPointer = {
+            guard moving else { return CGPoint(x: screen.midX, y: screen.midY) }
+            let a = Date.now.timeIntervalSince(started) * 1.5
+            return CGPoint(x: screen.midX + cos(a) * screen.width * 0.35, y: screen.midY + sin(a) * screen.height * 0.3)
+        }
+        mascot.followPointerChanged()
+        let close = 55.0
         schedule([
             (0, "launch", {}),
             (10, "notch-open", { mascot.pointerEntered() }),
             (20, "notch-idle", {}),
-            (30, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
+            // Claude 與 Codex 都閒置：睡著（呼吸）
+            (22, "notch-sleep", { mascot.mutate { $0.setAgentIdle(true, at: mascot.time()) } }),
+            (32, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
+            // 第二輪新增的動畫：每個各播一次，只記錄播放中的峰值（ADR-0010 第 3 節，Codex 第二輪 C-04）
+            // 間隔 3 秒（最長的表情 2.2 秒），每個至少有 2 筆每秒一次的取樣
+            (35, "notch-nod", { mascot.mutate { $0.request(.nod, at: mascot.time()) } }),
+            (38, "notch-tilt", { mascot.mutate { $0.request(.tilt, at: mascot.time()) } }),
+            (41, "notch-giggle", { mascot.mutate { $0.request(.giggle, at: mascot.time()) } }),
+            (44, "notch-look", { mascot.mutate { $0.request(.look, at: mascot.time()) } }),
+            (47, "notch-pinch", { mascot.mutate { $0.request(.pinch, at: mascot.time()) } }),
+            (50, "notch-face", { mascot.mutate { $0.requestFace(.happy, at: mascot.time()) } }),
             (close, "notch-close", { mascot.closeNow() }),
+            // 收著、睡著：游標移動時臉不跟著轉，不重畫
+            (close + 5, "gaze-move-asleep", { moving = true }),
+            (close + 15, "notch-wake", { mascot.mutate { $0.setAgentIdle(false, at: mascot.time()) } }),
+            // 收著、醒著：游標一直移動（看滑鼠，每秒約 12 次讀位置）
+            (close + 18, "gaze-move", {}),
+            (close + 33, "gaze-still", { moving = false }),
             (close + 60, "closed-60s", {}),
             (close + 90, "closed-90s", {}),
             (close + 92, "notch-reopen", { mascot.pointerEntered() }),
@@ -169,13 +196,22 @@ enum DebugTools {
         ])
     }
 
+    /// 量測時間表開始的時間（沒在量測時是 nil）
+    private static var perfStart: Date?
+
+    /// 量測中才記：App 自己的定時工作（例如每分鐘的時鐘更新）也記標記，報表才分得出來是哪裡在吃 CPU
+    static func perfMark(_ name: String) {
+        guard let perfStart else { return }
+        UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(perfStart), name))
+    }
+
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {
-        let start = Date.now
+        perfStart = Date.now
         for (offset, name, action) in steps {
             DispatchQueue.main.asyncAfter(deadline: .now() + offset) {
                 MainActor.assumeIsolated {
                     action()
-                    UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(start), name))
+                    perfMark(name)
                 }
             }
         }

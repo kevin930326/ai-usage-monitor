@@ -709,7 +709,8 @@ class SnapshotsScriptTests(unittest.TestCase):
            "tier2-card-revoked-device-light", "tier2-card-revoked-device-dark",
            "tier2-card-deleted-device-light", "tier2-card-deleted-device-dark",
            "tier2-card-all-cache-read-light", "tier2-card-all-cache-read-dark",
-           "notch-collapsed", "notch-intro", "notch-expressions", "notch-menubar-light", "notch-menubar-dark"]
+           "notch-collapsed", "notch-intro", "notch-expressions", "notch-menubar-light", "notch-menubar-dark",
+           "notch-menu-light", "notch-menu-dark"]
     IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
            "widget-large-dark", "live-activity-light", "live-activity-dark", "island-normal"]
 
@@ -809,26 +810,29 @@ if __name__ == "__main__":
 class NotchPerfSummaryTests(unittest.TestCase):
     """notch-perf-summary.py：門檻與缺少取樣都要讓報表失敗（ADR-0016 第 6 節、Codex C-07）。"""
     SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
-    MARKS = {"notch-open": 10, "notch-wave": 30, "notch-close": 40, "notch-close-2": 140}
+    MARKS = {"notch-open": 10, "notch-sleep": 22, "notch-wave": 32, "notch-nod": 35, "notch-tilt": 38, "notch-giggle": 41,
+             "notch-look": 44, "notch-pinch": 47, "notch-face": 50, "notch-close": 55, "gaze-move-asleep": 60,
+             "gaze-move": 73, "gaze-still": 88, "notch-close-2": 155}
 
-    def run_summary(self, samples, marks=None):
+    def run_summary(self, samples, marks=None, ticks=()):
         with tempfile.TemporaryDirectory() as tmp:
             s = Path(tmp) / "samples.tsv"
             log = Path(tmp) / "app.log"
             s.write_text("".join(f"{t} {cpu} {rss}\n" for t, cpu, rss in samples))
-            log.write_text("".join(f"perf-mark {v} {k}\n" for k, v in (marks or self.MARKS).items()))
+            log.write_text("".join(f"perf-mark {v} {k}\n" for k, v in (marks or self.MARKS).items())
+                           + "".join(f"perf-mark {t} minute-tick\n" for t in ticks))
             return subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log)], capture_output=True, text=True)
 
     @staticmethod
     def full(skip=()):
-        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 170) if not any(a <= t < b for a, b in skip)]
+        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 185) if not any(a <= t < b for a, b in skip)]
 
     def test_complete_samples_pass(self):
         result = self.run_summary(self.full())
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_missing_intro_or_wave_samples_fail(self):
-        for gap in [(10, 15), (30, 32), (15, 20), (22, 30)]:
+        for gap in [(10, 15), (32, 34), (15, 20), (24, 32), (35, 37), (44, 46), (50, 52), (62, 70), (75, 88)]:
             result = self.run_summary(self.full(skip=[gap]))
             self.assertEqual(result.returncode, 1, (gap, result.stdout))
             self.assertIn("缺", result.stdout)
@@ -839,5 +843,19 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(self.run_summary(self.full(), marks).returncode, 1)
 
     def test_busy_idle_fails(self):
-        samples = [(t, 6.0 if 22 <= t < 30 else 0.0, 100_000) for t in range(0, 170)]
+        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 185)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
+
+    def test_redraw_while_collapsed_asleep_fails(self):
+        # 收合、睡著時游標移動不能重畫（第二輪：睡著時降到每秒讀 1 次游標）
+        samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 185)]
+        self.assertEqual(self.run_summary(samples).returncode, 1)
+
+    def test_minute_tick_is_excluded_only_from_gaze_rows(self):
+        # 每分鐘的時鐘更新落在「睡著、游標移動」裡：扣掉那一秒後照樣通過
+        spike = [(t, 5.0 if t == 65 else 0.0, 100_000) for t in range(0, 185)]
+        self.assertEqual(self.run_summary(spike).returncode, 1)
+        self.assertEqual(self.run_summary(spike, ticks=[64.5]).returncode, 0)
+        # 沒落在看滑鼠的階段時不扣：收合後 60～90 秒照樣算進去
+        busy = [(t, 9.5 if t == 130 else 0.0, 100_000) for t in range(0, 185)]
+        self.assertEqual(self.run_summary(busy, ticks=[129.5]).returncode, 1)

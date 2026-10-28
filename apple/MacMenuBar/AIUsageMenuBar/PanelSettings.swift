@@ -8,7 +8,7 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case bar
     case percent
     case ringPercent
-    /// 角色（ADR-0016）：設定裡選的角色，左上角是狀態點
+    /// 角色（ADR-0016）：設定裡選的角色，額度用眼睛的形狀表示（沒有狀態點）
     case character
     case characterPercent
 
@@ -119,6 +119,10 @@ final class PanelSettings {
         static let mascotCharacter = "notch.character"
         static let notchIntro = "notch.intro"
         static let mascotMotion = "notch.motion"
+        static let mascotFollowPointer = "notch.followPointer"
+        static let mascotSleepMinutes = "notch.sleepMinutes"
+        static let mascotQuietUntil = "notch.quietUntil"
+        static let notchHintShown = "notch.hintShown"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -248,6 +252,11 @@ final class PanelSettings {
         mascotCharacter = defaults.string(forKey: Key.mascotCharacter).flatMap(MascotCharacter.init) ?? .claude
         notchIntro = defaults.string(forKey: Key.notchIntro).flatMap(NotchIntroChoice.init) ?? .firstOnly
         mascotMotion = defaults.string(forKey: Key.mascotMotion).flatMap(MascotMotionLevel.init) ?? .full
+        mascotFollowPointer = defaults.object(forKey: Key.mascotFollowPointer) as? Bool ?? true
+        let minutes = defaults.integer(forKey: Key.mascotSleepMinutes)
+        mascotSleepMinutes = Self.sleepMinuteChoices.contains(minutes) ? minutes : 5
+        mascotQuietUntil = defaults.object(forKey: Key.mascotQuietUntil) as? Date
+        notchHintShown = defaults.bool(forKey: Key.notchHintShown)
     }
 
     /// 瀏海面板（ADR-0016）：預設開啟；關掉時選單列圖示與面板照常
@@ -277,6 +286,41 @@ final class PanelSettings {
             defaults.set(mascotMotion.rawValue, forKey: Key.mascotMotion)
             MascotController.shared.motionChanged()
         }
+    }
+
+    /// 角色的眼睛跟著游標（整個螢幕，展開與收合都看；預設開）
+    var mascotFollowPointer: Bool {
+        didSet {
+            defaults.set(mascotFollowPointer, forKey: Key.mascotFollowPointer)
+            MascotController.shared.followPointerChanged()
+        }
+    }
+
+    static let sleepMinuteChoices = [1, 3, 5, 10, 15, 30]
+
+    /// Claude 與 Codex 都閒置超過幾分鐘角色就睡（預設 5）
+    var mascotSleepMinutes: Int {
+        didSet {
+            defaults.set(mascotSleepMinutes, forKey: Key.mascotSleepMinutes)
+            MascotController.shared.checkActivitySoon()
+        }
+    }
+
+    /// 靜音或勿擾到這個時間（角色的提醒動畫與瀏海的通知都不出現）；nil 表示沒有
+    var mascotQuietUntil: Date? {
+        didSet {
+            if let mascotQuietUntil { defaults.set(mascotQuietUntil, forKey: Key.mascotQuietUntil) }
+            else { defaults.removeObject(forKey: Key.mascotQuietUntil) }
+        }
+    }
+
+    /// 第一次展開瀏海時的提示（右鍵有更多）已經顯示過
+    var notchHintShown: Bool {
+        didSet { defaults.set(notchHintShown, forKey: Key.notchHintShown) }
+    }
+
+    func isMascotQuiet(at now: Date) -> Bool {
+        mascotQuietUntil.map { now < $0 } ?? false
     }
 
     var visibleSections: [PanelSection] {

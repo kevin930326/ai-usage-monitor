@@ -33,7 +33,9 @@ public class MascotGoldenTests
                 case "release": machine.Release(t); break;
                 case "move": machine.Move(t); break;
                 case "working": machine.SetWorking(e["on"]?.GetValue<bool>() ?? false, t); break;
-                case "status": machine.SetStatus(e["level"]?.GetValue<int>() ?? 0, t); break;
+                case "idle": machine.SetAgentIdle(e["on"]?.GetValue<bool>() ?? false, t); break;
+                case "status": machine.SetStatus(e["level"]?.GetValue<int>() ?? 0, t, e["react"]?.GetValue<bool>() ?? true); break;
+                case "silence": machine.Silence(t); break;
                 case "advance": machine.Advance(t); break;
                 default: throw new InvalidOperationException($"未知的事件 {e["e"]}");
             }
@@ -79,7 +81,7 @@ public class MascotGoldenTests
         var timing = Timing();
         foreach (var animation in Enum.GetValues<MascotAnimation>())
         {
-            var key = animation == MascotAnimation.Squeeze ? "squeeze_release" : MascotNames.Name(animation);
+            var key = MascotTiming.DurationKey(animation);
             Assert.True(timing.DurationsMs.ContainsKey(key), $"mascot-anim.json 缺少 {key} 的長度");
         }
         Assert.Equal(900, timing.Duration(MascotAnimation.Hop));
@@ -93,8 +95,9 @@ public class MascotGoldenTests
     public void NamesMatchSwiftRawValues()
     {
         Assert.Equal("hop", MascotNames.Name(MascotAnimation.Hop));
-        Assert.Equal(MascotRequest.Sleep, MascotNames.Parse<MascotRequest>("sleep"));
-        Assert.Throws<ArgumentException>(() => MascotNames.Parse<MascotRequest>("Sleep"));
+        Assert.Equal(MascotRequest.Giggle, MascotNames.Parse<MascotRequest>("giggle"));
+        Assert.Throws<ArgumentException>(() => MascotNames.Parse<MascotRequest>("Giggle"));
+        Assert.Throws<ArgumentException>(() => MascotNames.Parse<MascotRequest>("sleep"));
     }
 
     [Fact]

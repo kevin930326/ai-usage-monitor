@@ -146,7 +146,7 @@ import Testing
         var d = MascotDirector(config: config, seed: 3, startTime: 0)
         #expect((0..<20_000).allSatisfy { d.blink(at: $0) == 0 })   // 收合時不眨眼
         d.open(at: 0, intro: false)
-        d.move(at: 0, dx: 0, dy: 0)
+        d.look(at: 0, dx: 0, dy: 0)
         let blinks = stride(from: 1000, to: 9000, by: 10).filter { d.blink(at: $0) > 0.99 }
         #expect(!blinks.isEmpty)
         d.request(.shy, at: 9000)
@@ -167,19 +167,41 @@ import Testing
         #expect(d.ripple == nil)
     }
 
+    /// 收合途中 AI 變閒置（睡著）：角色仍然縮回迷你位置與大小，之後停止重畫（Codex C-01）
+    @Test func modeChangeDuringCloseStillReachesMini() throws {
+        let config = try Self.config()
+        let scripts = MascotScripts(config: config)
+        for working in [true, false] {
+            var d = MascotDirector(config: config, startTime: 0)
+            d.open(at: 0, intro: false)
+            d.setWorking(working, at: 1000)
+            d.advance(to: 3000)
+            d.close(at: 3000)
+            d.advance(to: 3100)
+            if working { d.setWorking(false, at: 3100) }
+            d.setAgentIdle(true, at: 3100)
+            d.advance(to: 6000)
+            let pose = d.pose(at: 6000), mini = scripts.collapsedPose(mode: .sleep)
+            for prop in [MascotProp.x, .y, .r, .pitch, .dash] {
+                #expect(abs(pose[prop] - mini[prop]) < 0.001, "\(working ? "工作中" : "閒置")：\(prop) = \(pose[prop])，應為 \(mini[prop])")
+            }
+            #expect(!d.isAnimating(at: 6000))
+        }
+    }
+
     @Test func idleStopsBetweenBlinks() throws {
         // 展開待著：眨眼中與視線追滑鼠時要重畫，其他時間畫面不動（停止重畫到下一次眨眼）
         let config = try Self.config()
         var d = MascotDirector(config: config, seed: 5, startTime: 0)
         d.open(at: 0, intro: false)
         d.advance(to: 2000)
-        d.move(at: 2000, dx: 200, dy: 0)
+        d.look(at: 2000, dx: 200, dy: 0)
         #expect(d.isIdleMoving(at: 2050))           // 視線還在轉
         let settled = stride(from: 2000, to: 9000, by: 10).first { !d.isIdleMoving(at: $0) }
         #expect(settled != nil && settled! < 4000)
         let next = d.nextBlink(after: 5000)
         #expect(next > 5000 && next <= 5000 + config.hero.blink.maxGapMs + config.hero.blink.maxGapMs)
-        // 下一次眨眼之前畫面不動（不在睡覺邊緣：10 秒沒操作才睡）
+        // 下一次眨眼之前畫面不動
         let quiet = stride(from: 5000, to: min(next, 11_900), by: 10).allSatisfy { !d.isIdleMoving(at: $0) || d.blink(at: $0) > 0 }
         #expect(quiet)
         if next + 30 < 12_000 { #expect(d.isIdleMoving(at: next + 30)) }
@@ -219,7 +241,7 @@ import Testing
     }
 
     @Test func stillCharacterOnlyChangesTheStatusColour() throws {
-        // 簡單／關閉：額度提醒、睡覺、工作都不動身體，只換狀態點的顏色（Codex C-02、C-03）
+        // 簡單／關閉：額度提醒、睡覺、工作都不動身體，只換表情（Codex C-02、C-03）
         let config = try Self.config()
         var d = MascotDirector(config: config, startTime: 0)
         d.setStill(true, at: 0)
@@ -248,7 +270,7 @@ import Testing
         var d = MascotDirector(config: config, startTime: 0)
         d.setStill(true, at: 0)
         d.open(at: 0, intro: false)
-        d.advance(to: 15_000)
+        d.setAgentIdle(true, at: 15_000)
         #expect(d.mode == .sleep)
         #expect(!d.showsSleep)
         d.setStill(false, at: 15_000)
@@ -273,7 +295,7 @@ import Testing
     }
 
     @Test func becomingStillDuringIntroEndsOnTheCard() throws {
-        // 過場途中改成靜止：角色到卡片、服務色與狀態點都在、過場結束（Codex 第二輪 C-01）
+        // 過場途中改成靜止：角色到卡片、服務色與額度等級都在、過場結束（Codex 第二輪 C-01）
         let config = try Self.config()
         for at in [300, 1200, 4500] {
             var d = MascotDirector(config: config, startTime: 0)
