@@ -32,7 +32,7 @@ import Testing
             Issue.record("應該寫入並備份")
             return
         }
-        #expect(backup == AgentHookFiles.backupURL(for: file, now: now))
+        #expect(backup == AgentHookFiles.backupURL(for: AgentHookFiles.resolved(file), now: now))
         #expect(try Data(contentsOf: backup) == original)
         #expect(try permissions(file) == 0o600)
         #expect(try permissions(backup) == 0o600)
@@ -68,6 +68,29 @@ import Testing
         _ = try AgentHookFiles.connect(file: file, ai: .claude, command: command, now: now)
         #expect(try AgentHookFiles.status(file: file, ai: .claude, command: command) == .installed)
         #expect(!String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("Downloads"))
+    }
+
+    /// dotfiles 管理的設定檔是符號連結：改連結指向的檔案，連結還是連結，權限照目標（Fable F-01）
+    @Test func symlinkedSettingsStayLinkedAndPrivate() throws {
+        let manager = FileManager.default
+        let dotfiles = folder.appendingPathComponent("dotfiles")
+        try manager.createDirectory(at: dotfiles, withIntermediateDirectories: true)
+        try manager.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let target = dotfiles.appendingPathComponent("claude-settings.json")
+        try Data(#"{"model":"opus"}"#.utf8).write(to: target)
+        try manager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: target.path)
+        try manager.createSymbolicLink(at: file, withDestinationURL: target)
+
+        guard case .written(let backup?) = try AgentHookFiles.connect(file: file, ai: .claude, command: command, now: now) else {
+            Issue.record("應該寫入並備份")
+            return
+        }
+        #expect(try manager.destinationOfSymbolicLink(atPath: file.path) == target.path)
+        #expect(String(decoding: try Data(contentsOf: target), as: UTF8.self).contains(AgentHookConfig.marker))
+        #expect(try permissions(target) == 0o600)
+        #expect(try permissions(backup) == 0o600)
+        #expect(backup.deletingLastPathComponent().resolvingSymlinksInPath() == dotfiles.resolvingSymlinksInPath())
+        #expect(try AgentHookFiles.status(file: file, ai: .claude, command: command) == .installed)
     }
 
     @Test func codexHooksDisabledReadsOnlyTheFeatureFlag() {

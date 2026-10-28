@@ -12,6 +12,7 @@ public enum AgentHookFiles {
 
     /// 連接或修好：合併我們的 hook，寫入前先備份
     public static func connect(file: URL, ai: AgentKind, command: String, now: Date = .now) throws -> Result {
+        let file = resolved(file)
         let old = try read(file)
         let new = try AgentHookConfig.install(into: old, ai: ai, command: command)
         guard new != old else { return .unchanged }
@@ -20,13 +21,14 @@ public enum AgentHookFiles {
 
     /// 移除：只刪我們的 hook，寫入前先備份
     public static func disconnect(file: URL, now: Date = .now) throws -> Result {
+        let file = resolved(file)
         let old = try read(file)
         guard let new = try AgentHookConfig.uninstall(from: old) else { return .unchanged }
         return .written(backup: try write(new, to: file, replacing: old, now: now))
     }
 
     public static func status(file: URL, ai: AgentKind, command: String) throws -> AgentHookConfig.Status {
-        try AgentHookConfig.status(of: read(file), ai: ai, command: command)
+        try AgentHookConfig.status(of: read(resolved(file)), ai: ai, command: command)
     }
 
     /// Codex 的 `config.toml` 有沒有把 hook 關掉（`[features]` 底下 `hooks = false`，舊名 `codex_hooks`）。
@@ -59,6 +61,12 @@ public enum AgentHookFiles {
     }
 
     // MARK: - 內部
+
+    /// 設定檔是符號連結（例如 dotfiles 管理）時改寫連結指向的檔案：原子寫入會把連結本身換成一般檔案，
+    /// 讀到的權限也是連結的 0755（Fable F-01）。備份放在真正的檔案旁邊
+    static func resolved(_ file: URL) -> URL {
+        file.resolvingSymlinksInPath()
+    }
 
     private static func read(_ file: URL) throws -> Data? {
         do {

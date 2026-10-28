@@ -73,7 +73,7 @@ final class AgentHookInstaller {
     func connect(_ ai: AgentKind) {
         do {
             switch try AgentHookFiles.connect(file: file(for: ai), ai: ai, command: command(ai)) {
-            case .written(let backup?): message[ai] = "已連接。原本的檔案備份成 \(backup.lastPathComponent)（同一個資料夾）。"
+            case .written(let backup?): message[ai] = "已連接。原本的檔案備份成 \(backup.lastPathComponent)（在設定檔實際所在的資料夾）。"
             case .written(nil): message[ai] = "已連接（新建了這個檔案）。"
             case .unchanged: message[ai] = "已經連接好了，不用改。"
             }
