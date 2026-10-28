@@ -250,3 +250,18 @@ class EdgeResponseTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MaxBytesTest(unittest.TestCase):
+    """公開狀態頁的回應有大小上限（ADR-0018 審查 F-05）。"""
+
+    def setUp(self):
+        self.server = Server()
+        self.addCleanup(self.server.close)
+
+    def test_over_limit_is_an_error(self):
+        with self.assertRaises(ProviderError):
+            request_json(f"{self.server.origin}/usage", {}, max_bytes=5)
+
+    def test_under_limit_reads_normally(self):
+        self.assertEqual(request_json(f"{self.server.origin}/usage", {}, max_bytes=1000), {"path": "/usage"})

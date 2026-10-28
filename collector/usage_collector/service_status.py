@@ -58,6 +58,8 @@ RELATED = {
 INDICATORS = ("none", "minor", "major", "critical", "maintenance")
 COMPONENT_STATUSES = ("operational", "degraded_performance", "partial_outage", "major_outage", "under_maintenance")
 MAX_ITEMS = 8
+# 狀態頁的回應上限（平常幾十 KB）
+MAX_RESPONSE = 1_000_000
 MAX_TEXT = 120
 
 
@@ -160,10 +162,10 @@ def fetch(provider: str) -> dict:
     """抓一個服務的狀態頁與事故清單。任何失敗（網路、讀取逾時、格式）只影響這個服務，錯誤只記固定訊息或類別。
     事故清單失敗時保留 summary.json 的結果，`incidents_checked` 為 False（不放進 usage.json）。"""
     try:
-        result = parse(provider, http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT))
+        result = parse(provider, http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT, max_bytes=MAX_RESPONSE))
         try:
             result["incidents"] = parse_incidents(
-                provider, http.request_json(f"{PAGES[provider]}{INCIDENTS[provider]}", {}, timeout=TIMEOUT))
+                provider, http.request_json(f"{PAGES[provider]}{INCIDENTS[provider]}", {}, timeout=TIMEOUT, max_bytes=MAX_RESPONSE))
             result["incidents_checked"] = True
         except Exception:  # noqa: BLE001 — 事故清單是附加資訊；不記例外內容
             result["incidents_checked"] = False

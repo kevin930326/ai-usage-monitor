@@ -75,7 +75,7 @@ class UpdateTest(unittest.TestCase):
         self.path = Path(self.dir.name) / "service-status.json"
         self.calls = []
 
-        def fake(url, headers, timeout=15):
+        def fake(url, headers, timeout=15, max_bytes=None):
             self.calls.append((url, headers))
             if "openai" in url:
                 raise ProviderError("網路錯誤")
@@ -117,7 +117,7 @@ class UpdateTest(unittest.TestCase):
         for failing, error in (("claude", TimeoutError("timed out /secret")), ("codex", TypeError("bad /secret"))):
             self.calls.clear()
 
-            def fake(url, headers, timeout=15, failing=failing, error=error):
+            def fake(url, headers, timeout=15, max_bytes=None, failing=failing, error=error):
                 self.calls.append((url, headers))
                 if ("claude" if "claude" in url else "codex") == failing:
                     raise error
@@ -205,7 +205,7 @@ class IncidentsTest(unittest.TestCase):
                 service_status.parse_incidents("codex", bad)
 
     def test_incident_failure_keeps_summary(self):
-        def fake(url, headers, timeout=15):
+        def fake(url, headers, timeout=15, max_bytes=None):
             if "incidents" in url:
                 raise TimeoutError("/secret")
             return summary("minor", incidents=[("From summary", "investigating", "minor")])
