@@ -21,7 +21,9 @@ struct NotchView: View {
             } else {
                 let rate = controller.renderRate
                 TimelineView(.animation(minimumInterval: rate.interval, paused: rate == .stopped)) { context in
-                    NotchCanvas(director: director, time: controller.time(context.date), layout: controller.layout,
+                    NotchCanvas(director: director,
+                                time: rate == .stopped ? controller.stoppedAt : controller.time(context.date),
+                                layout: controller.layout,
                                 snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter,
                                 motion: controller.motion)
                 }

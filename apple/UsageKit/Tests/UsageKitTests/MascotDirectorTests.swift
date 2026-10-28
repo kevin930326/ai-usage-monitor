@@ -164,4 +164,25 @@ import Testing
         // 粒子在收合時清掉
         #expect(d.ripple == nil)
     }
+
+    @Test func idleStopsBetweenBlinks() throws {
+        // 展開待著：眨眼中與視線追滑鼠時要重畫，其他時間畫面不動（停止重畫到下一次眨眼）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, seed: 5, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.move(at: 2000, dx: 200, dy: 0)
+        #expect(d.isIdleMoving(at: 2050))           // 視線還在轉
+        let settled = stride(from: 2000, to: 9000, by: 10).first { !d.isIdleMoving(at: $0) }
+        #expect(settled != nil && settled! < 4000)
+        let next = d.nextBlink(after: 5000)
+        #expect(next > 5000 && next <= 5000 + config.hero.blink.maxGapMs + config.hero.blink.maxGapMs)
+        // 下一次眨眼之前畫面不動（不在睡覺邊緣：10 秒沒操作才睡）
+        let quiet = stride(from: 5000, to: min(next, 11_900), by: 10).allSatisfy { !d.isIdleMoving(at: $0) || d.blink(at: $0) > 0 }
+        #expect(quiet)
+        if next + 30 < 12_000 { #expect(d.isIdleMoving(at: next + 30)) }
+        // 工作中一直在動
+        d.setWorking(true, at: 6000)
+        #expect(d.isIdleMoving(at: 6100))
+    }
 }

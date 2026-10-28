@@ -19,8 +19,9 @@ final class NotchPanelController {
     func apply() {
         var enabled = PanelSettings.shared.notchEnabled && MascotController.shared.baseConfig != nil
         #if DEBUG
-        // 截圖、示範與量測不顯示真的瀏海面板
-        if DebugTools.isDemo || ProcessInfo.processInfo.environment["AUM_RENDER_DIR"] != nil { enabled = false }
+        // 截圖、示範與面板的量測不顯示真的瀏海面板（瀏海面板自己的量測除外）
+        let env = ProcessInfo.processInfo.environment
+        if (DebugTools.isDemo && env["AUM_DEMO_NOTCH_PERF"] != "1") || env["AUM_RENDER_DIR"] != nil { enabled = false }
         #endif
         if enabled {
             show()

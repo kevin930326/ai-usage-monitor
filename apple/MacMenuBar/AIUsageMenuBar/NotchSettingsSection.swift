@@ -28,7 +28,7 @@ struct NotchSettingsSection: View {
                 FlowChips(choices: MascotMotionLevel.allCases.map { ($0, $0.title) }, selected: settings.mascotMotion) {
                     settings.mascotMotion = $0
                 }
-                Text("完整：點一下、繞圈、甩動、停在角色上都有反應，Claude 或 Codex 在跑時低頭敲鍵盤。簡單：不播過場與粒子，也不偵測手勢。關閉：角色靜止，只有狀態點的顏色會變。系統開了「減少動態效果」時，完整會當成簡單。「工作中」只看紀錄檔的修改時間，不讀內容。")
+                Text("完整：點一下、繞圈、甩動、停在角色上都有反應，Claude 或 Codex 在跑時低頭敲鍵盤。簡單：不播過場與粒子、面板展開不回彈，也不偵測手勢。關閉：角色靜止，只有狀態點的顏色會變。系統開了「減少動態效果」時，完整會當成簡單。「工作中」只看紀錄檔的修改時間，不讀內容。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

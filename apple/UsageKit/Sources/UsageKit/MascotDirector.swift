@@ -158,18 +158,41 @@ public struct MascotDirector: Sendable {
               pose(at: time)[.dash] < 0.1 else { return 0 }
         let b = config.hero.blink
         let period = (b.minGapMs + b.maxGapMs) / 2
-        let jitter = Double(b.maxGapMs - b.minGapMs) / 2
         let bucket = Int((Double(time) / Double(period)).rounded(.down))
         for index in [bucket - 1, bucket] {
-            let offset = Int((MascotRandom.unit(seed: seed, index: UInt64(bitPattern: Int64(index))) - 0.5) * jitter)
-            let start = index * period + offset
-            let local = time - start
+            let local = time - blinkStart(index)
             guard local >= 0, local < b.closeMs + b.holdMs + b.openMs else { continue }
             if local < b.closeMs { return MascotEase.inCubic(Double(local) / Double(b.closeMs)) }
             if local < b.closeMs + b.holdMs { return 1 }
             return 1 - MascotEase.out(Double(local - b.closeMs - b.holdMs) / Double(b.openMs))
         }
         return 0
+    }
+
+    /// 第 `index` 次眨眼的開始時間（每段 `period` 裡依種子偏移）
+    private func blinkStart(_ index: Int) -> Int {
+        let b = config.hero.blink
+        let period = (b.minGapMs + b.maxGapMs) / 2
+        let jitter = Double(b.maxGapMs - b.minGapMs) / 2
+        return index * period + Int((MascotRandom.unit(seed: seed, index: UInt64(bitPattern: Int64(index))) - 0.5) * jitter)
+    }
+
+    /// `time` 之後下一次眨眼開始的時間（展開待著、畫面不動時，排這個時間再開始重畫）
+    public func nextBlink(after time: Int) -> Int {
+        let b = config.hero.blink
+        let period = (b.minGapMs + b.maxGapMs) / 2
+        let bucket = Int((Double(time) / Double(period)).rounded(.down))
+        return (bucket - 1...bucket + 2).map(blinkStart).filter { $0 > time }.min() ?? time + period
+    }
+
+    /// 展開待著時這一刻畫面會不會變：眨眼中、視線還在追滑鼠、睡覺（呼吸）或工作中（敲鍵盤）。
+    /// 都沒有時畫面靜止，可以停止重畫到下一次眨眼（ADR-0016 第 6 節）。
+    public func isIdleMoving(at time: Int) -> Bool {
+        guard machine.isOpen else { return false }
+        if mode == .sleep || mode == .work { return true }
+        if blink(at: time) > 0 { return true }
+        let now = gaze(at: time)
+        return abs(now.yaw - gazeTarget.yaw) > 0.002 || abs(now.pitch - gazeTarget.pitch) > 0.002
     }
 
     public func panelShape(at time: Int) -> MascotPanelShape {

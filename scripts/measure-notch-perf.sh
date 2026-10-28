@@ -1,0 +1,33 @@
+#!/bin/bash
+# 量測瀏海面板與角色的 CPU% 與記憶體（ADR-0016 第 6 節，方法同 ADR-0010 第 3 節）。
+#
+#   scripts/measure-notch-perf.sh [Debug 版 AIUsageMenuBar.app] [輸出資料夾]
+#
+# 以 Debug 版的 AUM_DEMO_NOTCH_PERF=1 啟動：顯示真的瀏海面板（不截圖），依固定時間表在 10 秒時展開（含約 4.7 秒的過場）、
+# 30 秒時揮手、40 秒時收合，132 秒時再展開、140 秒時收合，約 165 秒後結束；每秒用 ps 取樣，依 perf-mark 分段。
+# 使用假資料（暫存資料夾的 usage.json 與 history.sqlite3）與獨立的 demo 設定，不讀真實資料。
+# 門檻：展開待著 ≤ 4%、收合後 60～90 秒 ≤ 0.3%、第二次收合後 RSS 不超過第一次收合後 +5 MB；任何一項未通過時以非零結束。
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+APP=${1:-$ROOT/build/verify/DerivedData/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app}
+OUT=${2:-$ROOT/build/perf-notch}
+BIN="$APP/Contents/MacOS/AIUsageMenuBar"
+[ -x "$BIN" ] || { echo "找不到 ${BIN}（先建置 Debug 版）"; exit 2; }
+mkdir -p "$OUT"
+touch "$OUT/.metadata_never_index"
+HOME_DIR=$(mktemp -d)
+python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" normal
+
+AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_TESTING=1 AUM_DEMO_NOTCH_PERF=1 "$BIN" 2>"$OUT/app.log" &
+PID=$!
+START=$(python3 -c 'import time; print(time.time())')
+: > "$OUT/samples.tsv"
+while kill -0 "$PID" 2>/dev/null; do
+  NOW=$(python3 -c "import time; print(f'{time.time() - $START:.1f}')")
+  LINE=$(ps -o %cpu=,rss= -p "$PID" 2>/dev/null || true)
+  [ -n "$LINE" ] && echo "$NOW $LINE" >> "$OUT/samples.tsv"
+  sleep 1
+done
+rm -rf "$HOME_DIR"
+
+python3 "$ROOT/scripts/notch-perf-summary.py" "$OUT/samples.tsv" "$OUT/app.log" | tee "$OUT/summary.md"

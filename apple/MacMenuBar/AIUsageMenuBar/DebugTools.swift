@@ -15,6 +15,7 @@ import UsageKitUI
 /// - `AUM_RENDER_EXIT=1`：輸出完就結束。
 /// - `AUM_RENDER_NOW=<ISO 8601>`：畫面的「現在」固定成這個時間（`RenderClock`，截圖比對用，見 `scripts/snapshots.sh`）。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
+/// - `AUM_DEMO_NOTCH_PERF=1`：顯示真的瀏海面板，依固定時間表展開（含過場）、播反應、收合、再開關一次，給 `scripts/measure-notch-perf.sh` 量測。
 /// - `AUM_DEMO_WINDOWS=settings,stats,wizard`：啟動後以 SwiftUI 的 scene 打開這些視窗（與使用者打開的相同），
 ///   檢查實際視窗的外觀（ImageRenderer 畫不出視窗背景）。
 /// - `AUM_DEMO_SWITCH=dark@4,system@8,sysdark@12`：在第 N 秒把外觀設定改成這個值（Debug 預覽用獨立的設定），
@@ -26,7 +27,7 @@ enum DebugTools {
     /// 不會改到正式的設定與通知紀錄（Codex C-01）
     nonisolated static var isDemo: Bool {
         let env = ProcessInfo.processInfo.environment
-        return env["AUM_DEMO_PANEL"] == "1" || !(env["AUM_DEMO_WINDOWS"] ?? "").isEmpty || !(env["AUM_DEMO_SWITCH"] ?? "").isEmpty
+        return env["AUM_DEMO_PANEL"] == "1" || env["AUM_DEMO_NOTCH_PERF"] == "1" || !(env["AUM_DEMO_WINDOWS"] ?? "").isEmpty || !(env["AUM_DEMO_SWITCH"] ?? "").isEmpty
     }
 
     private static var panelWindow: NSWindow?
@@ -65,6 +66,7 @@ enum DebugTools {
             if env["AUM_RENDER_EXIT"] == "1" { exit(0) }
         }
         if env["AUM_DEMO_PERF"] == "1" { runPerfSchedule() }
+        if env["AUM_DEMO_NOTCH_PERF"] == "1" { runNotchPerfSchedule() }
         if let names = env["AUM_DEMO_WINDOWS"], !names.isEmpty { openSceneWindows(names.split(separator: ",").map(String.init)) }
         for step in (env["AUM_DEMO_SWITCH"] ?? "").split(separator: ",") {
             let parts = step.split(separator: "@")
@@ -148,6 +150,36 @@ enum DebugTools {
     }
 
     // MARK: - 效能量測的時間表（ADR-0010 第 3 節）
+
+    /// 瀏海面板（ADR-0016 第 6 節）：展開含過場、待著、播反應、收合，收合後 1 分鐘、再開關一次比較記憶體
+    private static func runNotchPerfSchedule() {
+        let mascot = MascotController.shared
+        let close = 40.0
+        schedule([
+            (0, "launch", {}),
+            (10, "notch-open", { mascot.pointerEntered() }),
+            (20, "notch-idle", {}),
+            (30, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
+            (close, "notch-close", { mascot.closeNow() }),
+            (close + 60, "closed-60s", {}),
+            (close + 90, "closed-90s", {}),
+            (close + 92, "notch-reopen", { mascot.pointerEntered() }),
+            (close + 100, "notch-close-2", { mascot.closeNow() }),
+            (close + 125, "exit", { exit(0) }),
+        ])
+    }
+
+    private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {
+        let start = Date.now
+        for (offset, name, action) in steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + offset) {
+                MainActor.assumeIsolated {
+                    action()
+                    UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(start), name))
+                }
+            }
+        }
+    }
 
     /// 每個步驟在 stderr 印出 `perf-mark <秒> <名稱>`，量測腳本依此把 ps 的取樣分段。
     private static func runPerfSchedule() {
