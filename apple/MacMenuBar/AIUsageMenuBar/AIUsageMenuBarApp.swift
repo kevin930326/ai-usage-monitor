@@ -69,6 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             GlobalHotKey.shared.apply(PanelSettings.shared.hotKey)
             // 瀏海面板（ADR-0016）：設定預設開啟
             NotchPanelController.shared.apply()
+            // hook 的 socket（ADR-0017）：先開始聽，AI 的事件才不會丟
+            AgentMonitor.shared.start()
             #if DEBUG
             DebugTools.runIfRequested()
             #endif
