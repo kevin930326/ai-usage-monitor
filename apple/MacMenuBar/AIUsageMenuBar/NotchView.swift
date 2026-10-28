@@ -114,7 +114,7 @@ struct NotchCanvas: View {
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
-                           sleeping: director.mode == .sleep && director.machine.isOpen, effects: director.effects,
+                           sleeping: director.showsSleep, effects: director.effects,
                            ripple: director.ripple, character: character)
     }
 

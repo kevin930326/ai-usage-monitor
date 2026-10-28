@@ -156,6 +156,9 @@ public struct MascotDirector: Sendable {
     }
 
     /// 改成靜止或恢復（動畫程度改變時）：改成靜止時，正在播的反應與特效立刻停，回到平常的姿勢
+    /// 畫睡覺的 z：展開著睡著、而且身體會動（「簡單」「關閉」時狀態機照樣睡，但畫面不顯示）
+    public var showsSleep: Bool { !isStill && mode == .sleep && machine.isOpen }
+
     public mutating func setStill(_ still: Bool, at time: Int) {
         guard still != isStill else { return }
         isStill = still
