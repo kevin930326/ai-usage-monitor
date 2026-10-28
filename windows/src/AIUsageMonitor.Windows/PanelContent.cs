@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -190,7 +191,7 @@ internal sealed class PanelContent : Border
         };
     }
 
-    /// <summary>主圓環卡片：標題列放服務圖示＋「Claude 每週」；內容是雙圓環、大數字、重置倒數、用得較快</summary>
+    /// <summary>主圓環卡片：標題列放服務圖示＋「Claude 每週」；內容是雙圓環、大數字、重置倒數、會用完時的預測</summary>
     private UIElement RingCard(ProviderWindow item, bool stale, DateTimeOffset now)
     {
         var header = new StackPanel { Orientation = Orientation.Horizontal };
@@ -214,7 +215,7 @@ internal sealed class PanelContent : Border
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
         right.Children.Add(percent);
         right.Children.Add(Text("剩餘 · " + ResetText(item.Window, now), 12, p.Secondary));
-        if (UsagePace.Average(item.Window, stale, now) is { IsTooFast: true } pace) right.Children.Add(PaceBadge(pace, now));
+        if (ForecastOrTooFast(item.Window, stale, now, 4) is { } note) right.Children.Add(note);
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(ring);
@@ -222,24 +223,40 @@ internal sealed class PanelContent : Border
         return Card(row, header);
     }
 
-    /// <summary>「用得較快，約 N 分鐘後用完」（提示色膠囊）</summary>
-    private UIElement PaceBadge(UsagePace pace, DateTimeOffset now)
+    /// <summary>
+    /// 「照目前速度約 14:32 用完・比平常快 2.1 倍」（ADR-0018 第 3 節）：不到 60 分鐘紅色、其他提示色；顏色以外一律有文字。
+    /// 取代原本的「用得較快，約 N 分鐘後用完」。
+    /// </summary>
+    /// <summary>
+    /// 有預測時顯示預測；沒有預測但圓環是「太快」（平均速度）時只寫「用得較快」，不猜時間；其他不顯示
+    /// </summary>
+    private UIElement? ForecastOrTooFast(UsageWindow window, bool stale, DateTimeOffset now, double top) =>
+        QuotaForecast.Current(window, stale, now) is { } forecast ? ForecastLine(forecast, now, top)
+        : UsagePace.Average(window, stale, now)?.IsTooFast == true
+            ? Text("用得較快", 12, p.Notice, FontWeights.Medium, new Thickness(0, top, 0, 0))
+            : null;
+
+    private UIElement ForecastLine(QuotaForecast forecast, DateTimeOffset now, double top)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(Dot(p.Notice, 7, new Thickness(0, 0, 5, 0)));
-        row.Children.Add(Text(pace.BadgeText(now), 12, p.Notice, FontWeights.Medium));
-        return new Border
-        {
-            Child = row,
-            Background = Palette.Brush(p.Notice.Color, 0.12),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(8, 2, 8, 3),
-            Margin = new Thickness(0, 4, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
+        var line = Text((forecast.Urgent ? "⚠ " : "") + forecast.Line(now), 12, forecast.Urgent ? p.Critical : p.Notice, FontWeights.Medium,
+                        new Thickness(0, top, 0, 0), wrap: true);
+        System.Windows.Automation.AutomationProperties.SetName(line, forecast.SpokenLine(now));
+        return line;
     }
 
-    /// <summary>額度卡片：每個服務的名稱、方案、各額度的進度條（含預期進度標記）、重置倒數與用得較快</summary>
+    /// <summary>
+    /// 服務狀態頁的事故（ADR-0018 第 4 節）：只顯示名稱。Windows App 不放網址與超連結（ADR-0015 第 2 節），
+    /// 要看詳情到官方狀態頁
+    /// </summary>
+    private UIElement IncidentLine(ServiceIncident incident)
+    {
+        var line = Text("服務異常：" + incident.Name, 12, p.Notice, FontWeights.Medium, new Thickness(0, 6, 0, 0), wrap: true);
+        line.MaxHeight = 36;
+        System.Windows.Automation.AutomationProperties.SetName(line, "服務異常：" + incident.Name);
+        return line;
+    }
+
+    /// <summary>額度卡片：每個服務的名稱、方案、事故、各額度的進度條（含預期進度標記）、重置倒數與預測</summary>
     private UIElement QuotaCard(UsageSnapshot snapshot, bool stale, DateTimeOffset now)
     {
         var body = new StackPanel();
@@ -265,6 +282,7 @@ internal sealed class PanelContent : Border
                 });
             }
             block.Children.Add(title);
+            foreach (var incident in (provider.Incidents ?? []).Where(i => i.IsDisruption)) block.Children.Add(IncidentLine(incident));
             if (provider.Error is { } error)
             {
                 var line = Text("⚠ " + error, 12, p.Notice, margin: new Thickness(0, 8, 0, 0), wrap: true);
@@ -300,14 +318,8 @@ internal sealed class PanelContent : Border
                                       p.BarColor(window, provider, stale, now), p) { Margin = new Thickness(0, 3, 0, 3) };
         bars.Add(bar);
         row.Children.Add(bar);
-        var bottom = new StackPanel { Orientation = Orientation.Horizontal };
-        bottom.Children.Add(Text(ResetText(window, now), 12, p.Secondary));
-        if (UsagePace.Average(window, stale, now) is { IsTooFast: true })
-        {
-            bottom.Children.Add(Text(" · ", 12, p.Secondary));
-            bottom.Children.Add(Text("用得較快", 12, p.Notice, FontWeights.Medium));
-        }
-        row.Children.Add(bottom);
+        row.Children.Add(Text(ResetText(window, now), 12, p.Secondary));
+        if (ForecastOrTooFast(window, stale, now, 2) is { } note) row.Children.Add(note);
         System.Windows.Automation.AutomationProperties.SetName(row,
             $"{window.Label}，剩 {SwiftMath.Round(remaining)}%，{ResetText(window, now)}");
         return row;

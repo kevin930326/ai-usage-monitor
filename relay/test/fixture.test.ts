@@ -45,4 +45,9 @@ describe("共用 fixture", () => {
   it("沒有任何服務的快照原樣讀回（providers 為空）", async () => {
     await roundTrip(read("usage-no-providers.json"));
   });
+
+  // ADR-0018：額度預測與服務事故（選填）
+  it("預測與事故原樣讀回（含空的 incidents）", async () => {
+    await roundTrip(read("usage-forecast-incidents.json"));
+  });
 });

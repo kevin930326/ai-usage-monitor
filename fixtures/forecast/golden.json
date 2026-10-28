@@ -1,0 +1,152 @@
+[
+  {
+    "name" : "five-hour-before-reset",
+    "result" : {
+      "exhausts_in_min" : 120,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "urgent-under-an-hour",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "resets-first"
+  },
+  {
+    "name" : "exactly-at-reset"
+  },
+  {
+    "name" : "too-few-samples"
+  },
+  {
+    "name" : "span-too-short"
+  },
+  {
+    "name" : "stale"
+  },
+  {
+    "name" : "hidden"
+  },
+  {
+    "name" : "already-out"
+  },
+  {
+    "name" : "idle-lately"
+  },
+  {
+    "name" : "other-length"
+  },
+  {
+    "name" : "unknown-reset"
+  },
+  {
+    "name" : "reset-in-window",
+    "result" : {
+      "exhausts_in_min" : 160,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "faster-than-usual",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 4,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "not-much-faster",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "faster-floors",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 1.6,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "baseline-two-days",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "baseline-even-median",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 2.6,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "baseline-zero",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "baseline-skips-reset",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 4,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "weekly",
+    "result" : {
+      "exhausts_in_min" : 4320,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "weekly-too-short"
+  },
+  {
+    "name" : "last-sample-before-now",
+    "result" : {
+      "exhausts_in_min" : 116,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "future-samples-ignored",
+    "result" : {
+      "exhausts_in_min" : 120,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "small-dip-not-reset",
+    "result" : {
+      "exhausts_in_min" : 96,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "faster-capped",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 10,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "faster-near-threshold",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
+  }
+]

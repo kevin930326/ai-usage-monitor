@@ -78,10 +78,28 @@ public enum MascotMood: String, Sendable, CaseIterable {
     /// 冒冷汗（生病）
     public var sweat: Bool { self == .sick }
 
-    /// 額度的表情：狀態等級（0 正常、1 偏高、2 用完）＋資料是否過期或讀取失敗
-    public static func quota(level: Int, unavailable: Bool) -> MascotMood {
+    /// 額度的表情（ADR-0018 第 3 節）：資料過期或讀取失敗（閉眼）> 用完（×）> 服務有事故（生病）>
+    /// 預測會在重置前用完或剩不到 20%（擔心，持續到情況改變）> 正常。
+    /// 狀態等級：0 正常、1 偏高、2 用完
+    public static func quota(level: Int, unavailable: Bool, incident: Bool = false, runsOut: Bool = false) -> MascotMood {
         if unavailable { return .stale }
-        return level >= 2 ? .out : level == 1 ? .worried : .normal
+        if level >= 2 { return .out }
+        if incident { return .sick }
+        return level == 1 || runsOut ? .worried : .normal
+    }
+
+    /// 服務狀態頁有進行中、有影響的事故（minor 以上；維護與 none 不算）
+    public static func hasIncident(_ snapshot: UsageSnapshot?, provider: String) -> Bool {
+        snapshot?.providers[provider]?.incidents?.contains(where: \.isDisruption) ?? false
+    }
+
+    /// 這個服務有任何可見額度預測會在重置前用完（瀏海與角色不讀資料庫，用快照裡收集器算好的）
+    public static func runsOut(_ snapshot: UsageSnapshot?, provider: String, now: Date) -> Bool {
+        guard let snapshot, let usage = snapshot.providers[provider], usage.error == nil else { return false }
+        let stale = snapshot.isStale(now: now)
+        return usage.visibleWindows.contains {
+            QuotaForecast.current(window: $0, provider: provider, history: nil, stale: stale, now: now) != nil
+        }
     }
 
     /// 額度不明（閉眼）：還沒有資料、讀檔失敗（包括有舊資料時）、資料過期、選的服務沒有資料或出錯、

@@ -136,14 +136,18 @@ internal static class FloatingRingRenderer
             if (x + tag.WidthIncludingTrailingWhitespace < pctLeft - 4) dc.DrawText(tag, new Point(x, top + 1.5));
         }
 
-        var countdown = GlassRingFace.Formatted(row.Countdown, 10, FontWeights.Normal, p.Secondary, ppd);
+        // 會在重置前用完時倒數換成預測（ADR-0018 第 3 節）：不到 60 分鐘紅色、其他提示色
+        var bottomText = row.Forecast ?? row.Countdown;
+        var countdown = row.Forecast is null
+            ? GlassRingFace.Formatted(row.Countdown, 10, FontWeights.Normal, p.Secondary, ppd)
+            : GlassRingFace.Formatted(row.Forecast, 10, FontWeights.SemiBold, row.Urgent ? p.Critical : p.Notice, ppd);
         var barTop = top + 19;
-        var barRight = area.Right - (row.Countdown.Length > 0 ? countdown.WidthIncludingTrailingWhitespace + 8 : 0);
+        var barRight = area.Right - (bottomText.Length > 0 ? countdown.WidthIncludingTrailingWhitespace + 8 : 0);
         var bar = new Rect(area.Left, barTop, Math.Max(10, barRight - area.Left), 3);
         dc.DrawRoundedRectangle(Palette.Brush(p.Primary.Color, p.Dark ? 0.14 : 0.1), null, bar, 1.5, 1.5);
         var filled = bar.Width * Math.Clamp(row.Fraction, 0, 1);
         if (filled > 0) dc.DrawRoundedRectangle(new SolidColorBrush(tint), null, new Rect(bar.Left, bar.Top, Math.Max(filled, 3), bar.Height), 1.5, 1.5);
-        if (row.Countdown.Length > 0) dc.DrawText(countdown, new Point(area.Right - countdown.WidthIncludingTrailingWhitespace, barTop - 6));
+        if (bottomText.Length > 0) dc.DrawText(countdown, new Point(area.Right - countdown.WidthIncludingTrailingWhitespace, barTop - 6));
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;

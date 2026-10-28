@@ -69,16 +69,20 @@ public struct ProviderUsage: Codable, Equatable, Sendable {
     public var windows: [UsageWindow]
     /// 重置次數卷（目前只有 Codex，FR-58）；收集器沒給時為 nil
     public var resetCredits: ResetCredits?
+    /// 服務狀態頁上進行中的事故（ADR-0018 第 4 節）：nil 是沒查到（不知道），空陣列是查過、沒有事故
+    public var incidents: [ServiceIncident]?
 
-    public init(plan: String? = nil, error: String? = nil, windows: [UsageWindow] = [], resetCredits: ResetCredits? = nil) {
+    public init(plan: String? = nil, error: String? = nil, windows: [UsageWindow] = [], resetCredits: ResetCredits? = nil,
+                incidents: [ServiceIncident]? = nil) {
         self.plan = plan
         self.error = error
         self.windows = windows
         self.resetCredits = resetCredits
+        self.incidents = incidents
     }
 
     enum CodingKeys: String, CodingKey {
-        case plan, error, windows
+        case plan, error, windows, incidents
         case resetCredits = "reset_credits"
     }
 
@@ -89,6 +93,7 @@ public struct ProviderUsage: Codable, Equatable, Sendable {
         windows = try c.decode([UsageWindow].self, forKey: .windows)
         // 選填的附加資訊：格式不對時當成沒有，不讓整份快照讀不了
         resetCredits = try? c.decodeIfPresent(ResetCredits.self, forKey: .resetCredits)
+        incidents = try? c.decodeIfPresent([ServiceIncident].self, forKey: .incidents)
     }
 
     /// 預設顯示的額度（排除各模型等次要額度，FR-14）
@@ -101,17 +106,21 @@ public struct UsageWindow: Codable, Hashable, Identifiable, Sendable {
     public var usedPct: Double
     public var resetsAt: Date?
     public var hidden: Bool
+    /// 收集器算好的預測（ADR-0018 第 2 節，給沒有歷史的 iPhone）；Mac 自己用歷史算，見 `QuotaForecast.current`
+    public var forecast: QuotaForecast?
 
-    public init(id: String, label: String, usedPct: Double, resetsAt: Date? = nil, hidden: Bool = false) {
+    public init(id: String, label: String, usedPct: Double, resetsAt: Date? = nil, hidden: Bool = false,
+                forecast: QuotaForecast? = nil) {
         self.id = id
         self.label = label
         self.usedPct = usedPct
         self.resetsAt = resetsAt
         self.hidden = hidden
+        self.forecast = forecast
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, label, hidden
+        case id, label, hidden, forecast
         case usedPct = "used_pct"
         case resetsAt = "resets_at"
     }
@@ -124,6 +133,8 @@ public struct UsageWindow: Codable, Hashable, Identifiable, Sendable {
         resetsAt = try c.decodeIfPresent(Date.self, forKey: .resetsAt)
         // v0.1 的輸出沒有 hidden 欄位
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
+        // 選填的附加資訊：格式不對時當成沒有
+        forecast = try? c.decodeIfPresent(QuotaForecast.self, forKey: .forecast)
     }
 
     /// 剩餘百分比，限制在 0...100

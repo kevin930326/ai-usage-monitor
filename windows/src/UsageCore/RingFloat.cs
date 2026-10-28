@@ -179,8 +179,12 @@ public static class RingFloatLayout
     }
 }
 
-/// <summary>展開後的一行：服務、額度名稱、剩餘 %、細進度條、重置倒數，必要時「用得較快」。</summary>
-public sealed record RingDetailRow(string Provider, string Name, int RemainingPct, double Fraction, string Countdown, RingState State)
+/// <summary>
+/// 展開後的一行：服務、額度名稱、剩餘 %、細進度條、重置倒數，必要時「用得較快」。
+/// 會在重置前用完時（ADR-0018 第 3 節）倒數換成預測（<paramref name="Forecast"/>，不到 60 分鐘 <paramref name="Urgent"/>）。
+/// </summary>
+public sealed record RingDetailRow(string Provider, string Name, int RemainingPct, double Fraction, string Countdown, RingState State,
+                                   string? Forecast = null, bool Urgent = false)
 {
     public bool TooFast => State == RingState.TooFast;
 }
@@ -230,7 +234,9 @@ public sealed record RingDetails(IReadOnlyList<RingDetailRow> Rows)
         var remaining = (int)SwiftMath.Round(w.EffectiveRemainingPct(now));
         var countdown = w.IsReset(now) ? "已重置"
             : w.ResetsAt is { } r && ResetCountdown.Text(r, now) is { } text ? $"{text}後重置" : "";
-        return new RingDetailRow(item.Provider, item.DisplayName, remaining, remaining / 100.0, countdown, RingStates.Of(w, stale, now));
+        var forecast = QuotaForecast.Current(w, stale, now);
+        return new RingDetailRow(item.Provider, item.DisplayName, remaining, remaining / 100.0, countdown, RingStates.Of(w, stale, now),
+                                 forecast?.ShortLine(now), forecast?.Urgent ?? false);
     }
 
     // 同 TightestWindow：剩餘較少；同分時較早重置的

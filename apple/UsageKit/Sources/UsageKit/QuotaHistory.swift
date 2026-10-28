@@ -124,6 +124,30 @@ public struct QuotaHistory: Equatable, Sendable {
     }
 }
 
+// MARK: - 併入目前的快照
+
+public extension QuotaHistory {
+    /// 歷史裡已有同一次收集的樣本時，快照時間與樣本時間最多差這麼多（收集器同一次執行先寫快照、再寫歷史）
+    static let snapshotSampleTolerance: TimeInterval = 120
+
+    /// 把快照的每個額度當成一筆樣本併進歷史（還沒有同一次收集的樣本時）。收集器先寫 `usage.json`、之後才寫歷史，
+    /// 面板可能讀到新快照與舊歷史：不併入時，舊一輪的速度會配上新一輪的用量，算出錯的預測（Codex C-01）。
+    /// 有錯誤的服務與隱藏的額度不併入
+    func including(_ snapshot: UsageSnapshot?) -> QuotaHistory {
+        guard let snapshot else { return self }
+        var added: [QuotaSample] = []
+        for (provider, usage) in snapshot.providers where usage.error == nil {
+            for window in usage.windows where !window.hidden {
+                let last = samples(provider: provider, windowID: window.id).last
+                if let last, last.ts >= snapshot.updatedAt.addingTimeInterval(-Self.snapshotSampleTolerance) { continue }
+                added.append(QuotaSample(ts: snapshot.updatedAt, provider: provider, windowID: window.id,
+                                         usedPct: window.usedPct, resetsAt: window.resetsAt))
+            }
+        }
+        return added.isEmpty ? self : QuotaHistory(samples: samples + added, runs: runs)
+    }
+}
+
 // MARK: - 近期速度（ADR-0009 第 4 節）
 
 public extension QuotaHistory {

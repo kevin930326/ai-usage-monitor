@@ -6,7 +6,7 @@ namespace AIUsageMonitor.Core;
 /// <summary>
 /// 收集器輸出的快照（docs/02-architecture.md 第 3 節），對應 UsageKit 的 <c>UsageSnapshot</c>。
 /// 解析規則與 Swift 的 <c>UsageDecoder</c> 相同：先檢查 <c>schema_version</c>，必要欄位缺少或型別不對時整份視為格式錯誤；
-/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>）格式不對時當成沒有。
+/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>、<c>incidents</c>、額度的 <c>forecast</c>）格式不對時當成沒有。
 /// </summary>
 public sealed record UsageSnapshot(int SchemaVersion, DateTimeOffset UpdatedAt, IReadOnlyDictionary<string, ProviderUsage> Providers,
                                    LocalStatus? LocalStatus = null)
@@ -80,10 +80,21 @@ public sealed record LocalStatus(string? HistoryPaused, int? DiskFreeMB, DateTim
     public bool LowDisk => HistoryPaused == "low_disk";
 }
 
-public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<UsageWindow> Windows)
+public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<UsageWindow> Windows,
+                                   IReadOnlyList<ServiceIncident>? Incidents = null)
 {
     /// <summary>預設顯示的額度（排除各模型等次要額度，FR-14）</summary>
     public IReadOnlyList<UsageWindow> VisibleWindows => Windows.Where(w => !w.Hidden).ToList();
+}
+
+/// <summary>
+/// usage.json 裡的進行中事故（ADR-0018 第 4 節），對應 UsageKit 的 <c>ServiceIncident</c>：只有名稱、等級、事故頁與開始時間。
+/// Windows App 不放網址與超連結（ADR-0015 第 2 節，<c>check-no-network.py</c>），只顯示名稱；<c>Url</c> 只是解析後保留的資料。
+/// </summary>
+public sealed record ServiceIncident(string Name, string Impact, string? Url = null, DateTimeOffset? StartedAt = null)
+{
+    /// <summary>有影響的事故（minor 以上；維護與 none 不算），同 Swift 的 <c>MascotMood.hasIncident</c></summary>
+    public bool IsDisruption => Impact is "minor" or "major" or "critical";
 }
 
 /// <summary>某個服務的某個額度（<c>ProviderWindow</c>）。</summary>
@@ -163,7 +174,33 @@ public static class UsageDecoder
     {
         if (e.ValueKind != JsonValueKind.Object) throw new FormatException();
         var windows = Required(e, "windows", JsonValueKind.Array).EnumerateArray().Select(DecodeWindow).ToList();
-        return new ProviderUsage(NullableString(e, "plan"), NullableString(e, "error"), windows);
+        return new ProviderUsage(NullableString(e, "plan"), NullableString(e, "error"), windows, DecodeIncidents(e));
+    }
+
+    /// <summary>選填的事故：不是陣列或任何一項格式不對時當成沒有（同 Swift 的 <c>try? decodeIfPresent</c>）</summary>
+    private static IReadOnlyList<ServiceIncident>? DecodeIncidents(JsonElement e)
+    {
+        if (!e.TryGetProperty("incidents", out var list) || list.ValueKind != JsonValueKind.Array) return null;
+        var result = new List<ServiceIncident>();
+        foreach (var i in list.EnumerateArray())
+        {
+            if (i.ValueKind != JsonValueKind.Object || !i.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String
+                || !i.TryGetProperty("impact", out var impact) || impact.ValueKind != JsonValueKind.String) return null;
+            string? url = null;
+            if (i.TryGetProperty("url", out var u) && u.ValueKind != JsonValueKind.Null)
+            {
+                if (u.ValueKind != JsonValueKind.String) return null;
+                url = u.GetString();
+            }
+            DateTimeOffset? started = null;
+            if (i.TryGetProperty("started_at", out var st) && st.ValueKind != JsonValueKind.Null)
+            {
+                if (st.ValueKind != JsonValueKind.String || !TryParseIso(st.GetString()!, out var d)) return null;
+                started = d;
+            }
+            result.Add(new ServiceIncident(name.GetString()!, impact.GetString()!, url, started));
+        }
+        return result;
     }
 
     private static UsageWindow DecodeWindow(JsonElement e)
@@ -184,7 +221,23 @@ public static class UsageDecoder
                 _ => throw new FormatException(),
             };
         }
-        return new UsageWindow(id, label, used, resets, hidden);
+        return new UsageWindow(id, label, used, resets, hidden) { Forecast = DecodeForecast(e) };
+    }
+
+    /// <summary>選填的預測 <c>{exhausts_at, urgent, faster?}</c>：格式不對時當成沒有（同 Swift 的 <c>try? decodeIfPresent</c>）</summary>
+    private static QuotaForecast? DecodeForecast(JsonElement e)
+    {
+        if (!e.TryGetProperty("forecast", out var f) || f.ValueKind != JsonValueKind.Object) return null;
+        if (!f.TryGetProperty("exhausts_at", out var at) || at.ValueKind != JsonValueKind.String || !TryParseIso(at.GetString()!, out var exhausts))
+            return null;
+        if (!f.TryGetProperty("urgent", out var u) || u.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
+        double? faster = null;
+        if (f.TryGetProperty("faster", out var x) && x.ValueKind != JsonValueKind.Null)
+        {
+            if (x.ValueKind != JsonValueKind.Number) return null;
+            faster = x.GetDouble();
+        }
+        return new QuotaForecast(exhausts, u.ValueKind == JsonValueKind.True, faster);
     }
 
     private static JsonElement Required(JsonElement e, string name, JsonValueKind kind)

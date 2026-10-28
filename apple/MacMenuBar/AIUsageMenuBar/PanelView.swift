@@ -66,7 +66,7 @@ struct PanelView: View {
                     historyStore.close()
                 }
             },
-            snapshot: store.snapshot, now: store.now, history: historyStore.history,
+            snapshot: store.snapshot, now: store.now, history: historyStore.history.including(store.snapshot),
             onSnapshotChange: { old, new in
                 // 收集器寫入新資料後，「正在更新」之類的提示就不需要了
                 if old?.updatedAt != new?.updatedAt {

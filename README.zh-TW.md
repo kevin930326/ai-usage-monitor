@@ -246,7 +246,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | 收集器（只在設定第二層後） | Keychain `AIUsageMonitor-device-key`、`AIUsageMonitor-relay-read`（Windows：認證管理員 `AIUsageMonitor/device-key`，`set-tier2.ps1 -ReadKey` 時另有 `AIUsageMonitor/relay-read`） | 這台電腦的寫入密鑰；下載其他電腦資料用的讀取密鑰 | — |
 | 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
 | 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
-| 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字） | 事件內文、連結 |
+| 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`、`https://status.claude.com/api/v2/incidents/unresolved.json`、`https://status.openai.com/api/v2/incidents.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字）；影響這個服務的進行中事故另取事故頁連結（`https://status.claude.com/incidents/<id>`／`https://status.openai.com/incidents/<id>`）與開始時間（[ADR-0018](docs/adr/0018-quota-forecast-and-service-incidents.md) 第 4 節） | 事件內文與更新、其他連結 |
 | Mac 選單列 App | `usage.json`、`history.sqlite3`、`service-status.json`（同一個資料夾） | 全部（都是收集器寫的、不含帳號資訊） | — |
 | iPhone、小工具、手錶 | 你的中繼 `GET /usage` | 用量快照 | — |
 | iPhone App | 相機（只在按「掃描 QR 碼」時，VisionKit） | 只認 `aiusage-pair:v1:` 開頭的配對 QR 碼（中繼網址與讀取密鑰） | 其他 QR 碼與畫面內容 |
@@ -304,7 +304,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行 | — | — | 只在你按下時 |
 | Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
-上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏，以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
+上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏與預測（`forecast`：預計用完的時間、是否不到 1 小時、比平常快幾倍）、公開狀態頁的進行中事故（`incidents`：最多 3 項，名稱／影響程度／事故頁連結／開始時間），以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。
 
 Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都以 `#if DEBUG` 排除，Release 版本不包含（`scripts/verify-all.sh` 會檢查 Release 執行檔中沒有這些字串；Swift 把 15 個位元組以內的字串直接編進指令、`strings` 看不到，所以另外以 `scripts/check-debug-env.py` 檢查原始碼：`"AUM_…"` 只能出現在 `#if DEBUG` 裡，`AUM_TESTING` 例外）。`AI_USAGE_MONITOR_HOME` 在 Release 也有效，與收集器相同，只影響讀取本機檔案的位置。
 

@@ -252,7 +252,8 @@ struct NotchCanvas: View {
         let status = switch director.mood {
         case .stale: "額度資料過期或讀取失敗"
         case .out: "額度用完"
-        case .worried: "額度剩不到 20%"
+        case .worried: "額度剩不到 20% 或照目前速度會在重置前用完"
+        case .sick: "服務狀態頁有進行中的事故"
         default: "額度正常"
         }
         return "\(character.title) 角色，\(activity)，\(status)"
@@ -339,6 +340,20 @@ enum NotchQuota {
     }
 
 
+    /// 會在重置前用完、而且最早用完的可見額度的預測與名稱（快照裡收集器算好的，瀏海不讀資料庫）
+    static func forecast(in snapshot: UsageSnapshot?, provider: String, now: Date) -> (QuotaForecast, String)? {
+        guard let snapshot, let usage = snapshot.providers[provider], usage.error == nil else { return nil }
+        let stale = snapshot.isStale(now: now)
+        return usage.visibleWindows.compactMap { w in
+            QuotaForecast.current(window: w, provider: provider, history: nil, stale: stale, now: now).map { ($0, w.id == "five_hour" ? "5h" : w.label) }
+        }.min { $0.0.exhaustsAt < $1.0.exhaustsAt }
+    }
+
+    /// 第一個有影響的事故（同角色生病的規則）
+    static func incident(in snapshot: UsageSnapshot?, provider: String) -> ServiceIncident? {
+        snapshot?.providers[provider]?.incidents?.first(where: \.isDisruption)
+    }
+
     /// 額度的等級：出錯或用完 2、剩不到 20% 1、其他 0（同通知「剩不到 20%」的門檻）
     static func statusLevel(in snapshot: UsageSnapshot?, provider: String, now: Date) -> Int {
         guard let snapshot, let usage = snapshot.providers[provider] else { return 0 }
@@ -358,6 +373,9 @@ struct NotchContent: View {
 
     private static let card = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x16 / 255)
     private static let secondary = Color(red: 0x9a / 255, green: 0x9a / 255, blue: 0xa8 / 255)
+    /// 瀏海永遠是深色底：用提示色與紅色的深色外觀版本
+    private static let notice = Color(UsagePalette.notice.dark)
+    private static let urgent = Color(UsagePalette.critical.dark)
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -559,7 +577,24 @@ struct NotchContent: View {
                     // 同面板的進度條規則（FR-16）：過期灰、剩不到 20% 紅、其他服務色
                     row(window, tint: UsageColors.bar(window, provider: provider, stale: stale, now: now), primary: index == 0)
                 }
-                if let reset = windows.first?.resetsAt, let text = ResetCountdown.text(until: reset, now: now) {
+                // 最後一行（ADR-0018 第 3 節）：服務事故 > 會在重置前用完的預測 > 重置倒數
+                if let incident = NotchQuota.incident(in: snapshot, provider: provider) {
+                    incidentLine(incident)
+                } else if let (forecast, label) = NotchQuota.forecast(in: snapshot, provider: provider, now: now) {
+                    HStack(spacing: 3) {
+                        Image(systemName: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
+                            .font(.system(size: 9))
+                            .accessibilityHidden(true)
+                        Text(windows.count > 1 ? "\(label) \(forecast.shortLine(now: now))" : forecast.shortLine(now: now))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(forecast.urgent ? Self.urgent : Self.notice)
+                    .padding(.top, 7)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(forecast.spokenLine(now: now))
+                } else if let reset = windows.first?.resetsAt, let text = ResetCountdown.text(until: reset, now: now) {
                     Text("\(text)後重置")
                         .font(.system(size: 10))
                         .foregroundStyle(Color(red: 0x6f / 255, green: 0x6f / 255, blue: 0x7d / 255))
@@ -574,6 +609,28 @@ struct NotchContent: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+    }
+
+    /// 服務事故：名稱（點了用瀏覽器打開事故頁；連結只接受官方狀態頁）
+    @ViewBuilder
+    private func incidentLine(_ incident: ServiceIncident) -> some View {
+        let label = HStack(spacing: 3) {
+            Image(systemName: "cross.case.fill").font(.system(size: 9)).accessibilityHidden(true)
+            Text(incident.name).lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(Self.notice)
+        .padding(.top, 7)
+        if let link = incident.link {
+            Button { NSWorkspace.shared.open(link) } label: { label }
+                .buttonStyle(.plain)
+                .help("服務異常：\(incident.name)（點一下打開狀態頁）")
+                .accessibilityLabel("服務異常：\(incident.name)，點一下打開狀態頁")
+        } else {
+            label
+                .help("服務異常：\(incident.name)")
+                .accessibilityLabel("服務異常：\(incident.name)")
+        }
     }
 
     private func row(_ window: UsageWindow, tint: Color, primary: Bool) -> some View {

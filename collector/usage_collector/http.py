@@ -65,7 +65,9 @@ def _reason(e: urllib.error.HTTPError) -> str:
     return f"：{reason}"
 
 
-def request_json(url: str, headers: dict[str, str], body: dict | None = None, timeout: float = 15) -> dict:
+def request_json(url: str, headers: dict[str, str], body: dict | None = None, timeout: float = 15,
+                 max_bytes: int | None = None) -> dict:
+    """`max_bytes`：回應超過這個大小就當成錯誤（讀公開狀態頁之類不受信任的來源時用）"""
     data = None
     headers = {"User-Agent": USER_AGENT, **headers}
     if body is not None:
@@ -74,7 +76,9 @@ def request_json(url: str, headers: dict[str, str], body: dict | None = None, ti
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
     try:
         with _opener.open(req, timeout=timeout) as resp:
-            status, raw = resp.status, resp.read()
+            status, raw = resp.status, resp.read() if max_bytes is None else resp.read(max_bytes + 1)
+        if max_bytes is not None and len(raw) > max_bytes:
+            raise ProviderError("回應太大，已停止")
     except urllib.error.HTTPError as e:
         if 300 <= e.code < 400:
             raise ProviderError(f"伺服器要求重新導向（HTTP {e.code}），已停止") from None

@@ -118,7 +118,7 @@ FR-18、FR-19、FR-23 所需的歷史資料：Mac 的部分由 [ADR-0009](adr/00
 | FR-42 | 額度消耗（第一層）：以額度歷史計算每小時消耗的 %，畫熱力圖與走勢，涵蓋手機、網頁、所有電腦；標註「整個帳號」 | Could | v1.6 |
 | FR-43 | 這台 Mac 的 Token 統計：本週 Token、單日最高、最長任務、連續天數、30 天 Token 活動、活動熱力圖、全部／Claude／Codex 切換；主數字 = input＋cache_write＋output，滑鼠移上去顯示 cache_read（四項分開保存，ADR-0009 第 4 節；可切換為含 cache_read，FR-60）；標註「這台 Mac」並說明不包含的來源 | Could | v1.7 |
 | FR-44 | 完整統計視窗：一年熱力圖、30 天長條、各模型、各時段分布、個人紀錄；關閉後釋放資源 | Could | v1.7 |
-| FR-45 | 服務狀態：讀 Anthropic 與 OpenAI 公開狀態頁，分辨服務異常與額度用完；不需登入；由收集器抓取並寫入本機 `service-status.json`，App 不連網（ADR-0008） | Could | v1.8 |
+| FR-45 | 服務狀態：讀 Anthropic 與 OpenAI 公開狀態頁，分辨服務異常與額度用完；不需登入；由收集器抓取並寫入本機 `service-status.json`，App 不連網（ADR-0008）；進行中的事故另外放進 usage.json，Windows 與 iPhone 也看得到（ADR-0018） | Could | v1.8 |
 | FR-46 | 第一次使用時顯示骨架畫面：Token 統計「正在整理過去的紀錄（N%）」、額度走勢「正在收集，幾小時後開始會有資料」（ADR-0009 第 8 節） | Could | v1.6 |
 | FR-47 | 右鍵選單（立即更新、完整統計、設定、結束）與可自訂的全域快捷鍵 | Could | v1.8 |
 | FR-48 | Windows 收集器：與 Mac 共用程式，以工作排程器每 5 分鐘統計本機 Token | Could | v2.0 |

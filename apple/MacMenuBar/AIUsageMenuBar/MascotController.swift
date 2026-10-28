@@ -473,7 +473,9 @@ final class MascotController {
         let level = NotchQuota.statusLevel(in: store.snapshot, provider: provider, now: store.now)
         let unavailable = MascotMood.isQuotaUnavailable(store.snapshot, provider: provider,
                                                         readFailed: store.errorMessage != nil, now: store.now)
-        let quota = MascotMood.quota(level: level, unavailable: unavailable)
+        let quota = MascotMood.quota(level: level, unavailable: unavailable,
+                                     incident: MascotMood.hasIncident(store.snapshot, provider: provider),
+                                     runsOut: MascotMood.runsOut(store.snapshot, provider: provider, now: store.now))
         let monitor = AgentMonitor.shared
         let mood = MascotMood.agent(monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter),
                                     quota: quota)

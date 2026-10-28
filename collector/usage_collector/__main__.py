@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import disk, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
+from . import disk, forecast, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
 from .log import limit_repeats, log, repeats_path, rotate_if_large, rotate_inherited, stderr_is
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -150,6 +150,11 @@ def run(args: argparse.Namespace) -> int:
     for name, p in snapshot["providers"].items():
         if p["error"]:
             log(f"{name}: {p['error']}")
+    # 額度預測（ADR-0018）：iPhone 沒有歷史，在寫 usage.json 與上傳前算好；只讀歷史、失敗只是不加
+    forecast.annotate_safely(snapshot, history.HISTORY_PATH)
+    # 服務事故（ADR-0018 第 4 節）：上一次查到的公開狀態頁結果；只在寫本機檔案時（狀態頁也只在這時查）
+    if args.write_local:
+        service_status.annotate_safely(snapshot)
 
     if not args.quiet:
         json.dump(snapshot, sys.stdout, ensure_ascii=False, indent=None if args.compact else 2)

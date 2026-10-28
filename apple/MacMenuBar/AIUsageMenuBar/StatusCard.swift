@@ -10,6 +10,8 @@ struct ServiceStatusRow: Equatable, Identifiable {
     var provider: String
     var health: ServiceHealth
     var quotaExhausted: Bool
+    /// 第一個事故的事故頁（ADR-0018 第 4 節；只接受官方狀態頁的網址）
+    var incidentURL: URL? = nil
 
     var id: String { provider }
 
@@ -21,7 +23,8 @@ struct ServiceStatusRow: Equatable, Identifiable {
     static func rows(snapshot: UsageSnapshot, status: ServiceStatusFile?, now: Date) -> [ServiceStatusRow] {
         snapshot.orderedProviderKeys.map { key in
             ServiceStatusRow(provider: key, health: ServiceStatusSummary.health(status, provider: key, now: now),
-                             quotaExhausted: ServiceStatusSummary.quotaExhausted(snapshot, provider: key, now: now))
+                             quotaExhausted: ServiceStatusSummary.quotaExhausted(snapshot, provider: key, now: now),
+                             incidentURL: status?.providers[key]?.disruptionLink)
         }
     }
 
@@ -130,13 +133,14 @@ struct ServiceStatusRowView: View {
                     .truncationMode(.tail)
                     .help(stateText)
                 Spacer(minLength: 4)
-                if row.health.isProblem, let url = ServiceStatusPage.url(row.provider) {
-                    // 自己畫（不用 Link），ImageRenderer 才能截圖；在瀏覽器打開，App 本身不連網
-                    Button("狀態頁") { NSWorkspace.shared.open(url) }
+                if row.health.isProblem, let url = row.incidentURL ?? ServiceStatusPage.url(row.provider) {
+                    // 自己畫（不用 Link），ImageRenderer 才能截圖；在瀏覽器打開，App 本身不連網。
+                    // 有事故時直接打開那個事故的頁面
+                    Button(row.incidentURL == nil ? "狀態頁" : "事故頁") { NSWorkspace.shared.open(url) }
                         .buttonStyle(.plain)
                         .font(.caption)
                         .foregroundStyle(Color.accentColor)
-                        .help("在瀏覽器打開\(ProviderInfo.displayName(row.provider))的狀態頁")
+                        .help("在瀏覽器打開\(ProviderInfo.displayName(row.provider))的\(row.incidentURL == nil ? "狀態頁" : "事故頁")")
                 }
             }
             if case .disrupted(_, true) = row.health {

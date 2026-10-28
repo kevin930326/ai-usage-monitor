@@ -50,6 +50,15 @@ public struct ProviderStatus: Decodable, Equatable, Sendable {
     public struct Incident: Decodable, Equatable, Sendable {
         public var name: String
         public var impact: String
+        /// 事故頁（收集器從狀態頁的事故清單組成；舊版的 service-status.json 沒有）
+        public var url: String?
+
+        public var isDisruption: Bool { ServiceIncident.disruptionImpacts.contains(impact) }
+    }
+
+    /// 「事故頁」按鈕要開的：第一筆 minor 以上、有官方事故頁的事故（維護不算）
+    public var disruptionLink: URL? {
+        incidents.lazy.filter(\.isDisruption).compactMap { ServiceIncident.link($0.url) }.first
     }
 
     /// none／minor／major／critical／maintenance；抓不到時為 nil（看 `error`）
@@ -75,6 +84,43 @@ public struct ProviderStatus: Decodable, Equatable, Sendable {
 
     /// 異常的元件中有這個工具相關的（Claude Code、Claude API、Codex…）
     public var affectsTool: Bool { components.contains(where: \.related) }
+}
+
+/// usage.json 裡的進行中事故（ADR-0018 第 4 節）：只有名稱、等級、事故頁與開始時間。
+public struct ServiceIncident: Codable, Hashable, Sendable {
+    public var name: String
+    /// none／minor／major／critical／maintenance
+    public var impact: String
+    public var url: String?
+    public var startedAt: Date?
+
+    public init(name: String, impact: String, url: String? = nil, startedAt: Date? = nil) {
+        self.name = name
+        self.impact = impact
+        self.url = url
+        self.startedAt = startedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case name, impact, url
+        case startedAt = "started_at"
+    }
+
+    /// 會影響使用的等級（minor 以上）；維護與 none 不算服務異常（瀏海、表情、iPhone 共用，同 C# 的 `IsDisruption`）
+    public static let disruptionImpacts: Set<String> = ["minor", "major", "critical"]
+
+    public var isDisruption: Bool { Self.disruptionImpacts.contains(impact) }
+
+    /// 只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結
+    public static let allowedHosts: Set<String> = ["status.claude.com", "status.openai.com"]
+
+    public var link: URL? { Self.link(url) }
+
+    public static func link(_ text: String?) -> URL? {
+        guard let text, let url = URL(string: text), url.scheme == "https", let host = url.host,
+              allowedHosts.contains(host), url.path.hasPrefix("/incidents/"), url.user == nil, url.port == nil else { return nil }
+        return url
+    }
 }
 
 /// 一個服務在面板上的狀態。

@@ -28,8 +28,7 @@ struct MenuBarLabel: View {
     @ViewBuilder
     private var icon: some View {
         if let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) {
-            let content = MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
-                                             isLeast: settings.iconWindow == .automatic)
+            let content = MenuBarIconContent(item: item, snapshot: snapshot, now: store.now, isLeast: settings.iconWindow == .automatic)
             MenuBarIconView(content: content, style: settings.iconStyle, character: settings.mascotCharacter)
         } else {
             Image(systemName: "gauge.with.dots.needle.0percent")
@@ -47,23 +46,38 @@ struct MenuBarIconContent: Hashable {
     var label: String
     /// 顯示的是「自動」挑出的剩餘最少的額度（VoiceOver 要說出來）
     var isLeast: Bool
+    /// 這個服務的狀態頁有進行中的事故（角色生病，同瀏海；Codex C-03）
+    var incident: Bool
+    /// 這個服務有額度預測會在重置前用完（角色擔心，同瀏海）
+    var runsOut: Bool
 
-    init(provider: String, remainingPct: Int, timeRemaining: Int?, state: MenuBarState, label: String, isLeast: Bool = true) {
+    init(provider: String, remainingPct: Int, timeRemaining: Int?, state: MenuBarState, label: String, isLeast: Bool = true,
+         incident: Bool = false, runsOut: Bool = false) {
         self.provider = provider
         self.remainingPct = remainingPct
         self.timeRemaining = timeRemaining
         self.state = state
         self.label = label
         self.isLeast = isLeast
+        self.incident = incident
+        self.runsOut = runsOut
     }
 
-    init(item: ProviderWindow, stale: Bool, now: Date, isLeast: Bool) {
+    init(item: ProviderWindow, snapshot: UsageSnapshot, now: Date, isLeast: Bool) {
         self.isLeast = isLeast
         provider = item.provider
         remainingPct = Int(item.window.effectiveRemainingPct(at: now).rounded())
         timeRemaining = item.window.timeRemainingFraction(at: now).map { Int(($0 * 50).rounded()) * 2 }
-        state = MenuBarState(window: item.window, stale: stale, now: now)
+        state = MenuBarState(window: item.window, stale: snapshot.isStale(now: now), now: now)
         label = item.displayName
+        incident = MascotMood.hasIncident(snapshot, provider: item.provider)
+        runsOut = MascotMood.runsOut(snapshot, provider: item.provider, now: now)
+    }
+
+    /// 角色樣式的表情：和瀏海同一套優先順序（過期 > 用完 > 事故 > 會用完或剩不到 20% > 正常）
+    var mood: MascotMood {
+        let level = state == .critical ? (remainingPct <= 0 ? 2 : 1) : 0
+        return MascotMood.quota(level: level, unavailable: state == .stale, incident: incident, runsOut: runsOut)
     }
 
     var accessibilityText: String {
@@ -75,6 +89,8 @@ struct MenuBarIconContent: Hashable {
         case .stale: text += "，資料已過期"
         case .normal: break
         }
+        if state != .stale && incident { text += "，服務有事故" }
+        if state != .stale && runsOut { text += "，照目前速度會在重置前用完" }
         return text
     }
 }
@@ -190,10 +206,11 @@ enum MenuBarIcon {
         return image
     }
 
-    private enum CharacterIconEyes { case pill, dot, cross, closed }
+    private enum CharacterIconEyes { case pill, dot, cross, closed, half }
 
     /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），額度用眼睛的形狀表示（同瀏海面板，沒有狀態點）：
-    /// 正常膠囊、剩不到 20% 小圓點、用完 ×、過期閉眼並轉灰，不只靠顏色；用得太快右上角加提示色小點。
+    /// 正常膠囊、剩不到 20% 或預測會用完小圓點、用完 ×、事故半閉眼加冷汗、過期閉眼並轉灰，不只靠顏色；
+    /// 表情和瀏海用同一個 `MascotMood`。用得太快右上角加提示色小點。
     private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter) -> NSImage {
         let palette = MascotController.shared.baseConfig?.palette
         func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
@@ -204,10 +221,13 @@ enum MenuBarIcon {
         let tint = palette.map { stale ? $0.white : character.tint($0) }
         let fallback = NSColor(UsageColors.provider(character.provider))
         let light = color(tint?.light, fallback), mid = color(tint?.mid, fallback), shade = color(tint?.shade, fallback)
-        let eyes: CharacterIconEyes = switch c.state {
+        let mood = c.mood
+        let eyes: CharacterIconEyes = switch mood {
         case .stale: .closed
-        case .critical: c.remainingPct <= 0 ? .cross : .dot
-        case .normal, .tooFast: .pill
+        case .out: .cross
+        case .worried, .surprised: .dot
+        case .sick, .sad: .half
+        case .normal, .happy: .pill
         }
         let image = NSImage(size: NSSize(width: 18, height: 16), flipped: false) { rect in
             let center = NSPoint(x: 9, y: rect.midY)
@@ -236,7 +256,14 @@ enum MenuBarIcon {
                     cross.stroke()
                 case .pill:
                     NSBezierPath(roundedRect: NSRect(x: x - 0.75, y: center.y - 2.1, width: 1.5, height: 3.2), xRadius: 0.75, yRadius: 0.75).fill()
+                case .half:
+                    // 膠囊的下半（上半被眼皮蓋住）
+                    NSBezierPath(roundedRect: NSRect(x: x - 0.75, y: center.y - 2.1, width: 1.5, height: 1.6), xRadius: 0.75, yRadius: 0.75).fill()
                 }
+            }
+            if mood.sweat {
+                NSColor(srgbRed: 0.55, green: 0.78, blue: 1, alpha: 1).setFill()
+                NSBezierPath(ovalIn: NSRect(x: center.x + radius * 0.55, y: center.y + radius * 0.2, width: 1.6, height: 2.2)).fill()
             }
             if c.state == .tooFast { dot(at: NSPoint(x: 16, y: rect.maxY - 3), color: NSColor(UsageColors.notice), radius: 1.8) }
             return true

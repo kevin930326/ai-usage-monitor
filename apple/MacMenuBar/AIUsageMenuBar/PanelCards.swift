@@ -140,8 +140,10 @@ struct RingCardContent: View {
     @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { item.window.effectiveRemainingPct(at: now) }
-    /// 「約 N 分鐘後用完」有歷史時用近期速度，不足時退回平均速度（ADR-0008 第 4 節）
-    private var pace: UsagePace? { UsagePace(window: item.window, provider: item.provider, history: history, stale: stale, now: now) }
+    /// 「照目前速度約 14:32 用完」：只用近期速度，資料不足時不顯示（ADR-0018 第 1 節）
+    private var forecast: QuotaForecast? {
+        QuotaForecast.current(window: item.window, provider: item.provider, history: history, stale: stale, now: now)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
@@ -169,9 +171,11 @@ struct RingCardContent: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if let pace, pace.isTooFast {
-                    PaceBadge(pace: pace, now: now)
+                if let forecast {
+                    QuotaForecastLine(forecast: forecast, now: now, stacked: true)
                         .padding(.top, 2)
+                } else if UsagePace(window: item.window, stale: stale, now: now)?.isTooFast == true {
+                    TooFastNote().padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)
@@ -229,31 +233,46 @@ struct PanelResetText: View {
     }
 }
 
-/// 「用得較快，約 N 分鐘後用完」（提示色，ADR-0008 第 4 節）。
-struct PaceBadge: View {
-    let pace: UsagePace
+/// 選單列有「太快」小點（平均速度）但資料不足以預測時間：只寫「用得較快」，不猜時間（ADR-0018 第 3 節）
+struct TooFastNote: View {
+    var body: some View {
+        Label("用得較快", systemImage: "speedometer")
+            .labelStyle(.titleAndIcon)
+            .imageScale(.small)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(UsageColors.notice)
+    }
+}
+
+/// 「照目前速度約 14:32 用完・比平常快 2.1 倍」（ADR-0018 第 3 節）：不到 60 分鐘紅色，其他提示色；
+/// 顏色以外一律有文字。取代原本的「用得較快，約 N 分鐘後用完」。
+struct QuotaForecastLine: View {
+    let forecast: QuotaForecast
     let now: Date
-    var compact = false
+    /// 窄的地方（主圓環卡片）：倍數另起一行，不在中間斷開
+    var stacked = false
+
+    private var color: Color { forecast.urgent ? UsageColors.critical : UsageColors.notice }
 
     var body: some View {
-        HStack(spacing: 5) {
-            if !compact {
-                Circle().fill(UsageColors.notice).frame(width: 7, height: 7)
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            if stacked {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(forecast.text(now: now))
+                    if let faster = forecast.fasterText { Text(faster) }
+                }
+            } else {
+                Text(forecast.line(now: now))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(text)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(UsageColors.notice)
-        .padding(.horizontal, compact ? 0 : 8)
-        .padding(.vertical, compact ? 0 : 3)
-        .background(compact ? Color.clear : UsageColors.notice.opacity(0.12), in: Capsule())
-    }
-
-    private var text: String {
-        guard let at = pace.exhaustsAt else { return "用得較快" }
-        let minutes = max(Int((at.timeIntervalSince(now) / 60).rounded()), 1)
-        if compact { return "用得較快" }
-        return minutes >= 120 ? "用得較快，約 \(minutes / 60) 小時後用完" : "用得較快，約 \(minutes) 分鐘後用完"
+        .foregroundStyle(color)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(forecast.spokenLine(now: now))
     }
 }
 
@@ -344,7 +363,7 @@ struct ResetCreditsLine: View {
     }
 }
 
-/// 一個額度：名稱、剩餘 %、進度條（含預期進度標記）、重置倒數、用得較快的提示。
+/// 一個額度：名稱、剩餘 %、進度條（含預期進度標記）、重置倒數、會在重置前用完時的預測。
 struct QuotaRow: View {
     let window: UsageWindow
     let provider: String
@@ -357,7 +376,9 @@ struct QuotaRow: View {
     @Environment(\.quotaHistory) private var history
 
     private var remaining: Double { window.effectiveRemainingPct(at: now) }
-    private var pace: UsagePace? { UsagePace(window: window, provider: provider, history: history, stale: stale, now: now) }
+    private var forecast: QuotaForecast? {
+        QuotaForecast.current(window: window, provider: provider, history: history, stale: stale, now: now)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -376,15 +397,14 @@ struct QuotaRow: View {
             .frame(height: 7)
             // 資料更新時只動變化的那一條：值沒變的進度條不會有動畫
             .animation(animates ? PanelTiming.barUpdate : nil, value: remaining)
-            HStack(spacing: 4) {
-                PanelResetText(window: window, now: now)
-                if let pace, pace.isTooFast {
-                    Text("·")
-                    PaceBadge(pace: pace, now: now, compact: true)
-                }
+            PanelResetText(window: window, now: now)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let forecast {
+                QuotaForecastLine(forecast: forecast, now: now)
+            } else if UsagePace(window: window, stale: stale, now: now)?.isTooFast == true {
+                TooFastNote()
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
     }

@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-21T03:00:00Z",
+  "providers": {
+    "claude": {
+      "plan": "Max",
+      "error": null,
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "5 小時",
+          "used_pct": 80.0,
+          "resets_at": "2026-10-21T05:00:00Z",
+          "hidden": false,
+          "forecast": {
+            "exhausts_at": "2026-10-21T03:40:00Z",
+            "urgent": true,
+            "faster": 2.1
+          }
+        },
+        {
+          "id": "weekly",
+          "label": "每週",
+          "used_pct": 60.0,
+          "resets_at": "2026-10-24T03:00:00Z",
+          "hidden": false,
+          "forecast": {
+            "exhausts_at": "2026-10-22T09:30:00Z",
+            "urgent": false
+          }
+        }
+      ],
+      "incidents": [
+        {
+          "name": "Elevated errors on Claude Code",
+          "impact": "major",
+          "url": "https://status.claude.com/incidents/abc123",
+          "started_at": "2026-10-21T02:40:00Z"
+        }
+      ]
+    },
+    "codex": {
+      "plan": "Plus",
+      "error": null,
+      "windows": [
+        {
+          "id": "five_hour",
+          "label": "5 小時",
+          "used_pct": 10.0,
+          "resets_at": "2026-10-21T06:00:00Z",
+          "hidden": false
+        }
+      ],
+      "incidents": []
+    }
+  }
+}
