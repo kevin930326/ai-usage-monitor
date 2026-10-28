@@ -17,8 +17,10 @@ import Testing
         #expect(config.ripple.particles == 560)
         #expect(config.ripple.edgeFlash.ms == 320)
         #expect(config.intro.ringsAt == [40, 190, 360, 560])
-        // 眼睛中心距約直徑 27%：sin(0.3) ≈ 0.296R → 兩眼相距 ≈ 0.59R ≈ 直徑的 29.5%（球面投影後正面看）
-        #expect(abs(2 * sin(config.hero.eye.yaw) / 2 - 0.27) < 0.03)
+        // 眼睛中心距約直徑 30%（使用者確認維持 0.3 rad）：sin(0.3) ≈ 0.296R → 兩眼相距 ≈ 0.59R ≈ 直徑的 29.6%
+        //（球面投影後正面看）；不能比 27% 更近（「眼睛靠太近」被否決過）
+        #expect(abs(sin(config.hero.eye.yaw) - 0.296) < 0.01)
+        #expect(sin(config.hero.eye.yaw) >= 0.27)
     }
 
     @Test func sameEventsGiveSameFrames() throws {
