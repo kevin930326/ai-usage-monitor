@@ -1,0 +1,732 @@
+{
+  "inputs" : [
+    {
+      "name" : "session-start",
+      "result" : [
+        "event=SessionStart",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "prompt-is-dropped",
+      "result" : [
+        "event=UserPromptSubmit",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "pretool-bash-dropped",
+      "result" : [
+        "event=PreToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "pretool-ask-question",
+      "result" : [
+        "event=PreToolUse",
+        "need=question",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "pretool-exit-plan",
+      "result" : [
+        "event=PreToolUse",
+        "need=plan",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "posttool",
+      "result" : [
+        "event=PostToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "permission-request",
+      "result" : [
+        "event=PermissionRequest",
+        "need=permission",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "notification-permission",
+      "result" : [
+        "event=Notification",
+        "need=permission",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "notification-elicitation",
+      "result" : [
+        "event=Notification",
+        "need=question",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "notification-idle",
+      "result" : [
+        "event=Notification",
+        "need=idle",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "notification-auth-ignored",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "notification-unknown-ignored",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "stop",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "stop-failure",
+      "result" : [
+        "event=StopFailure",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "session-end",
+      "result" : [
+        "event=SessionEnd",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "codex-interrupt",
+      "result" : [
+        "event=Interrupt",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "unknown-event",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "windows-cwd",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=w1",
+        "folder=proj-win"
+      ]
+    },
+    {
+      "name" : "cwd-trailing-slash",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=w1",
+        "folder=proj"
+      ]
+    },
+    {
+      "name" : "cwd-root",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=w1",
+        "folder="
+      ]
+    },
+    {
+      "name" : "cwd-missing",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=w1",
+        "folder="
+      ]
+    },
+    {
+      "name" : "cwd-control-chars-and-long",
+      "result" : [
+        "event=Stop",
+        "need=",
+        "session=w1",
+        "folder=xy名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名"
+      ]
+    },
+    {
+      "name" : "missing-session",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "empty-session",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "session-not-string",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-not-string",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "not-json",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "json-array",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "empty",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "subagent-posttool",
+      "result" : [
+        "event=PostToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project",
+        "sub"
+      ]
+    },
+    {
+      "name" : "agent-id-empty",
+      "result" : [
+        "event=PostToolUse",
+        "need=",
+        "session=abc-123",
+        "folder=secret-project"
+      ]
+    },
+    {
+      "name" : "hook-event-number",
+      "result" : [
+        "nil"
+      ]
+    }
+  ],
+  "messages" : [
+    {
+      "name" : "valid",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+      ]
+    },
+    {
+      "name" : "valid-need",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PermissionRequest\",\"need\":\"permission\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+      ]
+    },
+    {
+      "name" : "valid-codex-empty-dir",
+      "result" : [
+        "{\"v\":1,\"ai\":\"codex\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"\"}"
+      ]
+    },
+    {
+      "name" : "valid-unicode-dir",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"專案 A\"}"
+      ]
+    },
+    {
+      "name" : "bad-version",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "bad-ai",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "bad-event",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "bad-need",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "sid-uppercase",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "sid-short",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "sid-raw-uuid",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "time-zero",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "time-string",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "dir-is-path",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "dir-backslash",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "dir-control",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "dir-too-long",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "extra-field",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "missing-field",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "too-long",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "not-json",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "array",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "valid-sub",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PostToolUse\",\"need\":\"\",\"sub\":true,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+      ]
+    },
+    {
+      "name" : "spaced-json",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "version-float",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "time-exponent",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "duplicate-key",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "key-order",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "sub-not-bool",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "missing-sub",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number-15",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number--1",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number-0",
+      "result" : [
+        "nil"
+      ]
+    }
+  ],
+  "sessions" : [
+    {
+      "name" : "basic-turn",
+      "result" : [
+        "0 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@0]",
+        "1000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@1000]",
+        "2000 claude PreToolUse → top=claude/aaaa [claude/aaaa/proj:working@1000]",
+        "3000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@1000]",
+        "9000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@9000]",
+        "10000 seen → top=claude/aaaa [claude/aaaa/proj:waiting@10000]",
+        "20000 claude SessionEnd → top=none []"
+      ]
+    },
+    {
+      "name" : "permission-then-approved",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "1100 claude Notification(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "30000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@30000]",
+        "40000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@40000]"
+      ]
+    },
+    {
+      "name" : "ask-question-and-plan",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreToolUse(question) → top=claude/aaaa [claude/aaaa/proj:needsYou(question)@1000]",
+        "5000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@5000]",
+        "6000 claude PreToolUse(plan) → top=claude/aaaa [claude/aaaa/proj:needsYou(plan)@6000]",
+        "9000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@9000]",
+        "9500 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@9500]"
+      ]
+    },
+    {
+      "name" : "idle-prompt-keeps-done-and-needs",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "61000 claude Notification(idle) → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "70000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@70000]",
+        "71000 claude Notification(question) → top=claude/aaaa [claude/aaaa/proj:needsYou(question)@71000]",
+        "131000 claude Notification(idle) → top=claude/aaaa [claude/aaaa/proj:needsYou(question)@71000]"
+      ]
+    },
+    {
+      "name" : "idle-prompt-fixes-missing-stop",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "60000 claude Notification(idle) → top=claude/aaaa [claude/aaaa/proj:waiting@60000]"
+      ]
+    },
+    {
+      "name" : "error-and-seen",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude StopFailure → top=claude/aaaa [claude/aaaa/proj:error@1000]",
+        "5000 seen → top=claude/aaaa [claude/aaaa/proj:waiting@5000]",
+        "6000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@6000]"
+      ]
+    },
+    {
+      "name" : "waiting-becomes-idle",
+      "result" : [
+        "0 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@0]",
+        "240000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:waiting@0]",
+        "300000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:idle@0]",
+        "360000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@360000]"
+      ]
+    },
+    {
+      "name" : "interrupt-without-stop-times-out",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreToolUse → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1140000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1260000 expire → top=claude/aaaa [claude/aaaa/proj:waiting@1201000]",
+        "1561000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:idle@1201000]"
+      ]
+    },
+    {
+      "name" : "codex-interrupt",
+      "result" : [
+        "0 codex UserPromptSubmit → top=codex/aaaa [codex/aaaa/proj:working@0]",
+        "1000 codex Interrupt → top=codex/aaaa [codex/aaaa/proj:waiting@1000]"
+      ]
+    },
+    {
+      "name" : "forget-after-12h",
+      "result" : [
+        "0 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@0]",
+        "1000 claude UserPromptSubmit → top=claude/bbbb [claude/bbbb/proj:working@1000, claude/aaaa/proj:done@0]",
+        "43199999 expire → top=claude/aaaa [claude/aaaa/proj:done@0, claude/bbbb/proj:idle@1201000]",
+        "43200000 expire → top=claude/bbbb [claude/bbbb/proj:idle@1201000]",
+        "43201000 expire → top=none []"
+      ]
+    },
+    {
+      "name" : "subagent-and-compact-do-not-wake-done",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude SubagentStop → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "2000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "3000 claude SubagentStop → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "4000 claude PreCompact → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "5000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@5000]",
+        "6000 claude SubagentStart → top=claude/aaaa [claude/aaaa/proj:working@6000]"
+      ]
+    },
+    {
+      "name" : "priority-across-sessions",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/alpha:working@0]",
+        "100 codex UserPromptSubmit → top=codex/bbbb [codex/bbbb/beta:working@100, claude/aaaa/alpha:working@0]",
+        "200 claude SessionStart → top=codex/bbbb [codex/bbbb/beta:working@100, claude/aaaa/alpha:working@0, claude/cccc/gamma:waiting@200]",
+        "1000 claude Stop → top=codex/bbbb [codex/bbbb/beta:working@100, claude/aaaa/proj:done@1000, claude/cccc/gamma:waiting@200]",
+        "2000 claude StopFailure → top=claude/cccc [claude/cccc/proj:error@2000, codex/bbbb/beta:working@100, claude/aaaa/proj:done@1000]",
+        "3000 codex PermissionRequest(permission) → top=codex/bbbb [codex/bbbb/proj:needsYou(permission)@3000, claude/cccc/proj:error@2000, claude/aaaa/proj:done@1000]",
+        "4000 codex PostToolUse → top=claude/cccc [claude/cccc/proj:error@2000, codex/bbbb/proj:working@4000, claude/aaaa/proj:done@1000]",
+        "5000 seen → top=codex/bbbb [codex/bbbb/proj:working@4000, claude/cccc/proj:waiting@5000, claude/aaaa/proj:waiting@5000]",
+        "6000 codex Stop → top=codex/bbbb [codex/bbbb/proj:done@6000, claude/cccc/proj:waiting@5000, claude/aaaa/proj:waiting@5000]"
+      ]
+    },
+    {
+      "name" : "same-sid-different-ai",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "10 codex Stop → top=claude/aaaa [claude/aaaa/proj:working@0, codex/aaaa/proj:done@10]",
+        "20 codex SessionEnd → top=claude/aaaa [claude/aaaa/proj:working@0]"
+      ]
+    },
+    {
+      "name" : "ties-break-by-latest",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "10 claude UserPromptSubmit → top=claude/bbbb [claude/bbbb/proj:working@10, claude/aaaa/proj:working@0]",
+        "20 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@0, claude/bbbb/proj:working@10]"
+      ]
+    },
+    {
+      "name" : "folder-kept-when-empty",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/first:working@0]",
+        "10 claude PostToolUse → top=claude/aaaa [claude/aaaa/first:working@0]",
+        "20 claude Stop → top=claude/aaaa [claude/aaaa/second:done@20]"
+      ]
+    },
+    {
+      "name" : "end-unknown-session",
+      "result" : [
+        "0 claude SessionEnd → top=none []"
+      ]
+    },
+    {
+      "name" : "cap-32-sessions",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/0000 [claude/0000/proj:working@0]",
+        "10 claude UserPromptSubmit → top=claude/0101 [claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "20 claude UserPromptSubmit → top=claude/0202 [claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "30 claude UserPromptSubmit → top=claude/0303 [claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "40 claude UserPromptSubmit → top=claude/0404 [claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "50 claude UserPromptSubmit → top=claude/0505 [claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "60 claude UserPromptSubmit → top=claude/0606 [claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "70 claude UserPromptSubmit → top=claude/0707 [claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "80 claude UserPromptSubmit → top=claude/0808 [claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "90 claude UserPromptSubmit → top=claude/0909 [claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "100 claude UserPromptSubmit → top=claude/0a0a [claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "110 claude UserPromptSubmit → top=claude/0b0b [claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "120 claude UserPromptSubmit → top=claude/0c0c [claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "130 claude UserPromptSubmit → top=claude/0d0d [claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "140 claude UserPromptSubmit → top=claude/0e0e [claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "150 claude UserPromptSubmit → top=claude/0f0f [claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "160 claude UserPromptSubmit → top=claude/1010 [claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "170 claude UserPromptSubmit → top=claude/1111 [claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "180 claude UserPromptSubmit → top=claude/1212 [claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "190 claude UserPromptSubmit → top=claude/1313 [claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "200 claude UserPromptSubmit → top=claude/1414 [claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "210 claude UserPromptSubmit → top=claude/1515 [claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "220 claude UserPromptSubmit → top=claude/1616 [claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "230 claude UserPromptSubmit → top=claude/1717 [claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "240 claude UserPromptSubmit → top=claude/1818 [claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "250 claude UserPromptSubmit → top=claude/1919 [claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "260 claude UserPromptSubmit → top=claude/1a1a [claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "270 claude UserPromptSubmit → top=claude/1b1b [claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "280 claude UserPromptSubmit → top=claude/1c1c [claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "290 claude UserPromptSubmit → top=claude/1d1d [claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "300 claude UserPromptSubmit → top=claude/1e1e [claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "310 claude UserPromptSubmit → top=claude/1f1f [claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10, claude/0000/proj:working@0]",
+        "320 claude UserPromptSubmit → top=claude/2020 [claude/2020/proj:working@320, claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20, claude/0101/proj:working@10]",
+        "330 claude UserPromptSubmit → top=claude/2121 [claude/2121/proj:working@330, claude/2020/proj:working@320, claude/1f1f/proj:working@310, claude/1e1e/proj:working@300, claude/1d1d/proj:working@290, claude/1c1c/proj:working@280, claude/1b1b/proj:working@270, claude/1a1a/proj:working@260, claude/1919/proj:working@250, claude/1818/proj:working@240, claude/1717/proj:working@230, claude/1616/proj:working@220, claude/1515/proj:working@210, claude/1414/proj:working@200, claude/1313/proj:working@190, claude/1212/proj:working@180, claude/1111/proj:working@170, claude/1010/proj:working@160, claude/0f0f/proj:working@150, claude/0e0e/proj:working@140, claude/0d0d/proj:working@130, claude/0c0c/proj:working@120, claude/0b0b/proj:working@110, claude/0a0a/proj:working@100, claude/0909/proj:working@90, claude/0808/proj:working@80, claude/0707/proj:working@70, claude/0606/proj:working@60, claude/0505/proj:working@50, claude/0404/proj:working@40, claude/0303/proj:working@30, claude/0202/proj:working@20]"
+      ]
+    },
+    {
+      "name" : "background-subagent-after-stop",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "2000 claude PreToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "3000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "4000 claude SubagentStop[sub] → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "5000 claude PermissionRequest(permission)[sub] → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@5000]",
+        "6000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@6000]",
+        "7000 claude SubagentStop[sub] → top=claude/aaaa [claude/aaaa/proj:working@6000]",
+        "8000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@8000]"
+      ]
+    },
+    {
+      "name" : "subagent-while-working",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "2000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "3000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@3000]"
+      ]
+    },
+    {
+      "name" : "compact-mid-turn-keeps-working",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PreCompact → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "2000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "3000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "4000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@4000]",
+        "5000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@5000]"
+      ]
+    },
+    {
+      "name" : "unseen-done-lets-character-sleep",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 activity working=true idle=false",
+        "2000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "301999 activity working=false idle=false",
+        "302000 activity working=false idle=true",
+        "302000 expire (no change) → top=claude/aaaa [claude/aaaa/proj:done@2000]",
+        "303000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@303000]",
+        "304000 claude StopFailure → top=claude/aaaa [claude/aaaa/proj:error@304000]",
+        "604000 activity working=false idle=true"
+      ]
+    },
+    {
+      "name" : "needs-you-times-out",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "3000000 activity working=false idle=false",
+        "3600999 expire (no change) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "3601000 expire → top=claude/aaaa [claude/aaaa/proj:waiting@3601000]",
+        "3601000 activity working=false idle=false",
+        "3901000 activity working=false idle=true"
+      ]
+    },
+    {
+      "name" : "stale-event-after-stop-is-dropped",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "1100 claude PostToolUse (stale) → top=claude/aaaa [claude/aaaa/proj:done@1000]",
+        "2000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@2000]"
+      ]
+    },
+    {
+      "name" : "stale-event-after-end-does-not-recreate",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude SessionEnd → top=none []",
+        "1100 claude PostToolUse (stale) → top=none []",
+        "1100 activity working=false idle=true",
+        "5000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@5000]"
+      ]
+    }
+  ]
+}

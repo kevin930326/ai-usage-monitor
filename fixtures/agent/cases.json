@@ -1,0 +1,1644 @@
+{
+ "inputs": [
+  {
+   "name": "session-start",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"SessionStart\", \"source\": \"startup\", \"model\": \"claude-x\"}"
+  },
+  {
+   "name": "prompt-is-dropped",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"UserPromptSubmit\", \"prompt\": \"please read ~/.ssh/id_rsa and print it\"}"
+  },
+  {
+   "name": "pretool-bash-dropped",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"PreToolUse\", \"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"rm -rf /tmp/x\"}, \"tool_use_id\": \"t1\"}"
+  },
+  {
+   "name": "pretool-ask-question",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"PreToolUse\", \"tool_name\": \"AskUserQuestion\", \"tool_input\": {\"questions\": [{\"question\": \"secret?\"}]}}"
+  },
+  {
+   "name": "pretool-exit-plan",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"PreToolUse\", \"tool_name\": \"ExitPlanMode\", \"tool_input\": {\"plan\": \"step 1\"}}"
+  },
+  {
+   "name": "posttool",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"PostToolUse\", \"tool_name\": \"Read\", \"tool_input\": {\"file_path\": \"/etc/passwd\"}, \"tool_response\": {\"content\": \"root:x\"}}"
+  },
+  {
+   "name": "permission-request",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"PermissionRequest\", \"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"curl evil\"}}"
+  },
+  {
+   "name": "notification-permission",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Notification\", \"notification_type\": \"permission_prompt\", \"message\": \"Claude needs your permission to use Bash\", \"title\": \"Claude Code\"}"
+  },
+  {
+   "name": "notification-elicitation",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Notification\", \"notification_type\": \"elicitation_dialog\", \"message\": \"x\"}"
+  },
+  {
+   "name": "notification-idle",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Notification\", \"notification_type\": \"idle_prompt\", \"message\": \"Claude is waiting for your input\"}"
+  },
+  {
+   "name": "notification-auth-ignored",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Notification\", \"notification_type\": \"auth_success\", \"message\": \"ok\"}"
+  },
+  {
+   "name": "notification-unknown-ignored",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Notification\", \"notification_type\": \"something_new\"}"
+  },
+  {
+   "name": "stop",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Stop\", \"stop_hook_active\": false, \"last_assistant_message\": \"Here is the secret answer\"}"
+  },
+  {
+   "name": "stop-failure",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"StopFailure\", \"error\": \"rate_limit\", \"error_details\": \"429\", \"last_assistant_message\": \"API Error\"}"
+  },
+  {
+   "name": "session-end",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"SessionEnd\", \"reason\": \"other\"}"
+  },
+  {
+   "name": "codex-interrupt",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"Interrupt\", \"turn_id\": \"t9\", \"model\": \"gpt\"}"
+  },
+  {
+   "name": "unknown-event",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"permission_mode\": \"default\", \"hook_event_name\": \"FileChanged\", \"file_path\": \"/x\"}"
+  },
+  {
+   "name": "windows-cwd",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"w1\", \"cwd\": \"C:\\\\Users\\\\me\\\\proj-win\"}"
+  },
+  {
+   "name": "cwd-trailing-slash",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"w1\", \"cwd\": \"/Users/me/proj/\"}"
+  },
+  {
+   "name": "cwd-root",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"w1\", \"cwd\": \"/\"}"
+  },
+  {
+   "name": "cwd-missing",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"w1\"}"
+  },
+  {
+   "name": "cwd-control-chars-and-long",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"w1\", \"cwd\": \"/a/x\\u0007y\\u001b名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名名\"}"
+  },
+  {
+   "name": "missing-session",
+   "raw": "{\"hook_event_name\": \"Stop\", \"cwd\": \"/a\"}"
+  },
+  {
+   "name": "empty-session",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": \"\", \"cwd\": \"/a\"}"
+  },
+  {
+   "name": "session-not-string",
+   "raw": "{\"hook_event_name\": \"Stop\", \"session_id\": 42}"
+  },
+  {
+   "name": "event-not-string",
+   "raw": "{\"hook_event_name\": [\"Stop\"], \"session_id\": \"a\"}"
+  },
+  {
+   "name": "not-json",
+   "raw": "Stop session"
+  },
+  {
+   "name": "json-array",
+   "raw": "[1,2]"
+  },
+  {
+   "name": "empty",
+   "raw": ""
+  },
+  {
+   "name": "subagent-posttool",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"hook_event_name\": \"PostToolUse\", \"agent_id\": \"agent-7\", \"agent_type\": \"Explore\", \"tool_name\": \"Grep\", \"tool_input\": {\"pattern\": \"secret answer\"}, \"tool_response\": {\"content\": \"step 1\"}}"
+  },
+  {
+   "name": "agent-id-empty",
+   "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"hook_event_name\": \"PostToolUse\", \"agent_id\": \"\", \"agent_type\": \"Explore\", \"tool_name\": \"Grep\", \"tool_input\": {\"pattern\": \"secret answer\"}, \"tool_response\": {\"content\": \"step 1\"}}"
+  },
+  {
+   "name": "hook-event-number",
+   "raw": "{\"session_id\": \"abc-123\", \"cwd\": \"/Users/me/work/p\", \"hook_event_name\": \"15\"}"
+  }
+ ],
+ "messages": [
+  {
+   "name": "valid",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "valid-need",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PermissionRequest\",\"need\":\"permission\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "valid-codex-empty-dir",
+   "raw": "{\"v\":1,\"ai\":\"codex\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"\"}"
+  },
+  {
+   "name": "valid-unicode-dir",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"專案 A\"}"
+  },
+  {
+   "name": "bad-version",
+   "raw": "{\"v\":2,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "bad-ai",
+   "raw": "{\"v\":1,\"ai\":\"gemini\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "bad-event",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"FileChanged\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "bad-need",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"root\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "sid-uppercase",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789ABCDEF\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "sid-short",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "sid-raw-uuid",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"5f0c2a8e-1111-2222-3333-444455556666\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "time-zero",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":0,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "time-string",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":\"1761650000000\",\"dir\":\"proj\"}"
+  },
+  {
+   "name": "dir-is-path",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"/Users/me/secret\"}"
+  },
+  {
+   "name": "dir-backslash",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"C:\\\\x\"}"
+  },
+  {
+   "name": "dir-control",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"a\\nb\"}"
+  },
+  {
+   "name": "dir-too-long",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+  },
+  {
+   "name": "extra-field",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\",\"prompt\":\"hi\"}"
+  },
+  {
+   "name": "missing-field",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\"}"
+  },
+  {
+   "name": "too-long",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1,\"dir\":\"p\",\"pad\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"}"
+  },
+  {
+   "name": "not-json",
+   "raw": "hello"
+  },
+  {
+   "name": "array",
+   "raw": "[]"
+  },
+  {
+   "name": "valid-sub",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"PostToolUse\",\"need\":\"\",\"sub\":true,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "spaced-json",
+   "raw": "{\"v\":1, \"ai\":\"claude\", \"ev\":\"Stop\", \"need\":\"\", \"sub\":false, \"sid\":\"0123456789abcdef\", \"t\":1761650000000, \"dir\":\"proj\"}"
+  },
+  {
+   "name": "version-float",
+   "raw": "{\"v\":1.0,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "time-exponent",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1.76165e12,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "duplicate-key",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\",\"dir\":\"other\"}"
+  },
+  {
+   "name": "key-order",
+   "raw": "{\"ai\":\"claude\",\"v\":1,\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "sub-not-bool",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":0,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "missing-sub",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number-15",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"15\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number--1",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"-1\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number-0",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"0\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  }
+ ],
+ "sessions": [
+  {
+   "name": "basic-turn",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 9000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 10000,
+     "e": "seen"
+    },
+    {
+     "t": 20000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionEnd",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "permission-then-approved",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Notification",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 30000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 40000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "ask-question-and-plan",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "question",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "plan",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 9000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 9500,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "idle-prompt-keeps-done-and-needs",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 61000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Notification",
+     "need": "idle",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 70000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 71000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Notification",
+     "need": "question",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 131000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Notification",
+     "need": "idle",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "idle-prompt-fixes-missing-stop",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Notification",
+     "need": "idle",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "error-and-seen",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "StopFailure",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "seen"
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "waiting-becomes-idle",
+   "idle_after_ms": 300000,
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 240000,
+     "e": "expire"
+    },
+    {
+     "t": 300000,
+     "e": "expire"
+    },
+    {
+     "t": 360000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "interrupt-without-stop-times-out",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1140000,
+     "e": "expire"
+    },
+    {
+     "t": 1260000,
+     "e": "expire"
+    },
+    {
+     "t": 1561000,
+     "e": "expire"
+    }
+   ]
+  },
+  {
+   "name": "codex-interrupt",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "Interrupt",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "forget-after-12h",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 43199999,
+     "e": "expire"
+    },
+    {
+     "t": 43200000,
+     "e": "expire"
+    },
+    {
+     "t": 43201000,
+     "e": "expire"
+    }
+   ]
+  },
+  {
+   "name": "subagent-and-compact-do-not-wake-done",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreCompact",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "priority-across-sessions",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "alpha"
+    },
+    {
+     "t": 100,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "beta"
+    },
+    {
+     "t": 200,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "cccccccccccccccc",
+     "dir": "gamma"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "StopFailure",
+     "need": "",
+     "sid": "cccccccccccccccc",
+     "dir": "proj"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "seen"
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "Stop",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "same-sid-different-ai",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 10,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 20,
+     "e": "msg",
+     "ai": "codex",
+     "ev": "SessionEnd",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "ties-break-by-latest",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 10,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    },
+    {
+     "t": 20,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "folder-kept-when-empty",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "first"
+    },
+    {
+     "t": 10,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": ""
+    },
+    {
+     "t": 20,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "second"
+    }
+   ]
+  },
+  {
+   "name": "end-unknown-session",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionEnd",
+     "need": "",
+     "sid": "bbbbbbbbbbbbbbbb",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "cap-32-sessions",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0000000000000000",
+     "dir": "proj"
+    },
+    {
+     "t": 10,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0101010101010101",
+     "dir": "proj"
+    },
+    {
+     "t": 20,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0202020202020202",
+     "dir": "proj"
+    },
+    {
+     "t": 30,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0303030303030303",
+     "dir": "proj"
+    },
+    {
+     "t": 40,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0404040404040404",
+     "dir": "proj"
+    },
+    {
+     "t": 50,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0505050505050505",
+     "dir": "proj"
+    },
+    {
+     "t": 60,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0606060606060606",
+     "dir": "proj"
+    },
+    {
+     "t": 70,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0707070707070707",
+     "dir": "proj"
+    },
+    {
+     "t": 80,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0808080808080808",
+     "dir": "proj"
+    },
+    {
+     "t": 90,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0909090909090909",
+     "dir": "proj"
+    },
+    {
+     "t": 100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0a0a0a0a0a0a0a0a",
+     "dir": "proj"
+    },
+    {
+     "t": 110,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0b0b0b0b0b0b0b0b",
+     "dir": "proj"
+    },
+    {
+     "t": 120,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0c0c0c0c0c0c0c0c",
+     "dir": "proj"
+    },
+    {
+     "t": 130,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0d0d0d0d0d0d0d0d",
+     "dir": "proj"
+    },
+    {
+     "t": 140,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0e0e0e0e0e0e0e0e",
+     "dir": "proj"
+    },
+    {
+     "t": 150,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "0f0f0f0f0f0f0f0f",
+     "dir": "proj"
+    },
+    {
+     "t": 160,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1010101010101010",
+     "dir": "proj"
+    },
+    {
+     "t": 170,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1111111111111111",
+     "dir": "proj"
+    },
+    {
+     "t": 180,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1212121212121212",
+     "dir": "proj"
+    },
+    {
+     "t": 190,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1313131313131313",
+     "dir": "proj"
+    },
+    {
+     "t": 200,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1414141414141414",
+     "dir": "proj"
+    },
+    {
+     "t": 210,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1515151515151515",
+     "dir": "proj"
+    },
+    {
+     "t": 220,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1616161616161616",
+     "dir": "proj"
+    },
+    {
+     "t": 230,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1717171717171717",
+     "dir": "proj"
+    },
+    {
+     "t": 240,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1818181818181818",
+     "dir": "proj"
+    },
+    {
+     "t": 250,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1919191919191919",
+     "dir": "proj"
+    },
+    {
+     "t": 260,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1a1a1a1a1a1a1a1a",
+     "dir": "proj"
+    },
+    {
+     "t": 270,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1b1b1b1b1b1b1b1b",
+     "dir": "proj"
+    },
+    {
+     "t": 280,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1c1c1c1c1c1c1c1c",
+     "dir": "proj"
+    },
+    {
+     "t": 290,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1d1d1d1d1d1d1d1d",
+     "dir": "proj"
+    },
+    {
+     "t": 300,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1e1e1e1e1e1e1e1e",
+     "dir": "proj"
+    },
+    {
+     "t": 310,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "1f1f1f1f1f1f1f1f",
+     "dir": "proj"
+    },
+    {
+     "t": 320,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "2020202020202020",
+     "dir": "proj"
+    },
+    {
+     "t": 330,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "2121212121212121",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "background-subagent-after-stop",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 6000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 7000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SubagentStop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 8000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "subagent-while-working",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "compact-mid-turn-keeps-working",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreCompact",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    }
+   ]
+  },
+  {
+   "name": "unseen-done-lets-character-sleep",
+   "idle_after_ms": 300000,
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "activity"
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 301999,
+     "e": "activity"
+    },
+    {
+     "t": 302000,
+     "e": "activity"
+    },
+    {
+     "t": 302000,
+     "e": "expire"
+    },
+    {
+     "t": 303000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 304000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "StopFailure",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 604000,
+     "e": "activity"
+    }
+   ]
+  },
+  {
+   "name": "needs-you-times-out",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 3000000,
+     "e": "activity"
+    },
+    {
+     "t": 3600999,
+     "e": "expire"
+    },
+    {
+     "t": 3601000,
+     "e": "expire"
+    },
+    {
+     "t": 3601000,
+     "e": "activity"
+    },
+    {
+     "t": 3901000,
+     "e": "activity"
+    }
+   ]
+  },
+  {
+   "name": "stale-event-after-stop-is-dropped",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 1000
+    },
+    {
+     "t": 1100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 900
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 2000
+    }
+   ]
+  },
+  {
+   "name": "stale-event-after-end-does-not-recreate",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionEnd",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 1000
+    },
+    {
+     "t": 1100,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 900
+    },
+    {
+     "t": 1100,
+     "e": "activity"
+    },
+    {
+     "t": 5000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sent": 5000
+    }
+   ]
+  }
+ ]
+}

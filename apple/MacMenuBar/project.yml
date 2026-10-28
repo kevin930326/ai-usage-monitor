@@ -35,6 +35,13 @@ targets:
         product: UsageKit
       - package: UsageKit
         product: UsageKitUI
+      # Claude Code／Codex 的 hook（ADR-0017）：放在 App 包的 Contents/Helpers/aum-hook
+      - target: aum-hook
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     info:
       path: AIUsageMenuBar/Info.plist
       properties:
@@ -50,4 +57,19 @@ targets:
         # 圖示由 scripts/render-app-icon.sh 產生
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
+
+  # hook 程式（ADR-0017 第 1 節）：只用 Foundation、CryptoKit 與 UsageKit，啟動到結束 < 50 ms
+  aum-hook:
+    type: tool
+    platform: macOS
+    sources:
+      - AumHook
+    dependencies:
+      - package: UsageKit
+        product: UsageKit
+    settings:
+      base:
+        PRODUCT_NAME: aum-hook
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMenuBar.hook
+        SKIP_INSTALL: YES
 

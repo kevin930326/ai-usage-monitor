@@ -36,6 +36,8 @@ struct SettingsView: View {
             Divider()
             NotchSettingsSection()
             Divider()
+            AgentHookSection()
+            Divider()
             panelSection
             Divider()
             HistorySettingsSection(store: history, interactive: scrolls)

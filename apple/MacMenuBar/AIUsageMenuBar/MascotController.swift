@@ -206,6 +206,8 @@ final class MascotController {
         if !PanelSettings.shared.notchHintShown { showsHint = true }
         refresh()
         restartActivityChecks()
+        // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
+        AgentMonitor.shared.markSeen()
     }
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
@@ -310,6 +312,7 @@ final class MascotController {
         guard gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r]) else { return false }
         pressedOnCharacter = true
         mutate { $0.press(at: t) }
+        AgentMonitor.shared.markSeen()
         return true
     }
 
@@ -371,6 +374,8 @@ final class MascotController {
         #if DEBUG
         testing = testing || DebugTools.isDemo
         #endif
+        // 有 hook 工作階段的 AI 照 hook 的狀態，不必再列它的紀錄資料夾（ADR-0017 第 4 節）
+        let hooked = Set(AgentKind.allCases.filter { AgentMonitor.shared.hasSessions($0) })
         Task.detached(priority: .utility) {
             // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
             // 測試與示範：不讀 config.json，只看暫存資料夾（示範模式沒設 AI_USAGE_MONITOR_HOME 時 config.json 是真的，Fable F-04）
@@ -378,21 +383,44 @@ final class MascotController {
             let roots = testing
                 ? MascotActivityProbe.defaultRoots(config: dirs, environment: [:], home: dataDirectory)
                 : MascotActivityProbe.defaultRoots(config: dirs)
-            let probe = MascotActivityProbe(roots: roots)
             let now = Date()
-            let working = probe.isWorking(now: now)
-            // Claude 與 Codex 都超過設定的分鐘數沒動：睡覺
-            let idle = !working && !probe.isActive(within: idleAfter, now: now)
+            // defaultRoots 的順序是 Claude、Codex
+            var fallback: [AgentKind: (working: Bool, active: Bool)] = [:]
+            for (ai, root) in zip([AgentKind.claude, .codex], roots) where !hooked.contains(ai) {
+                let probe = MascotActivityProbe(roots: [root])
+                let working = probe.isWorking(now: now)
+                fallback[ai] = (working, working || probe.isActive(within: idleAfter, now: now))
+            }
+            let result = fallback
             await MainActor.run {
                 let controller = MascotController.shared
                 controller.probing = false
-                guard generation == controller.probeGeneration, let machine = controller.director?.machine else { return }
-                guard machine.isWorking != working || machine.isAgentIdle != idle else { return }
-                controller.mutate {
-                    $0.setWorking(working, at: controller.time())
-                    $0.setAgentIdle(idle, at: controller.time())
-                }
+                guard generation == controller.probeGeneration else { return }
+                controller.fallbackActivity = result
+                controller.applyActivity()
             }
+        }
+    }
+
+    /// 修改時間判斷的上一次結果（沒接 hook 的 AI 用）
+    @ObservationIgnored private var fallbackActivity: [AgentKind: (working: Bool, active: Bool)] = [:]
+
+    /// hook 的狀態變了：馬上重算工作中與睡覺（不等下一次修改時間的檢查）
+    func agentStateChanged() {
+        applyActivity()
+    }
+
+    private func applyActivity() {
+        guard motion.animatesBody, let machine = director?.machine else { return }
+        #if DEBUG
+        if debugSkipsActivity { return }
+        #endif
+        let monitor = AgentMonitor.shared
+        let (working, idle) = monitor.sessions.activity(at: monitor.now, fallback: fallbackActivity)
+        guard machine.isWorking != working || machine.isAgentIdle != idle else { return }
+        mutate {
+            $0.setWorking(working, at: time())
+            $0.setAgentIdle(idle, at: time())
         }
     }
 
