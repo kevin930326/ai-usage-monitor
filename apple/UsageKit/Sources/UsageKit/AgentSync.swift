@@ -118,9 +118,10 @@ public enum RemoteAgents {
         return String(String.UnicodeScalarView(trimmed.unicodeScalars.prefix(maxName)))
     }
 
-    /// JSON 的整數（不收小數、布林）
+    /// JSON 的整數（不收小數、布林）。布林的 objCType 是 "c"（Linux 的 Foundation 沒有 CFBooleanGetTypeID）；
+    /// JSON 的數字不會是 char
     static func int(_ value: Any?) -> Int64? {
-        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        guard let number = value as? NSNumber, String(cString: number.objCType) != "c" else { return nil }
         let double = number.doubleValue
         guard double == double.rounded(), abs(double) < 9e15 else { return nil }
         return number.int64Value
