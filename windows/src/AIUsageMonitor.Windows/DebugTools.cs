@@ -20,7 +20,7 @@ namespace AIUsageMonitor.Windows;
 /// </summary>
 internal static class DebugTools
 {
-    public static readonly string[] Scenarios = ["normal", "too_fast", "critical", "stale", "error", "single", "none"];
+    public static readonly string[] Scenarios = ["normal", "too_fast", "forecast", "critical", "stale", "error", "single", "none"];
 
     public static bool TryRun(string[] args, out int code)
     {
@@ -65,6 +65,10 @@ internal static class DebugTools
             case "too_fast":
                 // 5 小時額度過了 30% 就用了 60%：照目前速度會在重置前用完
                 claude = Provider("Max", Window("five_hour", "5 小時", 60, 3.5), Window("weekly", "每週", 45, 98));
+                break;
+            case "forecast":
+                // 額度預測與服務事故（ADR-0018）：5 小時 40 分鐘後用完（紅）、每週約 30 小時後用完（黃），Claude 有進行中的事故
+                claude = $$"""{"plan": "Max", "windows": [{"id": "five_hour", "label": "5 小時", "used_pct": 80, "resets_at": "{{At(2)}}", "forecast": {"exhausts_at": "{{At(0.67)}}", "urgent": true, "faster": 2.1} }, {"id": "weekly", "label": "每週", "used_pct": 60, "resets_at": "{{At(72)}}", "forecast": {"exhausts_at": "{{At(30.5)}}", "urgent": false} }], "incidents": [{"name": "Elevated errors on Claude Code", "impact": "major", "url": "https://status.claude.com/incidents/abc123", "started_at": "{{At(-0.33)}}"}]}""";
                 break;
             case "critical":
                 claude = Provider("Max", Window("five_hour", "5 小時", 40, 2.0), Window("weekly", "每週", 88, 30));
@@ -158,6 +162,7 @@ internal static class DebugTools
             Shot("expand-right", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
             Shot("expand-left", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Left, RingDock.None, 1, ticks: false));
             Shot("expand-down", Desk(dark, palette, Content("critical"), Details("critical"), RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
+            Shot("expand-forecast", Desk(dark, palette, Content("forecast"), Details("forecast"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
             Shot("expand-half", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0.5, ticks: false));
             Shot("dock-tab", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
             Shot("dock-tab-right", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Down, RingDock.Right, 0, ticks: false, reveal: 0));
