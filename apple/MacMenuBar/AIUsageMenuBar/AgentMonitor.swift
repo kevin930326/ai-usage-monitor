@@ -98,8 +98,8 @@ final class AgentMonitor {
 
     #if DEBUG
     /// 效能量測：送一個假的事件（同 socket 收到的處理方式）
-    func debugApply(_ event: AgentHookEvent) {
-        handle(AgentHookMessage(ai: .claude, event: event, need: nil, session: "0123456789abcdef", time: now, folder: "perf"))
+    func debugApply(_ event: AgentHookEvent, need: AgentNeed? = nil) {
+        handle(AgentHookMessage(ai: .claude, event: event, need: need, session: "0123456789abcdef", time: now, folder: "perf"))
     }
     #endif
 

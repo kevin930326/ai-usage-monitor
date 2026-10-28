@@ -198,7 +198,13 @@ enum DebugTools {
                 AgentMonitor.shared.debugApply(.stop)
             }),
             (close + 106, "waiting-pulse", { AgentMonitor.shared.markSeen() }),
-            (close + 132, "exit", { exit(0) }),
+            // 需要你（舉手）與處理後放下：收著與展開各一次（Codex C-05），之後靜止的部分看門檻
+            (close + 130, "agent-raise", { AgentMonitor.shared.debugApply(.permissionRequest, need: .permission) }),
+            (close + 150, "agent-lower", { AgentMonitor.shared.debugApply(.postToolUse) }),
+            (close + 153, "notch-reopen-3", { mascot.pointerEntered() }),
+            (close + 160, "agent-raise-open", { AgentMonitor.shared.debugApply(.permissionRequest, need: .permission) }),
+            (close + 175, "agent-lower-open", { AgentMonitor.shared.debugApply(.postToolUse) }),
+            (close + 180, "exit", { exit(0) }),
         ])
     }
 
