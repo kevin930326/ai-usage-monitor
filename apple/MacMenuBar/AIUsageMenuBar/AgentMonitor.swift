@@ -96,6 +96,13 @@ final class AgentMonitor {
         if after == .done, before != .done { MascotController.shared.agentFinished() }
     }
 
+    #if DEBUG
+    /// 效能量測：送一個假的事件（同 socket 收到的處理方式）
+    func debugApply(_ event: AgentHookEvent) {
+        handle(AgentHookMessage(ai: .claude, event: event, need: nil, session: "0123456789abcdef", time: now, folder: "perf"))
+    }
+    #endif
+
     /// 使用者看過了（展開瀏海或點角色）：完成未看、出錯變成等你
     func markSeen() {
         let before = sessions

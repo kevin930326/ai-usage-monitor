@@ -812,7 +812,7 @@ class NotchPerfSummaryTests(unittest.TestCase):
     SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
     MARKS = {"notch-open": 10, "notch-sleep": 22, "notch-wave": 32, "notch-nod": 35, "notch-tilt": 38, "notch-giggle": 41,
              "notch-look": 44, "notch-pinch": 47, "notch-face": 50, "notch-close": 55, "gaze-move-asleep": 60,
-             "gaze-move": 73, "gaze-still": 88, "notch-close-2": 155}
+             "gaze-move": 73, "gaze-still": 88, "notch-close-2": 155, "agent-cheer": 158, "waiting-pulse": 161}
 
     def run_summary(self, samples, marks=None, ticks=()):
         with tempfile.TemporaryDirectory() as tmp:
@@ -825,7 +825,7 @@ class NotchPerfSummaryTests(unittest.TestCase):
 
     @staticmethod
     def full(skip=()):
-        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 185) if not any(a <= t < b for a, b in skip)]
+        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 187) if not any(a <= t < b for a, b in skip)]
 
     def test_complete_samples_pass(self):
         result = self.run_summary(self.full())
@@ -849,6 +849,11 @@ class NotchPerfSummaryTests(unittest.TestCase):
     def test_redraw_while_collapsed_asleep_fails(self):
         # 收合、睡著時游標移動不能重畫（第二輪：睡著時降到每秒讀 1 次游標）
         samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 185)]
+        self.assertEqual(self.run_summary(samples).returncode, 1)
+
+    def test_busy_waiting_pulse_fails(self):
+        # 等你下指令的脈動和收合靜止同一個門檻（每 7 秒亮 1.6 秒，平均不能超過 0.3%）
+        samples = [(t, 1.0 if 163 <= t < 184 else 0.0, 100_000) for t in range(0, 187)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_minute_tick_is_excluded_only_from_gaze_rows(self):

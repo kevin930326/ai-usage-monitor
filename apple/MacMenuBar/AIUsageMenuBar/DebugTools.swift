@@ -192,7 +192,13 @@ enum DebugTools {
             (close + 90, "closed-90s", {}),
             (close + 92, "notch-reopen", { mascot.pointerEntered() }),
             (close + 100, "notch-close-2", { mascot.closeNow() }),
-            (close + 125, "exit", { exit(0) }),
+            // AI 狀態（mascot2 第 2 部分）：收著時一個回合完成（瀏海鼓一下、迷你角色揮手），之後看過、等你下指令（每 7 秒脈動）
+            (close + 103, "agent-cheer", {
+                AgentMonitor.shared.debugApply(.userPromptSubmit)
+                AgentMonitor.shared.debugApply(.stop)
+            }),
+            (close + 106, "waiting-pulse", { AgentMonitor.shared.markSeen() }),
+            (close + 132, "exit", { exit(0) }),
         ])
     }
 
