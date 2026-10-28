@@ -93,9 +93,9 @@ struct MenuBarIconView: View {
                 Image(nsImage: MenuBarIcon.image(content, style: style))
                 Text("\(content.remainingPct)%").monospacedDigit()
             case .character:
-                Image(nsImage: MenuBarIcon.image(content, style: style, character: character))
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter))
             case .characterPercent:
-                Image(nsImage: MenuBarIcon.image(content, style: style, character: character))
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: shownCharacter))
                 Text("\(content.remainingPct)%").monospacedDigit()
             case .percent:
                 Text("\(content.remainingPct)%").monospacedDigit()
@@ -106,6 +106,12 @@ struct MenuBarIconView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.accessibilityText)
+    }
+
+    /// 圖示上的角色跟著顯示的額度所屬的服務（Codex C-05）：選 Claude 但剩最少的是 Codex 時畫 Codex，
+    /// 百分比、狀態點與角色才是同一個服務；不是 Claude／Codex 時用設定選的角色
+    private var shownCharacter: MascotCharacter {
+        MascotCharacter(rawValue: content.provider) ?? character
     }
 }
 
