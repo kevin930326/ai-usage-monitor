@@ -316,7 +316,8 @@ final class MascotController {
         #endif
         Task.detached(priority: .utility) {
             // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
-            let dirs = MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
+            // 測試與示範：不讀 config.json，只看暫存資料夾（示範模式沒設 AI_USAGE_MONITOR_HOME 時 config.json 是真的，Fable F-04）
+            let dirs = testing ? [:] : MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
             let roots = testing
                 ? MascotActivityProbe.defaultRoots(config: dirs, environment: [:], home: dataDirectory)
                 : MascotActivityProbe.defaultRoots(config: dirs)
