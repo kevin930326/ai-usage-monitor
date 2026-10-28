@@ -174,6 +174,8 @@ struct RingCardContent: View {
                 if let forecast {
                     QuotaForecastLine(forecast: forecast, now: now, stacked: true)
                         .padding(.top, 2)
+                } else if UsagePace(window: item.window, stale: stale, now: now)?.isTooFast == true {
+                    TooFastNote().padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)
@@ -228,6 +230,17 @@ struct PanelResetText: View {
                 LiveRelativeText(date: resetsAt)
             }
         }
+    }
+}
+
+/// 選單列有「太快」小點（平均速度）但資料不足以預測時間：只寫「用得較快」，不猜時間（ADR-0018 第 3 節）
+struct TooFastNote: View {
+    var body: some View {
+        Label("用得較快", systemImage: "speedometer")
+            .labelStyle(.titleAndIcon)
+            .imageScale(.small)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(UsageColors.notice)
     }
 }
 
@@ -389,6 +402,8 @@ struct QuotaRow: View {
                 .foregroundStyle(.secondary)
             if let forecast {
                 QuotaForecastLine(forecast: forecast, now: now)
+            } else if UsagePace(window: window, stale: stale, now: now)?.isTooFast == true {
+                TooFastNote()
             }
         }
         .accessibilityElement(children: .combine)

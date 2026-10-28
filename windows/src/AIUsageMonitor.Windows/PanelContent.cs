@@ -215,7 +215,7 @@ internal sealed class PanelContent : Border
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
         right.Children.Add(percent);
         right.Children.Add(Text("剩餘 · " + ResetText(item.Window, now), 12, p.Secondary));
-        if (QuotaForecast.Current(item.Window, stale, now) is { } forecast) right.Children.Add(ForecastLine(forecast, now, 4));
+        if (ForecastOrTooFast(item.Window, stale, now, 4) is { } note) right.Children.Add(note);
 
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(ring);
@@ -227,6 +227,15 @@ internal sealed class PanelContent : Border
     /// 「照目前速度約 14:32 用完・比平常快 2.1 倍」（ADR-0018 第 3 節）：不到 60 分鐘紅色、其他提示色；顏色以外一律有文字。
     /// 取代原本的「用得較快，約 N 分鐘後用完」。
     /// </summary>
+    /// <summary>
+    /// 有預測時顯示預測；沒有預測但圓環是「太快」（平均速度）時只寫「用得較快」，不猜時間；其他不顯示
+    /// </summary>
+    private UIElement? ForecastOrTooFast(UsageWindow window, bool stale, DateTimeOffset now, double top) =>
+        QuotaForecast.Current(window, stale, now) is { } forecast ? ForecastLine(forecast, now, top)
+        : UsagePace.Average(window, stale, now)?.IsTooFast == true
+            ? Text("用得較快", 12, p.Notice, FontWeights.Medium, new Thickness(0, top, 0, 0))
+            : null;
+
     private UIElement ForecastLine(QuotaForecast forecast, DateTimeOffset now, double top)
     {
         var line = Text((forecast.Urgent ? "⚠ " : "") + forecast.Line(now), 12, forecast.Urgent ? p.Critical : p.Notice, FontWeights.Medium,
@@ -310,7 +319,7 @@ internal sealed class PanelContent : Border
         bars.Add(bar);
         row.Children.Add(bar);
         row.Children.Add(Text(ResetText(window, now), 12, p.Secondary));
-        if (QuotaForecast.Current(window, stale, now) is { } forecast) row.Children.Add(ForecastLine(forecast, now, 2));
+        if (ForecastOrTooFast(window, stale, now, 2) is { } note) row.Children.Add(note);
         System.Windows.Automation.AutomationProperties.SetName(row,
             $"{window.Label}，剩 {SwiftMath.Round(remaining)}%，{ResetText(window, now)}");
         return row;
