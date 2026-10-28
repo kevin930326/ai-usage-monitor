@@ -402,6 +402,10 @@ final class MascotController {
 
     /// 瀏海面板顯示或隱藏：看滑鼠與活動檢查跟著開關
     func panelVisibilityChanged() {
+        // 面板換了一個：舊的循環跟著舊視窗不見，新的視窗依目前狀態重建（Codex C-02）
+        effectLoopKey = nil
+        effectLoopPlaying = false
+        updateEffectLoop()
         restartGaze()
         restartActivityChecks()
     }
