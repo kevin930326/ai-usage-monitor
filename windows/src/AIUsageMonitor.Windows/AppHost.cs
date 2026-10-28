@@ -44,6 +44,7 @@ internal sealed class AppHost : IDisposable
     private Palette TrayPalette => new(SystemLook.TaskbarIsDark);
 
     private RingContent Content => RingContent.From(store.Snapshot, settings.RingWindow, now);
+    private RingDetails Details => RingDetails.From(store.Snapshot, settings.RingWindow, now);
 
     public void Start()
     {
@@ -98,7 +99,7 @@ internal sealed class AppHost : IDisposable
     {
         now = Clock.Now;
         var content = Content;
-        ring?.SetContent(content, AppPalette);
+        ring?.SetContent(content, Details, AppPalette);
         tray.Update(content, TrayPalette);
         panel?.SetModel(Model);
     }
@@ -127,7 +128,8 @@ internal sealed class AppHost : IDisposable
                 e.Handled = true;
                 ShowMenu(fromTray: false);
             };
-            ring.SetContent(Content, AppPalette);
+            ring.SetContent(Content, Details, AppPalette);
+            ring.SetOptions(settings.RingTicks, settings.DockToEdge);
             _ = ring.Handle;
             PlaceRing();
         }
@@ -140,7 +142,8 @@ internal sealed class AppHost : IDisposable
         if (ring is not null)
         {
             ring.Opacity = settings.Opacity;
-            if (Math.Abs(ring.Width - AppSettings.RingDip(settings.RingSize)) > 0.1)
+            ring.SetOptions(settings.RingTicks, settings.DockToEdge);
+            if (Math.Abs(ring.RingDip - AppSettings.RingDip(settings.RingSize)) > 0.1)
             {
                 ring.SetSize(AppSettings.RingDip(settings.RingSize));
                 PlaceRing();
@@ -157,6 +160,7 @@ internal sealed class AppHost : IDisposable
         var hide = settings.HideInFullscreen && fullscreen.IsFullscreen;
         if (hide)
         {
+            ring.CollapseNow();
             if (ring.IsVisible) ring.Hide();
             panel?.SafeClose();
         }
@@ -224,9 +228,13 @@ internal sealed class AppHost : IDisposable
         window.QuitRequested += Quit;
         window.Closed += (_, _) =>
         {
-            if (panel == window) panel = null;
+            if (panel != window) return;
+            panel = null;
+            if (ring is not null) ring.Suppressed = false;
         };
         panel = window;
+        // 面板開著時圓環不展開（展開的膠囊會蓋到面板）
+        if (ring is not null) ring.Suppressed = true;
         // 先建立視窗量出大小，再放到圓環旁邊或系統匣的角落
         window.Left = -10000;
         window.Top = -10000;

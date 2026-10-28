@@ -31,6 +31,10 @@ public sealed class AppSettings
     /// <summary>開機自動啟動。實際狀態在登錄機碼（安裝腳本也讀這個值決定要不要寫入）</summary>
     public bool LaunchAtLogin { get; set; } = true;
     public Appearance Appearance { get; set; } = Appearance.System;
+    /// <summary>圓環貼在左右邊緣時縮成半圓的小標籤（滑鼠移上去滑出）</summary>
+    public bool DockToEdge { get; set; } = true;
+    /// <summary>圓環外圍顯示 60 格刻度（這個額度週期過了多少時間）</summary>
+    public bool RingTicks { get; set; }
     public List<SavedPosition> Positions { get; set; } = [];
     public List<DateTimeOffset> CollectorKicks { get; set; } = [];
 
@@ -65,6 +69,8 @@ public sealed class AppSettings
         settings.HideInFullscreen = Bool(root["hide_in_fullscreen"]) ?? true;
         settings.LaunchAtLogin = Bool(root["launch_at_login"]) ?? true;
         settings.Appearance = Enum(root["appearance"], Appearance.System);
+        settings.DockToEdge = Bool(root["dock_to_edge"]) ?? true;
+        settings.RingTicks = Bool(root["ring_ticks"]) ?? false;
         if (root["positions"] is JsonArray positions)
         {
             foreach (var p in positions.OfType<JsonObject>())
@@ -102,6 +108,8 @@ public sealed class AppSettings
             ["hide_in_fullscreen"] = HideInFullscreen,
             ["launch_at_login"] = LaunchAtLogin,
             ["appearance"] = Name(Appearance),
+            ["dock_to_edge"] = DockToEdge,
+            ["ring_ticks"] = RingTicks,
             ["positions"] = new JsonArray([.. Positions.Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["x"] = p.X, ["y"] = p.Y, ["used"] = p.Used })]),
             ["collector_kicks"] = new JsonArray([.. CollectorKicks.Select(k => (JsonNode)JsonValue.Create(k.ToUnixTimeSeconds()))]),
         };
@@ -112,6 +120,7 @@ public sealed class AppSettings
     private static readonly HashSet<string> Known =
     [
         "schema", "display_mode", "ring_window", "ring_size", "opacity", "hide_in_fullscreen", "launch_at_login", "appearance",
+        "dock_to_edge", "ring_ticks",
         "positions", "collector_kicks",
     ];
 

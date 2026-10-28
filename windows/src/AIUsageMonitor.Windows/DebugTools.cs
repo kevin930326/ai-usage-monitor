@@ -106,10 +106,9 @@ internal static class DebugTools
             {
                 var snapshot = UsageDecoder.Decode(DemoJson(state, now));
                 var content = RingContent.From(snapshot, WindowChoice.Automatic, now);
-                Save(Path.Combine(output, $"ring-{state}-{theme}.png"), RingVisual(content, palette, 56), failures);
                 Save(Path.Combine(output, $"tray-{state}-{theme}.png"), TrayIcon.RenderBitmap(content, palette, 64), failures);
             }
-            Save(Path.Combine(output, $"ring-empty-{theme}.png"), RingVisual(RingContent.Empty, palette, 56), failures);
+            RenderRing2(Path.Combine(output, "ring2"), palette, theme, now, failures);
             foreach (var scenario in Scenarios)
             {
                 var model = new PanelModel(UsageDecoder.Decode(DemoJson(scenario, now)), null, now, null);
@@ -127,28 +126,92 @@ internal static class DebugTools
         return failures.Count == 0 ? 0 : 1;
     }
 
-    /// <summary>圓環放在棋盤格上（看得出透明的部分）</summary>
-    private static BitmapSource RingVisual(RingContent content, Palette palette, double size)
+    // ---------- 懸浮圓環（ADR-0015「懸浮圓環設計」） ----------
+
+    private const double RingSizeDip = 56;
+
+    /// <summary>
+    /// 圓環四種狀態（含沒有資料）、展開的三個方向（往左、往右、貼邊時往下）、貼邊收合、刻度開啟，各畫在淺色與深色桌布上：
+    /// <c>ring2/&lt;畫面&gt;-&lt;桌布&gt;-&lt;外觀&gt;.png</c>
+    /// </summary>
+    private static void RenderRing2(string output, Palette palette, string theme, DateTimeOffset now, List<string> failures)
     {
-        var margin = 12;
-        var total = size + margin * 2;
+        Directory.CreateDirectory(output);
+        RingContent Content(string scenario) => RingContent.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
+        RingDetails Details(string scenario) => RingDetails.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
+        foreach (var wallpaper in new[] { "light", "dark" })
+        {
+            var dark = wallpaper == "dark";
+            void Shot(string name, BitmapSource bitmap) => Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"), bitmap, failures);
+            foreach (var state in new[] { "normal", "too_fast", "critical", "stale" })
+            {
+                Shot($"ring-{state}", Desk(dark, palette, Content(state), Details(state), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+            }
+            Shot("ring-empty", Desk(dark, palette, RingContent.Empty, RingDetails.Empty, RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+            Shot("ring-ticks", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: true));
+            Shot("expand-right", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
+            Shot("expand-left", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Left, RingDock.None, 1, ticks: false));
+            Shot("expand-down", Desk(dark, palette, Content("critical"), Details("critical"), RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
+            Shot("expand-half", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0.5, ticks: false));
+            Shot("dock-tab", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
+            Shot("dock-tab-right", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Down, RingDock.Right, 0, ticks: false, reveal: 0));
+            Shot("dock-reveal", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0.6));
+        }
+    }
+
+    /// <summary>
+    /// 一個畫面放在示範桌布上（漸層＋兩團柔和的色塊，看得出半透明的玻璃）。貼邊時桌布左（右）邊就是螢幕邊緣，
+    /// 圓環離邊緣 8 DIP（同 RingPlacement.SnapMargin）
+    /// </summary>
+    private static BitmapSource Desk(bool darkWallpaper, Palette palette, RingContent content, RingDetails details,
+                                     RingExpandDirection direction, RingDock dock, double expand, bool ticks, double reveal = 1)
+    {
+        const double margin = 20;
+        var r = RingShape.DiscRadius(RingSizeDip);
+        var shape = (expand > 0 ? RingShape.Shape(direction, dock, RingSizeDip) : new DipRect(-r, -r, r, r)).Inflate(RingShape.Inset);
+        double width, height;
+        Point center;
+        if (dock == RingDock.None)
+        {
+            width = shape.Width + margin * 2;
+            height = shape.Height + margin * 2;
+            center = new Point(margin - shape.Left, margin - shape.Top);
+        }
+        else
+        {
+            var full = RingShape.Shape(direction, dock, RingSizeDip).Inflate(RingShape.Inset);
+            var fromEdge = RingPlacement.SnapMargin + RingSizeDip / 2;
+            width = Math.Max(full.Width + RingPlacement.SnapMargin, 2 * fromEdge) + margin;
+            height = full.Height + margin * 2;
+            center = new Point(dock == RingDock.Left ? fromEdge : width - fromEdge, margin - full.Top);
+        }
+        var tabCenter = dock == RingDock.Left ? new Point(0, center.Y) : dock == RingDock.Right ? new Point(width, center.Y) : center;
+        Rect? visible = dock == RingDock.None ? null
+            : new Rect(dock == RingDock.Left ? 0 : width - RingSizeDip / 2, center.Y - RingSizeDip / 2, RingSizeDip / 2, RingSizeDip);
+        var scene = new FloatingScene(content, details, palette, GlassRingFace.Shared, ticks, RingSizeDip, direction, dock,
+                                      center, tabCenter, visible, reveal, expand, Scale);
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            var light = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC));
-            var lighter = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE));
-            for (var y = 0; y < total; y += 8)
-            {
-                for (var x = 0; x < total; x += 8)
-                {
-                    dc.DrawRectangle((x / 8 + y / 8) % 2 == 0 ? light : lighter, null, new Rect(x, y, 8, 8));
-                }
-            }
-            dc.PushTransform(new TranslateTransform(margin, margin));
-            RingDrawing.DrawFloating(dc, content, size, palette);
-            dc.Pop();
+            Wallpaper(dc, width, height, darkWallpaper);
+            FloatingRingRenderer.Draw(dc, scene);
         }
-        return Bitmap(visual, total, total);
+        return Bitmap(visual, width, height);
+    }
+
+    private static void Wallpaper(DrawingContext dc, double width, double height, bool dark)
+    {
+        var bounds = new Rect(0, 0, width, height);
+        dc.DrawRectangle(new LinearGradientBrush(
+            dark ? Color.FromRgb(0x18, 0x1E, 0x2E) : Color.FromRgb(0xD9, 0xE4, 0xF2),
+            dark ? Color.FromRgb(0x2B, 0x1C, 0x2C) : Color.FromRgb(0xF3, 0xE6, 0xD6), 35), null, bounds);
+        void Blob(double x, double y, double radius, Color color)
+        {
+            var brush = new RadialGradientBrush(color, Color.FromArgb(0, color.R, color.G, color.B));
+            dc.DrawEllipse(brush, null, new Point(x, y), radius, radius);
+        }
+        Blob(width * 0.2, height * 0.85, height * 0.9, dark ? Color.FromArgb(0x70, 0x2E, 0x5E, 0x8C) : Color.FromArgb(0x80, 0x9F, 0xC7, 0xF0));
+        Blob(width * 0.85, height * 0.1, height * 0.8, dark ? Color.FromArgb(0x60, 0x8C, 0x3E, 0x5A) : Color.FromArgb(0x70, 0xF5, 0xC2, 0x9A));
     }
 
     private static BitmapSource Element(FrameworkElement element)
