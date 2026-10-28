@@ -6,7 +6,7 @@ namespace AIUsageMonitor.Core;
 /// <summary>
 /// 收集器輸出的快照（docs/02-architecture.md 第 3 節），對應 UsageKit 的 <c>UsageSnapshot</c>。
 /// 解析規則與 Swift 的 <c>UsageDecoder</c> 相同：先檢查 <c>schema_version</c>，必要欄位缺少或型別不對時整份視為格式錯誤；
-/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>、<c>incidents</c>）格式不對時當成沒有。
+/// 選填的附加資訊（<c>local_status</c>、<c>reset_credits</c>、<c>incidents</c>、額度的 <c>forecast</c>）格式不對時當成沒有。
 /// </summary>
 public sealed record UsageSnapshot(int SchemaVersion, DateTimeOffset UpdatedAt, IReadOnlyDictionary<string, ProviderUsage> Providers,
                                    LocalStatus? LocalStatus = null)
@@ -89,20 +89,12 @@ public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<Us
 
 /// <summary>
 /// usage.json 裡的進行中事故（ADR-0018 第 4 節），對應 UsageKit 的 <c>ServiceIncident</c>：只有名稱、等級、事故頁與開始時間。
+/// Windows App 不放網址與超連結（ADR-0015 第 2 節，<c>check-no-network.py</c>），只顯示名稱；<c>Url</c> 只是解析後保留的資料。
 /// </summary>
 public sealed record ServiceIncident(string Name, string Impact, string? Url = null, DateTimeOffset? StartedAt = null)
 {
-    /// <summary>只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結</summary>
-    public static readonly IReadOnlySet<string> AllowedHosts = new HashSet<string> { "status.claude.com", "status.openai.com" };
-
-    public Uri? Link => LinkOf(Url);
-
-    public static Uri? LinkOf(string? text) =>
-        text is not null && Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps
-        && AllowedHosts.Contains(uri.Host) && uri.IsDefaultPort && uri.UserInfo.Length == 0
-        && uri.AbsolutePath.StartsWith("/incidents/", StringComparison.Ordinal)
-        // Uri 會把大寫主機轉成小寫；原文也要是小寫，同 Swift 的 URL.host
-        && text.StartsWith($"https://{uri.Host}/", StringComparison.Ordinal) ? uri : null;
+    /// <summary>有影響的事故（minor 以上；維護與 none 不算），同 Swift 的 <c>MascotMood.hasIncident</c></summary>
+    public bool IsDisruption => Impact is "minor" or "major" or "critical";
 }
 
 /// <summary>某個服務的某個額度（<c>ProviderWindow</c>）。</summary>
@@ -229,7 +221,23 @@ public static class UsageDecoder
                 _ => throw new FormatException(),
             };
         }
-        return new UsageWindow(id, label, used, resets, hidden);
+        return new UsageWindow(id, label, used, resets, hidden) { Forecast = DecodeForecast(e) };
+    }
+
+    /// <summary>選填的預測 <c>{exhausts_at, urgent, faster?}</c>：格式不對時當成沒有（同 Swift 的 <c>try? decodeIfPresent</c>）</summary>
+    private static QuotaForecast? DecodeForecast(JsonElement e)
+    {
+        if (!e.TryGetProperty("forecast", out var f) || f.ValueKind != JsonValueKind.Object) return null;
+        if (!f.TryGetProperty("exhausts_at", out var at) || at.ValueKind != JsonValueKind.String || !TryParseIso(at.GetString()!, out var exhausts))
+            return null;
+        if (!f.TryGetProperty("urgent", out var u) || u.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
+        double? faster = null;
+        if (f.TryGetProperty("faster", out var x) && x.ValueKind != JsonValueKind.Null)
+        {
+            if (x.ValueKind != JsonValueKind.Number) return null;
+            faster = x.GetDouble();
+        }
+        return new QuotaForecast(exhausts, u.ValueKind == JsonValueKind.True, faster);
     }
 
     private static JsonElement Required(JsonElement e, string name, JsonValueKind kind)

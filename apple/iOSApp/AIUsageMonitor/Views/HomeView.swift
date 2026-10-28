@@ -188,14 +188,26 @@ private struct ProviderSection: View {
 
     var body: some View {
         Section {
+            // 服務狀態頁的事故（ADR-0018 第 4 節）：額度讀取失敗時也顯示；連結只接受官方狀態頁
+            ForEach(Array((provider.incidents ?? []).enumerated()), id: \.offset) { _, incident in
+                IncidentRow(incident: incident)
+            }
             if let error = provider.error {
                 // 單一服務失敗不影響其他服務（FR-12）
                 Label(error, systemImage: "xmark.octagon")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(provider.visibleWindows) { window in
-                    UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed, now: now)
-                        .padding(.vertical, 2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        UsageWindowRow(window: window, provider: key, display: mode, dimmed: dimmed, now: now)
+                        // 會在重置前用完時（ADR-0018 第 3 節）：收集器算好的預測，iPhone 沒有歷史
+                        if let forecast = QuotaForecast.current(window: window, provider: key, history: nil, stale: dimmed, now: now) {
+                            Label(forecast.line(now: now), systemImage: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(forecast.urgent ? UsageColors.critical : UsageColors.notice)
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
                 // 重置次數卷（FR-58）：0 張時不顯示
                 if let credits = provider.resetCredits, let summary = credits.summary(at: now) {
@@ -217,6 +229,22 @@ private struct ProviderSection: View {
                         .background(.quaternary, in: Capsule())
                 }
             }
+        }
+    }
+}
+
+private struct IncidentRow: View {
+    let incident: ServiceIncident
+
+    var body: some View {
+        let label = Label("服務異常：\(incident.name)", systemImage: "cross.case.fill")
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(UsageColors.notice)
+        if let link = incident.link {
+            Link(destination: link) { label }
+                .accessibilityHint("在 Safari 打開事故頁")
+        } else {
+            label
         }
     }
 }

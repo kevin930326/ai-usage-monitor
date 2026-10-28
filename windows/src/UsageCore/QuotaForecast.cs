@@ -50,16 +50,63 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
             if (span.Count < QuotaHistory.RecentMinimumSamples) continue;
             var seconds = (span[^1].Ts - span[0].Ts).TotalSeconds;
             if (seconds < QuotaHistory.RecentMinimumSpan(windowId).TotalSeconds) continue;
-            double consumed = 0;
+            double used = 0;
             for (var i = 1; i < span.Count; i++)
             {
-                if (!QuotaHistory.IsReset(span[i - 1], span[i])) consumed += Math.Max(span[i].UsedPct - span[i - 1].UsedPct, 0);
+                if (!QuotaHistory.IsReset(span[i - 1], span[i])) used += Math.Max(span[i].UsedPct - span[i - 1].UsedPct, 0);
             }
-            rates.Add(consumed / seconds);
+            rates.Add(used / seconds);
         }
         if (rates.Count < BaselineMinimumDays) return null;
         rates.Sort();
         var mid = rates.Count / 2;
         return rates.Count % 2 == 1 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
+    }
+
+    /// <summary>
+    /// 畫面用的預測（Windows App 與 iPhone 一樣用快照裡收集器算好的，同一套規則、最多 5 分鐘前）：
+    /// 過期、已經過了、或不在重置前的不用，緊急與否照現在的時間重算。對應 Swift 的 <c>QuotaForecast.current</c>（沒有歷史時）。
+    /// </summary>
+    public static QuotaForecast? Current(UsageWindow window, bool stale, DateTimeOffset now)
+    {
+        if (stale || window.Hidden || window.Forecast is not { } f || f.ExhaustsAt <= now
+            || window.ResetsAt is not { } resetsAt || f.ExhaustsAt >= resetsAt || window.EffectiveUsedPct(now) >= 100) return null;
+        return f with { Urgent = (f.ExhaustsAt - now) < UrgentWithin };
+    }
+
+    /// <summary>「照目前速度約 14:32 用完」；不是今天時「照目前速度約明天 09:05 用完」「…約週五 18:00 用完」</summary>
+    public string Text(DateTimeOffset now, TimeZoneInfo? zone = null)
+    {
+        var clock = Clock(ExhaustsAt, now, zone);
+        return $"照目前速度約{(char.IsDigit(clock[0]) ? " " : "")}{clock} 用完";
+    }
+
+    /// <summary>「比平常快 2.1 倍」；沒有倍數時 null</summary>
+    public string? FasterText => Faster is { } f ? $"比平常快 {f.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} 倍" : null;
+
+    /// <summary>一行的完整說法：「照目前速度約 14:32 用完・比平常快 2.1 倍」</summary>
+    public string Line(DateTimeOffset now, TimeZoneInfo? zone = null) =>
+        FasterText is { } faster ? $"{Text(now, zone)}・{faster}" : Text(now, zone);
+
+    /// <summary>小地方的短說法：「約 14:32 用完・快 2.1 倍」</summary>
+    public string ShortLine(DateTimeOffset now, TimeZoneInfo? zone = null)
+    {
+        var clock = Clock(ExhaustsAt, now, zone);
+        var head = $"約{(char.IsDigit(clock[0]) ? " " : "")}{clock} 用完";
+        return Faster is { } f ? $"{head}・快 {f.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} 倍" : head;
+    }
+
+    /// <summary>「14:32」「明天 09:05」「週五 18:00」（本機時區）</summary>
+    public static string Clock(DateTimeOffset date, DateTimeOffset now, TimeZoneInfo? zone = null)
+    {
+        zone ??= TimeZoneInfo.Local;
+        var local = TimeZoneInfo.ConvertTime(date, zone);
+        var today = TimeZoneInfo.ConvertTime(now, zone);
+        var time = local.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var days = (local.Date - today.Date).Days;
+        if (days <= 0) return time;
+        if (days == 1) return $"明天 {time}";
+        string[] names = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
+        return $"{names[(int)local.DayOfWeek]} {time}";
     }
 }

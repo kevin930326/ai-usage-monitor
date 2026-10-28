@@ -18,7 +18,7 @@ public class IncidentTests
         var incident = Assert.Single(data.Providers["claude"].Incidents!);
         Assert.Equal(new ServiceIncident("Elevated errors on Claude Code", "major", "https://status.claude.com/incidents/abc123",
                                          DateTimeOffset.Parse("2026-10-21T02:40:00Z")), incident);
-        Assert.Equal("https://status.claude.com/incidents/abc123", incident.Link?.AbsoluteUri);
+        Assert.True(incident.IsDisruption);
         Assert.Empty(data.Providers["codex"].Incidents!);
         Assert.Null(Load("usage-sample.json").Providers["claude"].Incidents);
     }
@@ -35,16 +35,37 @@ public class IncidentTests
         Assert.Null(UsageDecoder.Decode(json).Providers["claude"].Incidents);
     }
 
-    [Theory]
-    [InlineData("http://status.claude.com/incidents/x")]
-    [InlineData("https://evil.example/incidents/x")]
-    [InlineData("https://status.claude.com/x")]
-    [InlineData("https://status.claude.com.evil.example/incidents/x")]
-    [InlineData("https://u@status.openai.com/incidents/x")]
-    [InlineData("https://status.openai.com:8443/incidents/x")]
-    [InlineData("javascript:alert(1)")]
-    public void LinksOnlyForStatusPages(string bad) => Assert.Null(ServiceIncident.LinkOf(bad));
+    [Fact]
+    public void SnapshotForecastAndText()
+    {
+        var data = Load("usage-forecast-incidents.json");
+        var weekly = data.Providers["claude"].Windows[1];
+        var now = data.UpdatedAt;
+        Assert.Equal(new QuotaForecast(DateTimeOffset.Parse("2026-10-22T09:30:00Z"), false, null), weekly.Forecast);
+        Assert.Equal(2.1, data.Providers["claude"].Windows[0].Forecast?.Faster);
+        Assert.Null(data.Providers["codex"].Windows[0].Forecast);
+        // 緊急與否照現在重算；過期、已經過了的不用
+        Assert.True(QuotaForecast.Current(weekly, false, now.AddHours(30))?.Urgent);
+        Assert.False(QuotaForecast.Current(weekly, false, now)?.Urgent);
+        Assert.Null(QuotaForecast.Current(weekly, true, now));
+        Assert.Null(QuotaForecast.Current(weekly, false, now.AddHours(31)));
+
+        // 同 Swift 的 ForecastGoldenTests.text：台北時間週三 12:00
+        var taipei = TimeZoneInfo.CreateCustomTimeZone("UTC+8", TimeSpan.FromHours(8), "UTC+8", "UTC+8");
+        var noon = DateTimeOffset.Parse("2026-10-28T04:00:00Z");
+        string Line(double hours, double? faster = null) => new QuotaForecast(noon.AddHours(hours), false, faster).Line(noon, taipei);
+        Assert.Equal("照目前速度約 14:30 用完", Line(2.5));
+        Assert.Equal("照目前速度約明天 00:30 用完・比平常快 2.1 倍", Line(12.5, 2.1));
+        Assert.Equal("照目前速度約週五 12:00 用完", Line(48));
+        Assert.Equal("約明天 00:30 用完・快 2.1 倍", new QuotaForecast(noon.AddHours(12.5), false, 2.1).ShortLine(noon, taipei));
+    }
 
     [Fact]
-    public void StatusPageLinkIsKept() => Assert.NotNull(ServiceIncident.LinkOf("https://status.openai.com/incidents/01J"));
+    public void BadForecastIsIgnored()
+    {
+        var json = "{\"schema_version\":1,\"updated_at\":\"2026-10-21T03:00:00Z\",\"providers\":{\"claude\":{\"plan\":null,"
+                   + "\"error\":null,\"windows\":[{\"id\":\"five_hour\",\"label\":\"5 小時\",\"used_pct\":1,\"resets_at\":null,"
+                   + "\"forecast\":{\"urgent\":\"yes\"}}]}}}";
+        Assert.Null(UsageDecoder.Decode(json).Providers["claude"].Windows[0].Forecast);
+    }
 }

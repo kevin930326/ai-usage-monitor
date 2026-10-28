@@ -8,6 +8,9 @@ namespace AIUsageMonitor.Core;
 /// </summary>
 public sealed record UsageWindow(string Id, string Label, double UsedPct, DateTimeOffset? ResetsAt = null, bool Hidden = false)
 {
+    /// <summary>收集器算好的預測（選填，ADR-0018 第 2 節）；畫面用 <see cref="QuotaForecast.Current"/></summary>
+    public QuotaForecast? Forecast { get; init; }
+
     /// <summary>重置時間已過（FR-26）。</summary>
     public bool IsReset(DateTimeOffset now) => ResetsAt is { } r && r <= now;
 
