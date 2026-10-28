@@ -66,8 +66,10 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
 - **資料夾**：同收集器 `paths.py`：`AI_USAGE_MONITOR_HOME` 有值用它（截圖、測試、量測），否則 `%LOCALAPPDATA%\AIUsageMonitor`。
 - **讀**：`usage.json`（階段 1）；`history.sqlite3`（階段 2，唯讀）；`service-status.json`（階段 4）。階段 1 不讀 `config.json`。
 - **寫**：只寫自己的設定 `windows-app.json`（同一資料夾）。例外（[ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節）：建立 `agent\salt` 與 `agent\inbox\`、刪 inbox 裡 `aum-hook.exe` 寫的事件檔；
-  使用者在設定按「連接／修好／移除」時，改 Claude Code 的 `settings.json` 或 Codex 的 `hooks.json`（先備份、只動自己的項目）。**永遠不寫 `history.sqlite3`**：Mac App 的例外（清除歷史、縮短保留期間）在 Windows 改由收集器的指令完成（階段 2）。
-- **不連網、不讀認證管理員、不執行 `claude`／`codex`**。唯一啟動的程式是「立即更新」的 `schtasks.exe /Run /TN \AIUsageMonitor\Collector`（觸發使用者自己的排程，不連網、不需要系統管理員）。
+  使用者在設定按「連接／修好／移除」時，改 Claude Code 的 `settings.json` 或 Codex 的 `hooks.json`（先備份、只動自己的項目）。
+  ADR-0019 第 2 節：寫 `agent-state.json`（這台的 AI 狀態彙總，沒有資料夾名稱或內容），讀收集器寫的 `agent-remote.json`。**永遠不寫 `history.sqlite3`**：Mac App 的例外（清除歷史、縮短保留期間）在 Windows 改由收集器的指令完成（階段 2）。
+- **不連網、不讀認證管理員、不執行 `claude`／`codex`**。唯一啟動的程式是 `schtasks.exe /Run`：「立即更新」的 `\AIUsageMonitor\Collector`，以及 AI 狀態改變時的 `\AIUsageMonitor\AgentSync`
+  （ADR-0019 第 2 節；都是觸發使用者自己的排程，不連網、不需要系統管理員）。
 - **驗證**：
   1. CI 靜態檢查 `windows/tools/check-no-network.py`：App 與 UsageCore 的原始碼不得出現網路（`System.Net`、`HttpClient`、`WebRequest`、`Socket`、`WinHttp`…）、認證（`CredRead`、`CredWrite`、`PasswordVault`…）的 API；`Process.Start` 只能在觸發收集器的那個檔案；不得有 `PackageReference`（App）；不得用 `CompositionTarget.Rendering`。
   2. 實機：防火牆封鎖 App 的輸出連線後一切正常；Process Monitor 看不到 TCP/UDP 與認證存取（實機確認清單）。
