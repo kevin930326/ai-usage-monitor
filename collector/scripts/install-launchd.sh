@@ -6,6 +6,10 @@ LABEL="io.github.kevin930326.ai-usage-monitor"
 COLLECTOR_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TEMPLATE="$COLLECTOR_DIR/launchd/$LABEL.plist.template"
 TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
+# AI 狀態同步（ADR-0019 第 2 節）：沒有排程，App 寫了 agent-state.json 後以 launchctl kickstart 觸發
+SYNC_LABEL="$LABEL.agent-sync"
+SYNC_TEMPLATE="$COLLECTOR_DIR/launchd/$SYNC_LABEL.plist.template"
+SYNC_TARGET="$HOME/Library/LaunchAgents/$SYNC_LABEL.plist"
 LOG_DIR="$HOME/Library/Logs/AIUsageMonitor"
 PYTHON="$(command -v python3)"
 CONFIG_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMonitor}"
@@ -71,17 +75,20 @@ if [ -n "$DETECTED" ] && [ -z "$UNKNOWN" ]; then
 fi
 
 # 路徑可能含空白，用 | 當 sed 分隔字元
-sed -e "s|__PYTHON__|$PYTHON|" \
-    -e "s|__COLLECTOR_DIR__|$COLLECTOR_DIR|" \
-    -e "s|__LOG_DIR__|$LOG_DIR|g" \
-    "$TEMPLATE" > "$TARGET"
-plutil -lint "$TARGET" >/dev/null
-
-# 已安裝過就先卸載再重新載入
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$TARGET"
+for pair in "$TEMPLATE|$TARGET|$LABEL" "$SYNC_TEMPLATE|$SYNC_TARGET|$SYNC_LABEL"; do
+    IFS='|' read -r template target label <<< "$pair"
+    sed -e "s|__PYTHON__|$PYTHON|" \
+        -e "s|__COLLECTOR_DIR__|$COLLECTOR_DIR|" \
+        -e "s|__LOG_DIR__|$LOG_DIR|g" \
+        "$template" > "$target"
+    plutil -lint "$target" >/dev/null
+    # 已安裝過就先卸載再重新載入
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$target"
+done
 
 echo "已安裝：$TARGET"
+echo "已安裝：${SYNC_TARGET}（AI 狀態同步，預設不上傳；set-tier2.sh --agent-sync 打開）"
 if is_unknown claude; then
     echo
     echo "⚠️  找不到 claude 指令，無法取得 Claude 用量，也沒有更動 config.json 的 enabled_providers。"

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- App 內建的 AI 狀態同步（ADR-0019 第 2 節）。scripts/bundle-collector.sh 填入 __LABEL__ 與 __EXTRA_ENV__ 後，
+     放進 AIUsageMenuBar.app/Contents/Library/LaunchAgents/<label>.plist，和收集器一起以 SMAppService.agent 註冊。
+     沒有排程：App 寫了 agent-state.json（內容改變）後以 launchctl kickstart 觸發。App 內的 plist 不能寫使用者的
+     絕對路徑，所以不用 WatchPaths；收集器自己最短 60 秒同步一次，一般 5 分鐘一輪也會同步。 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>BundleProgram</key>
+    <string>Contents/Resources/python/bin/python3.13</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>python3.13</string>
+        <!-- -I 隔離模式（不讀 PYTHON* 環境變數與使用者的 site-packages）、-B 不寫 .pyc（寫入 App 內會讓簽章失效） -->
+        <string>-I</string>
+        <string>-B</string>
+        <string>-X</string>
+        <string>utf8</string>
+        <string>-m</string>
+        <string>usage_collector</string>
+        <string>--agent-sync</string>
+        <string>--quiet</string>
+        <string>--agent</string>
+        <string>app</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- 內嵌的 OpenSSL 用系統的根憑證（連中繼） -->
+        <key>SSL_CERT_FILE</key>
+        <string>/etc/ssl/cert.pem</string>
+__EXTRA_ENV__    </dict>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
