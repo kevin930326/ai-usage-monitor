@@ -172,7 +172,7 @@ struct RingCardContent: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 if let forecast {
-                    QuotaForecastLine(forecast: forecast, now: now)
+                    QuotaForecastLine(forecast: forecast, now: now, stacked: true)
                         .padding(.top, 2)
                 }
             }
@@ -236,6 +236,8 @@ struct PanelResetText: View {
 struct QuotaForecastLine: View {
     let forecast: QuotaForecast
     let now: Date
+    /// 窄的地方（主圓環卡片）：倍數另起一行，不在中間斷開
+    var stacked = false
 
     private var color: Color { forecast.urgent ? UsageColors.critical : UsageColors.notice }
 
@@ -244,8 +246,15 @@ struct QuotaForecastLine: View {
             Image(systemName: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
                 .imageScale(.small)
                 .accessibilityHidden(true)
-            Text(forecast.line(now: now))
-                .fixedSize(horizontal: false, vertical: true)
+            if stacked {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(forecast.text(now: now))
+                    if let faster = forecast.fasterText { Text(faster) }
+                }
+            } else {
+                Text(forecast.line(now: now))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(color)

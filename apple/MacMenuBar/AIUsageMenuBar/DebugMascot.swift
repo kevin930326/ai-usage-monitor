@@ -20,7 +20,7 @@ enum DebugMascot {
         var pulse: Double?
     }
 
-    enum Quota { case normal, low, stale }
+    enum Quota { case normal, low, stale, forecast, incident }
 
     static func render(to dir: URL, snapshot: UsageSnapshot?, now: Date, write: (any View, URL) -> Void) {
         guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else {
@@ -36,7 +36,10 @@ enum DebugMascot {
             shot.setup(&d)
             // 沒有指定表情時照額度：過期閉眼、剩不到 20% 擔心、用完 ×
             if d.mood == .normal {
-                d.setMood(.quota(level: d.machine.statusLevel, unavailable: shot.quota == .stale))
+                let data = quotaSnapshot(shot.quota)
+                d.setMood(.quota(level: d.machine.statusLevel, unavailable: shot.quota == .stale,
+                                 incident: MascotMood.hasIncident(data, provider: shot.character.provider),
+                                 runsOut: MascotMood.runsOut(data, provider: shot.character.provider, now: now)))
             }
             d.advance(to: shot.time)
             return d
@@ -53,6 +56,23 @@ enum DebugMascot {
                 }
             case .stale:
                 snapshot.updatedAt = now.addingTimeInterval(-3 * 3600)
+            case .forecast:
+                // ADR-0018：Claude 的額度照目前速度會在重置前用完（收集器算好的）
+                if var claude = snapshot.providers["claude"] {
+                    claude.windows = claude.windows.map { w in
+                        var w = w
+                        guard let resets = w.resetsAt, !w.hidden else { return w }
+                        let at = now.addingTimeInterval(min(resets.timeIntervalSince(now) * 0.6, w.id == "five_hour" ? 40 * 60 : 20 * 3600))
+                        w.forecast = QuotaForecast(exhaustsAt: at, urgent: false, faster: w.id == "five_hour" ? 2.1 : nil)
+                        return w
+                    }
+                    snapshot.providers["claude"] = claude
+                }
+            case .incident:
+                snapshot.providers["claude"]?.incidents = [
+                    ServiceIncident(name: "Elevated errors on Claude Code", impact: "major",
+                                    url: "https://status.claude.com/incidents/demo", startedAt: now.addingTimeInterval(-1200)),
+                ]
             }
             return snapshot
         }
@@ -187,6 +207,17 @@ enum DebugMascot {
         write(sheet(expanded + intro), dir.appendingPathComponent("notch-intro.png"))
         write(sheet(expressions), dir.appendingPathComponent("notch-expressions.png"))
         write(sheet(agents, collapsedHeight: 44), dir.appendingPathComponent("notch-agents.png"))
+        // ADR-0018：預測會用完（擔心＋額度卡最後一行）、服務事故（生病＋事故名稱）
+        write(VStack(spacing: 0) {
+            sheet([
+                Shot(name: "expanded-claude-forecast", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .forecast),
+                Shot(name: "expanded-claude-incident", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .incident),
+            ])
+            sheet([
+                Shot(name: "collapsed-claude-forecast", setup: { _ in }, time: 1000, quota: .forecast),
+                Shot(name: "collapsed-claude-incident", setup: { _ in }, time: 1000, quota: .incident),
+            ], height: 40)
+        }, dir.appendingPathComponent("notch-forecast.png"))
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }
