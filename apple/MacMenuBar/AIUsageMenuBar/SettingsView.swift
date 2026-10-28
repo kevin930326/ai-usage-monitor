@@ -93,8 +93,7 @@ struct SettingsView: View {
 
     private var previewContent: MenuBarIconContent? {
         guard let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) else { return nil }
-        return MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
-                                  isLeast: settings.iconWindow == .automatic)
+        return MenuBarIconContent(item: item, snapshot: snapshot, now: store.now, isLeast: settings.iconWindow == .automatic)
     }
 
     // MARK: - 面板區塊

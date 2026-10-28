@@ -587,7 +587,7 @@ enum DebugTools {
         }
     }
 
-    /// 五種狀態（剩不到 20% 與用完分開）× 每種樣式，放在模擬的選單列上。
+    /// 七種狀態（剩不到 20% 與用完分開，加上服務有事故、預計用完）× 每種樣式，放在模擬的選單列上。
     private static func renderMenuBarIcons(to dir: URL) {
         let states: [(String, MenuBarIconContent)] = [
             ("正常", .init(provider: "claude", remainingPct: 62, timeRemaining: 70, state: .normal, label: "Claude 5 小時")),
@@ -595,6 +595,8 @@ enum DebugTools {
             ("剩不到 20%", .init(provider: "codex", remainingPct: 12, timeRemaining: 30, state: .critical, label: "Codex 每週")),
             ("用完", .init(provider: "codex", remainingPct: 0, timeRemaining: 30, state: .critical, label: "Codex 每週")),
             ("資料過期", .init(provider: "claude", remainingPct: 62, timeRemaining: 70, state: .stale, label: "Claude 5 小時")),
+            ("服務有事故", .init(provider: "claude", remainingPct: 62, timeRemaining: 70, state: .normal, label: "Claude 5 小時", incident: true)),
+            ("預計用完", .init(provider: "codex", remainingPct: 45, timeRemaining: 60, state: .normal, label: "Codex 每週", runsOut: true)),
         ]
         for scheme in [ColorScheme.light, .dark] {
             let view = VStack(alignment: .leading, spacing: 10) {
