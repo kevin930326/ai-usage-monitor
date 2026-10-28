@@ -131,6 +131,8 @@ import Testing
         let sparse = QuotaHistory(samples: [QuotaSample(ts: updatedAt, provider: "claude", windowID: "weekly", usedPct: 60,
                                                         resetsAt: window.resetsAt)])
         #expect(QuotaForecast.current(window: window, provider: "claude", history: sparse, stale: false, now: updatedAt) == nil)
+        // 空的歷史也一樣（清除歷史、讀取失敗；Codex C-02）
+        #expect(QuotaForecast.current(window: window, provider: "claude", history: .empty, stale: false, now: updatedAt) == nil)
     }
 
     // MARK: - 整合審查 D-i：只有 Codex（plan null、超過 100%）、沒有任何服務

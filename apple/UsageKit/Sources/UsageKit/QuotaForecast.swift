@@ -55,11 +55,11 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
 }
 
 public extension QuotaForecast {
-    /// 畫面用的預測：有本機歷史（Mac 面板）時只用自己算的，算不出來就不顯示（資料不足時不猜，不退回快照）；
+    /// 畫面用的預測：有本機歷史（Mac 面板，空的也算）時只用自己算的，算不出來就不顯示（資料不足時不猜，不退回快照；Codex C-02）；
     /// 沒有歷史（iPhone、瀏海與角色不讀資料庫）時用收集器寫在快照裡的（同一套規則，最多 5 分鐘前）。
     /// 快照的過期、已經過了、或不在重置前的不用，緊急與否照現在的時間重算
     static func current(window: UsageWindow, provider: String, history: QuotaHistory?, stale: Bool, now: Date) -> QuotaForecast? {
-        if let history, !history.samples.isEmpty {
+        if let history {
             return QuotaForecast(window: window, provider: provider, history: history, stale: stale, now: now)
         }
         guard !stale, !window.hidden, var forecast = window.forecast, forecast.exhaustsAt > now,
