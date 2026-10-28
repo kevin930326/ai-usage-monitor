@@ -17,6 +17,7 @@ final class AgentMonitor {
     @ObservationIgnored private var source: DispatchSourceRead?
     @ObservationIgnored private var expireTimer: Timer?
     @ObservationIgnored private var socketURL: URL?
+    @ObservationIgnored private var terminateSource: DispatchSourceSignal?
     /// 同一秒最多處理幾個事件（同一使用者的其他程式塞假事件時，最多讓狀態跳來跳去，不會吃滿 CPU）
     @ObservationIgnored private var budget = (second: 0, count: 0)
     static let maxPerSecond = 40
@@ -39,11 +40,26 @@ final class AgentMonitor {
             return
         }
         _ = fcntl(listener, F_SETFL, fcntl(listener, F_GETFL) | O_NONBLOCK)
-        let fd = listener
-        // 讀連線在背景佇列（每個連線最多 250 ms），解析好的事件回到主執行緒
+        let source = Self.makeSource(listener: listener)
+        source.resume()
+        self.source = source
+        // 被 kill（SIGTERM）時系統不會呼叫 applicationWillTerminate：自己接住，移除 socket 後結束
+        signal(SIGTERM, SIG_IGN)
+        let terminate = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        terminate.setEventHandler {
+            MainActor.assumeIsolated { AgentMonitor.shared.stop() }
+            exit(0)
+        }
+        terminate.resume()
+        terminateSource = terminate
+    }
+
+    /// 讀連線在背景佇列（每個連線最多 250 ms），解析好的事件回到主執行緒。
+    /// nonisolated：處理程式在背景佇列執行，不能繼承 MainActor 的隔離（否則執行時檢查會讓 App 當掉）
+    nonisolated private static func makeSource(listener fd: Int32) -> DispatchSourceRead {
         let queue = DispatchQueue(label: "aum.agent-socket", qos: .utility)
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-        source.setEventHandler {
+        source.setEventHandler { @Sendable in
             while true {
                 let client = accept(fd, nil, nil)
                 guard client >= 0 else { break }
@@ -53,12 +69,13 @@ final class AgentMonitor {
                 }
             }
         }
-        source.resume()
-        self.source = source
+        return source
     }
 
     /// App 結束：停止聽並移除 socket 檔（hook 看到沒有 socket 就立刻結束）
     func stop() {
+        // 只記數字（量測腳本用來確認有收到）
+        if listener >= 0 { UsageStore.log("agent events received=\(received) dropped=\(dropped)") }
         source?.cancel()
         source = nil
         if listener >= 0 { close(listener) }

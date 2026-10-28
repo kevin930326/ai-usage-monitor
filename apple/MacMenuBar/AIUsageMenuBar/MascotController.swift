@@ -206,6 +206,8 @@ final class MascotController {
         if !PanelSettings.shared.notchHintShown { showsHint = true }
         refresh()
         restartActivityChecks()
+        // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
+        AgentMonitor.shared.markSeen()
     }
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
@@ -310,6 +312,7 @@ final class MascotController {
         guard gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r]) else { return false }
         pressedOnCharacter = true
         mutate { $0.press(at: t) }
+        AgentMonitor.shared.markSeen()
         return true
     }
 

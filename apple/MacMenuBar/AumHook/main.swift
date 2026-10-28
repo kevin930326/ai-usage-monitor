@@ -24,6 +24,6 @@ if arguments.count >= 2, let ai = AgentKind(rawValue: arguments[1]), let input =
     // 資料夾與 App 相同：AI_USAGE_MONITOR_HOME 優先，否則 ~/Library/Application Support/AIUsageMonitor。
     // hook 不是測試環境的判斷對象（AUM_TESTING 由 AI 的環境決定），所以不讓 locator 中止
     let directory = UsageFileLocator(environment: environment, testing: false).directory
-    AgentHookRunner.run(ai: ai, input: input, directory: directory)
+    _ = AgentHookRunner.run(ai: ai, input: input, directory: directory)
 }
 exit(0)

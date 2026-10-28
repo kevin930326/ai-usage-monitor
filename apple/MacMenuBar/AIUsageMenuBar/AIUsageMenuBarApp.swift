@@ -71,9 +71,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotchPanelController.shared.apply()
             // hook 的 socket（ADR-0017）：先開始聽，AI 的事件才不會丟
             AgentMonitor.shared.start()
+            // App 被移動或 hook 缺事件：設定裡顯示「需要修好」
+            AgentHookInstaller.shared.refresh()
             #if DEBUG
             DebugTools.runIfRequested()
             #endif
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // 移除 socket 檔：hook 看到沒有 socket 就立刻結束，不必等連線逾時
+        MainActor.assumeIsolated { AgentMonitor.shared.stop() }
     }
 }
