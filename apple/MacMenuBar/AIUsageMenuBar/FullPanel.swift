@@ -17,6 +17,8 @@ final class FullPanelController {
     private var anchorTop: CGFloat = 0
     /// 關閉動畫播放中再按打開：取消關閉
     private var closing = false
+    /// 第幾次打開：舊的關閉動畫播完時，不能收掉後來打開的那一次（Codex C-03）
+    private var generation = 0
 
     var isOpen: Bool { panel != nil && !closing }
 
@@ -34,6 +36,7 @@ final class FullPanelController {
         let screen = Self.screenUnderPointer()
         // 上一次關閉動畫還沒播完：先收尾，不留舊的觀察者（Fable F-06）
         if closing { finishClose() }
+        generation += 1
         let host = NSHostingController(rootView: FullPanelContent(screenHeight: screen.visibleFrame.height))
         host.sizingOptions = [.preferredContentSize]
         let panel = panel ?? FullPanelWindow()
@@ -83,9 +86,11 @@ final class FullPanelController {
         removeMonitors()
         if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
         keyObserver = nil
+        let round = generation
         let finish = { @MainActor in
-            guard FullPanelController.shared.closing else { return }
-            FullPanelController.shared.finishClose()
+            let controller = FullPanelController.shared
+            guard controller.closing, controller.generation == round else { return }
+            controller.finishClose()
         }
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             finish()
