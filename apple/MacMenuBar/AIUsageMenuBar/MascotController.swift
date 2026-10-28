@@ -303,7 +303,10 @@ final class MascotController {
         let dataDirectory = UsageStore.shared.locator.directory
         let configURL = dataDirectory.appendingPathComponent("config.json")
         // 測試、截圖與量測：只看暫存資料夾裡的紀錄，不碰真的 ~/.claude、~/.codex
-        let testing = UsageFileLocator.isTestEnvironment() || DebugTools.isDemo
+        var testing = UsageFileLocator.isTestEnvironment()
+        #if DEBUG
+        testing = testing || DebugTools.isDemo
+        #endif
         Task.detached(priority: .utility) {
             // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
             let dirs = MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
