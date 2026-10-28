@@ -489,7 +489,7 @@ extension AgentSessions {
     /// 現在該發的通知（呼叫端用 `key` 去掉已經發過的）：需要你超過設定的秒數；跑超過設定分鐘數的回合完成
     public func notices(at now: Int64, policy: AgentNoticePolicy) -> [AgentNotice] {
         ordered(at: now).compactMap { s in
-            let key = "\(s.ai.rawValue)/\(s.id)/\(s.stored.rawValue)@\(s.since)"
+            let key = Self.noticeKey(s)
             switch s.stored {
             case .needsYou where now - s.since >= policy.needsYouAfter:
                 return AgentNotice(ai: s.ai, kind: .needsYou, need: s.need, key: key)
@@ -501,6 +501,15 @@ extension AgentSessions {
         }
     }
 
+    /// 每個工作階段目前的狀態（工作階段＋狀態＋進入時間）：通知去重用，狀態結束或工作階段消失時鍵就不在了
+    public func noticeKeys(at now: Int64) -> Set<String> {
+        Set(ordered(at: now).map(Self.noticeKey))
+    }
+
+    static func noticeKey(_ s: AgentSession) -> String {
+        "\(s.ai.rawValue)/\(s.id)/\(s.stored.rawValue)@\(s.since)"
+    }
+
     /// 下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 nil。門檻是 `Int64.max`（關閉）時不會溢位
     public func nextNoticeCheck(after now: Int64, policy: AgentNoticePolicy) -> Int64? {
         sessions.filter { $0.stored == .needsYou && now - $0.since < policy.needsYouAfter }
@@ -509,5 +518,20 @@ extension AgentSessions {
                 return overflow ? nil : at
             }
             .min()
+    }
+}
+
+/// 通知去重（Codex C-04）：同一個工作階段的同一次狀態只通知一次。記錄只在那個狀態結束、或工作階段消失時才清掉，
+/// 所以通知後把門檻調高、或關掉再打開，都不會讓同一次「需要你」再通知一次
+public struct AgentNoticeLog: Sendable {
+    private var sent: Set<String> = []
+
+    public init() {}
+
+    /// 這次該送的（還沒送過的）；呼叫後都記成送過（靜音時也一樣，結束後不補發）
+    public mutating func take(_ sessions: AgentSessions, at now: Int64, policy: AgentNoticePolicy) -> [AgentNotice] {
+        let fresh = sessions.notices(at: now, policy: policy).filter { !sent.contains($0.key) }
+        sent = sent.intersection(sessions.noticeKeys(at: now)).union(fresh.map(\.key))
+        return fresh
     }
 }

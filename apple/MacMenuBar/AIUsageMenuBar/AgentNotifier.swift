@@ -10,8 +10,8 @@ import UsageKit
 final class AgentNotifier {
     static let shared = AgentNotifier()
 
-    /// 發過的（工作階段＋狀態＋進入時間）；只放記憶體，工作階段消失就清掉
-    private var sent: Set<String> = []
+    /// 發過的（工作階段＋狀態＋進入時間）；只放記憶體，狀態結束或工作階段消失就清掉
+    private var log = AgentNoticeLog()
 
     /// Debug 的截圖與量測（假資料）不送通知
     private var disabled: Bool {
@@ -29,10 +29,7 @@ final class AgentNotifier {
     /// 狀態變了、或到了下一次檢查的時間：送出該發而還沒發的。靜音、勿擾時照樣記成發過（結束後不補發）
     func evaluate(_ sessions: AgentSessions, at now: Int64) {
         let settings = PanelSettings.shared
-        let notices = sessions.notices(at: now, policy: settings.agentNoticePolicy)
-        let fresh = notices.filter { !sent.contains($0.key) }
-        // 只留現在還成立的鍵：處理了、看過了、工作階段結束的不必記著
-        sent = Set(notices.map(\.key))
+        let fresh = log.take(sessions, at: now, policy: settings.agentNoticePolicy)
         guard !fresh.isEmpty, !disabled, !settings.isMascotQuiet(at: Date(timeIntervalSince1970: Double(now) / 1000)) else { return }
         for notice in fresh { deliver(notice) }
     }

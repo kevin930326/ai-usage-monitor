@@ -167,6 +167,29 @@ import Testing
         #expect(sessions.activity(at: 4000 + 300_000, fallback: [.claude: (true, true), .codex: (false, true)]) == (false, false))
     }
 
+    /// 同一次需要你只通知一次：通知後提高門檻、關掉再打開都不重發；處理後的下一次需要你照樣通知（Codex C-04）
+    @Test func noticeLogSendsEachStateOnce() {
+        var sessions = AgentSessions(idleAfter: 300_000)
+        let message = { (event: AgentHookEvent, need: AgentNeed?) in
+            AgentHookMessage(ai: .claude, event: event, need: need, session: "0123456789abcdef", time: 1, folder: "")
+        }
+        var log = AgentNoticeLog()
+        let fast = AgentNoticePolicy(needsYouAfter: 20_000), slow = AgentNoticePolicy(needsYouAfter: 120_000)
+        let off = AgentNoticePolicy(needsYouAfter: .max, longTask: .max)
+        sessions.apply(message(.permissionRequest, .permission), at: 0)
+        #expect(log.take(sessions, at: 10_000, policy: fast).isEmpty)
+        #expect(log.take(sessions, at: 20_000, policy: fast).count == 1)
+        #expect(log.take(sessions, at: 30_000, policy: slow).isEmpty)
+        #expect(log.take(sessions, at: 120_000, policy: slow).isEmpty)
+        #expect(log.take(sessions, at: 130_000, policy: off).isEmpty)
+        #expect(log.take(sessions, at: 140_000, policy: fast).isEmpty)
+        // 處理後再一次需要你：新的狀態，照樣通知
+        sessions.apply(message(.postToolUse, nil), at: 150_000)
+        #expect(log.take(sessions, at: 150_000, policy: fast).isEmpty)
+        sessions.apply(message(.permissionRequest, .permission), at: 160_000)
+        #expect(log.take(sessions, at: 180_000, policy: fast).count == 1)
+    }
+
     /// 通知關閉（門檻 Int64.max）：不發、也不排下一次檢查，不會溢位
     @Test func disabledNoticesNeverFire() {
         var sessions = AgentSessions(idleAfter: 300_000)
