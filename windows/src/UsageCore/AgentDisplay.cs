@@ -5,25 +5,33 @@ namespace AIUsageMonitor.Core;
 /// <summary>
 /// Windows 圓環上的 AI 狀態（ADR-0019 第 1 節）：只顯示要你注意的三種——需要你（琥珀色外框）、完成未看、出錯。
 /// 工作中、等你、閒置不顯示。文字只有 AI 與種類（Windows 上不顯示資料夾名稱）。
+/// 這台沒有要注意的時，其他電腦「需要你」也顯示（第 2 節；<see cref="Device"/> 是那台的名稱）。
+/// 其他電腦的完成與出錯不上圓環：這裡看過也消不掉，只能回那台處理。
 /// </summary>
-public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need)
+public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, string? Device = null)
 {
-    public static RingAgent? From(AgentSessions sessions, long now) =>
-        sessions.Top(now) is { } top && top.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error
-            ? new RingAgent(top.Ai, top.State(now, sessions.IdleAfter), top.Stored == AgentState.NeedsYou ? top.Need : null)
+    public static RingAgent? From(AgentSessions sessions, long now, IReadOnlyList<RemoteAgent>? remote = null)
+    {
+        if (sessions.Top(now) is { } top && top.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error)
+        {
+            return new RingAgent(top.Ai, top.State(now, sessions.IdleAfter), top.Stored == AgentState.NeedsYou ? top.Need : null);
+        }
+        return remote?.FirstOrDefault(r => r.State == AgentState.NeedsYou) is { } other
+            ? new RingAgent(other.Ai, AgentState.NeedsYou, null, other.Device)
             : null;
+    }
 
     public string Name => AgentText.Name(Ai);
 
-    /// <summary>展開膠囊、提示與螢幕閱讀器的一句話</summary>
-    public string Title => State switch
+    /// <summary>展開膠囊、提示與螢幕閱讀器的一句話；其他電腦的前面加名稱（「工作 PC：Codex 需要你」）</summary>
+    public string Title => (Device is null ? "" : $"{Device}：") + State switch
     {
         AgentState.NeedsYou => $"{Name} 需要你",
         AgentState.Done => $"{Name} 完成了",
         _ => $"{Name} 出錯了",
     };
 
-    public string Detail => State switch
+    public string Detail => Device is not null ? "在另一台電腦" : State switch
     {
         AgentState.NeedsYou => AgentText.NeedDetail(Need),
         AgentState.Done => "回去看看結果",

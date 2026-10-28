@@ -104,6 +104,41 @@ powershell -ExecutionPolicy Bypass -File windows\set-tier2.ps1 -RelayUrl https:/
 | T-6 | Mac 面板 | 切換到 PC | 只有 PC 的數字；完整統計視窗的「一天中的時段」說明其他電腦沒有時段資料 |
 | T-7 | Mac | `collector.log` | 沒有密鑰、網址或資料內容；失敗時只有狀態碼與錯誤類別 |
 
+## 6. AI 狀態同步（選用）
+
+看得到其他電腦的 AI「需要你、出錯、工作中、完成」（[ADR-0019](adr/0019-windows-agent-state-and-sync.md) 第 2 節）：Mac 瀏海的「AI 工作階段」分頁、
+Windows 圓環（其他電腦需要你時）、iPhone App 首頁的「其他電腦」。只同步每個 AI 的狀態、工作階段數與進入狀態的時間，
+沒有資料夾名稱、工作階段 ID 或任何內容。預設關閉，要先完成上面的第二層。
+
+中繼（只做一次；沿用第二層的 D1）：
+
+```bash
+cd relay
+npx wrangler d1 migrations apply ai-usage-tokens --remote   # 建立 agent_state 表（0002_agent_state.sql）
+```
+
+在部署用的設定檔（`wrangler.toml` 或 `wrangler.local.toml`）加上，再部署（`npm run deploy`）：
+
+```toml
+[vars]
+AGENT_SYNC = "on"
+```
+
+每台電腦（Mac 用 `install-launchd.sh` 或 App 內建收集器；PC 要重新執行一次 `install-task.ps1` 建立 `\AIUsageMonitor\AgentSync` 排程）：
+
+```bash
+collector/scripts/set-tier2.sh --agent-sync        # Mac；關閉：--no-agent-sync
+```
+
+```powershell
+.\windows\set-tier2.ps1 -AgentSync                  # PC；要看其他電腦的狀態還要 -ReadKey；關閉：-NoAgentSync
+```
+
+- `install-launchd.sh` 的收集器要重新執行一次 `install-launchd.sh`，才會裝上 `io.github.kevin930326.ai-usage-monitor.agent-sync`。
+- App 的 AI 狀態改變時觸發同步（最短 1 分鐘一次）；其他電腦 30 分鐘內有更新的才顯示。
+- 中繼沒打開（`AGENT_SYNC` 不是 `on`）時收集器每小時試一次，不影響其他功能。
+- 用量：每台電腦有 AI 在跑時大約每分鐘到每 10 分鐘寫一次（每次 1～3 列），三台一天約數千列，仍遠低於免費方案的上限。
+
 ## 換新或撤銷密鑰
 
 | 情況 | 做法 |

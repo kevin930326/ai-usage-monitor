@@ -5,7 +5,8 @@
 #
 # - Python：build/python-runtime/python（沒有就先執行 scripts/fetch-python-runtime.sh）→ Contents/Resources/python
 # - 收集器：collector/usage_collector → Contents/Resources/python/lib/python3.13/site-packages（不依賴工作目錄）
-# - LaunchAgent：apple/MacMenuBar/LaunchAgent/collector.plist.template → Contents/Library/LaunchAgents/<bundle ID>.collector.plist
+# - LaunchAgent：apple/MacMenuBar/LaunchAgent/collector.plist.template → Contents/Library/LaunchAgents/<bundle ID>.collector.plist，
+#   agent-sync.plist.template → <bundle ID>.agent-sync.plist（AI 狀態同步）
 # - --test-home：安裝測試用。agent 加上 AI_USAGE_MONITOR_HOME＝<資料夾>/app、AUM_LAUNCH_AGENTS_DIR＝<資料夾>/LaunchAgents、
 #   CLAUDE_CONFIG_DIR／CODEX_HOME＝<資料夾>/claude、codex（空的）、AUM_TESTING=1：只寫暫存資料夾，不看這台 Mac 真的舊安裝，
 #   也不查真的帳號、不讀真的對話紀錄（要搭配不同的 bundle ID，見 scripts/build-release.sh --test-home）
@@ -44,14 +45,18 @@ if [ -n "$TEST_HOME" ]; then
 fi
 AGENTS=$APP/Contents/Library/LaunchAgents
 mkdir -p "$AGENTS"
-PLIST=$AGENTS/$LABEL.plist
-python3 - "$ROOT/apple/MacMenuBar/LaunchAgent/collector.plist.template" "$PLIST" "$LABEL" "$EXTRA" <<'PY'
+# 收集器（每 5 分鐘）與 AI 狀態同步（ADR-0019 第 2 節，沒有排程，App 以 launchctl kickstart 觸發）
+SYNC_LABEL=${LABEL%.collector}.agent-sync
+for pair in "collector|$LABEL" "agent-sync|$SYNC_LABEL"; do
+  PLIST=$AGENTS/${pair#*|}.plist
+  python3 - "$ROOT/apple/MacMenuBar/LaunchAgent/${pair%%|*}.plist.template" "$PLIST" "${pair#*|}" "$EXTRA" <<'PY'
 import sys
 template, out, label, extra = sys.argv[1:]
 text = open(template).read().replace("__LABEL__", label).replace("__EXTRA_ENV__", extra.replace("\\n", "\n"))
 open(out, "w").write(text)
 PY
-plutil -lint "$PLIST" >/dev/null
+  plutil -lint "$PLIST" >/dev/null
+done
 
 # 內嵌的 Python 能載入收集器（-I：不受這台電腦的 PYTHON* 環境變數影響）
 "$DEST/bin/python3.13" -I -B -c 'import usage_collector.__main__, usage_collector.setup' \

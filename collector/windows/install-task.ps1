@@ -9,6 +9,8 @@
     claude_config_dir、codex_home 優先）
   - 以 pythonw.exe 執行（不開主控台視窗），-X utf8 讓檔案一律以 UTF-8 讀寫；收集器自己降到 BELOW_NORMAL 優先順序
   - 預設只統計 Token、不收集額度、不上傳任何東西
+  - 另外建立 \AIUsageMonitor\AgentSync（AI 狀態同步，ADR-0019 第 2 節）：沒有觸發條件，Windows App 寫了
+    agent-state.json 後以 schtasks /Run 執行；沒有用 set-tier2.ps1 -AgentSync 打開時什麼都不做
   再執行一次會以新的設定取代舊的排程。移除：uninstall-task.ps1。
 
 .PARAMETER WithQuota
@@ -102,7 +104,16 @@ Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Action $Action -
     -Settings $Settings -Principal $Principal -Description 'AI Usage Monitor：每 5 分鐘統計本機的 Token（ADR-0011）' -Force | Out-Null
 Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
 
-Write-Host "已安裝排程：$TaskPath$TaskName（每 5 分鐘，$Mode）"
+# AI 狀態同步：只讀 agent-state.json、只連 /agents/state，不跑 CLI。沒有觸發條件（App 以 schtasks /Run 執行），
+# 收集器自己最短 60 秒同步一次；一般 5 分鐘一輪也會同步
+$SyncArguments = "-X utf8 -m usage_collector --quiet --agent-sync --log-file `"$Log`""
+$SyncAction = New-ScheduledTaskAction -Execute $Pythonw -Argument $SyncArguments -WorkingDirectory $Collector
+$SyncSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+Register-ScheduledTask -TaskPath $TaskPath -TaskName 'AgentSync' -Action $SyncAction `
+    -Settings $SyncSettings -Principal $Principal -Description 'AI Usage Monitor：同步 AI 狀態（ADR-0019，預設關閉）' -Force | Out-Null
+
+Write-Host "已安裝排程：$TaskPath$TaskName（每 5 分鐘，$Mode）、$($TaskPath)AgentSync（AI 狀態同步，預設不上傳）"
 Write-Host "資料夾：$DataDir"
 Write-Host "日誌：$Log"
 if (-not $WithQuota) { Write-Host '要在 Windows App 看額度：加 -WithQuota 重新執行。' }

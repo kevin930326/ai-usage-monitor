@@ -4,6 +4,8 @@
 #   collector/scripts/set-tier2.sh               存入這台 Mac 的寫入密鑰與中繼的讀取密鑰，開啟上傳
 #   collector/scripts/set-tier2.sh --no-read-key 只存寫入密鑰（只上傳；移除之前存的讀取密鑰，面板不顯示其他電腦）
 #   collector/scripts/set-tier2.sh --disable     關閉上傳與下載（密鑰留在 Keychain；刪除本機的其他電腦資料）
+#   collector/scripts/set-tier2.sh --agent-sync  另外同步 AI 狀態（ADR-0019 第 2 節；第二層要先開啟，中繼要打開 AGENT_SYNC）
+#   collector/scripts/set-tier2.sh --no-agent-sync 關閉 AI 狀態同步（刪除本機的其他電腦狀態）
 #
 # 先用 scripts/relay-device.sh add <名稱> 為這台 Mac 產生寫入密鑰；中繼網址用 set-relay.sh 設定過的 relay_url。
 # 密鑰以不顯示的提示輸入，先檢查格式（去掉前後空白與換行；寫入密鑰要 aumd_ 開頭、48 字元），不對就重新提示；
@@ -15,17 +17,42 @@ case "${1:-}" in
     "") ;;
     --no-read-key) READ_KEY=0 ;;
     --disable) READ_KEY=-1 ;;
-    *) sed -n '4,6p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
+    --agent-sync|--no-agent-sync) READ_KEY=agent ;;
+    *) sed -n '4,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2 ;;
 esac
 
 COLLECTOR=$(cd "$(dirname "$0")/.." && pwd)
 CONFIG_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMonitor}"
 CONFIG="$CONFIG_DIR/config.json"
 
+# AI 狀態同步只改 config.json 的 agent_sync（密鑰沿用第二層的：裝置密鑰上傳、讀取密鑰下載）
+if [ "$READ_KEY" = agent ]; then
+    if [ "$1" = --no-agent-sync ]; then
+        python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" agent_sync false
+        (cd "$COLLECTOR" && python3 -m usage_collector.agent_sync forget)
+        echo "已關閉 AI 狀態同步（其他電腦最多 30 分鐘後不再顯示這台）"
+        exit 0
+    fi
+    ON=$(python3 -c 'import json, sys
+try:
+    print(json.load(open(sys.argv[1], encoding="utf-8")).get("token_sync") is True)
+except (OSError, ValueError):
+    print(False)' "$CONFIG")
+    if [ "$ON" != True ]; then
+        echo "第二層還沒開啟：先執行 collector/scripts/set-tier2.sh，再加 --agent-sync" >&2
+        exit 1
+    fi
+    python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" agent_sync true
+    echo "已開啟 AI 狀態同步：只上傳每個 AI 的狀態與工作階段數（沒有資料夾名稱或任何內容）。中繼要設定 AGENT_SYNC=on（relay/README.md）"
+    exit 0
+fi
+
 if [ "$READ_KEY" = -1 ]; then
     python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" token_sync false
+    python3 "$COLLECTOR/scripts/update-config.py" --json "$CONFIG" agent_sync false
     # 面板回到「這台 Mac」：刪除本機的其他電腦資料（中繼上的資料不動）
     (cd "$COLLECTOR" && python3 -m usage_collector.token_sync forget)
+    (cd "$COLLECTOR" && python3 -m usage_collector.agent_sync forget)
     echo "已關閉第二層：不再上傳與下載（Keychain 的密鑰保留；要移除：security delete-generic-password -s AIUsageMonitor-device-key）"
     exit 0
 fi

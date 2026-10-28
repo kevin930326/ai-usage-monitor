@@ -12,6 +12,14 @@
     history.sqlite3；-NoReadKey 刪除讀取密鑰與下載的資料（回到只上傳）；兩者都不加時不動之前的設定
   - 額度快照（/usage）仍只由 Mac 上傳，PC 不上傳（ADR-0015 第 3 節）；先執行 install-task.ps1 建立排程
   -Disable：關閉上傳與下載（認證管理員裡的密鑰保留；刪除本機的其他電腦資料）。
+  -AgentSync／-NoAgentSync：只開關 AI 狀態同步（ADR-0019 第 2 節），不提示密鑰；第二層要先開啟。
+
+.PARAMETER AgentSync
+  另外同步 AI 狀態：只上傳每個 AI 的狀態與工作階段數（沒有資料夾名稱或任何內容）。中繼要設定 AGENT_SYNC=on；
+  看得到其他電腦的狀態要有讀取密鑰（-ReadKey）。
+
+.PARAMETER NoAgentSync
+  關閉 AI 狀態同步，刪除本機的其他電腦狀態。
 
 .PARAMETER ReadKey
   也存中繼的讀取密鑰（READ_TOKEN，和 iPhone App 用的相同），下載其他電腦的每日加總。
@@ -34,6 +42,8 @@ param(
     [switch]$ReadKey,
     [switch]$NoReadKey,
     [switch]$KeepDeviceKey,
+    [switch]$AgentSync,
+    [switch]$NoAgentSync,
     [switch]$Disable
 )
 $ErrorActionPreference = 'Stop'
@@ -71,10 +81,28 @@ function Invoke-Collector([string[]]$ModuleArgs, [string]$Failure) {
     }
 }
 
+if ($AgentSync -and $NoAgentSync) { throw '-AgentSync 與 -NoAgentSync 只能選一個。' }
+if ($NoAgentSync) {
+    Update-Config @('--json', $Config, 'agent_sync', 'false')
+    Invoke-Collector @('usage_collector.agent_sync', 'forget') '無法刪除本機的其他電腦狀態。'
+    Write-Host '已關閉 AI 狀態同步（其他電腦最多 30 分鐘後不再顯示這台）。'
+    exit 0
+}
+if ($AgentSync) {
+    $on = $false
+    try { $on = (Get-Content $Config -Raw -Encoding UTF8 | ConvertFrom-Json).token_sync -eq $true } catch { }
+    if (-not $on) { throw '第二層還沒開啟：先執行 set-tier2.ps1，再加 -AgentSync。' }
+    Update-Config @('--json', $Config, 'agent_sync', 'true')
+    Write-Host '已開啟 AI 狀態同步：只上傳每個 AI 的狀態與工作階段數。中繼要設定 AGENT_SYNC=on（relay\README.md）；排程 AgentSync 由 install-task.ps1 建立。'
+    exit 0
+}
+
 if ($Disable) {
     Update-Config @('--json', $Config, 'token_sync', 'false')
+    Update-Config @('--json', $Config, 'agent_sync', 'false')
     # 面板回到「這台電腦」：刪除本機的其他電腦資料（中繼上的資料不動）
     Invoke-Collector @('usage_collector.token_sync', 'forget') '無法刪除本機的其他電腦資料。'
+    Invoke-Collector @('usage_collector.agent_sync', 'forget') '無法刪除本機的其他電腦狀態。'
     Write-Host '已關閉第二層：不再上傳與下載（認證管理員的密鑰保留；要移除：cmdkey /delete:AIUsageMonitor/device-key）。'
     exit 0
 }

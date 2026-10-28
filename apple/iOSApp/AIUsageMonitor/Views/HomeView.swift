@@ -57,7 +57,8 @@ struct HomeView: View {
             // 過期、已重置、百分比與剩餘最少的額度都依時間計算；畫面停在前景時沒有其他狀態變化也每分鐘重算
             // （FR-11、FR-26）。TimelineView 在 App 進入背景後不會更新
             TimelineView(.everyMinute) { context in
-                UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode, now: context.date)
+                UsageList(snapshot: snapshot, errorMessage: model.errorMessage, mode: model.displayMode, now: context.date,
+                          remoteAgents: model.remoteAgents.filter { $0.isShown(at: Int64(context.date.timeIntervalSince1970 * 1000)) })
             }
             .refreshable { await model.refresh() }
         } else if let error = model.errorMessage {
@@ -79,6 +80,7 @@ private struct UsageList: View {
     let errorMessage: String?
     let mode: UsageDisplayMode
     let now: Date
+    var remoteAgents: [RemoteAgent] = []
 
     private var stale: Bool { snapshot.isStale(now: now) }
 
@@ -99,6 +101,10 @@ private struct UsageList: View {
                 }
             }
 
+            if !remoteAgents.isEmpty {
+                RemoteAgentsSection(agents: remoteAgents)
+            }
+
             if snapshot.hasNoProviders {
                 Section {
                     NoProvidersNotice()
@@ -116,6 +122,32 @@ private struct UsageList: View {
             Section {
                 UpdatedFooter(updatedAt: snapshot.updatedAt, stale: stale)
             }
+        }
+    }
+}
+
+/// 其他電腦的 AI 狀態（ADR-0019 第 2 節）：需要你、出錯、工作中、完成，依狀態排序。打開或下拉更新時讀，沒有推播
+private struct RemoteAgentsSection: View {
+    let agents: [RemoteAgent]
+
+    var body: some View {
+        Section {
+            ForEach(agents, id: \.id) { agent in
+                HStack {
+                    Label(agent.text, systemImage: agent.state == .needsYou ? "hand.raised.fill" : "desktopcomputer")
+                        .foregroundStyle(agent.state == .needsYou ? UsageColors.notice : .primary)
+                    Spacer()
+                    if agent.sessions > 1 {
+                        Text("\(agent.sessions) 個").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+                .font(.subheadline)
+                .accessibilityElement(children: .combine)
+            }
+        } header: {
+            Text("其他電腦")
+        } footer: {
+            Text("打開 App 或下拉更新時讀取，不會即時通知。")
         }
     }
 }

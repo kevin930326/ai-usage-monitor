@@ -23,3 +23,8 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 # database_name = "ai-usage-tokens"
 # database_id = "<wrangler d1 create 輸出的 id>"
 # migrations_dir = "migrations"
+
+# 跨裝置的 AI 狀態（ADR-0019 第 2 節，選用，需要上面的 D1）。打開時先套用 migration（0002_agent_state.sql），再加：
+# [vars]
+# AGENT_SYNC = "on"
+# 沒有打開時 /agents/state 回 404，收集器 1 小時後再試。

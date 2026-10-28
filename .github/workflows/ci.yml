@@ -111,8 +111,12 @@ jobs:
           $task = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector'
           $task.Actions | Format-List Execute, Arguments, WorkingDirectory
           if ($task.Actions[0].Arguments -notmatch '--tokens-only') { throw 'expected --tokens-only by default' }
+          $sync = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'AgentSync'
+          if ($sync.Actions[0].Arguments -notmatch '--agent-sync') { throw 'AgentSync should run --agent-sync' }
+          if (@($sync.Triggers | Where-Object { $_ }).Count -ne 0) { throw 'AgentSync should have no triggers (the app runs it)' }
           .\windows\uninstall-task.ps1
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
+          if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'AgentSync' -ErrorAction SilentlyContinue) { throw 'AgentSync was not removed' }
       - name: Install with -WithQuota (picks codex.cmd over codex.ps1, writes the config)
         shell: powershell
         run: |
@@ -170,6 +174,15 @@ jobs:
           if (Has 'relay-read') { throw 'read key should be deleted by -NoReadKey' }
           $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
           if ($config.token_sync -ne $true -or $config.relay_url -ne 'https://relay.example.test') { throw "unexpected config: $($config | ConvertTo-Json)" }
+          # AI 狀態同步（ADR-0019）：只開關 config.json 的 agent_sync，-NoAgentSync 刪除本機的其他電腦狀態
+          if ((Run-Tier2 '' '-AgentSync') -ne 0) { throw '-AgentSync failed' }
+          $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($config.agent_sync -ne $true) { throw 'agent_sync should be true after -AgentSync' }
+          Set-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\agent-remote.json') '{}'
+          if ((Run-Tier2 '' '-NoAgentSync') -ne 0) { throw '-NoAgentSync failed' }
+          $config = Get-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($config.agent_sync -ne $false) { throw 'agent_sync should be false after -NoAgentSync' }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\agent-remote.json')) { throw '-NoAgentSync should delete agent-remote.json' }
           # the keys never reach a log or the config file
           foreach ($f in Get-ChildItem -Recurse -File $env:LOCALAPPDATA) {
             $text = [IO.File]::ReadAllText($f.FullName)

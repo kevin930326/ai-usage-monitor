@@ -249,6 +249,8 @@ class InstallLaunchdTest(unittest.TestCase):
         self.assertTrue(config["codex_path"].endswith("/bin/codex"))
         self.assertIn("Claude 用量：啟用", out)
         self.assertIn("Codex 用量：啟用（Codex CLI 已用 ChatGPT 登入）", out)
+        # AI 狀態同步的 LaunchAgent 一起安裝（ADR-0019 第 2 節）
+        self.assertIn("io.github.kevin930326.ai-usage-monitor.agent-sync.plist（AI 狀態同步", out)
 
     def test_paths_are_merged_into_existing_config(self):
         existing = {"relay_url": "https://relay.example", "iphone_udid": "x"}
