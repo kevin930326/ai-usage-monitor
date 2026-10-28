@@ -358,7 +358,9 @@ public struct TokenSummary: Equatable, Sendable {
             var previous: Date?
             for key in Set(totals.keys).union(data.recordDays.keys).sorted() {
                 guard let date = TokenCalendar.date(key, calendar: base), used(date) else { continue }
-                run = previous.map { TokenCalendar.adding(1, to: $0, calendar: calendar) == date } == true ? run + 1 : 1
+                // 比日期鍵、不比絕對時間：午夜切換夏令時間的時區（例如聖地牙哥）那天從 01:00 開始
+                run = previous.map { TokenCalendar.key(TokenCalendar.adding(1, to: $0, calendar: calendar), calendar: calendar) == key } == true
+                    ? run + 1 : 1
                 previous = date
                 let end = streak > 0 && run == streak && key == currentLast ? TokenCalendar.key(today, calendar: calendar) : key
                 if run > (longest?.value ?? 0) { longest = TokenRecord(value: Int64(run), day: end) }

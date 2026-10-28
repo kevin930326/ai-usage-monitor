@@ -7985,6 +7985,81 @@
      }
     ]
    }
+  },
+  {
+   "name": "tokens-streak-midnight-dst",
+   "now": "2026-09-10T15:00:00Z",
+   "time_zone": "America/Santiago",
+   "data": {
+    "days": [
+     {
+      "day": "2026-09-05",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 500,
+       "cache_write": 0,
+       "cache_read": 1000,
+       "output": 50,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-09-06",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 500,
+       "cache_write": 0,
+       "cache_read": 1000,
+       "output": 50,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-09-07",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 500,
+       "cache_write": 0,
+       "cache_read": 1000,
+       "output": 50,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     },
+     {
+      "day": "2026-09-09",
+      "provider": "claude",
+      "model": "opus",
+      "counts": {
+       "input": 500,
+       "cache_write": 0,
+       "cache_read": 1000,
+       "output": 50,
+       "reasoning": 0
+      },
+      "device": "dev-desk"
+     }
+    ],
+    "retention_days": 0,
+    "devices": [
+     {
+      "id": "self-id",
+      "name": "MacBook",
+      "last_upload": "2026-09-10T14:50:00Z",
+      "is_self": true
+     },
+     {
+      "id": "dev-desk",
+      "name": "桌機",
+      "last_upload": "2026-09-10T14:00:00Z"
+     }
+    ]
+   }
   }
  ]
 }
