@@ -250,8 +250,29 @@ public sealed class TokenSummary
             cursor = cursor.AddDays(-1);
         }
         CurrentStreak = streak;
-        var recordStreak = Record("longest_streak_days");
-        LongestStreak = streak > (recordStreak?.Value ?? 0) ? new TokenRecord(streak, LocalCalendar.Key(today)) : recordStreak;
+        // 最長紀錄以 records 為準（收集器從 record_days 算，涵蓋所有日子），目前這段更長時記成今天。
+        // 沒有 records 時（「所有電腦」、其他電腦、舊版收集器）從每日資料找所有連續區段的最大值，
+        // 過去較長、已結束的連續也要算到；同樣長取較早結束的，目前這段的結束日記成今天
+        if (Record("longest_streak_days") is { } recordStreak)
+        {
+            LongestStreak = streak > recordStreak.Value ? new TokenRecord(streak, LocalCalendar.Key(today)) : recordStreak;
+        }
+        else
+        {
+            var currentLast = LocalCalendar.Key(cursor.AddDays(streak));
+            TokenRecord? longest = null;
+            var run = 0;
+            DateOnly? previous = null;
+            foreach (var key in totals.Keys.Union(data.RecordDays.Keys).Order(StringComparer.Ordinal))
+            {
+                if (LocalCalendar.ParseKey(key) is not { } date || !Used(date)) continue;
+                run = previous is { } p && p.AddDays(1) == date ? run + 1 : 1;
+                previous = date;
+                var end = streak > 0 && run == streak && key == currentLast ? LocalCalendar.Key(today) : key;
+                if (run > (longest?.Value ?? 0)) longest = new TokenRecord(run, end);
+            }
+            LongestStreak = longest;
+        }
     }
 
     /// <summary>Swift 的 [a, b].compactMap { $0 }.max { $0.value &lt; $1.value }：同分時取前一個</summary>
