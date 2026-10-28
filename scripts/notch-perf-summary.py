@@ -29,7 +29,10 @@ for name, r, kind in rows:
     cpu = avg(r, 1) if kind == "avg" else peak(r, 1)
     print(f"| {name} | {len(r)} | {cpu:.1f}（{'平均' if kind == 'avg' else '最大'}） | {peak(r, 2) / 1024:.1f} |")
 idle, closed, second = rows[2][1], rows[4][1], rows[5][1]
+# 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 5 筆，缺了就算失敗（Codex C-07）
+missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 5)]
 checks = [
+    ("每個階段都有取樣" + (f"（缺：{'、'.join(missing)}）" if missing else ""), not missing),
     ("展開待著 ≤ 4%", bool(idle) and avg(idle, 1) <= 4),
     ("收合後 1 分鐘 ≤ 0.3%", bool(closed) and avg(closed, 1) <= 0.3),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
