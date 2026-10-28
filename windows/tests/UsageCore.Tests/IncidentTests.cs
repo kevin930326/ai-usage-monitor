@@ -4,7 +4,7 @@ namespace AIUsageMonitor.Core.Tests;
 
 /// <summary>
 /// usage.json 的選填事故（ADR-0018 第 4 節）：讀 fixtures/usage-forecast-incidents.json（Swift、中繼與收集器的測試讀同一份）。
-/// Windows App 有本機歷史，預測自己算，不讀快照裡的 <c>forecast</c>。
+/// Windows App 與 iPhone 一樣用快照裡收集器算好的 <c>forecast</c>（<c>QuotaForecast.Current</c>），不自己算。
 /// </summary>
 public class IncidentTests
 {
