@@ -35,7 +35,10 @@ final class AgentMonitor {
             listener = try AgentSocket.listen(at: url)
             socketURL = url
         } catch {
-            UsageStore.log("agent socket unavailable: \(error)")
+            // 只記 errno 或錯誤類別：Foundation 的錯誤描述會帶出完整路徑（Codex C-01）
+            let kind = (error as? POSIXError).map { "errno \($0.code.rawValue)" }
+                ?? (error as NSError).domain + " \((error as NSError).code)"
+            UsageStore.log("agent socket unavailable: \(kind)")
             return
         }
         _ = fcntl(listener, F_SETFL, fcntl(listener, F_GETFL) | O_NONBLOCK)
