@@ -302,10 +302,7 @@ class AppRunningTests(unittest.TestCase):
                 self.assertFalse(agent_sync.app_running())
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
+@unittest.skipIf(sys.platform == "win32", "set-tier2.sh 是 bash 腳本（Windows 用 set-tier2.ps1，CI 另外檢查）")
 class SetTier2Tests(unittest.TestCase):
     """set-tier2.sh --agent-sync／--no-agent-sync：只改 config.json 的 agent_sync，不提示密鑰；第二層沒開時停止"""
 
@@ -333,3 +330,6 @@ class SetTier2Tests(unittest.TestCase):
             self.assertIs(False, json.loads(config.read_text(encoding="utf-8"))["agent_sync"])
             self.assertFalse((home / "agent-remote.json").exists())
 
+
+if __name__ == "__main__":
+    unittest.main()
