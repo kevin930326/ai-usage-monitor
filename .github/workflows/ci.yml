@@ -113,7 +113,7 @@ jobs:
           if ($task.Actions[0].Arguments -notmatch '--tokens-only') { throw 'expected --tokens-only by default' }
           $sync = Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'AgentSync'
           if ($sync.Actions[0].Arguments -notmatch '--agent-sync') { throw 'AgentSync should run --agent-sync' }
-          if (@($sync.Triggers).Count -ne 0) { throw 'AgentSync should have no triggers (the app runs it)' }
+          if (@($sync.Triggers | Where-Object { $_ }).Count -ne 0) { throw 'AgentSync should have no triggers (the app runs it)' }
           .\windows\uninstall-task.ps1
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'Collector' -ErrorAction SilentlyContinue) { throw 'task was not removed' }
           if (Get-ScheduledTask -TaskPath '\AIUsageMonitor\' -TaskName 'AgentSync' -ErrorAction SilentlyContinue) { throw 'AgentSync was not removed' }
