@@ -228,8 +228,9 @@ enum DebugMascot {
         let top = MascotLevel(days: levelDays(10_000, tokens: 6_000_000, endingAt: 20_390), today: today)
         write(sheet([
             Shot(name: "expanded-level", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(level: level)),
-            Shot(name: "expanded-level-up", setup: { $0.open(at: 0, intro: false); $0.advance(to: 1000); $0.cheer(at: 1000) },
-                 time: 1700, extras: NotchExtras(level: level)),
+            Shot(name: "expanded-level-up", setup: {
+                $0.open(at: 0, intro: false); $0.advance(to: 1000); $0.request(.hop, at: 1000); $0.request(.faceHappy, at: 1000)
+            }, time: 1350, extras: NotchExtras(level: level)),
             Shot(name: "expanded-level-max", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(level: top)),
             // 第一次展開的提示（出現時不顯示等級，位置相同）
             Shot(name: "expanded-hint", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(hint: true, level: level)),

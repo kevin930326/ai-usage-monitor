@@ -2,9 +2,10 @@ import Foundation
 import SQLite3
 import UsageKit
 
-/// 角色等級（ADR-0020）：瀏海展開時從 `history.sqlite3` 的 `level_days` 讀出每天所有電腦合併的主數字，
-/// 以 UsageKit 的 `MascotLevel` 計算。只讀（唯讀開檔、不等鎖），一年約 365 列。
-/// 等級比上次慶祝過的高時角色歡呼一次（每個等級一次）；第一次看到等級只記下，不慶祝。
+/// 角色等級（ADR-0020 第 4 節）：瀏海展開時另開短暫的唯讀連線，從 `history.sqlite3` 的 `level_days` 讀出每天的合併主數字
+/// （這台＋這台下載到的其他電腦），以 UsageKit 的 `MascotLevel` 計算；一年約 365 列。展開期間不重讀；
+/// 讀不到時沿用上次的值，沒有上次的值就不顯示。
+/// 等級比上次慶祝過的高時角色慶祝一次（每個等級一次）；第一次看到等級只記下，不慶祝。
 @MainActor @Observable
 final class MascotLevelStore {
     static let shared = MascotLevelStore()
@@ -36,9 +37,9 @@ final class MascotLevelStore {
         if settings.celebratedLevel == 0 || level.level < settings.celebratedLevel {
             // 第一次：只記下（舊使用者不會一裝就連續慶祝）；清除歷史後等級變低：從新的等級重新算
             settings.celebratedLevel = level.level
-        } else if level.level > settings.celebratedLevel {
+        } else if level.level > settings.celebratedLevel, MascotController.shared.levelUp() {
+            // 真的播了（或動畫設定讓它不播）才記下；收合、靜音時留到下次展開
             settings.celebratedLevel = level.level
-            MascotController.shared.levelUp()
         }
     }
 
@@ -49,6 +50,7 @@ final class MascotLevelStore {
             return nil
         }
         defer { sqlite3_close_v2(db) }
+        sqlite3_busy_timeout(db, 200)  // 收集器正在寫入時稍等（展開時讀，不能讓瀏海卡住）
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT day, tokens FROM level_days", -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
