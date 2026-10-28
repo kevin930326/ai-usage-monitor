@@ -18,6 +18,8 @@ public struct MascotDirector: Sendable {
     public private(set) var contentShownAt: Int?
     public private(set) var contentHiddenAt: Int?
     public private(set) var isIntro = false
+    /// 目前的腳本是快速展開（展開途中換模式時重排用）
+    private var quickOpening = false
     /// 畫面看到的模式（依事件更新；`machine.mode` 是處理到目前時間的結果）
     public private(set) var mode = MascotMode.none
     private var statusFrom = 0.0
@@ -75,6 +77,11 @@ public struct MascotDirector: Sendable {
     private mutating func handle(_ entry: MascotLogEntry) {
         let t = entry.time
         let pose = script.pose(at: t)
+        // 快速展開之後換了別的腳本，就不再是「滑到卡片途中」
+        switch entry.event {
+        case .start, .release, .pose, .bump, .introEnd: quickOpening = false
+        default: break
+        }
         switch entry.event {
         case .open(let intro):
             spring = spring.retarget(1, at: t, stiffness: config.panel.openSpring.stiffness,
@@ -88,9 +95,11 @@ public struct MascotDirector: Sendable {
                 contentShownAt = t + config.intro.contentAt
             } else {
                 use(scripts.quickOpen(start: t, from: pose, mode: mode))
+                quickOpening = true
                 contentShownAt = t + 220
             }
         case .close:
+            quickOpening = false
             // 內容先在 .12 秒內淡出，面板才收回
             let at = t + config.panel.contentFadeOutMs
             spring = spring.retarget(0, at: at, stiffness: config.panel.closeSpring.stiffness,
@@ -112,8 +121,12 @@ public struct MascotDirector: Sendable {
             use(scripts.rest(start: t, from: pose, mode: poseMode))
         case .mode(let newMode):
             mode = newMode
-            // 沒有動畫時姿勢馬上換（有動畫時，同一刻的 start 事件會接著取代）
-            if machine.isOpen || contentShownAt != nil, !isIntro {
+            // 動畫播放中：不打斷，播完時的 pose 事件會接到新模式的姿勢（ADR-0016 第 2 節的動畫鎖）
+            guard machine.isOpen, !isIntro, machine.playing == nil else { break }
+            if quickOpening, script.settledAt > t {
+                // 還在滑到角色卡：從現在的姿勢重新滑過去，終點換成新模式的姿勢（位置與大小照樣到卡片）
+                use(scripts.quickOpen(start: t, from: pose, mode: newMode))
+            } else {
                 use(scripts.rest(start: t, from: pose, mode: newMode))
             }
         case .status(let level):

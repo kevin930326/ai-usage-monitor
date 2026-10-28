@@ -185,4 +185,34 @@ import Testing
         d.setWorking(true, at: 6000)
         #expect(d.isIdleMoving(at: 6100))
     }
+
+    @Test func workDuringQuickOpenStillReachesTheCard() throws {
+        // 快速展開 100 ms 後開始工作：仍然滑到卡片位置，最後是工作姿勢（Codex C-01）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        let before = d.pose(at: 100)
+        d.setWorking(true, at: 100)
+        let after = d.pose(at: 100)
+        for prop in MascotProp.allCases { #expect(abs(before[prop] - after[prop]) < 0.05, "\(prop) 跳動") }
+        d.advance(to: 3000)
+        let end = d.pose(at: 3000)
+        #expect(abs(end[.x] - config.hero.card.x) < 0.01 && abs(end[.r] - config.hero.card.radius) < 0.01)
+        #expect(abs(end[.pitch] - config.poses.work.pitch) < 0.001)
+    }
+
+    @Test func workChangeDoesNotCutAReaction() throws {
+        // 揮手途中開始工作：揮手照樣播完，之後才是工作姿勢
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.request(.wave, at: 2000)
+        let waving = d.pose(at: 2600)
+        d.setWorking(true, at: 2600)
+        #expect(d.pose(at: 2600) == waving)
+        #expect(d.pose(at: 3000)[.wave] != 0 || d.pose(at: 3000)[.hands] > 0)
+        d.advance(to: 6000)
+        #expect(abs(d.pose(at: 6000)[.pitch] - config.poses.work.pitch) < 0.001)
+    }
 }
