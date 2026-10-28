@@ -16,10 +16,14 @@ windows/
 │   ├── UsageCore/               # net10.0 純邏輯（UsageKit 的 C# 移植）：解析 usage.json、剩餘／預期進度／用得太快、
 │   │                            #   文字、圓環內容、位置計算、全螢幕判斷、設定檔；階段 2、3 的計算（QuotaHistory、QuotaInsights、
 │   │                            #   TokenStats、TokenDevices、LocalCalendar）與唯讀開啟 history.sqlite3（HistoryReader，系統內建的
-│   │                            #   SQLite）。畫面還沒有用到階段 2、3。Mac／Linux 上也能測試
+│   │                            #   SQLite）。畫面還沒有用到階段 2、3。AI 狀態（AgentSessions、AgentHookConfig、AgentHookFiles、
+│   │                            #   AgentInbox，ADR-0019）。Mac／Linux 上也能測試
+│   ├── AumHook/                 # aum-hook.exe：Claude Code／Codex 的 hook（不印任何東西、一律結束碼 0、App 沒在跑時立刻結束）
 │   └── AIUsageMonitor.Windows/  # net10.0-windows WPF
 │       ├── App.xaml(.cs)        # 進入點、單一執行個體與命令列（--show-panel／--hide-panel／--quit）
 │       ├── AppHost.cs           # 把下面各部分接起來：每分鐘的計時器、顯示方式、選單、開關面板
+│       ├── AgentMonitor.cs      # 收 aum-hook.exe 的事件（inbox＋具名事件）、AI 狀態、通知
+│       ├── AgentHookInstaller.cs # 設定裡的「連接 Claude Code／Codex」
 │       ├── RingWindow.cs        # 懸浮圓環（不搶焦點、拖動、點一下、滑鼠移上去展開、貼邊收合、動畫）
 │       ├── FloatingRing.cs      # 懸浮圓環某一刻的畫面（玻璃底、展開的膠囊與兩行資訊；截圖也用這個）
 │       ├── RingFace.cs          # 可替換的圓環面（IRingFace，預設 GlassRingFace）與玻璃質感
@@ -81,9 +85,14 @@ windows/
 - **面板**：主圓環卡片（剩餘最少的額度）、額度卡片（5 小時與每週的條、預期進度的標記、用得太快的提示、重置倒數）、上方是更新時間與過期提示。點面板外面或按 Esc 收起。
 - **設定**：顯示方式（圓環＋系統匣／只有圓環／只有系統匣）、圓環顯示的額度（自動＝剩餘最少的）、大小、透明度、全螢幕時隱藏、登入時自動啟動、外觀（跟隨系統／淺色／深色）。
   「顯示動畫」跟隨 Windows 的「設定 › 協助工具 › 視覺效果 › 動畫效果」。
+- **AI 狀態**（[ADR-0019](../docs/adr/0019-windows-agent-state-and-sync.md)）：設定裡「連接」Claude Code 或 Codex 後，AI 需要你時圓環外緣亮琥珀色外框，
+  完成或出錯時右下角有徽章，展開膠囊的第二行寫是哪個 AI、要你做什麼；打開面板就算看過了。需要你超過設定的秒數、長任務完成時以系統匣發通知
+  （沒有按鈕，不能從這裡允許或拒絕）。只傳事件種類與工作階段的雜湊，不傳資料夾名稱與任何內容。
 
 寫入的檔案：`%LOCALAPPDATA%\AIUsageMonitor\windows-app.json`（設定與圓環位置）、`logs\windows-app.log`（錯誤的類型與位置，256 KB 輪替）、
-`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `AIUsageMonitor`（只在開機自動啟動打開時）。
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `AIUsageMonitor`（只在開機自動啟動打開時）、
+`agent\salt` 與 `agent\inbox\`（hook 的事件檔，App 處理完立刻刪除、啟動與結束時清空）；按「連接／修好／移除」時改 Claude Code 的 `settings.json` 或 Codex 的 `hooks.json`
+（同一資料夾留最近 3 份 `.aum-backup-` 備份）。
 
 ## 開發
 
@@ -161,5 +170,8 @@ CI 看不到滑鼠、焦點與多螢幕的行為，在 x64 桌機（Windows 11�
 - [ ] 外觀：跟隨系統、淺色、深色；Windows 切換深色模式時跟著變；「透明效果」關閉時面板與設定視窗是純色（設定視窗開著時切換深淺色，背景與文字一起變）
 - [ ] 動畫：打開面板時圓環與條有短動畫；Windows 關閉動畫效果後直接顯示
 - [ ] 系統匣：按兩下開關面板、右鍵選單；「只有系統匣」時圓環不出現；Explorer 重新啟動後圖示回來
+- [ ] AI 狀態：設定裡連接 Claude Code 與 Codex（Codex 再執行 `/hooks` 信任）；要求權限時圓環亮琥珀色外框、膠囊第二行寫「需要你」，20 秒後有通知（沒有按鈕）；
+  完成後有綠色勾勾徽章，打開面板後消失；App 結束時 AI 照常、`agent\inbox\` 是空的；移除後設定檔回到原樣（備份在旁邊）；
+  App 資料夾移動後狀態變成「需要修好」；`aum-hook.exe` 冷、熱啟動各 100 次的時間寫進報告；把 `aum-hook.exe` 改名後 Claude Code 照常（`onFailure: continue`），Codex 的行為寫進報告
 - [ ] 不連網：防火牆封鎖 `AIUsageMonitor.exe` 對外連線後一切正常
 - [ ] 效能：`measure-perf.ps1`（上面）的閒置 CPU ≤ 0.1%
