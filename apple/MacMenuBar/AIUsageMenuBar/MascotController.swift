@@ -119,6 +119,8 @@ final class MascotController {
     @ObservationIgnored private var probing = false
     /// 目前 director 依哪個動畫程度建立（彈簧是否回彈）
     @ObservationIgnored private var builtMotion = MascotMotionLevel.full
+    /// 目前 director 依哪個版面建立；展開中換螢幕時等收合後再重建（Fable F-03）
+    @ObservationIgnored private var builtLayout: NotchLayout?
     /// 視窗目前該是整張畫布（展開中或收合動畫還沒播完）；建立或移動視窗時照這個決定大小
     @ObservationIgnored private(set) var windowExpanded = false
 
@@ -148,7 +150,8 @@ final class MascotController {
     func setLayout(_ layout: NotchLayout) {
         guard layout != self.layout || director == nil else { return }
         self.layout = layout
-        rebuild()
+        // 展開中（含收合動畫）不重建，不然滑鼠還在面板裡卻縮回瀏海；收合後在 refresh 重建
+        if !windowExpanded { rebuild() }
     }
 
     private func rebuild() {
@@ -159,6 +162,7 @@ final class MascotController {
         // 簡單、關閉（含減少動態效果）：面板展開不回彈
         if motion != .full { config.panel.openSpring.dampingRatio = 1 }
         builtMotion = motion
+        builtLayout = layout
         director = MascotDirector(config: config, startTime: time(), statusLevel: director?.machine.statusLevel ?? 0)
         director?.setStill(!motion.animatesBody, at: time())
         gestures = MascotGestureDetector(config: config)
@@ -391,7 +395,7 @@ final class MascotController {
             windowExpanded = expanded
             NotchPanelController.shared.setExpanded(expanded)
             // 收合動畫播完：動畫程度在展開中改過的話，現在重建
-            if !expanded, motion != builtMotion {
+            if !expanded, motion != builtMotion || layout != builtLayout {
                 rebuild()
                 return
             }
