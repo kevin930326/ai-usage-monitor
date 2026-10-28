@@ -52,7 +52,9 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 - 寫完觸發具名事件 `Local\io.github.kevin930326.AIUsageMonitor.Windows.agent`。App 等這個事件（不輪詢），每分鐘也掃一次作為退路；
   不用 FileSystemWatcher（緩衝溢位會漏事件）。
 - App 每次掃**整個資料夾**、依檔名（時間）排序處理、處理後刪除；讀檔用 `FileShare.ReadWrite | Delete`，刪不掉（防毒軟體鎖檔）留到下一次；
-  格式不合（`AgentHookMessage.Parse` 的嚴格標準寫法）直接刪。App 啟動時先處理再清空，結束時清空。
+  格式不合（`AgentHookMessage.Parse` 的嚴格標準寫法）直接刪。事件以 hook 端的時間套用（夾在現在與 12 小時前之間），
+  退路掃描或當機後留下的事件也照實際發生的時間算，太舊的立刻淘汰。App 啟動時處理留下的（只刪處理過的，啟動中途寫入的不會被刪），結束時清空。
+- 設定檔的備份與換上的檔案在建立時就套上原檔的 DACL，不會繼承資料夾較寬鬆的權限；巢狀的重複鍵也當成「格式不對、不改」。
 
 **狀態機與畫面**：UsageCore 的 `AgentSessions`（已有）。只顯示要你注意的三種（`RingAgent`，取優先順序最高的工作階段）：
 
