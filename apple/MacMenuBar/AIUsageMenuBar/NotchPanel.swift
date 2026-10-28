@@ -239,15 +239,27 @@ final class NotchContainerView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        if ignoresRealPointer { return }
         MascotController.shared.pointerEntered()
     }
 
     override func mouseExited(with event: NSEvent) {
+        if ignoresRealPointer { return }
         MascotController.shared.pointerExited()
     }
 
     override func mouseMoved(with event: NSEvent) {
+        if ignoresRealPointer { return }
         MascotController.shared.pointerMoved(to: canvasPoint(event))
+    }
+
+    /// 量測與截圖時游標固定（`debugPointer`）：真的滑鼠停在瀏海上也不展開，結果才不受游標位置影響
+    private var ignoresRealPointer: Bool {
+        #if DEBUG
+        MascotController.shared.debugPointer != nil
+        #else
+        false
+        #endif
     }
 
     /// 事件位置換成畫布座標（左上為原點，寬 580）
