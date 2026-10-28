@@ -12,6 +12,7 @@ final class MascotLevelStore {
 
     private(set) var level: MascotLevel?
     private var loading = false
+    private var retry: Task<Void, Never>?
 
     /// 瀏海展開時呼叫
     func refresh(now: Date = Date()) {
@@ -32,14 +33,34 @@ final class MascotLevelStore {
 
     func apply(_ level: MascotLevel?) {
         self.level = level
-        guard let level else { return }
+        retry?.cancel()
         let settings = PanelSettings.shared
+        guard let level else { return }
         if settings.celebratedLevel == 0 || level.level < settings.celebratedLevel {
             // 第一次：只記下（舊使用者不會一裝就連續慶祝）；清除歷史後等級變低：從新的等級重新算
             settings.celebratedLevel = level.level
-        } else if level.level > settings.celebratedLevel, MascotController.shared.levelUp() {
-            // 真的播了（或動畫設定讓它不播）才記下；收合、靜音時留到下次展開
-            settings.celebratedLevel = level.level
+        } else if level.level > settings.celebratedLevel {
+            celebrate(level.level)
+        }
+    }
+
+    /// 真的播了（或動畫設定讓它不播）才記下。過場或其他動作中每 0.5 秒再試，最多 8 秒；
+    /// 收合、靜音時不記，下次展開再播
+    private func celebrate(_ target: Int) {
+        if MascotController.shared.levelUp() {
+            PanelSettings.shared.celebratedLevel = target
+            return
+        }
+        retry = Task { @MainActor in
+            for _ in 0..<16 {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled, NotchPanelController.shared.isShown,
+                      MascotController.shared.director?.machine.isOpen == true else { return }
+                if MascotController.shared.levelUp() {
+                    PanelSettings.shared.celebratedLevel = target
+                    return
+                }
+            }
         }
     }
 

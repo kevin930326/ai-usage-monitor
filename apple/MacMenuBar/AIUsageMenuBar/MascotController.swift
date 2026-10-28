@@ -439,12 +439,14 @@ final class MascotController {
     }
 
     /// 升級（ADR-0020 第 4 節）：展開時跳一下再開心（和回合完成的揮手分得出來）。
-    /// 回傳是否處理完：收合、首次提示顯示中、靜音或勿擾時回傳 false，下次展開再播；
+    /// 回傳是否處理完：收合、首次提示顯示中、靜音或勿擾、過場或其他動作中時回傳 false（呼叫端稍後再試或下次展開再播）；
     /// 動畫「簡單」「關閉」（含系統減少動態效果）不播身體的反應（ADR-0016），只更新數字、算處理完
     func levelUp() -> Bool {
-        guard NotchPanelController.shared.isShown, director?.machine.isOpen == true, !showsHint,
+        guard NotchPanelController.shared.isShown, let machine = director?.machine, machine.isOpen, !showsHint,
               !PanelSettings.shared.isMascotQuiet(at: Date()) else { return false }
         guard motion.animatesBody else { return true }
+        // 過場或其他動作中：排隊只留最後一個，「跳一下」會被「開心」蓋掉（Codex C-02）。等可以馬上播時再來
+        guard !machine.isIntro, !machine.isBusy, !machine.isHolding else { return false }
         mutate {
             $0.request(.hop, at: time())
             $0.request(.faceHappy, at: time())
