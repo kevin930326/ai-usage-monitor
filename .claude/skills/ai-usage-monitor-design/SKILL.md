@@ -226,11 +226,13 @@ Windows App（`windows/`，ADR-0015）的懸浮圓環與面板沿用本節的圓
 - 沒有瀏海的螢幕：在選單列中間畫一個假瀏海（中間留 130 給「相機」）。
 - 過場約 4.7 秒，邊緣亮光每次只亮 0.32 秒；設定「每次／只有第一次（預設）／關閉」，「減少動態效果」時不播。
 - 重畫頻率：收合或畫面靜止時 0（不重畫，到下一次眨眼才再畫）、展開待著（眨眼、看滑鼠、工作）30 fps、睡著 10 fps、動畫中 60 fps；收合時清掉粒子。
+- **收合時的動態**（ADR-0021 第 4 節，ADR-0010 的例外）：AI 工作中所有外觀都動（一般配色是簡化的敲鍵盤：小手上下、身體輕晃，不畫鍵盤；特效外觀照特效動），每秒 12 格；睡著時慢慢呼吸（約 4.4 秒一次）加一個飄起的小 z，每秒 4 格，特效外觀的特效停住。做法是預先畫好一輪、交給 Core Animation 循環播放（`MascotEffectLoop`），App 不重畫；表情、服務、外觀、版面、動畫程度改變時重建（`EffectLoopKey`）。動畫「簡單」「關閉」與減少動態效果時收合一律靜態。門檻：收合工作中 ≤ 1%、睡著 ≤ 0.5%、閒置 ≤ 0.3%（`scripts/measure-look-perf.sh`，包含每分鐘的更新）。
+- **外觀**（ADR-0021）：跟著服務色（預設），或 `shared/mascot-looks.json` 裡定案的配色與特效（LED、霓虹、線框、ASCII、像素、漸層）；新增外觀只改這份 JSON 與 `MascotLookRenderer`。選單列的特效外觀先鋪深色圓底，淺色選單列也看得見。
 - 互動只在瀏海面板自己的視窗裡偵測（`NotchHostingView` 的 mouseDown/Up/rightMouseDown、容器的 tracking area），不裝全域滑鼠監聽。手勢門檻照 demo（`gestures`），但換算成 60 Hz 一格（`MascotGestureDetector`），120 Hz 的滑鼠手感相同。單擊從六個短反應（跳一下、揮手、點頭、歪頭、偷笑、東張西望）平均挑一個。
 - **看滑鼠是整個螢幕**（展開與收合）：只讀 `NSEvent.mouseLocation`（每秒約 12 次，游標停住 1 秒後 4 次），視線變化 < 0.02 rad 不更新、轉到位就停止重畫；設定「眼睛跟著游標」可關。
 - **右鍵選單**（`NotchMenu`）：所有動作與表情（點了就照按鈕規則播）、保持展開（滑鼠離開不收，再點一次、上緣的圖釘或 Esc 才收）、靜音 1 小時、勿擾到明天早上 8 點、打開完整面板、設定…、結束；靜音與勿擾擋掉提醒動畫（之後也擋通知）。第一次展開時角色卡下方顯示一次「右鍵點我有更多動作」。
-- 「工作中」與睡覺只列資料夾看 `.jsonl` 的修改時間（`MascotActivityProbe`：45 秒內改過＝工作中；Claude 與 Codex 都超過設定的分鐘數（預設 5）沒改＝睡覺），展開時每 5 秒、收著時每 60 秒一次；介面 `MascotDirectoryLister` 沒有讀檔的方法。睡覺不看滑鼠；收著時迷你角色閉眼低頭、旁邊一個靜止的 z。
+- 「工作中」與睡覺：連接了 hook（ADR-0017）時照 hook 的事件（工作中、需要你、完成、出錯、等你；等你超過設定的分鐘數（預設 5）＝閒置，Claude 與 Codex 都閒置才睡）。沒連接時退回只列資料夾看 `.jsonl` 的修改時間（`MascotActivityProbe`：45 秒內改過＝工作中），展開時每 5 秒、收著時每 60 秒一次；介面 `MascotDirectoryLister` 沒有讀檔的方法。睡覺不看滑鼠、動滑鼠不叫醒；收著時迷你角色閉眼低頭、慢慢呼吸加飄起的小 z（上一條）。
 - 角色動畫：完整／簡單（使用者確認的定義：身體不動、只有眼睛眨與看滑鼠，不要加回「狀態改變時動一下」；不播過場、反應、光環，不偵測手勢，面板展開不回彈）／關閉（完全靜止、展開待著也不重畫）；三種都用表情（眼睛的形狀）顯示額度；「減少動態效果」時完整當成簡單，設定頁會明確寫出「目前以簡單顯示」。
 - 選單列「角色」「角色＋%」：靜止的迷你角色（不動），畫顯示的額度所屬服務的角色（百分比與角色同一個服務），沒有狀態點；眼睛形狀跟著狀態變，不只靠顏色：正常是膠囊、剩不到 20% 縮成小圓點、用完是 ×、過期轉灰並閉上眼睛。
 - 效能：`scripts/measure-notch-perf.sh`（展開待著 ≤ 4%、收合後 1 分鐘 ≤ 0.3%、收合時游標一直移動 ≤ 4%、游標停住或睡著 ≤ 0.3%、重複開關 RSS ≤ +5 MB）。
-- 截圖：`DebugMascot` 以 ImageRenderer 產生 `notch-collapsed`、`notch-intro`、`notch-expressions`、`notch-menubar-light/dark`，列在 `scripts/snapshots.sh` 的基準裡；不截整個螢幕。
+- 截圖：`DebugMascot` 以 ImageRenderer 產生 `notch-collapsed`、`notch-intro`、`notch-expressions`、`notch-menubar-light/dark`、`notch-menu-light/dark`、`notch-agents`、`notch-forecast`、`notch-level`、`notch-looks-collapsed`、`notch-looks-expanded`、`notch-collapsed-motion`（收合循環的分格）與 `fullpanel-light/dark`，列在 `scripts/snapshots.sh` 的基準裡；不截整個螢幕。
