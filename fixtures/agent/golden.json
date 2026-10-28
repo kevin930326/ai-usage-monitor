@@ -249,6 +249,12 @@
         "session=abc-123",
         "folder=secret-project"
       ]
+    },
+    {
+      "name" : "hook-event-number",
+      "result" : [
+        "nil"
+      ]
     }
   ],
   "messages" : [
@@ -428,6 +434,24 @@
     },
     {
       "name" : "missing-sub",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number-15",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number--1",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "event-number-0",
       "result" : [
         "nil"
       ]

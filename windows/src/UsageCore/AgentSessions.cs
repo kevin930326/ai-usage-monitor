@@ -50,7 +50,9 @@ public static class AgentNames
     };
 
     public static AgentHookEvent? Event(string? name) =>
-        name is not null && Enum.TryParse<AgentHookEvent>(name, ignoreCase: false, out var e) && e.ToString() == name ? e : null;
+        // TryParse 也接受數字字串（例如 "15"，未定義的值 ToString() 也是 "15"）：要求是定義過的名稱（Codex C-05）
+        name is not null && Enum.TryParse<AgentHookEvent>(name, ignoreCase: false, out var e) && Enum.IsDefined(e)
+            && e.ToString() == name ? e : null;
 
     /// <summary>安裝時要掛上的事件（各 AI 的官方文件有的才掛；2026-10-28 查閱）</summary>
     public static IReadOnlyList<AgentHookEvent> Installed(AgentKind ai) => ai switch

@@ -123,6 +123,10 @@
   {
    "name": "agent-id-empty",
    "raw": "{\"session_id\": \"abc-123\", \"transcript_path\": \"/Users/me/.claude/projects/x/abc-123.jsonl\", \"cwd\": \"/Users/me/work/secret-project\", \"hook_event_name\": \"PostToolUse\", \"agent_id\": \"\", \"agent_type\": \"Explore\", \"tool_name\": \"Grep\", \"tool_input\": {\"pattern\": \"secret answer\"}, \"tool_response\": {\"content\": \"step 1\"}}"
+  },
+  {
+   "name": "hook-event-number",
+   "raw": "{\"session_id\": \"abc-123\", \"cwd\": \"/Users/me/work/p\", \"hook_event_name\": \"15\"}"
   }
  ],
  "messages": [
@@ -245,6 +249,18 @@
   {
    "name": "missing-sub",
    "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number-15",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"15\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number--1",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"-1\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
+  },
+  {
+   "name": "event-number-0",
+   "raw": "{\"v\":1,\"ai\":\"claude\",\"ev\":\"0\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"proj\"}"
   }
  ],
  "sessions": [
