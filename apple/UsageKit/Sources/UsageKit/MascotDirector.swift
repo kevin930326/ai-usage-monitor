@@ -18,12 +18,16 @@ public struct MascotDirector: Sendable {
     public private(set) var contentShownAt: Int?
     public private(set) var contentHiddenAt: Int?
     public private(set) var isIntro = false
-    /// 角色身體靜止（動畫程度「簡單」「關閉」）：不播反應、提醒、工作與睡覺的動作，只換狀態點的顏色
+    /// 角色身體靜止（動畫程度「簡單」「關閉」）：不播反應、提醒、工作與睡覺的動作，只換表情（額度）
     public private(set) var isStill = false
     /// 目前的腳本是快速展開（展開途中換模式時重排用）
     private var quickOpening = false
     /// 畫面看到的模式（依事件更新；`machine.mode` 是處理到目前時間的結果）
     public private(set) var mode = MascotMode.none
+    /// 平常的表情（額度、之後的 AI 狀態）；立即生效
+    public private(set) var mood = MascotMood.normal
+    /// 右鍵選單「表情」要顯示的（`face` 動畫播放中用它）
+    public private(set) var faceMood = MascotMood.happy
     private var statusFrom = 0.0
     private var statusTo = 0.0
     private var statusStart = 0
@@ -54,16 +58,40 @@ public struct MascotDirector: Sendable {
     public mutating func press(at time: Int) { apply { $0.press(at: time) } }
     public mutating func release(at time: Int) { apply { $0.release(at: time) } }
     public mutating func setWorking(_ working: Bool, at time: Int) { apply { $0.setWorking(working, at: time) } }
-    public mutating func setStatus(_ level: Int, at time: Int) { apply { $0.setStatus(level, at: time) } }
+    public mutating func setStatus(_ level: Int, at time: Int, react: Bool = true) {
+        apply { $0.setStatus(level, at: time, react: react) }
+    }
 
-    /// 滑鼠在面板裡移動：叫醒、並讓臉朝滑鼠轉（`dx`、`dy` 是滑鼠相對角色中心的距離，px）
-    public mutating func move(at time: Int, dx: Double, dy: Double) {
-        apply { $0.move(at: time) }
+    /// 滑鼠在面板裡移動（只推進時間；不叫醒，睡覺由 AI 的狀態決定）
+    public mutating func move(at time: Int) { apply { $0.move(at: time) } }
+    public mutating func setAgentIdle(_ idle: Bool, at time: Int) { apply { $0.setAgentIdle(idle, at: time) } }
+
+    /// 臉朝游標轉（`dx`、`dy` 是游標相對角色中心的距離，px；整個螢幕都看，展開與收合都一樣）。
+    /// 目標和現在差不到 `threshold`（弧度）時不更新，回傳 false，畫面不必重畫
+    @discardableResult
+    public mutating func look(at time: Int, dx: Double, dy: Double, threshold: Double = 0) -> Bool {
         let f = config.hero.follow
-        let current = gaze(at: time)
-        gazeFrom = current
-        gazeTarget = (min(max(dx / f.yawSpanPx, -1), 1) * f.yawMax, min(max(-dy / f.pitchSpanPx, -1), 1) * f.pitchMax)
+        let target = (min(max(dx / f.yawSpanPx, -1), 1) * f.yawMax, min(max(-dy / f.pitchSpanPx, -1), 1) * f.pitchMax)
+        guard abs(target.0 - gazeTarget.yaw) > threshold || abs(target.1 - gazeTarget.pitch) > threshold else { return false }
+        gazeFrom = gaze(at: time)
+        gazeTarget = target
         gazeStart = time
+        return true
+    }
+
+    /// 平常的表情（額度、AI 狀態）：立即換，不排隊
+    public mutating func setMood(_ mood: MascotMood) { self.mood = mood }
+
+    /// 右鍵選單的「表情」：記下要顯示哪個，再照按鈕的規則排隊播 `face`
+    public mutating func requestFace(_ mood: MascotMood, at time: Int) {
+        faceMood = mood
+        request(.face, at: time)
+    }
+
+    /// 這一刻的表情：播「表情」時是選的那個，其他時候是平常的表情
+    public func mood(at time: Int) -> MascotMood {
+        if let playing = machine.playing, playing.animation == .face, time >= playing.start { return faceMood }
+        return mood
     }
 
     /// 下一個需要叫 `advance` 的時間（動畫結束、排隊開始、按住成立、過場結束、睡著）；沒有為 nil
@@ -86,12 +114,9 @@ public struct MascotDirector: Sendable {
         }
         if isStill {
             switch entry.event {
-            case .start, .release, .pose, .bump, .introEnd, .mode(.sleep):
+            case .start, .release, .pose, .bump, .introEnd, .mode:
                 // 靜止時不換腳本；模式照記，姿勢維持平常的樣子
                 if case .mode(let newMode) = entry.event { mode = newMode }
-                return
-            case .mode(let newMode):
-                mode = newMode
                 return
             default: break
             }
@@ -123,10 +148,10 @@ public struct MascotDirector: Sendable {
             effects = []
             contentShownAt = nil
             contentHiddenAt = t
-            use(scripts.close(start: t, from: pose))
+            use(scripts.close(start: t, from: pose, mode: isStill ? .none : mode))
         case .introEnd:
             isIntro = false
-            if mode == .work { use(scripts.rest(start: t, from: pose, mode: .work)) }
+            if mode != .none { use(scripts.rest(start: t, from: pose, mode: mode)) }
         case .start(let animation):
             use(scripts.animation(animation, start: t, from: pose, level: machine.statusLevel))
         case .release:
@@ -135,8 +160,13 @@ public struct MascotDirector: Sendable {
             use(scripts.rest(start: t, from: pose, mode: poseMode))
         case .mode(let newMode):
             mode = newMode
+            // 收著：迷你角色換姿勢（睡著閉眼、醒來睜眼）一次，之後靜止
+            if !machine.isOpen {
+                use(scripts.collapsedRest(start: t, from: pose, mode: newMode))
+                break
+            }
             // 動畫播放中：不打斷，播完時的 pose 事件會接到新模式的姿勢（ADR-0016 第 2 節的動畫鎖）
-            guard machine.isOpen, !isIntro, machine.playing == nil else { break }
+            guard !isIntro, machine.playing == nil else { break }
             if quickOpening, script.settledAt > t {
                 // 還在滑到角色卡：從現在的姿勢重新滑過去，終點換成新模式的姿勢（位置與大小照樣到卡片）
                 use(scripts.quickOpen(start: t, from: pose, mode: newMode))
@@ -158,6 +188,8 @@ public struct MascotDirector: Sendable {
     /// 改成靜止或恢復（動畫程度改變時）：改成靜止時，正在播的反應與特效立刻停，回到平常的姿勢
     /// 畫睡覺的 z：展開著睡著、而且身體會動（「簡單」「關閉」時狀態機照樣睡，但畫面不顯示）
     public var showsSleep: Bool { !isStill && mode == .sleep && machine.isOpen }
+    /// 收著時睡著：迷你角色旁邊一個靜止的小 z（不重畫）
+    public var showsDoze: Bool { !isStill && mode == .sleep && !machine.isOpen }
 
     public mutating func setStill(_ still: Bool, at time: Int) {
         guard still != isStill else { return }
@@ -189,7 +221,7 @@ public struct MascotDirector: Sendable {
     public func pose(at time: Int) -> MascotPose { script.pose(at: time) }
     public func eyes(at time: Int) -> MascotEyes { script.eyes(at: time) }
 
-    /// 狀態點顏色（0 正常 → 1 偏高 → 2 用完），換色 .4 秒
+    /// 額度等級（0 正常 → 1 偏高 → 2 用完；提醒光環的顏色），換色 .4 秒
     public func statusColor(at time: Int) -> Double {
         statusFrom + (statusTo - statusFrom) * MascotEase.inOut(Double(time - statusStart) / 400)
     }
@@ -202,10 +234,12 @@ public struct MascotDirector: Sendable {
         return (gazeTarget.yaw + (gazeFrom.yaw - gazeTarget.yaw) * k, gazeTarget.pitch + (gazeFrom.pitch - gazeTarget.pitch) * k)
     }
 
-    /// 眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊）
+    /// 眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊；
+    /// 表情換掉膠囊眼（小圓點、×）或閉著眼時不眨）
     public func blink(at time: Int) -> Double {
+        let face = mood(at: time)
         guard machine.isOpen, !isIntro, isStill || (machine.playing == nil && mode != .sleep), eyes(at: time) == .pill,
-              pose(at: time)[.dash] < 0.1 else { return 0 }
+              face.eyes == nil, face.lid < 1, pose(at: time)[.dash] < 0.1 else { return 0 }
         let b = config.hero.blink
         let period = (b.minGapMs + b.maxGapMs) / 2
         let bucket = Int((Double(time) / Double(period)).rounded(.down))
@@ -235,12 +269,19 @@ public struct MascotDirector: Sendable {
         return (bucket - 1...bucket + 2).map(blinkStart).filter { $0 > time }.min() ?? time + period
     }
 
-    /// 展開待著時這一刻畫面會不會變：眨眼中、視線還在追滑鼠、睡覺（呼吸）或工作中（敲鍵盤）。
-    /// 都沒有時畫面靜止，可以停止重畫到下一次眨眼（ADR-0016 第 6 節）。
+    /// 待著時這一刻畫面會不會變：展開時眨眼中、睡覺（呼吸）或工作中（敲鍵盤）；展開或收著時視線還在追游標
+    /// （臉沒有朝游標轉時不算，例如睡著）。都沒有時畫面靜止，可以停止重畫（ADR-0016 第 6 節）。
     public func isIdleMoving(at time: Int) -> Bool {
-        guard machine.isOpen else { return false }
-        if !isStill, mode == .sleep || mode == .work { return true }
-        if blink(at: time) > 0 { return true }
+        if machine.isOpen {
+            if !isStill, mode == .sleep || mode == .work { return true }
+            if blink(at: time) > 0 { return true }
+        }
+        return isGazeMoving(at: time)
+    }
+
+    /// 視線還在往目標轉（而且臉會跟著轉）
+    public func isGazeMoving(at time: Int) -> Bool {
+        guard pose(at: time)[.follow] > 0.01 else { return false }
         let now = gaze(at: time)
         return abs(now.yaw - gazeTarget.yaw) > 0.002 || abs(now.pitch - gazeTarget.pitch) > 0.002
     }

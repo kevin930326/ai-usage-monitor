@@ -76,7 +76,7 @@ public struct MascotScripts: Sendable {
         return s
     }
 
-    /// 從任何姿勢（含過場途中）接到卡片上目前模式的姿勢：同快速展開，但服務色、狀態點、大小也是漸變，不跳格
+    /// 從任何姿勢（含過場途中）接到卡片上目前模式的姿勢：同快速展開，但服務色、額度等級、大小也是漸變，不跳格
     /// （動畫程度改成靜止、或從靜止恢復時）
     public func settle(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
         var s = MascotScript(start: start, base: base)
@@ -88,17 +88,34 @@ public struct MascotScripts: Sendable {
         return s
     }
 
-    /// 收合：角色縮回瀏海左邊的迷你位置（同一顆球連續移動）
-    public func close(start: Int, from base: MascotPose) -> MascotScript {
+    /// 收合時的姿勢依模式：睡覺時迷你角色也閉眼低頭（靜止，不呼吸、沒有 z）；其他模式是平常的迷你角色
+    public func collapsedPose(mode: MascotMode) -> MascotPose {
+        guard mode == .sleep else { return collapsedPose }
+        // 迷你角色很小：頭只低一半，閉著的眼睛才不會落到最下緣、看起來像嘴巴
+        return collapsedPose.with([.pitch: config.poses.sleep.pitch * 0.45, .dash: 1, .follow: 0])
+    }
+
+    /// 收著時換模式（睡著或醒來）：迷你角色換姿勢一次（.4 秒），之後靜止
+    public func collapsedRest(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
         var s = MascotScript(start: start, base: base)
-        let mini = collapsedPose
+        let target = collapsedPose(mode: mode)
+        s.to([.pitch: target[.pitch], .dash: target[.dash], .yaw: 0, .roll: 0], 400, .inOut)
+        s.to([.follow: target[.follow]], 300)
+        s.finalize()
+        return s
+    }
+
+    /// 收合：角色縮回瀏海左邊的迷你位置（同一顆球連續移動）；睡覺中的收成閉眼的迷你角色
+    public func close(start: Int, from base: MascotPose, mode: MascotMode = .none) -> MascotScript {
+        var s = MascotScript(start: start, base: base)
+        let mini = collapsedPose(mode: mode)
         var target: [MascotProp: Double] = [:]
         for prop in [MascotProp.x, .y, .r, .sc, .hands, .wave, .sway, .glow, .tint, .dot, .dash, .pitch, .yaw, .roll,
                      .sx, .sy, .jump, .orbit, .shiver, .blush, .type, .kb, .breathe] {
             target[prop] = mini[prop]
         }
         s.to(target, config.panel.closeGlideMs, .inOut)
-        s.to([.follow: 1], 200)
+        s.to([.follow: mini[.follow]], 200)
         s.finalize()
         return s
     }

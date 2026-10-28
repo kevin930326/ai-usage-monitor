@@ -35,8 +35,8 @@ public struct MascotFileSystemLister: MascotDirectoryLister {
     }
 }
 
-/// Claude 或 Codex 是否正在跑（ADR-0016 第 7 節）：紀錄檔（`.jsonl`）最近被改過就算工作中。
-/// 只在瀏海面板展開時每 5 秒看一次，收合即停；不常駐監看檔案系統。
+/// Claude 或 Codex 是否正在跑（ADR-0016 第 5 節）：紀錄檔（`.jsonl`）最近被改過就算工作中，很久沒改就睡覺。
+/// 展開時每 5 秒、收著時每 60 秒看一次（收著只為了睡覺）；不常駐監看檔案系統。接上 hook（ADR-0017）後改用 hook 的狀態。
 public struct MascotActivityProbe: Sendable {
     /// 一個紀錄資料夾與往下看幾層
     public struct Root: Sendable, Equatable {
@@ -99,7 +99,12 @@ public struct MascotActivityProbe: Sendable {
 
     /// 最近 `activeWindow` 秒內有沒有紀錄檔被改過
     public func isWorking(now: Date) -> Bool {
-        let since = now.addingTimeInterval(-Self.activeWindow)
+        isActive(within: Self.activeWindow, now: now)
+    }
+
+    /// 最近 `seconds` 秒內有沒有紀錄檔被改過（睡覺：Claude 與 Codex 都超過設定的分鐘數沒動就睡）
+    public func isActive(within seconds: TimeInterval, now: Date) -> Bool {
+        let since = now.addingTimeInterval(-seconds)
         // 每個服務各有一份預算：Claude 的專案再多，也不會讓 Codex 沒得看（Codex 第二輪 C-03）
         let share = Self.maxListings / max(roots.count, 1)
         return roots.contains { root in

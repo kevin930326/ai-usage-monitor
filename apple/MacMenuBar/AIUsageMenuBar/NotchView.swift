@@ -17,7 +17,7 @@ struct NotchView: View {
         if let director = controller.director {
             if let fixedTime {
                 NotchCanvas(director: director, time: fixedTime, layout: controller.layout, snapshot: store.snapshot,
-                            now: store.now, character: settings.mascotCharacter)
+                            now: store.now, character: settings.mascotCharacter, extras: extras)
             } else {
                 // 面板形狀與額度卡只在動畫中（展開、收合、提醒）逐格重畫；展開待著與睡著時只有角色的 Canvas
                 // 自己的 TimelineView 在跑，不必每格重建文字與卡片
@@ -27,13 +27,29 @@ struct NotchView: View {
                                 time: rate == .animating ? controller.time(context.date) : controller.stoppedAt,
                                 layout: controller.layout,
                                 snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter,
+                                extras: extras,
                                 motion: controller.motion,
-                                heroRate: rate == .idle || rate == .breathing ? rate : nil,
+                                heroRate: rate == .idle || rate == .breathing || rate == .gaze ? rate : nil,
                                 heroClock: { controller.time($0) })
                 }
             }
         }
     }
+}
+
+extension NotchView {
+    private var extras: NotchExtras {
+        NotchExtras(pinned: controller.pinned,
+                    quietUntil: settings.mascotQuietUntil.flatMap { $0 > store.now ? $0 : nil },
+                    hint: controller.showsHint)
+    }
+}
+
+/// 上緣與角色卡的小標示：保持展開（圖釘，點了取消）、靜音或勿擾到幾點、第一次展開的提示
+struct NotchExtras: Equatable {
+    var pinned = false
+    var quietUntil: Date?
+    var hint = false
 }
 
 /// 瀏海的形狀：上緣貼齊螢幕頂端、下方兩角圓角
@@ -65,6 +81,7 @@ struct NotchCanvas: View {
     let snapshot: UsageSnapshot?
     let now: Date
     let character: MascotCharacter
+    var extras = NotchExtras()
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
     /// 動畫程度：簡單時不畫粒子；關閉時也不眨眼、不看滑鼠
@@ -78,7 +95,7 @@ struct NotchCanvas: View {
         let content = director.content(at: time)
         ZStack(alignment: .topLeading) {
             NotchShape(width: shape.width, height: shape.height, corner: shape.corner).fill(.black)
-            NotchContent(snapshot: snapshot, now: now)
+            NotchContent(snapshot: snapshot, now: now, extras: extras)
                 .opacity(content.opacity)
                 .offset(y: content.offset)
             miniRing
@@ -94,7 +111,7 @@ struct NotchCanvas: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// VoiceOver：角色、在做什麼、額度狀態（畫面上只靠姿勢與狀態點顏色，Fable F-07）
+    /// VoiceOver：角色、在做什麼、額度狀態（畫面上只靠姿勢與表情，Fable F-07）
     private var heroDescription: String {
         let mode = director.isStill ? .none : director.mode
         let activity = switch mode {
@@ -102,10 +119,11 @@ struct NotchCanvas: View {
         case .sleep: "睡著了"
         case .none: "待命"
         }
-        let status = switch director.machine.statusLevel {
-        case 0: "額度正常"
-        case 1: "額度剩不到 20%"
-        default: "額度用完或出錯"
+        let status = switch director.mood {
+        case .stale: "額度資料過期或讀取失敗"
+        case .out: "額度用完"
+        case .worried: "額度剩不到 20%"
+        default: "額度正常"
         }
         return "\(character.title) 角色，\(activity)，\(status)"
     }
@@ -133,7 +151,8 @@ struct NotchCanvas: View {
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
-                           sleeping: director.showsSleep, effects: director.effects,
+                           mood: director.mood(at: time),
+                           sleeping: director.showsSleep, dozing: director.showsDoze, effects: director.effects,
                            ripple: director.ripple, character: character)
     }
 
@@ -176,7 +195,13 @@ enum NotchQuota {
         return usage.visibleWindows.min { $0.effectiveRemainingPct(at: now) < $1.effectiveRemainingPct(at: now) }
     }
 
-    /// 狀態點的等級：出錯或用完 2、剩不到 20% 1、其他 0（同通知「剩不到 20%」的門檻）
+    /// 讀取失敗或資料過期（表情閉眼；額度不明）
+    static func isUnavailable(in snapshot: UsageSnapshot?, provider: String, now: Date) -> Bool {
+        guard let snapshot else { return false }
+        return snapshot.providers[provider]?.error != nil || snapshot.isStale(now: now)
+    }
+
+    /// 額度的等級：出錯或用完 2、剩不到 20% 1、其他 0（同通知「剩不到 20%」的門檻）
     static func statusLevel(in snapshot: UsageSnapshot?, provider: String, now: Date) -> Int {
         guard let snapshot, let usage = snapshot.providers[provider] else { return 0 }
         if usage.error != nil { return 2 }
@@ -191,6 +216,7 @@ enum NotchQuota {
 struct NotchContent: View {
     let snapshot: UsageSnapshot?
     let now: Date
+    var extras = NotchExtras()
 
     private static let card = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x16 / 255)
     private static let secondary = Color(red: 0x9a / 255, green: 0x9a / 255, blue: 0xa8 / 255)
@@ -204,6 +230,19 @@ struct NotchContent: View {
             }
             .frame(height: 20)
             .position(x: 20 + 42, y: 17)
+            marks
+                .frame(height: 20)
+                .position(x: 112 + 30, y: 17)
+            if extras.hint {
+                Text("右鍵點我有更多動作")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255)))
+                    .fixedSize()
+                    .position(x: 16 + 70, y: 152)
+            }
             updated
                 .frame(height: 20)
                 .position(x: NotchLayout.canvasWidth - 20 - 50, y: 17)
@@ -217,6 +256,33 @@ struct NotchContent: View {
             .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
         }
         .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight, alignment: .topLeading)
+    }
+
+    /// 保持展開的圖釘（點了取消並在滑鼠不在面板上時收合）、靜音／勿擾到幾點
+    private var marks: some View {
+        HStack(spacing: 6) {
+            if extras.pinned {
+                Button { MascotController.shared.setPinned(false) } label: {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 10, weight: .medium))
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(Color(red: 0xe8 / 255, green: 0xe8 / 255, blue: 0xf0 / 255))
+                }
+                .buttonStyle(.plain)
+                .help("保持展開中：點一下或按 Esc 收起")
+                .accessibilityLabel("保持展開中，點一下取消")
+            }
+            if let until = extras.quietUntil {
+                HStack(spacing: 3) {
+                    Image(systemName: "bell.slash.fill").font(.system(size: 9))
+                    Text(until.formatted(date: .omitted, time: .shortened)).font(.system(size: 10).monospacedDigit())
+                }
+                .foregroundStyle(Color(red: 0x8d / 255, green: 0x8d / 255, blue: 0x9a / 255))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("靜音到\(until.formatted(date: .omitted, time: .shortened))")
+            }
+        }
+        .frame(width: 60, alignment: .leading)
     }
 
     private var updated: some View {

@@ -24,9 +24,13 @@ struct MascotFrame {
     /// 看滑鼠的偏航、俯仰（已平滑）
     var gazeYaw: Double
     var gazePitch: Double
-    /// 狀態點顏色（0 正常 → 1 偏高 → 2 用完，可以是中間值）
+    /// 提醒光環的顏色（0 正常 → 1 偏高 → 2 用完，可以是中間值）；額度本身改用表情表示，沒有狀態點
     var statusColor: Double
+    /// 平常的表情（眼睛是膠囊、沒在閉眼時換成表情的眼睛與眉毛）
+    var mood: MascotMood = .normal
     var sleeping: Bool
+    /// 收著時睡著：靜止的小 z
+    var dozing = false
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
@@ -237,7 +241,31 @@ struct MascotPainter {
             }
         }
         let ink = Color(red: 0x12 / 255, green: 0x12 / 255, blue: 0x12 / 255)
-        let dash = max(h[.dash], frame.blink)
+        // 表情：動畫沒有指定眼睛（膠囊）、也沒在睡覺或閉眼時，眼睛與眉毛照平常的表情（額度：擔心的小圓點、用完的 ×、過期閉眼）
+        let showsMood = frame.eyes == .pill && h[.dash] < 0.5
+        let eyes = showsMood ? (frame.mood.eyes ?? .pill) : frame.eyes
+        let dash = max(h[.dash], frame.blink, showsMood ? frame.mood.lid : 0)
+        if showsMood, frame.mood.brow != .none {
+            let b = hero.brow
+            let tilt = switch frame.mood.brow {
+            case .worried: b.worriedTilt
+            case .sad: b.sadTilt
+            default: 0.0
+            }
+            let lift = frame.mood.brow == .raised ? 0.1 : 0
+            for s in [-1.0, 1.0] {
+                guard let p = project(yaw + s * b.yaw, pitch + hero.eye.pitch + b.pitch + lift) else { continue }
+                var g = context
+                g.opacity = p.a
+                g.translateBy(x: p.x, y: p.y)
+                g.rotate(by: .radians(roll + s * tilt))
+                let w = R * b.width * p.fx
+                var path = Path()
+                path.move(to: CGPoint(x: -w / 2, y: 0))
+                path.addLine(to: CGPoint(x: w / 2, y: 0))
+                g.stroke(path, with: .color(ink), style: StrokeStyle(lineWidth: R * b.thickness, lineCap: .round))
+            }
+        }
         for s in [-1.0, 1.0] {
             guard let p = project(yaw + s * hero.eye.yaw, pitch + hero.eye.pitch) else { continue }
             var g = context
@@ -245,7 +273,7 @@ struct MascotPainter {
             g.translateBy(x: p.x, y: p.y)
             g.rotate(by: .radians(roll))
             let round = StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round)
-            switch frame.eyes {
+            switch eyes {
             case .pill:
                 let w = R * hero.eye.width * p.fx * (1 + 0.55 * dash)
                 let hh = (R * hero.eye.height * h[.open] * (1 - dash) + R * 0.13 * dash) * p.fy
@@ -261,7 +289,9 @@ struct MascotPainter {
                 var style = round; style.lineWidth = R * 0.12
                 g.stroke(path, with: .color(ink), style: style)
             case .dot:
-                g.fill(Path(ellipseIn: CGRect(x: -R * 0.1 * p.fx, y: -R * 0.1 * p.fy, width: R * 0.2 * p.fx, height: R * 0.2 * p.fy)),
+                // 表情（擔心、驚訝）的小圓點比嚇到時大一點，迷你角色上也看得到
+                let k = showsMood ? 0.13 : 0.1
+                g.fill(Path(ellipseIn: CGRect(x: -R * k * p.fx, y: -R * k * p.fy, width: 2 * R * k * p.fx, height: 2 * R * k * p.fy)),
                        with: .color(ink))
             case .xx:
                 let w = R * 0.12 * p.fx
@@ -270,6 +300,15 @@ struct MascotPainter {
                 path.addLine(to: CGPoint(x: s * w, y: 0))
                 path.addLine(to: CGPoint(x: -s * w, y: R * 0.13))
                 var style = round; style.lineWidth = R * 0.1
+                g.stroke(path, with: .color(ink), style: style)
+            case .cross:
+                let w = R * 0.11 * p.fx, hh = R * 0.11 * p.fy
+                var path = Path()
+                path.move(to: CGPoint(x: -w, y: -hh))
+                path.addLine(to: CGPoint(x: w, y: hh))
+                path.move(to: CGPoint(x: -w, y: hh))
+                path.addLine(to: CGPoint(x: w, y: -hh))
+                var style = round; style.lineWidth = R * 0.085
                 g.stroke(path, with: .color(ink), style: style)
             case .spiral:
                 g.rotate(by: .radians(now / 110 * s))
@@ -304,16 +343,15 @@ struct MascotPainter {
 
         for p in hands where p.z >= 0 { drawHand(p, in: &context) }
 
-        // 狀態點
-        if h[.dot] > 0.01 {
-            let d = hero.statusDot
-            let dx = x + d.x * R * sx, dy = y + d.y * R * sy, dr = R * d.radius * (0.6 + 0.4 * h[.dot])
-            var g = context
-            g.opacity = h[.dot]
-            let outer = dr + R * d.border
-            g.fill(Path(ellipseIn: CGRect(x: dx - outer, y: dy - outer, width: 2 * outer, height: 2 * outer)), with: .color(.black))
-            g.fill(Path(ellipseIn: CGRect(x: dx - dr, y: dy - dr, width: 2 * dr, height: 2 * dr)),
-                   with: .color(color(statusColor(frame.statusColor))))
+        // 生病：頭的右上方冒一滴冷汗（形狀，不只靠顏色）
+        if showsMood, frame.mood.sweat, R > 4 {
+            let cx = x + R * 0.8 * sx, cy = y - R * 0.42 * sy, s = R * 0.13
+            var drop = Path()
+            drop.move(to: CGPoint(x: cx, y: cy - s * 1.6))
+            drop.addQuadCurve(to: CGPoint(x: cx + s, y: cy + s * 0.2), control: CGPoint(x: cx + s * 0.9, y: cy - s * 0.6))
+            drop.addArc(center: CGPoint(x: cx, y: cy + s * 0.2), radius: s, startAngle: .zero, endAngle: .degrees(180), clockwise: false)
+            drop.addQuadCurve(to: CGPoint(x: cx, y: cy - s * 1.6), control: CGPoint(x: cx - s * 0.9, y: cy - s * 0.6))
+            context.fill(drop, with: .color(Color(red: 0.62, green: 0.82, blue: 1)))
         }
         return (x, y, R)
     }
@@ -330,14 +368,20 @@ struct MascotPainter {
                 drawStar(at: CGPoint(x: x + cos(a) * R * 0.95, y: y - R * 1.15 + sin(a) * R * 0.22), size: R * 0.15, in: &context)
             }
         }
+        // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）
+        let zColor = Color(red: 0.85, green: 0.85, blue: 0.89)
+        if frame.dozing {
+            var g = context
+            g.opacity = 0.85
+            drawZ(at: CGPoint(x: x + R * 0.95, y: y - R * 0.45), size: max(R * 0.55, 5), in: &g, color: zColor)
+        }
         if frame.sleeping {
             for i in 0..<3 {
                 let u = (now / 1000 + Double(i) * 0.8).truncatingRemainder(dividingBy: 2.4) / 2.4
                 var g = context
                 g.opacity = sin(u * .pi) * 0.85
-                let text = Text("z").font(.system(size: R * (0.32 + Double(i) * 0.1), weight: .medium))
-                    .foregroundColor(Color(red: 0.85, green: 0.85, blue: 0.89))
-                g.draw(text, at: CGPoint(x: x + R * 0.75 + u * R * 0.5, y: y - R * 0.5 - u * R), anchor: .bottomLeading)
+                drawZ(at: CGPoint(x: x + R * 0.75 + u * R * 0.5, y: y - R * 0.5 - u * R), size: R * (0.24 + Double(i) * 0.075),
+                      in: &g, color: zColor)
             }
         }
         for effect in frame.effects {
@@ -361,6 +405,16 @@ struct MascotPainter {
                        at: CGPoint(x: x + R * 1.15, y: y - R * 0.92 - k * 4), anchor: .bottomLeading)
             }
         }
+    }
+
+    /// 「z」：左下角在 `origin`，高 `size`
+    private func drawZ(at origin: CGPoint, size s: Double, in context: inout GraphicsContext, color: Color) {
+        var path = Path()
+        path.move(to: CGPoint(x: origin.x, y: origin.y - s))
+        path.addLine(to: CGPoint(x: origin.x + s * 0.8, y: origin.y - s))
+        path.addLine(to: CGPoint(x: origin.x, y: origin.y))
+        path.addLine(to: CGPoint(x: origin.x + s * 0.8, y: origin.y))
+        context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: max(s * 0.17, 0.9), lineCap: .round, lineJoin: .round))
     }
 
     private func drawStar(at c: CGPoint, size s: Double, in context: inout GraphicsContext) {

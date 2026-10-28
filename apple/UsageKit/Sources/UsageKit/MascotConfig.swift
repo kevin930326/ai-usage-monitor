@@ -12,7 +12,7 @@ public struct MascotConfig: Sendable {
     public var ripple: Ripple
     public var expressions: Expressions
     public var gestures: Gestures
-    /// `machine` 裡狀態機以外的互動參數（停留多久害羞、點一下跳或揮手的機率）
+    /// `machine` 裡狀態機以外的互動參數（停留多久害羞、單擊時隨機挑的短反應）
     public var interaction: Interaction
 
     public static func decode(_ data: Data) throws -> MascotConfig {
@@ -89,7 +89,8 @@ public struct MascotConfig: Sendable {
         public var handRest: HandRest
         public var wave: Wave
         public var glow: Glow
-        public var statusDot: Dot
+        /// 擔心、難過、生病時的眉毛（額度與狀態改用表情表示，沒有狀態點）
+        public var brow: Brow
         public var follow: Follow
         public var blink: Blink
 
@@ -100,7 +101,14 @@ public struct MascotConfig: Sendable {
         public struct HandRest: Decodable, Sendable { public var left: [Double]; public var right: [Double] }
         public struct Wave: Decodable, Sendable { public var pivot: [Double]; public var radius: Double; public var angle: Double; public var swing: Double; public var periodMs: Double }
         public struct Glow: Decodable, Sendable { public var inner: Double; public var outer: Double; public var alpha: Double }
-        public struct Dot: Decodable, Sendable { public var x: Double; public var y: Double; public var radius: Double; public var border: Double }
+        public struct Brow: Decodable, Sendable {
+            public var yaw: Double
+            public var pitch: Double
+            public var width: Double
+            public var thickness: Double
+            public var worriedTilt: Double
+            public var sadTilt: Double
+        }
         public struct Follow: Decodable, Sendable {
             public var yawMax: Double
             public var pitchMax: Double
@@ -190,6 +198,7 @@ public struct MascotConfig: Sendable {
 
     public struct Interaction: Decodable, Sendable {
         public var hoverShyMs: Int
-        public var tapHopProbability: Double
+        /// 單擊時平均隨機挑的短反應
+        public var tapReactions: [String]
     }
 }

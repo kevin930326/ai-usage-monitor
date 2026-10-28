@@ -15,6 +15,25 @@ final class NotchPanelController {
     private var panel: NotchPanel?
     private var observers: [NSObjectProtocol] = []
 
+    /// 瀏海面板顯示中（設定開著、不是截圖或示範）
+    var isShown: Bool { panel != nil }
+
+    /// 畫布左上角的螢幕座標（左下為原點；x 是畫布左緣，y 是螢幕頂端）：看滑鼠用
+    func canvasOrigin() -> CGPoint? {
+        guard let screen = panel?.targetScreen else { return nil }
+        return CGPoint(x: screen.frame.midX - NotchLayout.canvasWidth / 2, y: screen.frame.maxY)
+    }
+
+    /// 游標是否在面板視窗裡
+    func containsPointer() -> Bool {
+        panel.map { $0.frame.contains(NSEvent.mouseLocation) } ?? false
+    }
+
+    /// 保持展開時讓面板接收 Esc（`nonactivatingPanel`：成為 key 也不會把 App 帶到前面）
+    func makeKey() {
+        panel?.makeKey()
+    }
+
     /// App 啟動後與設定改變時呼叫
     func apply() {
         var enabled = PanelSettings.shared.notchEnabled && MascotController.shared.baseConfig != nil
@@ -41,6 +60,7 @@ final class NotchPanelController {
         }
         place()
         panel?.orderFrontRegardless()
+        MascotController.shared.panelVisibilityChanged()
     }
 
     private func hide() {
@@ -49,6 +69,7 @@ final class NotchPanelController {
         panel = nil
         observers.forEach(NotificationCenter.default.removeObserver)
         observers = []
+        MascotController.shared.panelVisibilityChanged()
     }
 
     /// 選螢幕與位置：有瀏海的螢幕優先，否則選單列所在的主螢幕
@@ -104,8 +125,19 @@ final class NotchPanel: NSPanel {
         setAccessibilityLabel("AI 用量瀏海面板")
     }
 
-    override var canBecomeKey: Bool { false }
+    /// 平常不成為 key（不搶焦點）；保持展開時才成為 key，好接收 Esc
+    override var canBecomeKey: Bool { MascotController.shared.pinned }
     override var canBecomeMain: Bool { false }
+
+    /// Esc：取消保持展開並收合
+    override func cancelOperation(_ sender: Any?) {
+        MascotController.shared.setPinned(false)
+        MascotController.shared.closeNow()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { cancelOperation(nil) } else { super.keyDown(with: event) }
+    }
 
     /// 收合時視窗只有瀏海（含鼓一下的空間）大；展開時是整張畫布。畫布的頂端中央永遠對齊瀏海中央
     func place(on screen: NSScreen, layout: NotchLayout, expanded: Bool) {
@@ -211,9 +243,102 @@ final class NotchHostingView: NSHostingView<AnyView> {
         }
     }
 
+    /// 右鍵（或 control＋點擊）：列出所有動作與表情、保持展開、靜音、勿擾、設定
+    override func rightMouseDown(with event: NSEvent) {
+        let menu = NotchMenu.build()
+        menu.delegate = NotchMenu.delegate
+        menu.popUp(positioning: nil, at: convert(event.locationInWindow, from: nil), in: self)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? { nil }
+
     /// 畫布座標（左上為原點）；畫布就是這個 view
     private func canvasPoint(_ event: NSEvent) -> CGPoint {
         let local = convert(event.locationInWindow, from: nil)
         return CGPoint(x: local.x, y: isFlipped ? local.y : bounds.height - local.y)
+    }
+}
+
+/// 瀏海的右鍵選單（第二輪第 0 部分：表情與動作找得到）。每一項都是按鈕，照狀態機的排隊規則播；
+/// 動畫程度不是「完整」時動作與表情不播（角色身體不動），項目停用並寫出原因。
+/// 項目先組成 `Entry` 清單：選單與截圖（`DebugMascot`）用同一份。
+@MainActor
+enum NotchMenu {
+    static let delegate = MenuDelegate()
+
+    final class MenuDelegate: NSObject, NSMenuDelegate {
+        func menuWillOpen(_ menu: NSMenu) { MainActor.assumeIsolated { MascotController.shared.menuWillOpen() } }
+        func menuDidClose(_ menu: NSMenu) { MainActor.assumeIsolated { MascotController.shared.menuDidClose() } }
+    }
+
+    /// 動作（單擊的短反應＋長動畫）；順序就是選單的順序
+    static let actions: [(MascotRequest, String)] = [
+        (.hop, "跳一下"), (.wave, "揮手"), (.nod, "點頭"), (.tilt, "歪頭"), (.giggle, "偷笑"), (.look, "東張西望"),
+        (.pinch, "捏一下"), (.dizzy, "轉暈"), (.shy, "害羞"), (.scared, "嚇到"),
+    ]
+
+    /// 表情（之後的 AI 狀態與服務異常也用這套）
+    static let faces: [MascotMood] = [.happy, .worried, .sad, .sick, .surprised, .out, .stale]
+
+    enum Entry {
+        case header(String)
+        case item(String, enabled: Bool, checked: Bool, action: @MainActor () -> Void)
+        case note(String)
+        case separator
+    }
+
+    /// `animates`：動畫程度是「完整」；`quietUntil`：靜音或勿擾到這個時間（沒有為 nil）
+    static func entries(animates: Bool, simple: Bool, pinned: Bool, quietUntil: Date?) -> [Entry] {
+        let controller = MascotController.shared
+        var entries: [Entry] = [.header("動作")]
+        entries += actions.map { request, title in .item(title, enabled: animates, checked: false) { controller.play(request) } }
+        entries.append(.header("表情"))
+        entries += faces.map { mood in .item(mood.title, enabled: animates, checked: false) { controller.playFace(mood) } }
+        if !animates {
+            entries.append(.note(simple ? "角色動畫是「簡單」：不播動作與表情" : "角色動畫已關閉：不播動作與表情"))
+        }
+        entries.append(.separator)
+        entries.append(.item("保持展開", enabled: true, checked: pinned) { controller.setPinned(!controller.pinned) })
+        if let quietUntil {
+            entries.append(.item("取消靜音（靜音到\(quietUntil.formatted(date: .omitted, time: .shortened))）", enabled: true, checked: false) {
+                controller.setQuiet(until: nil)
+            })
+        } else {
+            entries.append(.item("靜音 1 小時", enabled: true, checked: false) { controller.setQuiet(until: Date().addingTimeInterval(3600)) })
+            entries.append(.item("勿擾到明天早上 8 點", enabled: true, checked: false) {
+                controller.setQuiet(until: MascotQuiet.tomorrowMorning(after: Date()))
+            })
+        }
+        entries.append(.separator)
+        entries.append(.item("設定…", enabled: true, checked: false) {
+            AppActions.openSettings?()
+            NSApplication.shared.activate()
+        })
+        return entries
+    }
+
+    static func build(now: Date = Date()) -> NSMenu {
+        let controller = MascotController.shared
+        let quiet = PanelSettings.shared.mascotQuietUntil.flatMap { $0 > now ? $0 : nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for entry in entries(animates: controller.motion.animatesBody, simple: controller.motion == .simple,
+                             pinned: controller.pinned, quietUntil: quiet) {
+            switch entry {
+            case .header(let title): menu.addItem(.sectionHeader(title: title))
+            case .separator: menu.addItem(.separator())
+            case .note(let title):
+                let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            case .item(let title, let enabled, let checked, let action):
+                let item = ClosureMenuItem(title: title, key: "") { MainActor.assumeIsolated { action() } }
+                item.isEnabled = enabled
+                item.state = checked ? .on : .off
+                if title == "保持展開" { item.toolTip = "滑鼠離開也不收合；再點一次或按 Esc 收起" }
+                menu.addItem(item)
+            }
+        }
+        return menu
     }
 }

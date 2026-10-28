@@ -7,12 +7,18 @@
     "clicks_for_dizzy": 5,
     "hold_ms": 350,
     "hover_shy_ms": 800,
-    "sleep_after_idle_ms": 10000,
+    "_sleep": "睡覺由 AI 的狀態決定（Claude 與 Codex 都閒置超過設定的分鐘數，App 的設定），不看滑鼠；所以這裡沒有睡覺的時間",
     "intro_interactive_ms": 4680,
     "quick_open_ms": 620,
     "durations_ms": {
       "hop": 900,
       "wave": 1800,
+      "nod": 800,
+      "tilt": 1000,
+      "giggle": 1000,
+      "look": 1300,
+      "pinch": 1100,
+      "face": 2200,
       "dizzy": 2900,
       "shy": 2200,
       "scared": 1500,
@@ -20,8 +26,8 @@
       "alert": 1000,
       "squeeze_release": 800
     },
-    "tap_reactions": ["hop", "wave"],
-    "tap_hop_probability": 0.6
+    "tap_reactions": ["hop", "wave", "nod", "tilt", "giggle", "look"],
+    "_tap_reactions": "單擊時從這些短反應平均隨機挑一個（呼叫端擲骰；狀態機的 MascotRequest.taps 要一致）"
   },
   "gestures": {
     "circle_radius_px": 130,
@@ -64,7 +70,7 @@
     "hand_rest": { "left": [-1.2, 0.62, 0.35], "right": [1.18, 0.55, 0.3] },
     "wave": { "pivot": [1.02, 0.34], "radius": 0.78, "angle": -1.45, "swing": 0.5, "period_ms": 300 },
     "glow": { "inner": 0.6, "outer": 3.2, "alpha": 0.42 },
-    "status_dot": { "x": -0.74, "y": -0.74, "radius": 0.2, "border": 0.07 },
+    "brow": { "yaw": 0.3, "pitch": 0.36, "width": 0.26, "thickness": 0.075, "worried_tilt": 0.42, "sad_tilt": 0.6 },
     "follow": { "yaw_max": 0.55, "pitch_max": 0.38, "smoothing_per_frame": 0.12, "yaw_span_px": 260, "pitch_span_px": 200 },
     "blink": { "min_gap_ms": 3300, "max_gap_ms": 4800, "close_ms": 70, "hold_ms": 20, "open_ms": 120 },
     "bob": { "period_ms": 480, "amplitude_px_at_r40": 1.4 },

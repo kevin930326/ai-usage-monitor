@@ -709,7 +709,8 @@ class SnapshotsScriptTests(unittest.TestCase):
            "tier2-card-revoked-device-light", "tier2-card-revoked-device-dark",
            "tier2-card-deleted-device-light", "tier2-card-deleted-device-dark",
            "tier2-card-all-cache-read-light", "tier2-card-all-cache-read-dark",
-           "notch-collapsed", "notch-intro", "notch-expressions", "notch-menubar-light", "notch-menubar-dark"]
+           "notch-collapsed", "notch-intro", "notch-expressions", "notch-menubar-light", "notch-menubar-dark",
+           "notch-menu-light", "notch-menu-dark"]
     IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
            "widget-large-dark", "live-activity-light", "live-activity-dark", "island-normal"]
 
@@ -809,7 +810,8 @@ if __name__ == "__main__":
 class NotchPerfSummaryTests(unittest.TestCase):
     """notch-perf-summary.py：門檻與缺少取樣都要讓報表失敗（ADR-0016 第 6 節、Codex C-07）。"""
     SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
-    MARKS = {"notch-open": 10, "notch-wave": 30, "notch-close": 40, "notch-close-2": 140}
+    MARKS = {"notch-open": 10, "notch-sleep": 22, "notch-wave": 32, "notch-close": 40, "gaze-move-asleep": 45,
+             "gaze-move": 58, "gaze-still": 73, "notch-close-2": 140}
 
     def run_summary(self, samples, marks=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -828,7 +830,7 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_missing_intro_or_wave_samples_fail(self):
-        for gap in [(10, 15), (30, 32), (15, 20), (22, 30)]:
+        for gap in [(10, 15), (32, 34), (15, 20), (24, 32), (47, 55), (60, 73)]:
             result = self.run_summary(self.full(skip=[gap]))
             self.assertEqual(result.returncode, 1, (gap, result.stdout))
             self.assertIn("缺", result.stdout)
@@ -839,5 +841,10 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(self.run_summary(self.full(), marks).returncode, 1)
 
     def test_busy_idle_fails(self):
-        samples = [(t, 6.0 if 22 <= t < 30 else 0.0, 100_000) for t in range(0, 170)]
+        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 170)]
+        self.assertEqual(self.run_summary(samples).returncode, 1)
+
+    def test_redraw_while_collapsed_asleep_fails(self):
+        # 收合、睡著時游標移動不能重畫（第二輪：睡著時降到每秒讀 1 次游標）
+        samples = [(t, 1.0 if 47 <= t < 55 else 0.0, 100_000) for t in range(0, 170)]
         self.assertEqual(self.run_summary(samples).returncode, 1)

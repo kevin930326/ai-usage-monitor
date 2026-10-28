@@ -34,6 +34,7 @@ import Testing
         var choice: String?
         var on: Bool?
         var level: Int?
+        var react: Bool?
     }
 
     struct Output: Codable, Equatable {
@@ -64,7 +65,8 @@ import Testing
             case "release": machine.release(at: event.t)
             case "move": machine.move(at: event.t)
             case "working": machine.setWorking(event.on ?? false, at: event.t)
-            case "status": machine.setStatus(event.level ?? 0, at: event.t)
+            case "idle": machine.setAgentIdle(event.on ?? false, at: event.t)
+            case "status": machine.setStatus(event.level ?? 0, at: event.t, react: event.react ?? true)
             case "advance": machine.advance(to: event.t)
             default: Issue.record("未知的事件 \(event.e)（\(testCase.name)）")
             }
@@ -115,7 +117,7 @@ import Testing
         // 設定檔的短反應清單要和狀態機的 tap 類型一致
         struct File: Decodable { struct M: Decodable { var tap_reactions: [String] }; var machine: M }
         let file = try JSONDecoder().decode(File.self, from: Data(contentsOf: Self.configURL))
-        #expect(file.machine.tap_reactions == ["hop", "wave"])
+        #expect(file.machine.tap_reactions == MascotRequest.taps.map(\.rawValue))
     }
 
     /// 有排隊的就一定有下一個到期時間（golden 只比紀錄，這裡確認不會卡住）

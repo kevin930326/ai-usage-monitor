@@ -154,13 +154,32 @@ enum DebugTools {
     /// 瀏海面板（ADR-0016 第 6 節）：展開含過場、待著、播反應、收合，收合後 1 分鐘、再開關一次比較記憶體
     private static func runNotchPerfSchedule() {
         let mascot = MascotController.shared
+        mascot.debugSkipsActivity = true
+        // 游標固定在螢幕中間（不動）；量「游標移動」時繞圓移動（只換假的位置，不移動真的游標）
+        let screen = NSScreen.main?.frame ?? .zero
+        var moving = false
+        let started = Date.now
+        mascot.debugPointer = {
+            guard moving else { return CGPoint(x: screen.midX, y: screen.midY) }
+            let a = Date.now.timeIntervalSince(started) * 1.5
+            return CGPoint(x: screen.midX + cos(a) * screen.width * 0.35, y: screen.midY + sin(a) * screen.height * 0.3)
+        }
+        mascot.followPointerChanged()
         let close = 40.0
         schedule([
             (0, "launch", {}),
             (10, "notch-open", { mascot.pointerEntered() }),
             (20, "notch-idle", {}),
-            (30, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
+            // Claude 與 Codex 都閒置：睡著（呼吸）
+            (22, "notch-sleep", { mascot.mutate { $0.setAgentIdle(true, at: mascot.time()) } }),
+            (32, "notch-wave", { mascot.mutate { $0.request(.wave, at: mascot.time()) } }),
             (close, "notch-close", { mascot.closeNow() }),
+            // 收著、睡著：游標移動時臉不跟著轉，不重畫
+            (close + 5, "gaze-move-asleep", { moving = true }),
+            (close + 15, "notch-wake", { mascot.mutate { $0.setAgentIdle(false, at: mascot.time()) } }),
+            // 收著、醒著：游標一直移動（看滑鼠，每秒約 12 次讀位置）
+            (close + 18, "gaze-move", {}),
+            (close + 33, "gaze-still", { moving = false }),
             (close + 60, "closed-60s", {}),
             (close + 90, "closed-90s", {}),
             (close + 92, "notch-reopen", { mascot.pointerEntered() }),

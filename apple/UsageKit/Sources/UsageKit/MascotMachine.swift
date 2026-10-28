@@ -6,12 +6,20 @@ import Foundation
 
 /// 動畫（一次只播一個）
 public enum MascotAnimation: String, Sendable, CaseIterable {
-    case hop, wave, dizzy, shy, scared, squeeze, wake, alert
+    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, face, squeeze, wake, alert
 }
 
-/// 按鈕或狀態觸發的動畫：播放中就排隊，只保留最後一個
+/// 按鈕（右鍵選單）或狀態觸發的動畫：播放中就排隊，只保留最後一個。
+/// 短反應（hop、wave、nod、tilt、giggle、look）也是單擊的隨機反應；`pinch` 是選單的「捏一下」（不必按住），
+/// `face` 是選單的「表情」（顯示哪個表情由畫面決定，狀態機只管長度與排隊）
 public enum MascotRequest: String, Sendable, CaseIterable {
-    case hop, wave, dizzy, shy, scared, sleep, alert
+    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, face, alert
+
+    /// 單擊時隨機挑的短反應（可以被連點 5 下打斷）
+    public static let taps: [MascotRequest] = [.hop, .wave, .nod, .tilt, .giggle, .look]
+
+    var animation: MascotAnimation { MascotAnimation(rawValue: rawValue)! }
+    var kind: MascotAnimationKind { Self.taps.contains(self) ? .tap : .long }
 }
 
 /// 手勢：播放中直接忽略
@@ -32,7 +40,7 @@ public enum MascotGesture: String, Sendable, CaseIterable {
     }
 }
 
-/// 模式和動畫是兩回事：動畫播完回到目前模式的姿勢
+/// 模式和動畫是兩回事：動畫播完回到目前模式的姿勢。模式由 AI 的狀態決定（工作中優先於睡覺），不看滑鼠
 public enum MascotMode: String, Sendable {
     case none, sleep, work
 }
@@ -48,7 +56,6 @@ public struct MascotTiming: Decodable, Sendable, Equatable {
     public var clickWindowMs: Int
     public var clicksForDizzy: Int
     public var holdMs: Int
-    public var sleepAfterIdleMs: Int
     public var introInteractiveMs: Int
     public var durationsMs: [String: Int]
 
@@ -57,7 +64,6 @@ public struct MascotTiming: Decodable, Sendable, Equatable {
         case clickWindowMs = "click_window_ms"
         case clicksForDizzy = "clicks_for_dizzy"
         case holdMs = "hold_ms"
-        case sleepAfterIdleMs = "sleep_after_idle_ms"
         case introInteractiveMs = "intro_interactive_ms"
         case durationsMs = "durations_ms"
     }
@@ -151,17 +157,19 @@ public struct MascotMachine: Sendable {
     /// 最近一次動畫結束、回到模式姿勢的時間（畫面用來做 .32 秒的回位）
     public private(set) var restedAt: Int?
     public private(set) var log: [MascotLogEntry] = []
+    /// AI 正在跑（工作中）
+    public private(set) var isWorking = false
+    /// Claude 與 Codex 都閒置超過設定的時間（睡覺）；工作中優先
+    public private(set) var isAgentIdle = false
 
     private var holdArmAt: Int?
     private var justReleased = false
     private var clicks: [Int] = []
-    private var lastActivity = 0
 
     /// `statusLevel` 是啟動時已知的額度狀態（不會因此鼓一下或播提醒）
     public init(timing: MascotTiming, startTime: Int = 0, statusLevel: Int = 0) {
         self.timing = timing
         now = startTime
-        lastActivity = startTime
         self.statusLevel = statusLevel
     }
 
@@ -182,7 +190,7 @@ public struct MascotMachine: Sendable {
 
     // MARK: - 時間
 
-    /// 處理到 `time` 之前到期的所有事（動畫結束、排隊開始、按住成立、過場結束、睡著）；時間不會倒退
+    /// 處理到 `time` 之前到期的所有事（動畫結束、排隊開始、按住成立、過場結束）；時間不會倒退
     public mutating func advance(to time: Int) {
         while let (at, step) = nextDue(before: time) {
             now = max(now, at)
@@ -191,7 +199,6 @@ public struct MascotMachine: Sendable {
             case .queued: startPending()
             case .hold: armHold()
             case .intro: finishIntro()
-            case .sleep: enterSleep()
             }
         }
         now = max(now, time)
@@ -203,7 +210,7 @@ public struct MascotMachine: Sendable {
         return now
     }
 
-    private enum Step: Int { case end, queued, hold, intro, sleep }
+    private enum Step: Int { case end, queued, hold, intro }
 
     private func nextDue(before time: Int) -> (Int, Step)? {
         var best: (Int, Step)?
@@ -215,14 +222,7 @@ public struct MascotMachine: Sendable {
         consider(restUntil, .queued)
         consider(holdArmAt, .hold)
         consider(introUntil, .intro)
-        consider(sleepDeadline, .sleep)
         return best
-    }
-
-    /// 10 秒沒有操作（移動、點擊、按住、放開）就睡著：只在面板展開、沒有動畫、沒有排隊、平常模式時
-    private var sleepDeadline: Int? {
-        guard isOpen, !isIntro, !isBusy, !isHolding, holdArmAt == nil, mode == .none, queued == nil else { return nil }
-        return max(lastActivity + timing.sleepAfterIdleMs, now)
     }
 
     // MARK: - 事件
@@ -232,7 +232,6 @@ public struct MascotMachine: Sendable {
         guard !isOpen else { return }
         isOpen = true
         clicks = []
-        lastActivity = time
         if intro { introUntil = time + timing.introInteractiveMs }
         record(.open(intro: intro))
     }
@@ -251,7 +250,6 @@ public struct MascotMachine: Sendable {
         holdArmAt = nil
         justReleased = false
         clicks = []
-        if mode == .sleep { setMode(.none) }
         record(.close)
     }
 
@@ -260,11 +258,6 @@ public struct MascotMachine: Sendable {
         _ = begin(time)
         guard isOpen else {
             record(.drop(request))
-            return
-        }
-        // 工作中不會睡著
-        if request == .sleep, mode == .work {
-            record(.ignore(request.rawValue))
             return
         }
         if isIntro || isBusy || isHolding {
@@ -290,14 +283,13 @@ public struct MascotMachine: Sendable {
     public mutating func click(at time: Int, choice: MascotRequest) {
         let time = begin(time)
         guard isOpen, !isIntro else { return }
-        lastActivity = time
         if justReleased {
             justReleased = false
             return
         }
-        // 睡覺時點一下：先叫醒
-        if mode == .sleep {
-            wake()
+        // 睡覺時點一下：叫醒一下（播完回到睡覺的姿勢；睡不睡由 AI 的狀態決定）
+        if mode == .sleep, !isBusy {
+            start(.wake, kind: .long)
             return
         }
         // 長動畫（含按住、回位中）裡的點擊不計次
@@ -321,14 +313,12 @@ public struct MascotMachine: Sendable {
     public mutating func press(at time: Int) {
         let time = begin(time)
         guard isOpen, !isIntro, !isBusyWithLong else { return }
-        lastActivity = time
         justReleased = false
         holdArmAt = time + timing.holdMs
     }
 
     public mutating func release(at time: Int) {
         let time = begin(time)
-        lastActivity = time
         holdArmAt = nil
         guard isHolding else { return }
         isHolding = false
@@ -339,32 +329,37 @@ public struct MascotMachine: Sendable {
         }
     }
 
-    /// 滑鼠在面板裡移動：睡覺時叫醒（按住中不算）
+    /// 滑鼠在面板裡移動：只推進時間。睡不睡由 AI 的狀態決定，動滑鼠不會叫醒
     public mutating func move(at time: Int) {
-        let time = begin(time)
-        lastActivity = time
-        guard mode == .sleep, isOpen, !isIntro, !isHolding else { return }
-        wake()
+        _ = begin(time)
     }
 
-    /// 工作中：狀態立即生效（姿勢在沒有動畫時馬上換）
+    /// 工作中：狀態立即生效（姿勢在沒有動畫時馬上換）；工作中優先於睡覺
     public mutating func setWorking(_ working: Bool, at time: Int) {
         _ = begin(time)
-        if working, mode != .work {
-            setMode(.work)
-        } else if !working, mode == .work {
-            setMode(.none)
-        }
+        isWorking = working
+        updateMode()
     }
 
-    /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：狀態點立即換色，提醒動畫排隊；收著時改成瀏海鼓一下；
-    /// 回到正常只換色，排隊中的提醒也丟掉
-    public mutating func setStatus(_ level: Int, at time: Int) {
+    /// Claude 與 Codex 都閒置超過設定的時間：睡覺（面板收著也算，迷你角色顯示睡著的姿勢）
+    public mutating func setAgentIdle(_ idle: Bool, at time: Int) {
+        _ = begin(time)
+        isAgentIdle = idle
+        updateMode()
+    }
+
+    private mutating func updateMode() {
+        setMode(isWorking ? .work : isAgentIdle ? .sleep : .none)
+    }
+
+    /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；
+    /// 回到正常只換表情，排隊中的提醒也丟掉。`react` 為 false（靜音、勿擾）時只換表情、不播也不鼓
+    public mutating func setStatus(_ level: Int, at time: Int, react: Bool = true) {
         let time = begin(time)
         guard level != statusLevel else { return }
         statusLevel = level
         record(.status(level))
-        guard level > 0 else {
+        guard level > 0, react else {
             if queued == .alert { dropQueued() }
             if pending == .alert { dropPending() }
             return
@@ -378,33 +373,10 @@ public struct MascotMachine: Sendable {
 
     // MARK: - 內部
 
+    /// 睡覺中也照樣播（每個動畫從中性姿勢開始），播完回到睡覺的姿勢
     private mutating func run(_ request: MascotRequest) {
-        if mode == .sleep, request != .sleep { setMode(.none) }
         restUntil = nil
-        switch request {
-        case .sleep:
-            // 工作中不會睡著（排隊時還不是工作中，播到時才開始工作的也一樣）
-            if mode == .work {
-                record(.ignore(request.rawValue))
-                return
-            }
-            if let playing { record(.interrupt(playing.animation)) }
-            playing = nil
-            enterSleep()
-        case .hop: start(.hop, kind: .tap)
-        case .wave: start(.wave, kind: .tap)
-        case .dizzy: start(.dizzy, kind: .long)
-        case .shy: start(.shy, kind: .long)
-        case .scared: start(.scared, kind: .long)
-        case .alert: start(.alert, kind: .long)
-        }
-    }
-
-    private mutating func wake() {
-        restUntil = nil
-        dropPending()
-        setMode(.none)
-        start(.wake, kind: .long)
+        start(request.animation, kind: request.kind)
     }
 
     /// 每個動畫開始前先歸零（畫面依 `playing.start` 從中性姿勢開始），被取代的記為 interrupt
@@ -452,8 +424,6 @@ public struct MascotMachine: Sendable {
         isHolding = true
         restUntil = nil
         dropPending()
-        // 睡覺時被捏：先回到平常
-        if mode == .sleep { setMode(.none) }
         start(.squeeze, kind: .hold)
     }
 
@@ -464,12 +434,6 @@ public struct MascotMachine: Sendable {
             queued = nil
             run(next)
         }
-    }
-
-    private mutating func enterSleep() {
-        guard isOpen, !isIntro else { return }
-        restUntil = nil
-        setMode(.sleep)
     }
 
     private mutating func dropQueued() {
