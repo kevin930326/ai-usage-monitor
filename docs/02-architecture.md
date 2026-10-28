@@ -65,7 +65,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 | 面板 | `.window` 樣式，單一長版、卡片式：剩餘最少的額度、所有額度與預期進度、倒數、更新時間；區塊可開關、排序、收合（FR-22、FR-34～FR-36）；走勢與統計見 ADR-0008 的階段 |
 | 動態視覺 | SwiftUI 內建動畫，只在面板或統計視窗開啟時執行、尊重「減少動態效果」（FR-25、[ADR-0010](adr/0010-mac-animation-principles.md)）；不用 Metal／SceneKit |
 | 角色與瀏海面板 | 會動的角色放在瀏海（沒有瀏海時畫假瀏海），狀態機與動畫參數和 Windows 共用（`shared/mascot-anim.json`、`fixtures/mascot`）；對 ADR-0010 的例外見 [ADR-0016](adr/0016-mascot-character.md)（提議中） |
-| AI 的確切狀態 | Claude Code 與 Codex 的官方 hook 執行 App 包裡的 `aum-hook`，只把事件種類、加鹽雜湊的工作階段 ID 與資料夾名稱經本機 Unix socket 送給 App；狀態彙總和 Windows 共用（`fixtures/agent`）；沒接 hook 時退回修改時間，見 [ADR-0017](adr/0017-agent-hooks.md)（提議中） |
+| AI 的確切狀態 | Claude Code 與 Codex 的官方 hook 執行 App 包裡的 `aum-hook`，只把事件種類、加鹽雜湊的工作階段 ID 與資料夾名稱經本機 Unix socket 送給 App；狀態彙總和 Windows 共用（`fixtures/agent`）；沒接 hook 時退回修改時間，見 [ADR-0017](adr/0017-agent-hooks.md) |
 | 設定視窗 | 選單列圖示樣式、面板區塊的開關與排序（FR-35，[ADR-0008](adr/0008-mac-panel-layout.md)） |
 
 - 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。面板的「更新」按鈕另以 `launchctl kickstart` 請 launchd 提早執行收集器（60 秒內一次、24 小時最多 100 次，FR-50）；連網的仍只有收集器。

@@ -1,6 +1,6 @@
 # ADR-0017：用 hook 取得 AI 的確切狀態
 
-- 狀態：**提議中**（2026-10-28；Fable 對抗式審查後改為已接受）
+- 狀態：**已接受**（2026-10-28；Fable 5.1 對抗式審查 12 項全部處理，見 PR）
 - 日期：2026-10-28
 - 相關：[ADR-0016](0016-mascot-character.md)（角色；本 ADR 取代它「看紀錄資料夾修改時間判斷工作中」的作法，沒接 hook 時才退回）、[ADR-0009](0009-local-history-and-token-stats.md)（本機紀錄）、[ADR-0015](0015-windows-desktop-app.md)（Windows 版，第 4 部分接上同一套）
 - 設計來源：工作資料夾 `design/mascot2-TASK.md` 第 1、2 部分；`design/mascot/RESEARCH-2026-10-28.md`
