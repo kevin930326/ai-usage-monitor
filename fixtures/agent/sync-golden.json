@@ -1,0 +1,86 @@
+{
+ "state_files": [
+  {
+   "name": "canonical",
+   "result": "{\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":1000},{\"ai\":\"codex\",\"state\":\"idle\",\"sessions\":0,\"since\":1000}]}"
+  },
+  {
+   "name": "spaces-and-float-are-normalized",
+   "result": "{\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"working\",\"sessions\":1,\"since\":5}]}"
+  },
+  {
+   "name": "extra-fields-dropped",
+   "result": "{\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"done\",\"sessions\":1,\"since\":1000}]}"
+  },
+  {
+   "name": "empty",
+   "result": "{\"v\":1,\"ais\":[]}"
+  },
+  {
+   "name": "duplicate-ai",
+   "result": "nil"
+  },
+  {
+   "name": "three-rows",
+   "result": "nil"
+  },
+  {
+   "name": "unknown-state",
+   "result": "nil"
+  },
+  {
+   "name": "unknown-ai",
+   "result": "nil"
+  },
+  {
+   "name": "too-many-sessions",
+   "result": "nil"
+  },
+  {
+   "name": "bool-sessions",
+   "result": "nil"
+  },
+  {
+   "name": "negative-since",
+   "result": "nil"
+  },
+  {
+   "name": "wrong-version",
+   "result": "nil"
+  },
+  {
+   "name": "duplicate-key",
+   "result": "nil"
+  },
+  {
+   "name": "not-json",
+   "result": "nil"
+  },
+  {
+   "name": "not-object",
+   "result": "nil"
+  }
+ ],
+ "relay": [
+  {
+   "name": "skip-own-and-old-id",
+   "result": "{\"v\":1,\"fetched_at\":1761700000000,\"now\":1761700000000,\"devices\":[{\"name\":\"桌機\",\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":1000},{\"ai\":\"codex\",\"state\":\"working\",\"sessions\":1,\"since\":1000}],\"updated_at\":1761699940000}]}"
+  },
+  {
+   "name": "bad-device-skipped",
+   "result": "{\"v\":1,\"fetched_at\":1761700000000,\"now\":1761700000000,\"devices\":[{\"name\":\"筆電\",\"ais\":[{\"ai\":\"claude\",\"state\":\"done\",\"sessions\":1,\"since\":1000}],\"updated_at\":1761699940000}]}"
+  },
+  {
+   "name": "name-cleaned",
+   "result": "{\"v\":1,\"fetched_at\":1761700000000,\"now\":1761700000000,\"devices\":[{\"name\":\"Mac mini 的名稱非常非常非常非常非常非常非常非常非常非常\",\"ais\":[{\"ai\":\"claude\",\"state\":\"error\",\"sessions\":1,\"since\":1000}],\"updated_at\":1761699940000}]}"
+  },
+  {
+   "name": "missing-now",
+   "result": "nil"
+  },
+  {
+   "name": "devices-not-list",
+   "result": "nil"
+  }
+ ]
+}

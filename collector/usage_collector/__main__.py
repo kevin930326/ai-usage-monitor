@@ -1,5 +1,5 @@
 """用法：python3 -m usage_collector [--compact] [--write-local] [--upload] [--quiet] [--agent app]
-                                  [--tokens-only] [--log-file 檔案]"""
+                                  [--tokens-only] [--agent-sync] [--log-file 檔案]"""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import disk, forecast, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
+from . import agent_sync, disk, forecast, history, history_care, local_store, paths, relay, service_status, token_stats, token_sync
 from .log import limit_repeats, log, repeats_path, rotate_if_large, rotate_inherited, stderr_is
 from .models import SCHEMA_VERSION, ProviderError, ProviderUsage, iso_utc
 from .providers import PROVIDERS, enabled_providers
@@ -103,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
                         "install-launchd.sh 的收集器存在時不執行")
     parser.add_argument("--tokens-only", action="store_true",
                         help="只統計本機 Token，不收集額度（Windows 排程的預設，ADR-0011 第 2 節）")
+    parser.add_argument("--agent-sync", action="store_true",
+                        help="只同步 AI 狀態（ADR-0019 第 2 節）：App 寫了 agent-state.json 後觸發，不收集額度、不跑 CLI")
     parser.add_argument("--log-file", help="日誌附加到這個檔案（Windows 的 pythonw 沒有 stderr）")
     args = parser.parse_args(argv)
     # 日誌每份最多 1 MB、留一份舊的（ADR-0014）：Windows 的 --log-file、App 內建收集器（redirect_stderr_to）
@@ -125,6 +127,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.agent_sync:
+        # 只讀 agent-state.json、只連 /agents/state；沒打開時什麼都不做。失敗只記日誌
+        if args.agent == "app":
+            redirect_stderr_to(app_agent_log_path())
+        agent_sync.run_safely()
+        return 0
+
     if args.tokens_only:
         # 不執行 claude／codex、不寫 usage.json、不上傳：只有 Token 統計（本機）。
         # 這是唯一的工作，失敗時回傳非 0，工作排程器的「上次執行結果」才看得出來
@@ -134,6 +143,7 @@ def run(args: argparse.Namespace) -> int:
         history.tidy_safely()  # 保留期間的清理（收集額度時由 history.record 執行）
         # 第二層（只有安裝了才執行；失敗不影響結束碼）
         token_sync.run_safely()
+        agent_sync.run_safely()  # 退路：App 觸發的同步沒跑到時，每 5 分鐘也同步一次
         return 0 if ok else 1
 
     if args.agent == "app":
@@ -190,6 +200,7 @@ def run(args: argparse.Namespace) -> int:
         token_stats.run_safely()
         # 第二層（ADR-0011 第 2 節）：只有安裝第二層的電腦才上傳每日加總、下載其他電腦的；失敗只記日誌
         token_sync.run_safely()
+        agent_sync.run_safely()
     if args.write_local:
         # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘。
         # 和 usage.json 一樣是覆寫的小檔案，磁碟空間不足時照常

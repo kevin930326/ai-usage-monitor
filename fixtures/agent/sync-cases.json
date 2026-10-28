@@ -1,0 +1,101 @@
+{
+ "state_files": [
+  {
+   "name": "canonical",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"needsYou\", \"sessions\": 2, \"since\": 1000}, {\"ai\": \"codex\", \"state\": \"idle\", \"sessions\": 0, \"since\": 1000}]}"
+  },
+  {
+   "name": "spaces-and-float-are-normalized",
+   "raw": "{ \"v\": 1.0, \"ais\": [ {\"since\": 5, \"sessions\": 1.0, \"state\": \"working\", \"ai\": \"codex\"} ] }"
+  },
+  {
+   "name": "extra-fields-dropped",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}], \"folder\": \"/Users/me/secret\"}"
+  },
+  {
+   "name": "empty",
+   "raw": "{\"v\": 1, \"ais\": []}"
+  },
+  {
+   "name": "duplicate-ai",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}, {\"ai\": \"claude\", \"state\": \"error\", \"sessions\": 1, \"since\": 1000}]}"
+  },
+  {
+   "name": "three-rows",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}, {\"ai\": \"codex\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}, {\"ai\": \"codex\", \"state\": \"idle\", \"sessions\": 1, \"since\": 1000}]}"
+  },
+  {
+   "name": "unknown-state",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"sleeping\", \"sessions\": 1, \"since\": 1000}]}"
+  },
+  {
+   "name": "unknown-ai",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"gemini\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}]}"
+  },
+  {
+   "name": "too-many-sessions",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 33, \"since\": 1000}]}"
+  },
+  {
+   "name": "bool-sessions",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": true, \"since\": 1000}]}"
+  },
+  {
+   "name": "negative-since",
+   "raw": "{\"v\": 1, \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": -1}]}"
+  },
+  {
+   "name": "wrong-version",
+   "raw": "{\"v\": 2, \"ais\": []}"
+  },
+  {
+   "name": "duplicate-key",
+   "raw": "{\"v\":1,\"v\":1,\"ais\":[]}"
+  },
+  {
+   "name": "not-json",
+   "raw": "{\"v\":1"
+  },
+  {
+   "name": "not-object",
+   "raw": "[]"
+  }
+ ],
+ "relay": [
+  {
+   "name": "skip-own-and-old-id",
+   "own": [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222"
+   ],
+   "fetched_at": 1761700000000,
+   "raw": "{\"now\": 1761700000000, \"devices\": [{\"device_id\": \"11111111-1111-4111-8111-111111111111\", \"name\": \"這台\", \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}, {\"device_id\": \"22222222-2222-4222-8222-222222222222\", \"name\": \"這台（舊）\", \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}, {\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"桌機\", \"ais\": [{\"ai\": \"claude\", \"state\": \"needsYou\", \"sessions\": 2, \"since\": 1000}, {\"ai\": \"codex\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}]}"
+  },
+  {
+   "name": "bad-device-skipped",
+   "own": [
+    "11111111-1111-4111-8111-111111111111"
+   ],
+   "fetched_at": 1761700000000,
+   "raw": "{\"now\": 1761700000000, \"devices\": [{\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"\", \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}, {\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"x\", \"ais\": [], \"updated_at\": \"soon\"}, {\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"重複\", \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}, {\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}, {\"device_id\": null, \"name\": \"沒有 ID\", \"ais\": [{\"ai\": \"claude\", \"state\": \"working\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}, {\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"筆電\", \"ais\": [{\"ai\": \"codex\", \"state\": \"sleeping\", \"sessions\": 1, \"since\": 1000}, {\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}]}"
+  },
+  {
+   "name": "name-cleaned",
+   "own": [],
+   "fetched_at": 1761700000000,
+   "raw": "{\"now\": 1761700000000, \"devices\": [{\"device_id\": \"33333333-3333-4333-8333-333333333333\", \"name\": \"\\t Mac​ mini\\u0007 的名稱非常非常非常非常非常非常非常非常非常非常長 \", \"ais\": [{\"ai\": \"claude\", \"state\": \"error\", \"sessions\": 1, \"since\": 1000}], \"updated_at\": 1761699940000}]}"
+  },
+  {
+   "name": "missing-now",
+   "own": [],
+   "fetched_at": 1761700000000,
+   "raw": "{\"devices\": []}"
+  },
+  {
+   "name": "devices-not-list",
+   "own": [],
+   "fetched_at": 1761700000000,
+   "raw": "{\"now\": 1761700000000, \"devices\": {}}"
+  }
+ ]
+}
