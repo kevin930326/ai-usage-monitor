@@ -1,6 +1,6 @@
 # ADR-0018：額度預測與服務異常
 
-- 狀態：**提議中**（2026-10-28）
+- 狀態：**已接受**（2026-10-29；Fable 對抗式審查 10 項都已處理）
 - 日期：2026-10-28
 - 相關需求：FR-18（用得太快）、FR-45（服務狀態）、NFR-8
 - 相關：[ADR-0008](0008-mac-panel-layout.md)（面板，第 2 節第 8 項服務狀態、第 4 節用量節奏）、[ADR-0009](0009-local-history-and-token-stats.md)（歷史與近期速度）、[ADR-0015](0015-windows-desktop-app.md)（Windows）、[ADR-0016](0016-mascot-character.md)（角色表情）
