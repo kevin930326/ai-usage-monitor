@@ -75,6 +75,9 @@ public sealed class AgentWindowsTests : IDisposable
     [InlineData("""{"hooks":{"Stop":{}}}""")]
     [InlineData("{not json")]
     [InlineData("""{"a":1,"a":2}""")]
+    [InlineData("""{"hooks":{"Stop":[],"Stop":[]}}""")]
+    [InlineData("""{"hooks":{"Stop":[{"matcher":"","matcher":"x","hooks":[]}]}}""")]
+    [InlineData("""{"hooks":{"Stop":[{"hooks":[{"type":"command","type":"x"}]}]}}""")]
     public void RefusesShapesItCannotSafelyChange(string text)
     {
         Assert.Throws<AgentHookConfigException>(() => AgentHookConfig.Install(Bytes(text), AgentKind.Claude, Exe));

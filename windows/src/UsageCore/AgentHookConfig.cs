@@ -121,9 +121,23 @@ public static class AgentHookConfig
         try { node = JsonNode.Parse(text, documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Disallow }); }
         catch (JsonException) { throw new AgentHookConfigException("設定檔不是合法的 JSON"); }
         if (node is not JsonObject root) throw new AgentHookConfigException("設定檔最上層不是物件");
-        try { _ = root.Count; }
+        try { CheckKeys(root); }
         catch (ArgumentException) { throw new AgentHookConfigException("設定檔有重複的鍵"); }
         return root;
+    }
+
+    /// <summary>重複的鍵在 JsonObject 第一次列舉時才丟出例外：整棵樹先走一遍，巢狀的也在這裡變成設定錯誤（Codex C-06）</summary>
+    private static void CheckKeys(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject o:
+                foreach (var (_, child) in o) CheckKeys(child);
+                break;
+            case JsonArray a:
+                foreach (var child in a) CheckKeys(child);
+                break;
+        }
     }
 
     private static JsonObject HooksObject(JsonObject root) => root["hooks"] switch
