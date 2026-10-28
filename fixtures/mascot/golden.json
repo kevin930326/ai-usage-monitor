@@ -1,0 +1,474 @@
+{
+  "cases" : [
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start wave",
+        "500 queue dizzy",
+        "1900 end wave",
+        "1900 pose none",
+        "2260 start dizzy",
+        "5160 end dizzy",
+        "5160 pose none"
+      ],
+      "name" : "wave-then-dizzy-button-queues"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start wave",
+        "1000 interrupt wave",
+        "1000 start dizzy",
+        "3900 end dizzy",
+        "3900 pose none"
+      ],
+      "name" : "wave-then-five-clicks-interrupts"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start hop",
+        "250 queue shy",
+        "750 drop shy",
+        "750 interrupt hop",
+        "750 start dizzy",
+        "3650 end dizzy",
+        "3650 pose none"
+      ],
+      "name" : "five-clicks-interrupt-hop"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start hop",
+        "1000 end hop",
+        "1000 pose none",
+        "1200 start hop",
+        "1700 interrupt hop",
+        "1700 start dizzy",
+        "4600 end dizzy",
+        "4600 pose none"
+      ],
+      "name" : "clicks-outside-window-do-not-count"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start shy",
+        "2300 end shy",
+        "2300 pose none",
+        "2400 start hop",
+        "2800 interrupt hop",
+        "2800 start dizzy",
+        "5700 end dizzy",
+        "5700 pose none"
+      ],
+      "name" : "clicks-during-long-animation-not-counted"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "playing" : "dizzy",
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "0 start shy",
+        "200 queue hop",
+        "300 drop hop",
+        "300 queue wave",
+        "400 drop wave",
+        "400 queue scared",
+        "2200 end shy",
+        "2200 pose none",
+        "2400 queue dizzy",
+        "2560 start scared",
+        "4060 end scared",
+        "4060 pose none",
+        "4420 start dizzy"
+      ],
+      "name" : "queue-three-keeps-last"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open intro",
+        "1000 ignore circle",
+        "4680 intro-end",
+        "4700 start scared",
+        "5000 ignore circle",
+        "5500 ignore hover",
+        "6200 end scared",
+        "6200 pose none"
+      ],
+      "name" : "gestures-ignored-while-busy"
+    },
+    {
+      "final" : {
+        "mode" : "sleep",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "13000 mode sleep",
+        "15000 mode none",
+        "15000 start wake",
+        "15900 end wake",
+        "15900 pose none",
+        "25100 mode sleep"
+      ],
+      "name" : "sleep-then-move-wakes"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 1
+      },
+      "log" : [
+        "0 open quick",
+        "100 mode sleep",
+        "2000 ignore hover",
+        "3000 status 1",
+        "3000 mode none",
+        "3000 start alert",
+        "4000 end alert",
+        "4000 pose none"
+      ],
+      "name" : "sleep-request-and-alert-wakes"
+    },
+    {
+      "final" : {
+        "mode" : "sleep",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 mode work",
+        "500 start hop",
+        "1400 end hop",
+        "1400 pose work",
+        "2000 start scared",
+        "3500 end scared",
+        "3500 pose work",
+        "20100 mode none",
+        "20100 mode sleep"
+      ],
+      "name" : "work-mode-returns-to-work-pose"
+    },
+    {
+      "final" : {
+        "mode" : "sleep",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "10000 mode sleep",
+        "10500 mode work",
+        "11000 mode none",
+        "11000 mode sleep"
+      ],
+      "name" : "work-starts-during-sleep"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start shy",
+        "600 status 2",
+        "600 queue alert",
+        "2300 end shy",
+        "2300 pose none",
+        "2660 start alert",
+        "3660 end alert",
+        "3660 pose none",
+        "4000 status 0"
+      ],
+      "name" : "status-changes-color-now-reaction-queued"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 1
+      },
+      "log" : [
+        "0 open intro",
+        "1000 status 1",
+        "1000 queue alert",
+        "4680 intro-end",
+        "4680 start alert",
+        "5680 end alert",
+        "5680 pose none"
+      ],
+      "name" : "intro-queues-until-interactive"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 1
+      },
+      "log" : [
+        "0 status 1",
+        "0 bump",
+        "100 drop hop",
+        "500 open quick"
+      ],
+      "name" : "collapsed-status-bumps"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "450 start squeeze",
+        "900 release squeeze",
+        "1700 end squeeze",
+        "1700 pose none",
+        "2500 start shy",
+        "4700 end shy",
+        "4700 pose none"
+      ],
+      "name" : "hold-squeeze-and-release"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 1
+      },
+      "log" : [
+        "0 open quick",
+        "100 start hop",
+        "550 interrupt hop",
+        "550 start squeeze",
+        "800 status 1",
+        "800 queue alert",
+        "1500 release squeeze",
+        "2300 end squeeze",
+        "2300 pose none",
+        "2660 start alert",
+        "3660 end alert",
+        "3660 pose none"
+      ],
+      "name" : "hold-interrupts-tap"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start shy",
+        "200 queue hop",
+        "1000 interrupt shy",
+        "1000 drop hop",
+        "1000 close",
+        "1200 open quick",
+        "11200 mode sleep",
+        "12000 mode none",
+        "12000 close"
+      ],
+      "name" : "close-clears-everything"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "0 start wave",
+        "1000 queue dizzy",
+        "1800 end wave",
+        "1800 pose none",
+        "2160 start dizzy",
+        "5060 end dizzy",
+        "5060 pose none"
+      ],
+      "name" : "queued-dizzy-after-wave-not-cancelled-by-taps"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "0 start hop",
+        "900 end hop",
+        "900 pose none",
+        "900 start squeeze",
+        "1500 release squeeze",
+        "2300 end squeeze",
+        "2300 pose none"
+      ],
+      "name" : "same-ms-end-before-hold"
+    },
+    {
+      "final" : {
+        "mode" : "sleep",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "9100 start hop",
+        "10000 end hop",
+        "10000 pose none",
+        "19100 mode sleep"
+      ],
+      "name" : "same-ms-end-before-sleep"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start hop",
+        "1000 end hop",
+        "1000 pose none",
+        "1200 start hop",
+        "1600 interrupt hop",
+        "1600 start dizzy",
+        "4500 end dizzy",
+        "4500 pose none"
+      ],
+      "name" : "click-window-boundary"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "5350 start squeeze",
+        "5500 release squeeze",
+        "6300 end squeeze",
+        "6300 pose none"
+      ],
+      "name" : "event-time-goes-backwards"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "playing" : "shy",
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "10000 mode sleep",
+        "12350 mode none",
+        "12350 start squeeze",
+        "12650 release squeeze",
+        "12800 queue shy",
+        "13450 end squeeze",
+        "13450 pose none",
+        "13810 start shy"
+      ],
+      "name" : "press-while-asleep"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start shy",
+        "600 status 2",
+        "600 queue alert",
+        "1000 status 0",
+        "1000 drop alert",
+        "2300 end shy",
+        "2300 pose none"
+      ],
+      "name" : "status-back-to-normal-drops-alert"
+    },
+    {
+      "final" : {
+        "mode" : "work",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 mode work",
+        "200 ignore sleep"
+      ],
+      "name" : "sleep-request-ignored-while-working"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "10000 mode sleep",
+        "10500 mode none",
+        "10500 start wake",
+        "11400 end wake",
+        "11400 pose none",
+        "11950 start squeeze",
+        "23000 release squeeze",
+        "23800 end squeeze",
+        "23800 pose none"
+      ],
+      "name" : "click-wakes-and-activity-delays-sleep"
+    }
+  ]
+}

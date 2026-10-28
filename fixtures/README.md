@@ -9,3 +9,8 @@
 | `usage-no-providers.json` | `providers` 為空（沒有啟用任何服務，畫面顯示提示而不是錯誤） | 同上 |
 
 改格式時三邊的測試會一起失敗；`schema_version` 的變更規則見 FR-13。
+
+## logic、mascot
+
+- `logic/`：Mac（UsageKit）與 Windows（UsageCore）的計算一致性（ADR-0015 第 4 節）。
+- `mascot/`：角色狀態機的事件串與播放紀錄（ADR-0016 第 3 節）。時間參數讀 `shared/mascot-anim.json`；golden 由 Swift 產生（`AUM_UPDATE_GOLDEN=1 swift test --filter MascotGoldenTests`），C# 的 `MascotGoldenTests` 比對同一份。

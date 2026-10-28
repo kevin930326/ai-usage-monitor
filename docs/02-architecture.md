@@ -64,6 +64,7 @@ Swift Package，iOS、watchOS 與 Mac App 共用（NFR-7；v1.4 起套件平台�
 | 選單列圖示 | `MenuBarExtra` 顯示剩餘最少的額度的 % 與顏色（FR-21） |
 | 面板 | `.window` 樣式，單一長版、卡片式：剩餘最少的額度、所有額度與預期進度、倒數、更新時間；區塊可開關、排序、收合（FR-22、FR-34～FR-36）；走勢與統計見 ADR-0008 的階段 |
 | 動態視覺 | SwiftUI 內建動畫，只在面板或統計視窗開啟時執行、尊重「減少動態效果」（FR-25、[ADR-0010](adr/0010-mac-animation-principles.md)）；不用 Metal／SceneKit |
+| 角色與瀏海面板 | 會動的角色放在瀏海（沒有瀏海時畫假瀏海），狀態機與動畫參數和 Windows 共用（`shared/mascot-anim.json`、`fixtures/mascot`）；對 ADR-0010 的例外見 [ADR-0016](adr/0016-mascot-character.md)（提議中） |
 | 設定視窗 | 選單列圖示樣式、面板區塊的開關與排序（FR-35，[ADR-0008](adr/0008-mac-panel-layout.md)） |
 
 - 資料來源：監看本機 `usage.json` 的變更，不經過網路，也不需要讀取密鑰。面板的「更新」按鈕另以 `launchctl kickstart` 請 launchd 提早執行收集器（60 秒內一次、24 小時最多 100 次，FR-50）；連網的仍只有收集器。
