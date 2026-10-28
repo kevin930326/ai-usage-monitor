@@ -285,6 +285,9 @@ def migrate(conn: sqlite3.Connection) -> None:
     if current >= 2:
         _repair_v2(conn)
     _add_cached_records(conn)
+    # 角色養成（ADR-0020）：和 record_days_cached 一樣補建、不升版本（舊版 App 照常讀原本的表）
+    if _table_exists(conn, "record_days"):
+        conn.execute("CREATE TABLE IF NOT EXISTS level_days (day TEXT PRIMARY KEY, tokens INTEGER NOT NULL)")
 
 
 @contextmanager
