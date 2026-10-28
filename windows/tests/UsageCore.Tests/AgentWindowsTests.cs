@@ -372,6 +372,28 @@ public sealed class AgentWindowsTests : IDisposable
     }
 
     [Fact]
+    public void RingFallsBackToAnotherComputerThatNeedsYou()
+    {
+        var sessions = new AgentSessions(600_000);
+        var remote = new List<RemoteAgent>
+        {
+            new("工作 PC", AgentKind.Codex, AgentState.NeedsYou, 1),
+            new("桌機", AgentKind.Claude, AgentState.Done, 1),
+        };
+        var agent = RingAgent.From(sessions, 1_000, remote)!;
+        Assert.Equal(new RingAgent(AgentKind.Codex, AgentState.NeedsYou, null, "工作 PC"), agent);
+        Assert.Equal("工作 PC：Codex 需要你", agent.Title);
+        Assert.Equal("在另一台電腦", agent.Detail);
+        // 其他電腦的完成、出錯、工作中不上圓環（這裡看過也消不掉）
+        Assert.Null(RingAgent.From(sessions, 1_000, [new("桌機", AgentKind.Claude, AgentState.Done, 1),
+                                                     new("桌機", AgentKind.Codex, AgentState.Error, 1),
+                                                     new("筆電", AgentKind.Claude, AgentState.Working, 2)]));
+        // 這台有要注意的時以這台為主
+        sessions.Apply(Event(AgentHookEvent.Stop, 2), 2_000);
+        Assert.Null(RingAgent.From(sessions, 3_000, remote)!.Device);
+    }
+
+    [Fact]
     public void NoticeLogSendsOncePerState()
     {
         var sessions = new AgentSessions(600_000);

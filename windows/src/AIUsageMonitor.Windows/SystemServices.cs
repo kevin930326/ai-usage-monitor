@@ -155,7 +155,7 @@ internal sealed class CollectorTrigger
         }
     }
 
-    private static async Task<int?> RunAsync(params string[] args)
+    internal static async Task<int?> RunAsync(params string[] args)
     {
         var info = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"))
         {
@@ -181,5 +181,38 @@ internal sealed class CollectorTrigger
             AppLog.Write($"schtasks: {e.GetType().Name}");
             return null;
         }
+    }
+}
+
+/// <summary>
+/// AI 狀態同步（ADR-0019 第 2 節）：App 寫了 agent-state.json 後請工作排程器執行 \AIUsageMonitor\AgentSync
+/// （install-task.ps1 建立，沒有觸發條件）。不受「立即更新」的節流限制，收集器自己最短 60 秒同步一次；
+/// 沒有安裝這個排程時 schtasks 失敗、不影響。App 本身仍不連網。
+/// </summary>
+internal static class AgentSyncTrigger
+{
+    private const string TaskName = @"\AIUsageMonitor\AgentSync";
+    private static bool running;
+
+    public static async void Run()
+    {
+        if (AppMode.Isolated || running) return;
+        running = true;
+        try
+        {
+            var code = await CollectorTrigger.RunAsync("/Run", "/TN", TaskName);
+            if (code != 0) AppLog.Write($"agent sync schtasks /Run exit={code?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"}");
+        }
+        finally
+        {
+            running = false;
+        }
+    }
+
+    /// <summary>App 結束時：不等結果（結束前送出就好）</summary>
+    public static void RunAndForget()
+    {
+        if (AppMode.Isolated) return;
+        _ = CollectorTrigger.RunAsync("/Run", "/TN", TaskName);
     }
 }
