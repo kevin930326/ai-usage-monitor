@@ -921,6 +921,60 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "queued-sleep-ignored-after-work-starts",
+      "note": "排隊的睡覺：播到時已經是工作中就忽略（排隊中開始工作、回位等待中開始工作）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 200,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        },
+        {
+          "t": 3100,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 3100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 3200,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 4050,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }

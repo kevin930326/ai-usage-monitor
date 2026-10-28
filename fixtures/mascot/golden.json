@@ -469,6 +469,30 @@
         "23800 pose none"
       ],
       "name" : "click-wakes-and-activity-delays-sleep"
+    },
+    {
+      "final" : {
+        "mode" : "work",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "0 start hop",
+        "100 queue sleep",
+        "200 mode work",
+        "900 end hop",
+        "900 pose work",
+        "1260 ignore sleep",
+        "3100 mode none",
+        "3100 start hop",
+        "3200 queue sleep",
+        "4000 end hop",
+        "4000 pose none",
+        "4050 mode work",
+        "4360 ignore sleep"
+      ],
+      "name" : "queued-sleep-ignored-after-work-starts"
     }
   ]
 }

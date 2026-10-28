@@ -383,6 +383,11 @@ public struct MascotMachine: Sendable {
         restUntil = nil
         switch request {
         case .sleep:
+            // 工作中不會睡著（排隊時還不是工作中，播到時才開始工作的也一樣）
+            if mode == .work {
+                record(.ignore(request.rawValue))
+                return
+            }
             if let playing { record(.interrupt(playing.animation)) }
             playing = nil
             enterSleep()

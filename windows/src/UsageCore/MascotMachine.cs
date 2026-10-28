@@ -365,6 +365,12 @@ public sealed class MascotMachine
         switch (request)
         {
             case MascotRequest.Sleep:
+                // 工作中不會睡著（排隊時還不是工作中，播到時才開始工作的也一樣）
+                if (Mode == MascotMode.Work)
+                {
+                    Record(new MascotEvent.Ignore(MascotNames.Name(request)));
+                    return;
+                }
                 if (Playing is { } playing) Record(new MascotEvent.Interrupt(playing.Animation));
                 Playing = null;
                 EnterSleep();
