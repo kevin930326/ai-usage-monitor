@@ -129,7 +129,8 @@ def parse_incidents(provider: str, data: dict) -> list[dict]:
     for i in data["incidents"]:
         if not isinstance(i, dict) or i.get("status") in ("resolved", "postmortem") or i.get("resolved_at"):
             continue
-        components = [c.get("name") for c in _items(i.get("components")) if isinstance(c, dict) and isinstance(c.get("name"), str)]
+        components = [c["name"] for c in _items(i.get("components"))
+                      if isinstance(c, dict) and isinstance(c.get("name"), str)]
         if related and components and not any(key in name for name in components for key in related):
             continue
         name = _text(i.get("name"))

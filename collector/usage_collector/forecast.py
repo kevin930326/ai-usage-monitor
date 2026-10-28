@@ -143,7 +143,8 @@ def _read_samples(path: Path, since: int) -> dict[tuple[str, str], list[Sample]]
         conn.close()
     result: dict[tuple[str, str], list[Sample]] = {}
     for provider, window_id, ts, used, resets in rows:
-        result.setdefault((provider, window_id), []).append(Sample(float(ts), float(used), None if resets is None else float(resets)))
+        sample = Sample(float(ts), float(used), None if resets is None else float(resets))
+        result.setdefault((provider, window_id), []).append(sample)
     return result
 
 
