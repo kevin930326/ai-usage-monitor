@@ -23,7 +23,11 @@ internal sealed record FloatingScene(
     Rect? TabVisible,
     double Reveal,
     double Expand,
-    double PixelsPerDip);
+    double PixelsPerDip)
+{
+    /// <summary>展開後被推回工作區時，展開的內容（含圓環）跟著移動的距離；展開的過程中逐漸移過去</summary>
+    public Vector Shift { get; init; }
+}
 
 internal static class FloatingRingRenderer
 {
@@ -63,6 +67,7 @@ internal static class FloatingRingRenderer
             return;
         }
 
+        center += s.Shift * e;
         var full = RingShape.Shape(s.Direction, s.Dock, s.RingDip);
         var rect = new Rect(
             new Point(center.X + Lerp(-r, full.Left, e), center.Y + Lerp(-r, full.Top, e)),

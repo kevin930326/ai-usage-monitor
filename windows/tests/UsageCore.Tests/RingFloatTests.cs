@@ -89,6 +89,34 @@ public class RingFloatLayoutTests
     }
 
     [Fact]
+    public void ShiftMovesTheContentWithTheClampedWindow()
+    {
+        // 100%、小圓環（40 DIP）貼在上緣：膠囊（高 80）比圓環高，視窗被推下來，內容也要跟著往下移
+        var plain = new MonitorInfo(@"\\.\DISPLAY1", new PixelRect(0, 0, 1920, 1080), new PixelRect(0, 0, 1920, 1040), 96, true);
+        foreach (var size in new[] { 40, 56, 72 })
+        {
+            foreach (var y in new[] { 8, 1040 - 8 - size })
+            {
+                var ring = PixelRect.FromSize(900, y, size, size);
+                var direction = RingFloatLayout.Direction(ring, plain, size);
+                var window = RingFloatLayout.Expanded(ring, direction, plain, size);
+                var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, plain, size);
+                var shape = RingShape.Shape(direction, RingFloatLayout.DockOf(ring, plain), size).Inflate(RingShape.Inset);
+                var info = RingShape.Info(direction, RingFloatLayout.DockOf(ring, plain), size);
+                var cx = ring.Left + size / 2.0 + dx;
+                var cy = ring.Top + size / 2.0 + dy;
+                Assert.True(plain.WorkArea.Contains(window));
+                // 移動後的外框與兩行資訊都在視窗裡
+                Assert.InRange(cy + shape.Top, window.Top - 1, window.Top + 1);
+                Assert.True(cy + info.Top >= window.Top && cy + info.Bottom <= window.Bottom, $"{size} {y}");
+                Assert.True(cx + info.Left >= window.Left && cx + info.Right <= window.Right, $"{size} {y}");
+            }
+        }
+        // 不必推的時候不動
+        Assert.Equal((0, 0), RingFloatLayout.ExpandedShift(Ring(1500, 500), RingExpandDirection.Left, Screen, Dip));
+    }
+
+    [Fact]
     public void TabShowsHalfTheRingAtTheEdge()
     {
         var margin = (int)Math.Round(RingPlacement.SnapMargin * Screen.Scale);

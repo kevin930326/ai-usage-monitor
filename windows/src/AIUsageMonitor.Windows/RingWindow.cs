@@ -43,7 +43,10 @@ internal sealed class RingWindow : Window
     private double ringDip;
     private PixelRect ring;
     private MonitorInfo? monitor;
+    /// <summary>收成標籤的那一邊（貼邊收合關閉時一律 None）</summary>
     private RingDock dock;
+    /// <summary>展開後被推回工作區時，內容跟著移動的距離（DIP）</summary>
+    private Vector shift;
     private RingExpandDirection direction;
     private PixelRect stage;
     private bool hoverOpen;
@@ -204,7 +207,10 @@ internal sealed class RingWindow : Window
         if (hoverOpen) return;
         hoverOpen = true;
         direction = RingFloatLayout.Direction(ring, monitor, ringDip);
-        var target = RingFloatLayout.Union(RingFloatLayout.Expanded(ring, direction, monitor, ringDip), ring);
+        var expanded = RingFloatLayout.Expanded(ring, direction, monitor, ringDip);
+        var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, monitor, ringDip);
+        shift = new Vector(dx / monitor.Scale, dy / monitor.Scale);
+        var target = RingFloatLayout.Union(expanded, ring);
         if (dock != RingDock.None) target = RingFloatLayout.Union(target, RingFloatLayout.Tab(ring, dock, monitor));
         if (target != stage) Place(target);
         var id = ++transition;
@@ -294,7 +300,7 @@ internal sealed class RingWindow : Window
             visible = new System.Windows.Rect(corner.X, corner.Y, tab.Width / scale, tab.Height / scale);
         }
         return new FloatingScene(content, details, palette, face, ticks, ringDip, direction, dock, center, tabCenter, visible,
-                                 Reveal, Expand, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                                 Reveal, Expand, VisualTreeHelper.GetDpi(this).PixelsPerDip) { Shift = shift };
     }
 
     // ---------- 滑鼠 ----------

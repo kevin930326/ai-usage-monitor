@@ -137,6 +137,15 @@ public static class RingFloatLayout
         return new PixelRect(left, top, (int)Math.Ceiling(cx + rect.Right * scale), (int)Math.Ceiling(cy + rect.Bottom * scale));
     }
 
+    /// <summary>展開後的視窗被推回工作區時移動了多少（實體像素）：畫的時候展開的內容要跟著移，否則會被視窗裁掉</summary>
+    public static (int Dx, int Dy) ExpandedShift(PixelRect ring, RingExpandDirection direction, MonitorInfo monitor, double ringDip)
+    {
+        var shape = RingShape.Shape(direction, DockOf(ring, monitor), ringDip).Inflate(RingShape.Inset);
+        var raw = ToPixels(ring, shape, monitor.Scale);
+        var clamped = Clamp(raw, monitor.WorkArea);
+        return (clamped.Left - raw.Left, clamped.Top - raw.Top);
+    }
+
     /// <summary>展開後的視窗（含陰影），推回工作區內（比工作區大時對齊左上）</summary>
     public static PixelRect Expanded(PixelRect ring, RingExpandDirection direction, MonitorInfo monitor, double ringDip)
     {
