@@ -61,6 +61,22 @@ import Testing
         #expect(d.mood(at: d.machine.now) == .surprised)
     }
 
+    /// 沒有資料、讀檔失敗（含已有舊資料）、服務出錯、過期都閉眼；恢復後照額度（Codex C-04）
+    @Test func unreadableQuotaClosesTheEyes() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let fresh = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [
+            UsageWindow(id: "five_hour", label: "5 小時", usedPct: 10)])])
+        let failing = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(error: "auth")])
+        let old = UsageSnapshot(updatedAt: now.addingTimeInterval(-3600), providers: fresh.providers)
+        #expect(MascotMood.isQuotaUnavailable(nil, provider: "claude", readFailed: false, now: now))
+        #expect(MascotMood.isQuotaUnavailable(nil, provider: "claude", readFailed: true, now: now))
+        #expect(MascotMood.isQuotaUnavailable(fresh, provider: "claude", readFailed: true, now: now))
+        #expect(MascotMood.isQuotaUnavailable(failing, provider: "claude", readFailed: false, now: now))
+        #expect(MascotMood.isQuotaUnavailable(old, provider: "claude", readFailed: false, now: now))
+        #expect(!MascotMood.isQuotaUnavailable(fresh, provider: "claude", readFailed: false, now: now))
+        #expect(MascotMood.quota(level: 0, unavailable: true) == .stale)
+    }
+
     @Test func collapsedSleepIsAStillPoseWithDoze() throws {
         let config = try Self.config()
         var d = MascotDirector(config: config, startTime: 0)

@@ -61,6 +61,9 @@ final class UsageStore {
 
     func reload() {
         loadServiceStatus()
+        // 讀檔失敗與恢復都要更新角色的表情（閉眼／照額度；Codex C-04）
+        let failedBefore = errorMessage != nil
+        defer { if failedBefore != (errorMessage != nil) { MascotController.shared.updateStatus() } }
         do {
             let loaded = try locator.load()
             errorMessage = nil

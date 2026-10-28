@@ -83,6 +83,12 @@ public enum MascotMood: String, Sendable, CaseIterable {
         if unavailable { return .stale }
         return level >= 2 ? .out : level == 1 ? .worried : .normal
     }
+
+    /// 額度不明（閉眼）：還沒有資料、讀檔失敗（包括有舊資料時）、服務出錯或資料過期（Codex C-04）
+    public static func isQuotaUnavailable(_ snapshot: UsageSnapshot?, provider: String, readFailed: Bool, now: Date) -> Bool {
+        guard let snapshot, !readFailed else { return true }
+        return snapshot.providers[provider]?.error != nil || snapshot.isStale(now: now)
+    }
 }
 
 /// 靜音與勿擾（右鍵選單）：角色的提醒動畫與瀏海的通知暫停到某個時間

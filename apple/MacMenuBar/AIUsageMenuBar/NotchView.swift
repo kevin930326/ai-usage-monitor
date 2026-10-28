@@ -195,11 +195,6 @@ enum NotchQuota {
         return usage.visibleWindows.min { $0.effectiveRemainingPct(at: now) < $1.effectiveRemainingPct(at: now) }
     }
 
-    /// 讀取失敗或資料過期（表情閉眼；額度不明）
-    static func isUnavailable(in snapshot: UsageSnapshot?, provider: String, now: Date) -> Bool {
-        guard let snapshot else { return false }
-        return snapshot.providers[provider]?.error != nil || snapshot.isStale(now: now)
-    }
 
     /// 額度的等級：出錯或用完 2、剩不到 20% 1、其他 0（同通知「剩不到 20%」的門檻）
     static func statusLevel(in snapshot: UsageSnapshot?, provider: String, now: Date) -> Int {

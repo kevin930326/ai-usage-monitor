@@ -401,8 +401,9 @@ final class MascotController {
         let store = UsageStore.shared
         let provider = PanelSettings.shared.mascotCharacter.provider
         let level = NotchQuota.statusLevel(in: store.snapshot, provider: provider, now: store.now)
-        let mood = MascotMood.quota(level: level,
-                                    unavailable: NotchQuota.isUnavailable(in: store.snapshot, provider: provider, now: store.now))
+        let unavailable = MascotMood.isQuotaUnavailable(store.snapshot, provider: provider,
+                                                        readFailed: store.errorMessage != nil, now: store.now)
+        let mood = MascotMood.quota(level: level, unavailable: unavailable)
         if director?.mood != mood { mutate { $0.setMood(mood) } }
         setStatus(level)
     }
