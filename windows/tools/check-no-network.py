@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Windows App 與 UsageCore 不連網、不碰密鑰（ADR-0015 第 2 節）的靜態檢查。
+"""Windows App、UsageCore 與 hook 不連網、不碰密鑰（ADR-0015 第 2 節）的靜態檢查。
 
 - 原始碼不得出現網路（System.Net、HttpClient、Socket、WinHttp、WebSocket…）與認證（CredRead、PasswordVault…）的 API
 - 啟動其他程式（Process.Start、ProcessStartInfo）只能在 SystemServices.cs（觸發收集器的 schtasks.exe）
-- App 與 UsageCore 不得有 PackageReference（不帶第三方程式）
+- App、UsageCore 與 hook（AumHook，ADR-0019）不得有 PackageReference（不帶第三方程式）
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
 - 傳入 Release 版的執行檔（--release <資料夾>）時，另外確認不含 Debug 專用的字串（示範資料、截圖參數）
 
@@ -44,7 +44,7 @@ def strip_comments(text: str) -> str:
 
 def check_sources(root: Path = ROOT) -> list[str]:
     problems = []
-    for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore"):
+    for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore", root / "src" / "AumHook"):
         for path in sorted(folder.rglob("*")):
             if path.suffix not in (".cs", ".xaml", ".csproj", ".props") or "obj" in path.parts or "bin" in path.parts:
                 continue
@@ -66,7 +66,7 @@ def check_sources(root: Path = ROOT) -> list[str]:
 
 def check_release(folder: Path) -> list[str]:
     problems = []
-    binaries = [p for p in folder.rglob("*") if p.suffix in (".dll", ".exe") and p.name.startswith(("AIUsageMonitor",))]
+    binaries = [p for p in folder.rglob("*") if p.suffix in (".dll", ".exe") and p.name.startswith(("AIUsageMonitor", "aum-hook"))]
     if not binaries:
         return [f"{folder}: 找不到 AIUsageMonitor 的執行檔"]
     for path in binaries:
