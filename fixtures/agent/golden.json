@@ -727,6 +727,67 @@
         "1100 activity working=false idle=true",
         "5000 claude SessionStart → top=claude/aaaa [claude/aaaa/proj:waiting@5000]"
       ]
+    },
+    {
+      "name" : "long-task-done-notifies",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "10000 notices [] next=none",
+        "200000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@200000]",
+        "200000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@200000] next=none",
+        "500000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@200000] next=none"
+      ]
+    },
+    {
+      "name" : "short-task-done-is-silent",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "60000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@60000]",
+        "60000 notices [] next=none"
+      ]
+    },
+    {
+      "name" : "needs-you-notifies-after-delay",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "1000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@1000]",
+        "10000 notices [] next=21000",
+        "20999 notices [] next=21000",
+        "21000 notices [claude:needsYou(permission) key=claude/aaaaaaaaaaaaaaaa/needsYou@1000] next=none",
+        "30000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@30000]",
+        "30000 notices [] next=none"
+      ]
+    },
+    {
+      "name" : "turn-start-survives-needs-you",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "100000 claude PermissionRequest(permission) → top=claude/aaaa [claude/aaaa/proj:needsYou(permission)@100000]",
+        "150000 claude PostToolUse → top=claude/aaaa [claude/aaaa/proj:working@150000]",
+        "190000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@190000]",
+        "190000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@190000] next=none"
+      ]
+    },
+    {
+      "name" : "new-turn-resets-turn-start",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "100000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@100000]",
+        "110000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@110000]",
+        "250000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@250000]",
+        "250000 notices [] next=none"
+      ]
+    },
+    {
+      "name" : "subagent-after-done-keeps-notice-key",
+      "result" : [
+        "0 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@0]",
+        "190000 claude Stop → top=claude/aaaa [claude/aaaa/proj:done@190000]",
+        "190000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@190000] next=none",
+        "195000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@190000]",
+        "195000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@190000] next=none"
+      ]
     }
   ]
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -61,6 +62,14 @@ public class AgentGoldenTests
                 case "activity":
                     var (working, idle) = sessions.Activity(t, new Dictionary<AgentKind, (bool, bool)>());
                     log.Add($"{t} activity working={(working ? "true" : "false")} idle={(idle ? "true" : "false")}");
+                    break;
+                case "notices":
+                    var policy = new AgentNoticePolicy();
+                    var notices = AgentNotices.Due(sessions, t, policy).Select(n =>
+                        $"{AgentNames.Name(n.Ai)}:{(n.Kind == AgentNoticeKind.NeedsYou ? "needsYou" : "done")}" +
+                        $"{(n.Need is { } nd ? $"({AgentNames.Name(nd)})" : "")} key={n.Key}");
+                    var next = AgentNotices.NextCheck(sessions, t, policy);
+                    log.Add($"{t} notices [{string.Join(", ", notices)}] next={(next is { } nx ? nx.ToString(CultureInfo.InvariantCulture) : "none")}");
                     break;
                 case "seen":
                     sessions.MarkSeen(t);

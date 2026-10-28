@@ -87,6 +87,13 @@ import Testing
             case "activity":
                 let (working, idle) = sessions.activity(at: event.t, fallback: [:])
                 log.append("\(event.t) activity working=\(working) idle=\(idle)")
+            case "notices":
+                let policy = AgentNoticePolicy()
+                let list = sessions.notices(at: event.t, policy: policy).map { n in
+                    "\(n.ai.rawValue):\(n.kind.rawValue)\(n.need.map { "(\($0.rawValue))" } ?? "") key=\(n.key)"
+                }
+                let next = sessions.nextNoticeCheck(after: event.t, policy: policy).map(String.init) ?? "none"
+                log.append("\(event.t) notices [\(list.joined(separator: ", "))] next=\(next)")
             case "seen":
                 sessions.markSeen(at: event.t)
                 log.append("\(event.t) seen → \(describe(sessions, at: event.t))")

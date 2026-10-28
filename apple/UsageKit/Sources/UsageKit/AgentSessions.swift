@@ -239,6 +239,8 @@ public struct AgentSession: Sendable, Equatable {
     public var since: Int64
     /// 最後一個事件的時間（毫秒）
     public var last: Int64
+    /// 這一回合開始工作的時間（從不在跑的狀態進入工作中時記下；完成後用來算跑了多久）
+    public var turnStart: Int64? = nil
 
     public func state(at now: Int64, idleAfter: Int64) -> AgentState {
         stored == .waiting && now - since >= idleAfter ? .idle : stored
@@ -289,6 +291,8 @@ public struct AgentSessions: Sendable, Equatable {
         session.last = now
         let next = Self.transition(from: session.stored, event: message.event, need: message.need, sub: message.sub)
         if let next, next.state != session.stored || next.need != session.need {
+            let wasRunning = session.stored == .working || session.stored == .needsYou
+            if next.state == .working && !wasRunning { session.turnStart = now }
             session.stored = next.state
             session.need = next.need
             session.since = now
@@ -454,5 +458,52 @@ public struct AgentRateLimiter: Sendable {
         if current != second { (second, count) = (current, 0) }
         count += 1
         return count <= Self.maxPerSecond
+    }
+}
+
+// MARK: - 系統通知（第 2 部分）
+
+/// 該發的系統通知。只有 AI、種類與工作階段，不含資料夾名稱：通知中心會把通知內容存到磁碟（隱私底線）
+public struct AgentNotice: Sendable, Equatable {
+    public enum Kind: String, Sendable { case needsYou, done }
+    public var ai: AgentKind
+    public var kind: Kind
+    public var need: AgentNeed?
+    /// 同一次狀態只發一次：工作階段、種類與進入狀態的時間
+    public var key: String
+}
+
+public struct AgentNoticePolicy: Sendable, Equatable {
+    /// 需要你多久還沒處理才發通知（設定，預設 20 秒）
+    public var needsYouAfter: Int64
+    /// 跑超過多久的任務完成時發通知（設定，預設 3 分鐘）
+    public var longTask: Int64
+
+    public init(needsYouAfter: Int64 = 20_000, longTask: Int64 = 180_000) {
+        self.needsYouAfter = needsYouAfter
+        self.longTask = longTask
+    }
+}
+
+extension AgentSessions {
+    /// 現在該發的通知（呼叫端用 `key` 去掉已經發過的）：需要你超過設定的秒數；跑超過設定分鐘數的回合完成
+    public func notices(at now: Int64, policy: AgentNoticePolicy) -> [AgentNotice] {
+        ordered(at: now).compactMap { s in
+            let key = "\(s.ai.rawValue)/\(s.id)/\(s.stored.rawValue)@\(s.since)"
+            switch s.stored {
+            case .needsYou where now - s.since >= policy.needsYouAfter:
+                return AgentNotice(ai: s.ai, kind: .needsYou, need: s.need, key: key)
+            case .done where s.turnStart.map { s.since - $0 >= policy.longTask } ?? false:
+                return AgentNotice(ai: s.ai, kind: .done, need: nil, key: key)
+            default:
+                return nil
+            }
+        }
+    }
+
+    /// 下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 nil
+    public func nextNoticeCheck(after now: Int64, policy: AgentNoticePolicy) -> Int64? {
+        sessions.filter { $0.stored == .needsYou && now - $0.since < policy.needsYouAfter }
+            .map { $0.since + policy.needsYouAfter }.min()
     }
 }

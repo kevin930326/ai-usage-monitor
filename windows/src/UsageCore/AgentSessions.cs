@@ -231,7 +231,9 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
 }
 
 /// <summary>一個工作階段。Stored 是存的狀態（閒置由「等你」加上時間算出，見 State）</summary>
-public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentState Stored, AgentNeed? Need, long Since, long Last)
+/// <remarks>TurnStart：這一回合開始工作的時間（從不在跑的狀態進入工作中時記下；完成後用來算跑了多久）</remarks>
+public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentState Stored, AgentNeed? Need, long Since, long Last,
+                                  long? TurnStart = null)
 {
     public AgentState State(long now, long idleAfter) =>
         Stored == AgentState.Waiting && now - Since >= idleAfter ? AgentState.Idle : Stored;
@@ -275,7 +277,11 @@ public sealed class AgentSessions(long idleAfter)
         session = session with { Last = now };
         var next = Transition(session.Stored, message.Event, message.Need, message.Sub);
         if (next is { } n && (n.State != session.Stored || n.Need != session.Need))
+        {
+            var wasRunning = session.Stored is AgentState.Working or AgentState.NeedsYou;
+            if (n.State == AgentState.Working && !wasRunning) session = session with { TurnStart = now };
             session = session with { Stored = n.State, Need = n.Need, Since = now };
+        }
         if (index >= 0)
         {
             sessions[index] = session;
@@ -402,5 +408,41 @@ public sealed class AgentSessions(long idleAfter)
             }
         }
         return (working, !working && !active);
+    }
+}
+
+/// <summary>該發的系統通知。只有 AI、種類與工作階段，不含資料夾名稱：通知中心會把通知內容存到磁碟（隱私底線）</summary>
+public sealed record AgentNotice(AgentKind Ai, AgentNoticeKind Kind, AgentNeed? Need, string Key);
+
+public enum AgentNoticeKind { NeedsYou, Done }
+
+/// <summary>NeedsYouAfter：需要你多久還沒處理才發（預設 20 秒）；LongTask：跑超過多久的任務完成時發（預設 3 分鐘）</summary>
+public sealed record AgentNoticePolicy(long NeedsYouAfter = 20_000, long LongTask = 180_000);
+
+public static class AgentNotices
+{
+    /// <summary>現在該發的通知（呼叫端用 Key 去掉已經發過的）</summary>
+    public static List<AgentNotice> Due(AgentSessions sessions, long now, AgentNoticePolicy policy)
+    {
+        var list = new List<AgentNotice>();
+        foreach (var s in sessions.Ordered(now))
+        {
+            var key = $"{AgentNames.Name(s.Ai)}/{s.Id}/{AgentNames.Name(s.Stored)}@{s.Since.ToString(CultureInfo.InvariantCulture)}";
+            if (s.Stored == AgentState.NeedsYou && now - s.Since >= policy.NeedsYouAfter)
+                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.NeedsYou, s.Need, key));
+            else if (s.Stored == AgentState.Done && s.TurnStart is { } start && s.Since - start >= policy.LongTask)
+                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.Done, null, key));
+        }
+        return list;
+    }
+
+    /// <summary>下一次要檢查通知的時間（還沒到時間的需要你）；沒有就是 null</summary>
+    public static long? NextCheck(AgentSessions sessions, long now, AgentNoticePolicy policy)
+    {
+        long? next = null;
+        foreach (var s in sessions.Sessions)
+            if (s.Stored == AgentState.NeedsYou && now - s.Since < policy.NeedsYouAfter)
+                next = Math.Min(next ?? long.MaxValue, s.Since + policy.NeedsYouAfter);
+        return next;
     }
 }

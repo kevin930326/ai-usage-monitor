@@ -1639,6 +1639,256 @@
      "sent": 5000
     }
    ]
+  },
+  {
+   "name": "long-task-done-notifies",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 10000,
+     "e": "notices"
+    },
+    {
+     "t": 200000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 200000,
+     "e": "notices"
+    },
+    {
+     "t": 500000,
+     "e": "notices"
+    }
+   ]
+  },
+  {
+   "name": "short-task-done-is-silent",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 60000,
+     "e": "notices"
+    }
+   ]
+  },
+  {
+   "name": "needs-you-notifies-after-delay",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 10000,
+     "e": "notices"
+    },
+    {
+     "t": 20999,
+     "e": "notices"
+    },
+    {
+     "t": 21000,
+     "e": "notices"
+    },
+    {
+     "t": 30000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 30000,
+     "e": "notices"
+    }
+   ]
+  },
+  {
+   "name": "turn-start-survives-needs-you",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 100000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PermissionRequest",
+     "need": "permission",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 150000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 190000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 190000,
+     "e": "notices"
+    }
+   ]
+  },
+  {
+   "name": "new-turn-resets-turn-start",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 100000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 110000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 250000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 250000,
+     "e": "notices"
+    }
+   ]
+  },
+  {
+   "name": "subagent-after-done-keeps-notice-key",
+   "events": [
+    {
+     "t": 0,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 190000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj"
+    },
+    {
+     "t": 190000,
+     "e": "notices"
+    },
+    {
+     "t": 195000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PostToolUse",
+     "need": "",
+     "sid": "aaaaaaaaaaaaaaaa",
+     "dir": "proj",
+     "sub": true
+    },
+    {
+     "t": 195000,
+     "e": "notices"
+    }
+   ]
   }
  ]
 }
