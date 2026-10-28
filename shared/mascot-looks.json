@@ -1,0 +1,25 @@
+{
+  "_comment": "角色外觀（ADR-0021）。色值與畫法來源：配色挑選頁（design/mascot/PALETTE-PICKS.md）的 PAL 陣列。Mac 打包成資源，Windows 之後共用。style：solid（light/mid/shade 三階球面漸層）、linear（stops 依 angle 度的直線漸層，加高光與陰影）、led、pixel、neon、wire、ascii（特效，color 是主色）。eye 沒寫時是深色 #121212。",
+  "version": 1,
+  "groups": [
+    { "id": "basic", "name": "基本" },
+    { "id": "tech", "name": "科技" },
+    { "id": "cute", "name": "可愛" },
+    { "id": "minimal", "name": "極簡" },
+    { "id": "effect", "name": "特效" }
+  ],
+  "looks": [
+    { "id": "D3", "name": "珍珠白", "group": "basic", "style": "solid", "light": "#FFFFFF", "mid": "#E4E0DC", "shade": "#8C8680", "glow": "#FFC496" },
+    { "id": "T5", "name": "深空", "group": "tech", "style": "linear", "angle": 120, "stops": ["#3A4FB8", "#4A2C8F", "#0E1530"], "glow": "#6C5CFF", "eye": "#EAF0FF" },
+    { "id": "C1", "name": "草莓牛奶", "group": "cute", "style": "solid", "light": "#FFF0F4", "mid": "#FFAFC5", "shade": "#D45D82", "glow": "#FF8FB1", "blush": true },
+    { "id": "C3", "name": "棉花糖", "group": "cute", "style": "linear", "angle": 135, "stops": ["#FFC2DA", "#C8D8FF", "#FFF1B8"], "glow": "#FFC2DA", "blush": true },
+    { "id": "C4", "name": "蜜桃", "group": "cute", "style": "solid", "light": "#FFF3E6", "mid": "#FFC08F", "shade": "#D9773A", "glow": "#FFB27A", "blush": true },
+    { "id": "M1", "name": "石墨", "group": "minimal", "style": "solid", "light": "#8A8F99", "mid": "#3D424B", "shade": "#15171B", "glow": "#6B7280", "eye": "#F2F2F2" },
+    { "id": "M2", "name": "霧灰", "group": "minimal", "style": "solid", "light": "#FAFAF9", "mid": "#CFCCC6", "shade": "#7C7870", "glow": "#E8E2D8" },
+    { "id": "X9", "name": "LED 點陣", "group": "effect", "style": "led", "color": "#FFB547", "glow": "#FFB547" },
+    { "id": "X10", "name": "8-bit 像素", "group": "effect", "style": "pixel", "color": "#EC9674", "glow": "#F08C5F" },
+    { "id": "X8", "name": "霓虹線條", "group": "effect", "style": "neon", "color": "#FF4FC3", "glow": "#FF4FC3", "glow_scale": 1.4 },
+    { "id": "X4", "name": "線框球", "group": "effect", "style": "wire", "color": "#5CF2FF", "glow": "#3AC8FF" },
+    { "id": "X3", "name": "ASCII 白", "group": "effect", "style": "ascii", "color": "#ECECF2", "glow": "#C9D6E6" }
+  ]
+}

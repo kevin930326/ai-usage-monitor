@@ -30,7 +30,7 @@ MAC_SET=(panel-light panel-dark stats-window-light stats-window-dark stats-windo
          menubar-icons-light menubar-icons-dark wizard-light wizard-dark
          tier2-card-revoked-device-light tier2-card-revoked-device-dark tier2-card-deleted-device-light tier2-card-deleted-device-dark
          tier2-card-all-cache-read-light tier2-card-all-cache-read-dark
-         notch-collapsed notch-intro notch-expressions notch-agents notch-forecast notch-level notch-menubar-light notch-menubar-dark notch-menu-light notch-menu-dark)
+         notch-collapsed notch-intro notch-expressions notch-agents notch-forecast notch-level notch-looks-expanded notch-looks-collapsed notch-collapsed-motion notch-menubar-light notch-menubar-dark notch-menu-light notch-menu-dark)
 IOS_SET=(widget-small-light widget-small-dark widget-medium-light widget-medium-dark widget-large-light widget-large-dark
          live-activity-light live-activity-dark island-normal)
 IOS_BUNDLE=io.github.kevin930326.AIUsageMonitor

@@ -18,6 +18,15 @@ struct NotchSettingsSection: View {
                 FlowChips(choices: MascotCharacter.allCases.map { ($0, $0.title) }, selected: settings.mascotCharacter) {
                     settings.mascotCharacter = $0
                 }
+                if let config = MascotController.shared.baseConfig, let looks = MascotController.shared.looks {
+                    Text("角色外觀").font(.subheadline.weight(.semibold)).padding(.top, 4)
+                    MascotLookPicker(config: config, looks: looks, character: settings.mascotCharacter,
+                                     selected: looks.look(settings.mascotLook)?.id) { settings.mascotLook = $0 }
+                    Text("預設跟著服務（Claude 珊瑚、Codex 青瓷）。特效在展開時會動；收合時只在 AI 工作中動（每秒最多 12 次），閒置與睡著時停住。角色動畫是「簡單」「關閉」或系統開了「減少動態效果」時一律靜止。選單列圖示用同一個外觀的靜態圖。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text("過場").font(.subheadline.weight(.semibold)).padding(.top, 4)
                 FlowChips(choices: NotchIntroChoice.allCases.map { ($0, $0.title) }, selected: settings.notchIntro) {
                     settings.notchIntro = $0

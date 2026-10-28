@@ -18,6 +18,11 @@ enum DebugMascot {
         /// AI 工作階段（外框、數量、列表）與等你時的脈動（0…1）
         var extras = NotchExtras()
         var pulse: Double?
+        /// 角色外觀（ADR-0021）與特效是否在動（動的話畫 `time` 那一格）
+        var look: MascotLook?
+        var effectsLive = false
+        /// 收合時的動態（ADR-0021）：畫 Core Animation 那一輪的這個位置（0…1）
+        var loopPhase: Double?
     }
 
     enum Quota { case normal, low, stale, forecast, incident }
@@ -79,8 +84,23 @@ enum DebugMascot {
         func canvas(_ shot: Shot) -> some View {
             let d = director(shot)
             let size = d.config.panel.collapsed
-            return NotchCanvas(director: d, time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
-                               character: shot.character, extras: shot.extras, gazeOverride: (0, 0))
+            let base = NotchCanvas(director: d, time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
+                                   character: shot.character, extras: shot.extras, look: shot.look, effectsLive: shot.effectsLive,
+                                   gazeOverride: (0, 0))
+            let plan = shot.loopPhase.flatMap { _ in
+                MascotEffectLoop.plan(base, now: 0) { shot.look?.style.animates == true ? $0 : nil }
+            }
+            return ZStack(alignment: .topLeading) {
+                if let plan, let phase = shot.loopPhase {
+                    // 角色由 Core Animation 那一輪畫（App 裡也是這樣），畫布上不畫
+                    NotchCanvas(director: d, time: shot.time, layout: shot.layout, snapshot: quotaSnapshot(shot.quota), now: now,
+                                character: shot.character, extras: shot.extras, look: shot.look, gazeOverride: (0, 0),
+                                heroRate: .effect, heroClock: { _ in shot.time })
+                    plan.draw(Int(phase * plan.length)).position(x: plan.box.midX, y: plan.box.midY)
+                } else {
+                    base
+                }
+            }
                 .overlay {
                     if let pulse = shot.pulse {
                         NotchPulse.glow(NotchShape(width: size.width, height: size.height, corner: size.corner), phase: pulse)
@@ -240,6 +260,26 @@ enum DebugMascot {
             // 第一次展開的提示（出現時不顯示等級，位置相同）
             Shot(name: "expanded-hint", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(hint: true, level: level)),
         ]), dir.appendingPathComponent("notch-level.png"))
+        // ADR-0021：每個外觀展開（特效動到某一格）與收合（AI 工作中的某一格、閒置的靜態）
+        if let data = MascotController.bundledLooks(), let looks = try? MascotLooks.decode(data) {
+            write(sheet(looks.looks.map { look in
+                Shot(name: "expanded-look-\(look.id)", setup: { $0.open(at: 0, intro: false) }, time: 1500,
+                     look: look, effectsLive: look.style.animates)
+            }), dir.appendingPathComponent("notch-looks-expanded.png"))
+            write(sheet(looks.looks.flatMap { look in
+                [Shot(name: "collapsed-look-\(look.id)-work", setup: { $0.setWorking(true, at: 0) }, time: 2000,
+                      look: look, effectsLive: look.style.animates, loopPhase: 0.3),
+                 Shot(name: "collapsed-look-\(look.id)-sleep", setup: { $0.setAgentIdle(true, at: 0) }, time: 2000,
+                      look: look, loopPhase: 0.3),
+                 Shot(name: "collapsed-look-\(look.id)-idle", setup: { _ in }, time: 2000, look: look)]
+            }, height: 40), dir.appendingPathComponent("notch-looks-collapsed.png"))
+            // 跟著服務色：收合時敲鍵盤與睡著呼吸的幾格（ADR-0021 收合時的動態）
+            write(sheet([0.0, 0.2, 0.4, 0.6].map { phase in
+                Shot(name: "collapsed-typing-\(Int(phase * 100))", setup: { $0.setWorking(true, at: 0) }, time: 2000, loopPhase: phase)
+            } + [0.1, 0.35, 0.6, 0.85].map { phase in
+                Shot(name: "collapsed-doze-\(Int(phase * 100))", setup: { $0.setAgentIdle(true, at: 0) }, time: 2000, loopPhase: phase)
+            }, height: 40), dir.appendingPathComponent("notch-collapsed-motion.png"))
+        }
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }

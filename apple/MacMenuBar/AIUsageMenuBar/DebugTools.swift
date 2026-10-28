@@ -16,6 +16,7 @@ import UsageKitUI
 /// - `AUM_RENDER_NOW=<ISO 8601>`：畫面的「現在」固定成這個時間（`RenderClock`，截圖比對用，見 `scripts/snapshots.sh`）。
 /// - `AUM_DEMO_PERF=1`（搭配 `AUM_DEMO_PANEL=1`）：依固定時間表打開面板、觸發動畫、關閉、再開關一次，給 `scripts/measure-panel-perf.sh` 量測。
 /// - `AUM_DEMO_NOTCH_PERF=1`：顯示真的瀏海面板，依固定時間表展開（含過場）、播反應、收合、再開關一次，給 `scripts/measure-notch-perf.sh` 量測。
+/// - `AUM_DEMO_LOOK_PERF=<外觀代號|none>`：顯示真的瀏海面板、選這個外觀，依固定時間表收著工作、收著睡著、收著閒置、展開，給 `scripts/measure-look-perf.sh` 量測（ADR-0021）。
 /// - `AUM_DEMO_WINDOWS=settings,stats,wizard`：啟動後以 SwiftUI 的 scene 打開這些視窗（與使用者打開的相同），
 ///   檢查實際視窗的外觀（ImageRenderer 畫不出視窗背景）。
 /// - `AUM_DEMO_SWITCH=dark@4,system@8,sysdark@12`：在第 N 秒把外觀設定改成這個值（Debug 預覽用獨立的設定），
@@ -27,7 +28,8 @@ enum DebugTools {
     /// 不會改到正式的設定與通知紀錄（Codex C-01）
     nonisolated static var isDemo: Bool {
         let env = ProcessInfo.processInfo.environment
-        return env["AUM_DEMO_PANEL"] == "1" || env["AUM_DEMO_NOTCH_PERF"] == "1" || !(env["AUM_DEMO_WINDOWS"] ?? "").isEmpty || !(env["AUM_DEMO_SWITCH"] ?? "").isEmpty
+        return env["AUM_DEMO_PANEL"] == "1" || env["AUM_DEMO_NOTCH_PERF"] == "1" || !(env["AUM_DEMO_LOOK_PERF"] ?? "").isEmpty
+            || !(env["AUM_DEMO_WINDOWS"] ?? "").isEmpty || !(env["AUM_DEMO_SWITCH"] ?? "").isEmpty
     }
 
     private static var panelWindow: NSWindow?
@@ -67,6 +69,7 @@ enum DebugTools {
         }
         if env["AUM_DEMO_PERF"] == "1" { runPerfSchedule() }
         if env["AUM_DEMO_NOTCH_PERF"] == "1" { runNotchPerfSchedule() }
+        if let look = env["AUM_DEMO_LOOK_PERF"], !look.isEmpty { runLookPerfSchedule(look) }
         if let names = env["AUM_DEMO_WINDOWS"], !names.isEmpty { openSceneWindows(names.split(separator: ",").map(String.init)) }
         for step in (env["AUM_DEMO_SWITCH"] ?? "").split(separator: ",") {
             let parts = step.split(separator: "@")
@@ -206,6 +209,50 @@ enum DebugTools {
             (close + 175, "agent-lower-open", { AgentMonitor.shared.debugApply(.postToolUse) }),
             (close + 180, "exit", { exit(0) }),
         ])
+    }
+
+    /// 外觀的特效（ADR-0021）：收著時 AI 工作中（特效每秒 12 次）、閒置（靜態）、展開待著。游標固定不動
+    private static func runLookPerfSchedule(_ look: String) {
+        let mascot = MascotController.shared
+        mascot.debugSkipsActivity = true
+        let screen = NSScreen.main?.frame ?? .zero
+        mascot.debugPointer = { CGPoint(x: screen.midX, y: screen.midY) }
+        mascot.followPointerChanged()
+        PanelSettings.shared.mascotLook = look == "none" ? nil : look
+        schedule([
+            (0, "launch", {}),
+            (10, "look-work", { mascot.mutate { $0.setWorking(true, at: mascot.time()) } }),
+            (16, "look-dump", { dumpNotchLayers() }),
+            (40, "look-sleep", { mascot.mutate { $0.setWorking(false, at: mascot.time()); $0.setAgentIdle(true, at: mascot.time()) } }),
+            (70, "look-idle", { mascot.mutate { $0.setAgentIdle(false, at: mascot.time()) } }),
+            (100, "look-open", { mascot.pointerEntered() }),
+            (115, "look-close", { mascot.closeNow() }),
+            (120, "exit", { exit(0) }),
+        ])
+    }
+
+    /// `AUM_LOOK_DUMP=<資料夾>`：把瀏海視窗的圖層（含 Core Animation 循環播放的第一格）畫成 notch-layers.png，
+    /// 檢查特效循環的位置與方向（不截螢幕）
+    private static func dumpNotchLayers() {
+        guard let dir = ProcessInfo.processInfo.environment["AUM_LOOK_DUMP"], !dir.isEmpty,
+              let view = NotchPanelController.shared.debugContainer, let layer = view.layer else { return }
+        let scale = 2.0
+        let size = view.bounds.size
+        guard let cg = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
+                                 bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        cg.setFillColor(CGColor(gray: 0.5, alpha: 1))
+        cg.fill(CGRect(x: 0, y: 0, width: size.width * scale, height: size.height * scale))
+        cg.scaleBy(x: scale, y: scale)
+        if view.isFlipped {
+            cg.translateBy(x: 0, y: size.height)
+            cg.scaleBy(x: 1, y: -1)
+        }
+        layer.render(in: cg)
+        guard let image = cg.makeImage() else { return }
+        let rep = NSBitmapImageRep(cgImage: image)
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: dir).appendingPathComponent("notch-layers.png"))
+        UsageStore.log("look-dump loop=\(MascotController.shared.effectLoopPlaying) rate=\(MascotController.shared.renderRate)")
     }
 
     /// 量測時間表開始的時間（沒在量測時是 nil）
@@ -606,6 +653,22 @@ enum DebugTools {
                         ForEach(states, id: \.0) { title, content in
                             HStack(spacing: 6) {
                                 MenuBarIconView(content: content, style: style).font(.system(size: 13))
+                                Text(title).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            .frame(width: 120, alignment: .leading)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: 24)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+                }
+                // 角色外觀（ADR-0021）：角色樣式用各外觀的靜態圖
+                ForEach(MascotController.shared.looks?.looks ?? [], id: \.id) { look in
+                    HStack(spacing: 18) {
+                        Text(look.name).font(.caption).frame(width: 56, alignment: .leading)
+                        ForEach(states, id: \.0) { title, content in
+                            HStack(spacing: 6) {
+                                MenuBarIconView(content: content, style: .character, look: look).font(.system(size: 13))
                                 Text(title).font(.caption2).foregroundStyle(.secondary)
                             }
                             .frame(width: 120, alignment: .leading)

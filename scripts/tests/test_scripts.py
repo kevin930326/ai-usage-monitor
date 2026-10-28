@@ -709,7 +709,8 @@ class SnapshotsScriptTests(unittest.TestCase):
            "tier2-card-revoked-device-light", "tier2-card-revoked-device-dark",
            "tier2-card-deleted-device-light", "tier2-card-deleted-device-dark",
            "tier2-card-all-cache-read-light", "tier2-card-all-cache-read-dark",
-           "notch-collapsed", "notch-intro", "notch-expressions", "notch-agents", "notch-forecast", "notch-level",
+           "notch-collapsed", "notch-intro", "notch-expressions", "notch-agents", "notch-forecast", "notch-level", "notch-looks-expanded",
+           "notch-looks-collapsed", "notch-collapsed-motion",
            "notch-menubar-light", "notch-menubar-dark",
            "notch-menu-light", "notch-menu-dark"]
     IOS = ["widget-small-light", "widget-small-dark", "widget-medium-light", "widget-medium-dark", "widget-large-light",
@@ -806,6 +807,40 @@ class SnapshotsScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LookPerfSummaryTests(unittest.TestCase):
+    """look-perf-summary.py：門檻包含每分鐘的更新（Codex C-03），缺標記或缺取樣要失敗。"""
+    SCRIPT = ROOT / "scripts" / "look-perf-summary.py"
+    MARKS = {"look-work": 10, "look-sleep": 40, "look-idle": 70, "look-open": 100}
+
+    def run_summary(self, samples, marks=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Path(tmp) / "samples.tsv"
+            log = Path(tmp) / "app.log"
+            s.write_text("".join(f"{t} {cpu} 100000\n" for t, cpu in samples))
+            log.write_text("".join(f"perf-mark {v} {k}\n" for k, v in (marks or self.MARKS).items())
+                           + "perf-mark 50 minute-tick\n")
+            return subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log), "X9"],
+                                  capture_output=True, text=True)
+
+    def test_quiet_samples_pass(self):
+        result = self.run_summary([(t, 0.1) for t in range(0, 120)])
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_minute_tick_spike_counts(self):
+        # 睡著那段平均 0.1%，每分鐘更新那兩秒衝到 6%：算進去後超過 0.5%
+        result = self.run_summary([(t, 6.0 if 50 <= t < 52 else 0.1) for t in range(0, 120)])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌", result.stdout)
+
+    def test_missing_mark_or_samples_fail(self):
+        marks = dict(self.MARKS)
+        del marks["look-idle"]
+        self.assertEqual(self.run_summary([(t, 0.1) for t in range(0, 120)], marks).returncode, 1)
+        result = self.run_summary([(t, 0.1) for t in range(0, 120) if not 45 <= t < 68])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("缺取樣", result.stdout)
 
 
 class NotchPerfSummaryTests(unittest.TestCase):
