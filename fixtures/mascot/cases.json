@@ -1,0 +1,1034 @@
+{
+  "_comment": "角色狀態機的 golden 輸入（ADR-0016）：每個情境是一串依時間排列的事件（毫秒）。Swift（UsageKit MascotGoldenTests）以 AUM_UPDATE_GOLDEN=1 產生 golden.json，C#（UsageCore.Tests MascotGoldenTests）必須排出同樣的紀錄。時間參數讀 shared/mascot-anim.json。",
+  "cases": [
+    {
+      "name": "wave-then-dizzy-button-queues",
+      "note": "揮手中按轉暈（按鈕）：排隊，揮手播完、回位 360 ms 後才轉暈",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 500,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "wave-then-five-clicks-interrupts",
+      "note": "揮手中連點 5 下：揮手是短反應，直接打斷轉暈",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 400,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 600,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 800,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 1000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 4500,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "five-clicks-interrupt-hop",
+      "note": "連點 5 下打斷跳一下；排隊中的也一併丟掉",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 250,
+          "e": "request",
+          "name": "shy"
+        },
+        {
+          "t": 300,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 450,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 600,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 750,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 4000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "clicks-outside-window-do-not-count",
+      "note": "5 下要在 1.5 秒內；超過的從頭算",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1200,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1400,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 1550,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1650,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1700,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "clicks-during-long-animation-not-counted",
+      "note": "長動畫（害羞）中連點不計次；播完後重新點滿 5 下才轉暈",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 500,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 700,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 900,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1300,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2400,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2500,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 2600,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2700,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2800,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "queue-three-keeps-last",
+      "note": "排隊三個只播最後一個；回位期間（已取出排隊的）再來的要求另外排隊，兩個都會播（同 demo 的 finish）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "request",
+          "name": "shy"
+        },
+        {
+          "t": 200,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 300,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 400,
+          "e": "request",
+          "name": "scared"
+        },
+        {
+          "t": 2400,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "gestures-ignored-while-busy",
+      "note": "手勢在播放中、過場中、按住時直接忽略，不排隊",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": true
+        },
+        {
+          "t": 1000,
+          "e": "gesture",
+          "name": "circle"
+        },
+        {
+          "t": 4700,
+          "e": "gesture",
+          "name": "shake"
+        },
+        {
+          "t": 5000,
+          "e": "gesture",
+          "name": "circle"
+        },
+        {
+          "t": 5500,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 9000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "sleep-then-move-wakes",
+      "note": "10 秒沒動滑鼠睡著；睡覺時動滑鼠叫醒（.9 秒），之後再 10 秒又睡著",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 3000,
+          "e": "move"
+        },
+        {
+          "t": 15000,
+          "e": "move"
+        },
+        {
+          "t": 15100,
+          "e": "move"
+        },
+        {
+          "t": 26000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "sleep-request-and-alert-wakes",
+      "note": "按鈕要求睡覺；睡覺中的提醒先醒來（模式回到平常）再播",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 2000,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 3000,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "work-mode-returns-to-work-pose",
+      "note": "工作中模式下播反應後回到工作姿勢；工作中不會睡著",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 500,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2000,
+          "e": "gesture",
+          "name": "shake"
+        },
+        {
+          "t": 20000,
+          "e": "advance"
+        },
+        {
+          "t": 20100,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 31000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "work-starts-during-sleep",
+      "note": "睡覺時開始工作：直接換成工作中；工作結束後回到平常",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 10500,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 11000,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 11000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "status-changes-color-now-reaction-queued",
+      "note": "額度狀態改變時狀態點立即換色，提醒排隊；回到正常只換色不播",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 600,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 900,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 4000,
+          "e": "status",
+          "level": 0
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "intro-queues-until-interactive",
+      "note": "過場中：提醒排隊、點擊忽略；4680 ms 開始接受互動時立即播排隊的",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": true
+        },
+        {
+          "t": 1000,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 2000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2100,
+          "e": "press"
+        },
+        {
+          "t": 2600,
+          "e": "release"
+        },
+        {
+          "t": 7000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "collapsed-status-bumps",
+      "note": "面板收著時狀態改變：瀏海鼓一下，不排隊；收著時的按鈕要求丟掉",
+      "events": [
+        {
+          "t": 0,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 500,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 2000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "hold-squeeze-and-release",
+      "note": "按住 .35 秒捏扁，放開後 .8 秒回彈；放開後那一下點擊不算；長動畫中按住無效",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "press"
+        },
+        {
+          "t": 900,
+          "e": "release"
+        },
+        {
+          "t": 900,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1000,
+          "e": "press"
+        },
+        {
+          "t": 1200,
+          "e": "release"
+        },
+        {
+          "t": 2500,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 2600,
+          "e": "press"
+        },
+        {
+          "t": 3200,
+          "e": "release"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "hold-interrupts-tap",
+      "note": "短反應中按住可以捏扁（打斷），狀態觸發的動畫在按住時排隊",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 200,
+          "e": "press"
+        },
+        {
+          "t": 800,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 1500,
+          "e": "release"
+        },
+        {
+          "t": 1500,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "close-clears-everything",
+      "note": "收合時：播放中的停止、排隊丟掉、睡覺改回平常；再展開從頭開始",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "shy"
+        },
+        {
+          "t": 200,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 1000,
+          "e": "close"
+        },
+        {
+          "t": 1200,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 11200,
+          "e": "advance"
+        },
+        {
+          "t": 12000,
+          "e": "close"
+        },
+        {
+          "t": 12500,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "queued-dizzy-after-wave-not-cancelled-by-taps",
+      "note": "回位等待中的點擊不算短反應中，不會累積；排隊的轉暈照常播",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "wave"
+        },
+        {
+          "t": 1000,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 1850,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1900,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 2000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "same-ms-end-before-hold",
+      "note": "同一毫秒：動畫結束先於按住成立（end < hold）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 550,
+          "e": "press"
+        },
+        {
+          "t": 1500,
+          "e": "release"
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "same-ms-end-before-sleep",
+      "note": "同一毫秒：動畫結束後同一刻滿 10 秒就睡著（end < sleep）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 9100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 20000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "click-window-boundary",
+      "note": "1500 ms 邊界：剛好 1500 ms 內的點擊算在內",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 400,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 800,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1200,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 1600,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "event-time-goes-backwards",
+      "note": "事件時間比狀態機早（不同時鐘的小誤差）：以目前時間為準，紀錄不倒退",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        },
+        {
+          "t": 3000,
+          "e": "press"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        },
+        {
+          "t": 5500,
+          "e": "release"
+        },
+        {
+          "t": 7000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "press-while-asleep",
+      "note": "睡覺時按住：先回到平常再捏扁；按住中移動不會叫醒、也不會卡住",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 12000,
+          "e": "press"
+        },
+        {
+          "t": 12600,
+          "e": "move"
+        },
+        {
+          "t": 12650,
+          "e": "release"
+        },
+        {
+          "t": 12800,
+          "e": "request",
+          "name": "shy"
+        },
+        {
+          "t": 16000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "status-back-to-normal-drops-alert",
+      "note": "額度回到正常：排隊中的提醒丟掉，不播綠色的提醒",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "gesture",
+          "name": "hover"
+        },
+        {
+          "t": 600,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 1000,
+          "e": "status",
+          "level": 0
+        },
+        {
+          "t": 4000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "sleep-request-ignored-while-working",
+      "note": "工作中按睡覺：忽略，仍是工作中",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 1000,
+          "e": "move"
+        },
+        {
+          "t": 15000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "click-wakes-and-activity-delays-sleep",
+      "note": "睡覺時點一下先叫醒；點擊、按住、放開都算操作，不會放開後馬上睡著",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 10500,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 11600,
+          "e": "press"
+        },
+        {
+          "t": 23000,
+          "e": "release"
+        },
+        {
+          "t": 30000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "queued-sleep-ignored-after-work-starts",
+      "note": "排隊的睡覺：播到時已經是工作中就忽略（排隊中開始工作、回位等待中開始工作）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 200,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        },
+        {
+          "t": 3100,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 3100,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 3200,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 4050,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 6000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "queue-continues-after-pending-cancelled",
+      "note": "待播的提醒因回到正常被取消、或待播的是睡覺：後面排隊的照樣在回位後播，不會卡住",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 100,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 950,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 1000,
+          "e": "status",
+          "level": 0
+        },
+        {
+          "t": 4000,
+          "e": "advance"
+        },
+        {
+          "t": 4000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 4100,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 4950,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 8000,
+          "e": "advance"
+        }
+      ]
+    }
+  ]
+}
