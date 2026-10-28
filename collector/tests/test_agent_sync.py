@@ -10,6 +10,8 @@ golden：
 import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -235,3 +237,32 @@ class AppRunningTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SetTier2Tests(unittest.TestCase):
+    """set-tier2.sh --agent-sync／--no-agent-sync：只改 config.json 的 agent_sync，不提示密鑰；第二層沒開時停止"""
+
+    def run_script(self, home: Path, flag: str) -> subprocess.CompletedProcess:
+        script = Path(__file__).resolve().parents[1] / "scripts" / "set-tier2.sh"
+        env = {"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "HOME": str(home), "AI_USAGE_MONITOR_HOME": str(home),
+               "LANG": "en_US.UTF-8"}
+        return subprocess.run([str(script), flag], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+
+    def test_flags_toggle_agent_sync_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d)
+            config = home / "config.json"
+            config.write_text(json.dumps({"relay_url": URL}), encoding="utf-8")
+            result = self.run_script(home, "--agent-sync")
+            self.assertNotEqual(0, result.returncode)
+            self.assertNotIn("agent_sync", json.loads(config.read_text(encoding="utf-8")))
+            config.write_text(json.dumps({"relay_url": URL, "token_sync": True}), encoding="utf-8")
+            result = self.run_script(home, "--agent-sync")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIs(True, json.loads(config.read_text(encoding="utf-8"))["agent_sync"])
+            (home / "agent-remote.json").write_text("{}", encoding="utf-8")
+            result = self.run_script(home, "--no-agent-sync")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertIs(False, json.loads(config.read_text(encoding="utf-8"))["agent_sync"])
+            self.assertFalse((home / "agent-remote.json").exists())
+

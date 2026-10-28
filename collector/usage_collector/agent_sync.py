@@ -322,3 +322,19 @@ def run_safely(path: Path | None = None) -> None:
         log(f"略過 AI 狀態同步：{e}")
     except Exception as e:
         log(f"略過 AI 狀態同步：{type(e).__name__}")
+
+
+def forget(path: Path | None = None) -> None:
+    """關閉同步時刪除本機的其他電腦狀態（`set-tier2.sh --no-agent-sync`／`--disable`）；中繼上的不動，30 分鐘後自然不顯示"""
+    try:
+        (path or REMOTE_PATH).unlink()
+    except FileNotFoundError:
+        pass
+
+
+if __name__ == "__main__":
+    # python -m usage_collector.agent_sync forget
+    if sys.argv[1:] != ["forget"]:
+        print("用法：python3 -m usage_collector.agent_sync forget", file=sys.stderr)
+        sys.exit(2)
+    forget()
