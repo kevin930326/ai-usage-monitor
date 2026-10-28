@@ -118,6 +118,20 @@ import Testing
         #expect(file.machine.tap_reactions == ["hop", "wave"])
     }
 
+    /// 有排隊的就一定有下一個到期時間（golden 只比紀錄，這裡確認不會卡住）
+    @Test func queuedAlwaysHasDeadline() throws {
+        var machine = MascotMachine(timing: try Self.timing())
+        machine.open(at: 0, intro: false)
+        machine.click(at: 0, choice: .hop)
+        machine.setStatus(1, at: 100)
+        machine.request(.wave, at: 950)
+        machine.setStatus(0, at: 1000)
+        machine.advance(to: 1300)
+        #expect(machine.queued == nil || machine.nextDeadline != nil)
+        machine.advance(to: 1700)
+        #expect(machine.playing?.animation == .wave)
+    }
+
     @Test func advanceIsIdempotentAndOrdered() throws {
         var machine = MascotMachine(timing: try Self.timing())
         machine.open(at: 0, intro: false)

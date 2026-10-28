@@ -975,6 +975,60 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "queue-continues-after-pending-cancelled",
+      "note": "待播的提醒因回到正常被取消、或待播的是睡覺：後面排隊的照樣在回位後播，不會卡住",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 0,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 100,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 950,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 1000,
+          "e": "status",
+          "level": 0
+        },
+        {
+          "t": 4000,
+          "e": "advance"
+        },
+        {
+          "t": 4000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 4100,
+          "e": "request",
+          "name": "sleep"
+        },
+        {
+          "t": 4950,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 8000,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }

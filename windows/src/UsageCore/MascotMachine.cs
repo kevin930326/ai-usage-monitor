@@ -420,9 +420,21 @@ public sealed class MascotMachine
     private void StartPending()
     {
         RestUntil = null;
-        if (Pending is not { } next) return;
-        Pending = null;
-        Run(next);
+        if (Pending is { } next)
+        {
+            Pending = null;
+            Run(next);
+        }
+        PromoteQueued();
+    }
+
+    /// <summary>沒有動畫在播（待播的被取消、或執行的是沒有結束事件的睡覺）卻還有排隊的：照樣回位 360 ms 後播，不會卡住</summary>
+    private void PromoteQueued()
+    {
+        if (IsBusy || IsHolding || Queued is not { } next) return;
+        Queued = null;
+        Pending = next;
+        RestUntil = Now + Timing.RestBeforeQueuedMs;
     }
 
     private void ArmHold()

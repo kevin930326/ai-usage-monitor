@@ -431,9 +431,19 @@ public struct MascotMachine: Sendable {
 
     private mutating func startPending() {
         restUntil = nil
-        guard let next = pending else { return }
-        pending = nil
-        run(next)
+        if let next = pending {
+            pending = nil
+            run(next)
+        }
+        promoteQueued()
+    }
+
+    /// 沒有動畫在播（待播的被取消、或執行的是沒有結束事件的睡覺）卻還有排隊的：照樣回位 360 ms 後播，不會卡住
+    private mutating func promoteQueued() {
+        guard !isBusy, !isHolding, let next = queued else { return }
+        queued = nil
+        pending = next
+        restUntil = now + timing.restBeforeQueuedMs
     }
 
     private mutating func armHold() {

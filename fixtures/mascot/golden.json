@@ -493,6 +493,38 @@
         "4360 ignore sleep"
       ],
       "name" : "queued-sleep-ignored-after-work-starts"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "0 start hop",
+        "100 status 1",
+        "100 queue alert",
+        "900 end hop",
+        "900 pose none",
+        "950 queue wave",
+        "1000 status 0",
+        "1000 drop alert",
+        "1620 start wave",
+        "3420 end wave",
+        "3420 pose none",
+        "4000 start hop",
+        "4100 queue sleep",
+        "4900 end hop",
+        "4900 pose none",
+        "4950 queue wave",
+        "5260 mode sleep",
+        "5620 mode none",
+        "5620 start wave",
+        "7420 end wave",
+        "7420 pose none"
+      ],
+      "name" : "queue-continues-after-pending-cancelled"
     }
   ]
 }
