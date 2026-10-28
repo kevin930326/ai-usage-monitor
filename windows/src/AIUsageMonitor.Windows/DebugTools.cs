@@ -68,7 +68,7 @@ internal static class DebugTools
                 break;
             case "forecast":
                 // 額度預測與服務事故（ADR-0018）：5 小時 40 分鐘後用完（紅）、每週約 30 小時後用完（黃），Claude 有進行中的事故
-                claude = $$"""{"plan": "Max", "windows": [{"id": "five_hour", "label": "5 小時", "used_pct": 80, "resets_at": "{{At(2)}}", "forecast": {"exhausts_at": "{{At(0.67)}}", "urgent": true, "faster": 2.1} }, {"id": "weekly", "label": "每週", "used_pct": 60, "resets_at": "{{At(72)}}", "forecast": {"exhausts_at": "{{At(30.5)}}", "urgent": false} }], "incidents": [{"name": "Elevated errors on Claude Code", "impact": "major", "url": "https://status.claude.com/incidents/abc123", "started_at": "{{At(-0.33)}}"}]}""";
+                claude = $$"""{"plan": "Max", "windows": [{"id": "five_hour", "label": "5 小時", "used_pct": 80, "resets_at": "{{At(2)}}", "forecast": {"exhausts_at": "{{At(0.67)}}", "urgent": true, "faster": 2.1} }, {"id": "weekly", "label": "每週", "used_pct": 60, "resets_at": "{{At(72)}}", "forecast": {"exhausts_at": "{{At(30.5)}}", "urgent": false} }], "incidents": [{"name": "Elevated errors on Claude Code", "impact": "major", "started_at": "{{At(-0.33)}}"}]}""";
                 break;
             case "critical":
                 claude = Provider("Max", Window("five_hour", "5 小時", 40, 2.0), Window("weekly", "每週", 88, 30));
