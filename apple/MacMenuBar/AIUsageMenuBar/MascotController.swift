@@ -116,7 +116,8 @@ final class MascotController {
     @ObservationIgnored private var gestures: MascotGestureDetector?
     /// 按下時落在角色上（放開時才當成點擊）
     @ObservationIgnored private var pressedOnCharacter = false
-    @ObservationIgnored private var probing = false
+    /// 正在列舉紀錄資料夾的開始時間；卡住超過 30 秒就不再等它（Fable F-08）
+    @ObservationIgnored private var probingSince: Date?
     /// 目前 director 依哪個動畫程度建立（彈簧是否回彈）
     @ObservationIgnored private var builtMotion = MascotMotionLevel.full
     /// 目前 director 依哪個版面建立；展開中換螢幕時等收合後再重建（Fable F-03）
@@ -305,8 +306,10 @@ final class MascotController {
     }
 
     private func checkWorking() {
-        guard !probing, motion.animatesBody else { return }
-        probing = true
+        guard motion.animatesBody else { return }
+        if let probingSince, Date().timeIntervalSince(probingSince) < 30 { return }
+        let started = Date()
+        probingSince = started
         let dataDirectory = UsageStore.shared.locator.directory
         let configURL = dataDirectory.appendingPathComponent("config.json")
         // 測試、截圖與量測：只看暫存資料夾裡的紀錄，不碰真的 ~/.claude、~/.codex
@@ -325,7 +328,7 @@ final class MascotController {
             let working = probe.isWorking(now: Date())
             await MainActor.run {
                 let controller = MascotController.shared
-                controller.probing = false
+                if controller.probingSince == started { controller.probingSince = nil }
                 guard controller.director?.machine.isOpen == true,
                       (controller.director?.machine.mode == .work) != working else { return }
                 controller.mutate { $0.setWorking(working, at: controller.time()) }
