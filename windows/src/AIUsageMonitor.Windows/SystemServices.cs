@@ -201,6 +201,8 @@ internal static class AgentSyncTrigger
         if (AppMode.Isolated || running || pending) return;
         pending = true;
         await Task.Delay(1000);
+        // App 結束時已經由 TakePending 送出：不重複
+        if (!pending) return;
         pending = false;
         if (running) return;
         running = true;
@@ -213,6 +215,14 @@ internal static class AgentSyncTrigger
         {
             running = false;
         }
+    }
+
+    /// <summary>App 結束時：取走還沒送出的合併觸發（之後延遲的那次不再送），回傳有沒有</summary>
+    public static bool TakePending()
+    {
+        var had = pending;
+        pending = false;
+        return had;
     }
 
     /// <summary>App 結束時：不等結果（結束前送出就好）</summary>

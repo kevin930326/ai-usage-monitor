@@ -48,8 +48,14 @@ final class AgentStateFile {
     func stop() {
         timer?.invalidate()
         timer = nil
-        guard last != nil, last != AgentSummary.empty, write(AgentSummary.empty) else { return }
-        last = AgentSummary.empty
+        // 還有沒送出的合併觸發時也要送（最後一個工作階段剛結束就關 App：檔案已是全部閒置，Codex C-01）
+        let pending = kickPending
+        kickPending = false
+        if last != nil, last != AgentSummary.empty, write(AgentSummary.empty) {
+            last = AgentSummary.empty
+        } else if !pending {
+            return
+        }
         // App 正要結束：馬上觸發，不等合併
         kickNow()
     }
@@ -70,8 +76,10 @@ final class AgentStateFile {
         guard !kickPending else { return }
         kickPending = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.kickPending = false
-            self?.kickNow()
+            // stop() 已經送出時不重複
+            guard let self, self.kickPending else { return }
+            self.kickPending = false
+            self.kickNow()
         }
     }
 

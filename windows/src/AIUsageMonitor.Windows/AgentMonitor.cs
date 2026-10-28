@@ -176,8 +176,11 @@ internal sealed class AgentMonitor : IDisposable
         next.Stop();
         if (!started) return;
         AgentInbox.Clear(home);
-        // 其他電腦馬上看到這台沒事，而不是等 30 分鐘過期
-        if (lastState is not null && !lastState.AsSpan().SequenceEqual(AgentSummary.Empty) && TryWriteState(AgentSummary.Empty))
+        // 其他電腦馬上看到這台沒事，而不是等 30 分鐘過期。
+        // 還有沒送出的合併觸發時也要送（最後一個工作階段剛結束就關 App：檔案已是全部閒置，Codex C-01）
+        var pending = AgentSyncTrigger.TakePending();
+        var wroteIdle = lastState is not null && !lastState.AsSpan().SequenceEqual(AgentSummary.Empty) && TryWriteState(AgentSummary.Empty);
+        if (wroteIdle || pending)
         {
             AgentSyncTrigger.RunAndForget();
         }
