@@ -575,6 +575,67 @@
         "9100 drop alert"
       ],
       "name" : "silence-drops-queued-and-pending-alert"
+    },
+    {
+      "final" : {
+        "mode" : "sleep",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode sleep",
+        "100 mode work",
+        "200 mode raise",
+        "300 mode work",
+        "400 mode sleep",
+        "500 mode raise",
+        "600 mode sleep"
+      ],
+      "name" : "needs-you-raises-over-work-and-sleep"
+    },
+    {
+      "final" : {
+        "mode" : "raise",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start hop",
+        "200 mode raise",
+        "1000 end hop",
+        "1000 pose raise"
+      ],
+      "name" : "needs-you-waits-for-animation"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 cheer"
+      ],
+      "name" : "cheer-collapsed-bumps"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start wave",
+        "200 queue wave",
+        "1900 end wave",
+        "1900 pose none",
+        "2260 start wave",
+        "4060 end wave",
+        "4060 pose none"
+      ],
+      "name" : "cheer-open-queues-wave"
     }
   ]
 }

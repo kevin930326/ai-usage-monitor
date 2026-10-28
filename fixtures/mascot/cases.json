@@ -1212,6 +1212,115 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "needs-you-raises-over-work-and-sleep",
+      "note": "需要你優先於工作中與睡覺；處理完回到工作中，閒置時回到睡覺",
+      "events": [
+        {
+          "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 300,
+          "e": "needs",
+          "on": false
+        },
+        {
+          "t": 400,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 500,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 600,
+          "e": "needs",
+          "on": false
+        }
+      ]
+    },
+    {
+      "name": "needs-you-waits-for-animation",
+      "note": "展開播動畫中需要你：不打斷，播完接到舉手的姿勢",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 200,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "cheer-collapsed-bumps",
+      "note": "收著時完成：瀏海鼓一下、迷你角色揮手",
+      "events": [
+        {
+          "t": 0,
+          "e": "cheer"
+        },
+        {
+          "t": 100,
+          "e": "cheer",
+          "react": false
+        }
+      ]
+    },
+    {
+      "name": "cheer-open-queues-wave",
+      "note": "展開時完成：照按鈕規則播揮手；忙碌時排隊；靜音不播",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "cheer"
+        },
+        {
+          "t": 200,
+          "e": "cheer"
+        },
+        {
+          "t": 300,
+          "e": "cheer",
+          "react": false
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }
