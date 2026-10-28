@@ -214,6 +214,8 @@ final class MascotController {
         restartActivityChecks()
         // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
         AgentMonitor.shared.markSeen()
+        // 等級（ADR-0020）：每次展開重新讀；升級時 levelUp 歡呼
+        MascotLevelStore.shared.refresh()
     }
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
@@ -434,6 +436,22 @@ final class MascotController {
         guard NotchPanelController.shared.isShown else { return }
         let quiet = PanelSettings.shared.isMascotQuiet(at: Date())
         mutate { $0.cheer(at: time(), react: !quiet) }
+    }
+
+    /// 升級（ADR-0020 第 4 節）：展開時跳一下再開心（和回合完成的揮手分得出來）。
+    /// 回傳是否處理完：收合、首次提示顯示中、靜音或勿擾、過場或其他動作中時回傳 false（呼叫端稍後再試或下次展開再播）；
+    /// 動畫「簡單」「關閉」（含系統減少動態效果）不播身體的反應（ADR-0016），只更新數字、算處理完
+    func levelUp() -> Bool {
+        guard NotchPanelController.shared.isShown, let machine = director?.machine, machine.isOpen, !showsHint,
+              !PanelSettings.shared.isMascotQuiet(at: Date()) else { return false }
+        guard motion.animatesBody else { return true }
+        // 過場或其他動作中：排隊只留最後一個，「跳一下」會被「開心」蓋掉（Codex C-02）。等可以馬上播時再來
+        guard !machine.isIntro, !machine.isBusy, !machine.isHolding else { return false }
+        mutate {
+            $0.request(.hop, at: time())
+            $0.request(.faceHappy, at: time())
+        }
+        return true
     }
 
     /// 等你下一個指令（而且沒有更優先的狀態）：收著時每 7 秒輕輕脈動一次（1.6 秒）；

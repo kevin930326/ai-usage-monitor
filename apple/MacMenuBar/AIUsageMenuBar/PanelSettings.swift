@@ -109,6 +109,7 @@ final class PanelSettings {
         static let statsDevice = "panel.statsDevice"
         static let statsMeasure = "panel.statsMeasure"
         static let celebratedStreak = "panel.celebratedStreak"
+        static let celebratedLevel = "mascot.celebratedLevel"
         static let notifyLow = "notify.low"
         static let notifyTooFast = "notify.tooFast"
         static let notifyReset = "notify.reset"
@@ -190,6 +191,11 @@ final class PanelSettings {
         didSet { defaults.set(celebratedStreak, forKey: Key.celebratedStreak) }
     }
 
+    /// 已經慶祝過的角色等級（ADR-0020；0＝還沒看過等級：第一次只記下、不慶祝）
+    var celebratedLevel: Int {
+        didSet { defaults.set(celebratedLevel, forKey: Key.celebratedLevel) }
+    }
+
     /// 額度通知的三個開關（FR-19）。「剩不到 20%」預設開（第一次打開 App 時向系統要求權限），其他兩個預設關
     var notifyLow: Bool {
         didSet { defaults.set(notifyLow, forKey: Key.notifyLow) }
@@ -246,6 +252,7 @@ final class PanelSettings {
         statsDevice = defaults.string(forKey: Key.statsDevice).flatMap(TokenDeviceScope.init)
         statsMeasure = defaults.string(forKey: Key.statsMeasure).flatMap(TokenMeasure.init) ?? .main
         celebratedStreak = defaults.integer(forKey: Key.celebratedStreak)
+        celebratedLevel = defaults.integer(forKey: Key.celebratedLevel)
         notifyLow = defaults.object(forKey: Key.notifyLow) as? Bool ?? true
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
         notifyReset = defaults.bool(forKey: Key.notifyReset)

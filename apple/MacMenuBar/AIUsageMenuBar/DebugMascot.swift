@@ -223,6 +223,23 @@ enum DebugMascot {
                 Shot(name: "collapsed-claude-incident", setup: { _ in }, time: 1000, quota: .incident),
             ], height: 40)
         }, dir.appendingPathComponent("notch-forecast.png"))
+        // ADR-0020：角色卡下方的等級、進度與連續天數；升級時歡呼（彩紙）；最高級
+        func levelDays(_ count: Int, tokens: Int64, endingAt end: Int) -> [String: Int64] {
+            Dictionary(uniqueKeysWithValues: (0..<count).map { (LevelDebug.day(end - $0), tokens) })
+        }
+        let today = LevelDebug.day(20_390)
+        let level = MascotLevel(days: levelDays(40, tokens: 300_000, endingAt: 20_390)
+                                    .merging(levelDays(12, tokens: 80_000, endingAt: 20_300)) { a, _ in a }, today: today)
+        let top = MascotLevel(days: levelDays(10_000, tokens: 6_000_000, endingAt: 20_390), today: today)
+        write(sheet([
+            Shot(name: "expanded-level", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(level: level)),
+            Shot(name: "expanded-level-up", setup: {
+                $0.open(at: 0, intro: false); $0.advance(to: 1000); $0.request(.hop, at: 1000); $0.request(.faceHappy, at: 1000)
+            }, time: 1350, extras: NotchExtras(level: level)),
+            Shot(name: "expanded-level-max", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(level: top)),
+            // 第一次展開的提示（出現時不顯示等級，位置相同）
+            Shot(name: "expanded-hint", setup: { $0.open(at: 0, intro: false) }, time: 1500, extras: NotchExtras(hint: true, level: level)),
+        ]), dir.appendingPathComponent("notch-level.png"))
         for scheme in [ColorScheme.light, .dark] {
             write(menuBar(screens.map { ($0.name, canvas($0)) }, scheme: scheme), dir.appendingPathComponent("notch-menubar-\(scheme == .dark ? "dark" : "light").png"))
         }
@@ -301,6 +318,16 @@ enum DebugMascot {
         }
         .padding(10)
         .background(scheme == .dark ? Color(white: 0.08) : Color(white: 0.97))
+    }
+}
+/// 截圖用的日期（日數 → YYYY-MM-DD，和 MascotLevel 的日曆日算法相同）
+enum LevelDebug {
+    static func day(_ n: Int) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(n) * 86_400)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 }
 #endif

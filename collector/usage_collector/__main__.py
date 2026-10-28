@@ -19,6 +19,7 @@ from . import (
     forecast,
     history,
     history_care,
+    level,
     local_store,
     paths,
     relay,
@@ -156,6 +157,7 @@ def run(args: argparse.Namespace) -> int:
         # 第二層（只有安裝了才執行；失敗不影響結束碼）
         token_sync.run_safely()
         agent_sync.run_safely()  # 退路：App 觸發的同步沒跑到時，每 5 分鐘也同步一次
+        level.update_safely()  # 角色養成（ADR-0020）：Token 統計與其他電腦的資料都更新後
         return 0 if ok else 1
 
     if args.agent == "app":
@@ -213,6 +215,7 @@ def run(args: argparse.Namespace) -> int:
         # 第二層（ADR-0011 第 2 節）：只有安裝第二層的電腦才上傳每日加總、下載其他電腦的；失敗只記日誌
         token_sync.run_safely()
         agent_sync.run_safely()
+        level.update_safely()  # 角色養成（ADR-0020）
     if args.write_local:
         # 服務狀態（FR-45）：公開狀態頁，只寫本機 service-status.json、不上傳；至少間隔 4 分鐘。
         # 和 usage.json 一樣是覆寫的小檔案，磁碟空間不足時照常

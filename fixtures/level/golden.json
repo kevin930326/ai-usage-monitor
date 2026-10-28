@@ -1,0 +1,195 @@
+[
+  {
+    "name" : "empty"
+  },
+  {
+    "name" : "only-zero-days"
+  },
+  {
+    "name" : "one-small-day",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    }
+  },
+  {
+    "name" : "volume-steps",
+    "result" : {
+      "active_days" : 8,
+      "current_streak" : 0,
+      "level" : 2,
+      "longest_streak" : 1,
+      "to_next" : 42,
+      "xp" : 108
+    }
+  },
+  {
+    "name" : "huge-day-is-capped",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 30,
+      "xp" : 20
+    }
+  },
+  {
+    "name" : "streak-bonus-caps-at-five",
+    "result" : {
+      "active_days" : 10,
+      "current_streak" : 10,
+      "level" : 2,
+      "longest_streak" : 10,
+      "to_next" : 15,
+      "xp" : 135
+    }
+  },
+  {
+    "name" : "today-not-used-yet-counts-yesterday",
+    "result" : {
+      "active_days" : 10,
+      "current_streak" : 10,
+      "level" : 2,
+      "longest_streak" : 10,
+      "to_next" : 15,
+      "xp" : 135
+    }
+  },
+  {
+    "name" : "gap-breaks-current-streak",
+    "result" : {
+      "active_days" : 10,
+      "current_streak" : 0,
+      "level" : 2,
+      "longest_streak" : 10,
+      "to_next" : 15,
+      "xp" : 135
+    }
+  },
+  {
+    "name" : "longest-earlier-than-current",
+    "result" : {
+      "active_days" : 8,
+      "current_streak" : 2,
+      "level" : 2,
+      "longest_streak" : 6,
+      "to_next" : 30,
+      "xp" : 120
+    }
+  },
+  {
+    "name" : "month-and-leap-boundaries",
+    "result" : {
+      "active_days" : 4,
+      "current_streak" : 4,
+      "level" : 1,
+      "longest_streak" : 4,
+      "to_next" : 4,
+      "xp" : 46
+    }
+  },
+  {
+    "name" : "year-boundary",
+    "result" : {
+      "active_days" : 3,
+      "current_streak" : 3,
+      "level" : 1,
+      "longest_streak" : 3,
+      "to_next" : 17,
+      "xp" : 33
+    }
+  },
+  {
+    "name" : "non-leap-feb",
+    "result" : {
+      "active_days" : 2,
+      "current_streak" : 2,
+      "level" : 1,
+      "longest_streak" : 2,
+      "to_next" : 29,
+      "xp" : 21
+    }
+  },
+  {
+    "name" : "bad-strings-ignored",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    }
+  },
+  {
+    "name" : "negative-tokens-ignored",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    }
+  },
+  {
+    "name" : "future-day-after-clock-change",
+    "result" : {
+      "active_days" : 2,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 30,
+      "xp" : 20
+    }
+  },
+  {
+    "name" : "bad-today",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 0,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    }
+  },
+  {
+    "name" : "level-two-exactly",
+    "result" : {
+      "active_days" : 3,
+      "current_streak" : 1,
+      "level" : 2,
+      "longest_streak" : 1,
+      "to_next" : 100,
+      "xp" : 50
+    }
+  },
+  {
+    "name" : "a-year-of-heavy-days",
+    "result" : {
+      "active_days" : 365,
+      "current_streak" : 365,
+      "level" : 19,
+      "longest_streak" : 365,
+      "to_next" : 390,
+      "xp" : 9110
+    }
+  },
+  {
+    "name" : "max-level",
+    "result" : {
+      "active_days" : 10000,
+      "current_streak" : 0,
+      "level" : 99,
+      "longest_streak" : 10000,
+      "to_next" : 0,
+      "xp" : 249985
+    }
+  }
+]
