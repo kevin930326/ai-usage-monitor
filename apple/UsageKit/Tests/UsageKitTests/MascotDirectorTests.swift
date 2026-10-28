@@ -215,4 +215,43 @@ import Testing
         d.advance(to: 6000)
         #expect(abs(d.pose(at: 6000)[.pitch] - config.poses.work.pitch) < 0.001)
     }
+
+    @Test func stillCharacterOnlyChangesTheStatusColour() throws {
+        // 簡單／關閉：額度提醒、睡覺、工作都不動身體，只換狀態點的顏色（Codex C-02、C-03）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.setStill(true, at: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 1500)
+        let rest = d.pose(at: 1500)
+        d.setStatus(2, at: 1500)
+        d.setWorking(true, at: 1600)
+        #expect(d.statusColor(at: 2000) == 2)
+        #expect(!d.isAnimating(at: 2000))
+        for t in stride(from: 1500, through: 20_000, by: 250) {
+            d.advance(to: t)
+            #expect(d.pose(at: t) == rest, "\(t) ms 身體動了")
+            #expect(d.effects.isEmpty)
+        }
+        // 收著時的提醒也不鼓
+        d.close(at: 20_000)
+        d.advance(to: 22_000)
+        d.setStatus(1, at: 22_000)
+        #expect(!d.isAnimating(at: 22_500))
+    }
+
+    @Test func becomingStillStopsAReaction() throws {
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.request(.dizzy, at: 2000)
+        let mid = d.pose(at: 2500)
+        d.setStill(true, at: 2500)
+        #expect(d.pose(at: 2500) == mid)          // 不跳
+        #expect(d.effects.isEmpty)
+        d.advance(to: 4000)
+        let after = d.pose(at: 4000)
+        for prop in [MascotProp.hands, .orbit, .sway, .shiver] { #expect(abs(after[prop]) < 0.001) }
+    }
 }

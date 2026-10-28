@@ -18,6 +18,8 @@ public struct MascotDirector: Sendable {
     public private(set) var contentShownAt: Int?
     public private(set) var contentHiddenAt: Int?
     public private(set) var isIntro = false
+    /// 角色身體靜止（動畫程度「簡單」「關閉」）：不播反應、提醒、工作與睡覺的動作，只換狀態點的顏色
+    public private(set) var isStill = false
     /// 目前的腳本是快速展開（展開途中換模式時重排用）
     private var quickOpening = false
     /// 畫面看到的模式（依事件更新；`machine.mode` 是處理到目前時間的結果）
@@ -82,6 +84,18 @@ public struct MascotDirector: Sendable {
         case .start, .release, .pose, .bump, .introEnd: quickOpening = false
         default: break
         }
+        if isStill {
+            switch entry.event {
+            case .start, .release, .pose, .bump, .introEnd, .mode(.sleep):
+                // 靜止時不換腳本；模式照記，姿勢維持平常的樣子
+                if case .mode(let newMode) = entry.event { mode = newMode }
+                return
+            case .mode(let newMode):
+                mode = newMode
+                return
+            default: break
+            }
+        }
         switch entry.event {
         case .open(let intro):
             spring = spring.retarget(1, at: t, stiffness: config.panel.openSpring.stiffness,
@@ -94,7 +108,7 @@ public struct MascotDirector: Sendable {
                                       confettiAt: config.intro.confettiAt, seed: seed &+ UInt64(truncatingIfNeeded: t))
                 contentShownAt = t + config.intro.contentAt
             } else {
-                use(scripts.quickOpen(start: t, from: pose, mode: mode))
+                use(scripts.quickOpen(start: t, from: pose, mode: isStill ? .none : mode))
                 quickOpening = true
                 contentShownAt = t + 220
             }
@@ -141,6 +155,19 @@ public struct MascotDirector: Sendable {
         }
     }
 
+    /// 改成靜止或恢復（動畫程度改變時）：改成靜止時，正在播的反應與特效立刻停，回到平常的姿勢
+    public mutating func setStill(_ still: Bool, at time: Int) {
+        guard still != isStill else { return }
+        isStill = still
+        guard still else { return }
+        effects = []
+        ripple = nil
+        let pose = script.pose(at: time)
+        if machine.isOpen {
+            use(scripts.rest(start: time, from: pose, mode: .none))
+        }
+    }
+
     private mutating func use(_ next: MascotScript) {
         script = next
         effects.removeAll { $0.start + $0.duration <= next.start }
@@ -167,7 +194,7 @@ public struct MascotDirector: Sendable {
 
     /// 眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊）
     public func blink(at time: Int) -> Double {
-        guard machine.isOpen, !isIntro, machine.playing == nil, mode != .sleep, eyes(at: time) == .pill,
+        guard machine.isOpen, !isIntro, isStill || (machine.playing == nil && mode != .sleep), eyes(at: time) == .pill,
               pose(at: time)[.dash] < 0.1 else { return 0 }
         let b = config.hero.blink
         let period = (b.minGapMs + b.maxGapMs) / 2
@@ -202,7 +229,7 @@ public struct MascotDirector: Sendable {
     /// 都沒有時畫面靜止，可以停止重畫到下一次眨眼（ADR-0016 第 6 節）。
     public func isIdleMoving(at time: Int) -> Bool {
         guard machine.isOpen else { return false }
-        if mode == .sleep || mode == .work { return true }
+        if !isStill, mode == .sleep || mode == .work { return true }
         if blink(at: time) > 0 { return true }
         let now = gaze(at: time)
         return abs(now.yaw - gazeTarget.yaw) > 0.002 || abs(now.pitch - gazeTarget.pitch) > 0.002
@@ -236,7 +263,7 @@ public struct MascotDirector: Sendable {
         if time < statusStart + 400 { return true }
         if let shown = contentShownAt, time < shown + config.panel.contentRiseMs { return true }
         if let hidden = contentHiddenAt, time < hidden + config.panel.contentFadeOutMs { return true }
-        return machine.playing != nil
+        return !isStill && machine.playing != nil
     }
 
     /// 畫面需要持續重畫（眨眼、看滑鼠、晃動、呼吸）：面板展開時

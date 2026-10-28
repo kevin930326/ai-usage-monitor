@@ -22,11 +22,11 @@ enum NotchIntroChoice: String, CaseIterable, Identifiable {
 
 /// 角色動畫的程度（ADR-0016 第 7 節）。系統開了「減少動態效果」時「完整」當成「簡單」。
 enum MascotMotionLevel: String, CaseIterable, Identifiable {
-    /// 全部：過場、粒子與光環、手勢、點擊反應、眨眼與看滑鼠
+    /// 全部：過場、粒子與光環、手勢、點擊與提醒的反應、工作與睡覺的動作、眨眼與看滑鼠
     case full
-    /// 不播過場、不畫粒子與光環、不偵測繞圈／甩動／停留；點擊、提醒與工作中照常
+    /// 身體靜止、只有眼睛會動（眨眼、看滑鼠）：不播過場、反應、光環，也不偵測手勢；面板展開不回彈
     case simple
-    /// 角色靜止：不眨眼、不看滑鼠、沒有任何反應；狀態點的顏色照常（面板照常展開）
+    /// 角色完全靜止：也不眨眼、不看滑鼠；只有狀態點的顏色會變（面板照常展開）
     case off
 
     var id: String { rawValue }
@@ -47,7 +47,10 @@ enum MascotMotionLevel: String, CaseIterable, Identifiable {
     var playsIntro: Bool { self == .full }
     var drawsParticles: Bool { self == .full }
     var detectsGestures: Bool { self == .full }
-    var reacts: Bool { self != .off }
+    /// 身體會動：點擊、手勢、提醒的反應，工作與睡覺的動作
+    var animatesBody: Bool { self == .full }
+    /// 眼睛會動：眨眼、看滑鼠
+    var movesEyes: Bool { self != .off }
 }
 
 /// 重畫的頻率（ADR-0016 第 6 節）：收合而且沒在動時完全停止；展開待著每秒 30 次；動畫中每秒 60 次
@@ -152,6 +155,7 @@ final class MascotController {
         if motion != .full { config.panel.openSpring.dampingRatio = 1 }
         builtMotion = motion
         director = MascotDirector(config: config, startTime: time(), statusLevel: director?.machine.statusLevel ?? 0)
+        director?.setStill(!motion.animatesBody, at: time())
         gestures = MascotGestureDetector(config: config)
         pressedOnCharacter = false
         // 重建後是收著的：停掉工作中的檢查（下次展開再開始）
@@ -201,7 +205,8 @@ final class MascotController {
 
     /// 設定改了：關閉時停掉進行中的工作姿勢，回到靜止
     func motionChanged() {
-        if !motion.reacts { mutate { $0.setWorking(false, at: time()) } }
+        // 身體不動的程度：正在播的反應與特效立刻停（Codex C-02、C-03）
+        mutate { $0.setStill(!motion.animatesBody, at: time()) }
         // 彈簧的參數在建立時決定：收著時才重建（展開中等下次收合）
         if motion != builtMotion, director?.machine.isOpen == false, !windowExpanded { rebuild() }
         refresh()
@@ -225,7 +230,7 @@ final class MascotController {
 
     /// 按下：落在角色上才算（按住 0.35 秒捏扁）；回傳是否由角色處理（其他位置交給分頁按鈕）
     func pointerDown(at point: CGPoint) -> Bool {
-        guard let director, let gestures, motion.reacts, director.machine.isOpen else { return false }
+        guard let director, let gestures, motion.animatesBody, director.machine.isOpen else { return false }
         let t = time()
         let pose = director.pose(at: t)
         guard gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r]) else { return false }
@@ -268,7 +273,7 @@ final class MascotController {
     }
 
     private func checkWorking() {
-        guard !probing, motion.reacts else { return }
+        guard !probing, motion.animatesBody else { return }
         probing = true
         let probe = activity
         Task.detached(priority: .utility) {
@@ -332,7 +337,7 @@ final class MascotController {
         let animating = director.isAnimating(at: now)
         // 展開待著：眨眼、視線追滑鼠、睡覺、工作中才以每秒 30 次重畫；畫面靜止時停止，到下一次眨眼再開始。
         // 動畫關閉時展開待著也不重畫（沒有眨眼、看滑鼠）
-        let live = director.isLive && motion.reacts
+        let live = director.isLive && motion.movesEyes
         let idleMoving = live && director.isIdleMoving(at: now)
         let rate: MascotRenderRate = animating ? .animating : (idleMoving ? .idle : .stopped)
         if rate != renderRate {

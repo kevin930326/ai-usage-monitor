@@ -63,7 +63,7 @@ struct NotchCanvas: View {
     let character: MascotCharacter
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
-    /// 動畫程度：簡單時不畫粒子與光環；關閉時也不眨眼、不看滑鼠
+    /// 動畫程度：簡單時不畫粒子；關閉時也不眨眼、不看滑鼠
     var motion = MascotMotionLevel.full
 
     var body: some View {
@@ -87,7 +87,7 @@ struct NotchCanvas: View {
     }
 
     private var frame: MascotFrame {
-        let still = !motion.reacts
+        let still = !motion.movesEyes
         let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
