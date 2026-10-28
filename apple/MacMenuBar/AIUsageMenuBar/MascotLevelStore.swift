@@ -35,7 +35,11 @@ final class MascotLevelStore {
         self.level = level
         retry?.cancel()
         let settings = PanelSettings.shared
-        guard let level else { return }
+        guard let level else {
+            // 成功讀到、但沒有任何活躍日（清除歷史後）：從頭算，之後的第一個等級只記下（Codex C-03）
+            settings.celebratedLevel = 0
+            return
+        }
         if settings.celebratedLevel == 0 || level.level < settings.celebratedLevel {
             // 第一次：只記下（舊使用者不會一裝就連續慶祝）；清除歷史後等級變低：從新的等級重新算
             settings.celebratedLevel = level.level
