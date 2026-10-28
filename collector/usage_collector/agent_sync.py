@@ -229,10 +229,11 @@ def _own_ids(conn: sqlite3.Connection) -> set[str]:
 
 # MARK: - 上傳與下載
 
-def upload(conn: sqlite3.Connection, url: str, now: int, body: dict) -> bool:
-    """回傳是否真的送出"""
+def upload(conn: sqlite3.Connection, url: str, now: int, read_body: Callable[[int], dict]) -> bool:
+    """回傳是否真的送出。`read_body(now)` 讀這台的彙總；等候 60 秒的間隔後再讀一次，送出的是最新的狀態"""
     if now < _meta_int(conn, "agent_upload_next_at"):
         return False
+    body = read_body(now)
     text = encode(body)
     digest = hashlib.sha256(text.encode()).hexdigest()[:32]
     last = _meta_int(conn, "agent_upload_at")
@@ -247,6 +248,8 @@ def upload(conn: sqlite3.Connection, url: str, now: int, body: dict) -> bool:
         # 狀態剛改變又改變：等到滿 60 秒再送最新的（不丟掉這次改變）
         time.sleep(MIN_INTERVAL - (now - last))
         now += MIN_INTERVAL - (now - last)
+        body = read_body(now)
+        digest = hashlib.sha256(encode(body).encode()).hexdigest()[:32]
     try:
         request_json(f"{url}/agents/state", {"Authorization": f"Bearer {key}"}, body={"ais": body["ais"]})
     except ProviderError as e:
@@ -305,7 +308,7 @@ def run(path: Path | None = None, now: int | None = None, config_path: Path | No
             if not history.meta(conn, "relay_device_id"):
                 return
             # 自動提交（isolation_level=None）：等候與連線時不鎖住資料庫，Token 統計照常寫入
-            upload(conn, url, now, local_body(now, running))
+            upload(conn, url, now, lambda t: local_body(t, running))
             download(conn, url, now)
         finally:
             conn.close()

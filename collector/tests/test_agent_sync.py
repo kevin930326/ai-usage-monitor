@@ -156,6 +156,17 @@ class SyncTests(unittest.TestCase):
         self.assertEqual([40], self.sleeps)
         self.assertEqual("working", self.relay.uploads()[-1]["ais"][0]["state"])
 
+    def test_change_during_the_wait_is_what_gets_sent(self):
+        self.write_state()
+        self.run_sync()
+        self.write_state(STATE.replace("needsYou", "working"))
+        # 等候的 40 秒內 App 又寫了一次：送出的是等完後讀到的
+        with mock.patch("usage_collector.agent_sync.time.sleep",
+                        lambda _: self.write_state(STATE.replace("needsYou", "done"))):
+            self.run_sync(NOW + 20)
+        self.assertEqual(2, len(self.relay.uploads()))
+        self.assertEqual("done", self.relay.uploads()[-1]["ais"][0]["state"])
+
     def test_app_not_running_or_stale_file_uploads_idle_once(self):
         self.write_state()
         self.run_sync()
