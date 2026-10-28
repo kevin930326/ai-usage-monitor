@@ -73,13 +73,16 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 ### 2. 跨裝置（預設關閉）
 
 **本機彙總**：每台電腦的 App 把彙總狀態寫到本機 `agent-state.json`：`{"v":1, "ais":[{"ai","state","sessions","since"}]}`
-（AI、最高狀態、工作階段數、進入這個狀態的時間），不含資料夾、工作階段 ID 或任何內容。狀態改變時寫（內容一樣不寫），App 正常結束時寫「全部閒置」。
+（AI、最高狀態、工作階段數、進入這個狀態的時間），不含資料夾、工作階段 ID 或任何內容。狀態改變時寫並觸發同步；內容一樣時每 5 分鐘重寫一次、不觸發
+（收集器把 10 分鐘沒更新的檔當成 App 沒在跑）；App 正常結束時寫「全部閒置」並觸發。
 彙總規則與「本機＋遠端合併顯示」放進 `fixtures/agent/cases.json` 的 `summary`、`remote` 兩組 golden，Swift、C#、Python 三邊跑（F-13）。
 
 **只同步狀態的入口**（F-02）：`python -m usage_collector agent-sync`：只讀 `agent-state.json`、只連 `/agents/state`，不跑 CLI、不上傳 `/usage`，
-不用「立即更新」的節流（`CollectorKicks`），自己最短 60 秒一次。
+不用「立即更新」的節流（`CollectorKicks`），自己最短 60 秒一次（等候後重讀 `agent-state.json`，送出的是最新的狀態）。
 
-- Mac：新的 LaunchAgent `io.github.kevin930326.ai-usage-monitor.agent-sync`，`WatchPaths` 監看 `agent-state.json`（App 不用啟動任何程式）、`ThrottleInterval` 60。
+- Mac：新的 LaunchAgent，沒有排程，App 寫了檔（內容改變）後以 `launchctl kickstart` 觸發（同「更新」按鈕的做法）。內建收集器的是 App 內的
+  `<bundle ID>.agent-sync.plist`，和收集器一起以 `SMAppService` 註冊與解除；`install-launchd.sh` 的是 `io.github.kevin930326.ai-usage-monitor.agent-sync`。
+  （實作時修訂：原本用 `WatchPaths` 監看 `agent-state.json`，但 App 內的 plist 不能寫使用者的絕對路徑；兩種安裝方式改用同一個做法。）
 - Windows：新的排程 `\AIUsageMonitor\AgentSync`（`install-task.ps1` 建立），App 寫完檔以 `schtasks /Run` 觸發（仍只在 `SystemServices.cs`），獨立 60 秒節流。
 - 一般 5 分鐘一輪也做一次狀態同步，作為退路。
 
@@ -90,8 +93,9 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 
 - `POST /agents/state`：**裝置密鑰**，整台覆蓋（device_id 由密鑰決定，不能寫別台）。body ≤ 1 KB；`ai ∈ {claude, codex}`、`state` 是六個白名單值、
   `sessions` 0～32 整數；`updated_at` 由中繼寫，`since` 夾在 `[updated_at − 24h, updated_at]`。
-- `GET /agents/state`：**讀取密鑰**，回 `{"now", "devices":[{"device_id","name","ais":[…],"updated_at"}]}`，不含撤銷的裝置；用戶端以 `now − updated_at`
-  判斷 30 分鐘內才顯示（用中繼的時鐘）。
+- `GET /agents/state`：**讀取密鑰**，回 `{"now", "devices":[{"device_id","name","ais":[…],"updated_at"}]}`，不含撤銷的裝置與 30 分鐘內沒有更新的裝置；
+  用戶端再以 `now − updated_at` 判斷 30 分鐘內才顯示（用中繼的時鐘）。全部閒置時中繼留一列標記（`ai` 為空字串，不回傳），其他電腦才知道這台還在。
+- 撤銷裝置時一併刪除它的 AI 狀態。
 - `AGENT_SYNC` 不是 `on` 時兩個端點回 404；沒有 D1 綁定時回 503（同第二層）。
 - 中繼只改程式與測試，**不部署**；部署步驟見報告。
 
@@ -108,8 +112,12 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 | 舊 App＋新收集器 | 沒有 `agent-state.json`，不上傳；忽略 `agent-remote.json` |
 | 新 App＋舊收集器 | 沒有 `agent-remote.json`，不顯示其他電腦 |
 
-**顯示**：Mac 瀏海與 Windows 圓環顯示其他電腦的狀態（「桌機：需要你」，裝置名稱是第二層設定的名稱）；iPhone App 打開時、下拉更新時、小工具更新時
-讀 `GET /agents/state`，404 或逾時時不顯示這一區、不影響額度。
+**顯示**：裝置名稱是第二層設定的名稱。
+
+- Mac 瀏海：「AI 工作階段」分頁在這台的工作階段之後列出其他電腦（電腦圖示＋名稱、AI、狀態、工作階段數）；不改變收合時的外框與數量。
+- Windows 圓環：這台沒有要注意的時，顯示其他電腦的「需要你」（膠囊第二行「工作 PC：Codex 需要你」）。其他電腦的完成、出錯不上圓環：這裡看過也消不掉。
+- iPhone App：打開時與下拉更新時讀 `GET /agents/state`，首頁列出「其他電腦」；404 或逾時時不顯示這一區、不影響額度。
+  小工具不讀（實作時修訂：小工具空間小、更新間隔 15～60 分鐘，列進 BACKLOG）。
 
 ### 3. iPhone 沒有推播
 

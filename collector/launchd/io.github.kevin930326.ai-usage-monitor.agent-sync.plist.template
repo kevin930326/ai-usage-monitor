@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 由 scripts/install-launchd.sh 填入 __PLACEHOLDER__ 後安裝到 ~/Library/LaunchAgents。
+     AI 狀態同步（ADR-0019 第 2 節）：沒有排程，App 寫了 agent-state.json（內容改變）後以 launchctl kickstart 觸發；
+     收集器自己最短 60 秒同步一次，一般 5 分鐘一輪也會同步。 -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.github.kevin930326.ai-usage-monitor.agent-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__PYTHON__</string>
+        <string>-m</string>
+        <string>usage_collector</string>
+        <string>--agent-sync</string>
+        <string>--quiet</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__COLLECTOR_DIR__</string>
+
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/collector.log</string>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/collector.log</string>
+
+    <!-- 背景工作，系統忙碌時可延後 -->
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

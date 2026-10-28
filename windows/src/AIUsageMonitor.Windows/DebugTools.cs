@@ -175,6 +175,10 @@ internal static class DebugTools
                                                 RingExpandDirection.Right, RingDock.None, 1, ticks: false));
             Shot("agent-needs-you-down", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
                                               RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
+            // 其他電腦需要你（ADR-0019 第 2 節）：膠囊第二行前面是那台的名稱
+            Shot("agent-remote-expand", Desk(dark, palette,
+                                             Content("normal").WithAgent(new RingAgent(AgentKind.Codex, AgentState.NeedsYou, null, "工作 PC")),
+                                             Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
         }
     }
 

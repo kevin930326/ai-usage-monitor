@@ -178,6 +178,11 @@ enum DebugMascot {
                  extras: NotchExtras(page: .agents, agents: manyRows)),
             Shot(name: "expanded-agent-error", setup: { $0.setMood(.sad); $0.open(at: 0, intro: false) }, time: 1500,
                  extras: NotchExtras(agents: [row(.codex, "billing-service", .error, minutes: 3)])),
+            // 其他電腦（ADR-0019 第 2 節）：接在這台之後，電腦圖示＋裝置名稱
+            Shot(name: "expanded-agents-remote", setup: { $0.open(at: 0, intro: false) }, time: 1500,
+                 extras: NotchExtras(page: .agents, agents: [row(.claude, "ai-usage-monitor", .working, minutes: 6)],
+                                     remote: [RemoteAgent(device: "工作 PC", ai: .codex, state: .needsYou, sessions: 1),
+                                              RemoteAgent(device: "桌機", ai: .claude, state: .working, sessions: 2)])),
         ]
         // 有瀏海的 Mac（實體瀏海 185 寬）與沒有瀏海時的假瀏海
         let notch = NotchLayout(notchWidth: 185, notchHeight: 32, hasNotch: true)

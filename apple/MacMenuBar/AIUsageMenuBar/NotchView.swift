@@ -53,8 +53,8 @@ extension NotchView {
         return NotchExtras(pinned: controller.pinned,
                            quietUntil: settings.mascotQuietUntil.flatMap { $0 > store.now ? $0 : nil },
                            hint: controller.showsHint,
-                           page: rows.isEmpty ? .overview : controller.page,
-                           agents: rows,
+                           page: rows.isEmpty && store.remoteAgents.isEmpty ? .overview : controller.page,
+                           agents: rows, remote: store.remoteAgents,
                            level: MascotLevelStore.shared.level)
     }
 
@@ -74,10 +74,14 @@ struct NotchExtras: Equatable {
     var hint = false
     var page = NotchPage.overview
     var agents: [NotchAgentRow] = []
+    /// 其他電腦的 AI 狀態（ADR-0019 第 2 節）：只在「AI 工作階段」分頁列出，不改變收合時的外框與數量
+    var remote: [RemoteAgent] = []
     /// 角色等級（ADR-0020）；沒有任何活躍日時 nil
     var level: MascotLevel?
 
     var needsYou: Bool { agents.contains { $0.state == .needsYou } }
+    /// 有東西可以列在「AI 工作階段」分頁
+    var hasAgentPage: Bool { !agents.isEmpty || !remote.isEmpty }
     /// 收合時顯示的數量：閒置以外的工作階段，兩個以上才顯示
     var activeCount: Int { agents.filter { $0.state != .idle }.count }
 }
@@ -386,7 +390,7 @@ struct NotchContent: View {
                 NotchTab(symbol: "house.fill", label: "總覽", selected: extras.page == .overview) {
                     MascotController.shared.setPage(.overview)
                 }
-                if !extras.agents.isEmpty {
+                if extras.hasAgentPage {
                     NotchTab(symbol: "terminal", label: "AI 工作階段", selected: extras.page == .agents,
                              tint: extras.needsYou ? notchAmber : nil) {
                         MascotController.shared.setPage(.agents)
@@ -401,7 +405,7 @@ struct NotchContent: View {
             .position(x: 20 + 60, y: 17)
             marks
                 .frame(height: 20)
-                .position(x: (extras.agents.isEmpty ? 112 : 142) + 30, y: 17)
+                .position(x: (extras.hasAgentPage ? 142 : 112) + 30, y: 17)
             updated
                 .frame(height: 20)
                 .position(x: NotchLayout.canvasWidth - 20 - 50, y: 17)
@@ -409,7 +413,7 @@ struct NotchContent: View {
                 RoundedRectangle(cornerRadius: 18).fill(Self.card)
                     .frame(width: 140)
                     .accessibilityHidden(true)
-                if extras.page == .agents, !extras.agents.isEmpty {
+                if extras.page == .agents, extras.hasAgentPage {
                     agentsCard
                 } else {
                     quotaCard
@@ -522,9 +526,12 @@ struct NotchContent: View {
         .background(RoundedRectangle(cornerRadius: 18).fill(Self.card))
     }
 
-    /// AI 工作階段：AI、資料夾名稱、狀態、多久（需要你的排最前面）。狀態用文字，不只靠顏色
+    /// AI 工作階段：AI、資料夾名稱、狀態、多久（需要你的排最前面）。狀態用文字，不只靠顏色。
+    /// 其他電腦的接在這台之後：電腦圖示＋裝置名稱、狀態、工作階段數（沒有資料夾名稱）。最多 4 列
     private var agentsCard: some View {
         let shown = extras.agents.prefix(4)
+        let remote = extras.remote.prefix(4 - shown.count)
+        let hidden = extras.agents.count + extras.remote.count - shown.count - remote.count
         return VStack(alignment: .leading, spacing: 5) {
             ForEach(shown) { row in
                 HStack(spacing: 8) {
@@ -550,8 +557,37 @@ struct NotchContent: View {
                 }
                 .accessibilityElement(children: .combine)
             }
-            if extras.agents.count > shown.count {
-                Text("還有 \(extras.agents.count - shown.count) 個")
+            ForEach(remote, id: \.id) { row in
+                HStack(spacing: 8) {
+                    Text(row.ai == .claude ? "Claude" : "Codex")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(UsageColors.provider(row.ai.rawValue))
+                        .frame(width: 44, alignment: .leading)
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Self.secondary)
+                        .accessibilityHidden(true)
+                    Text(row.device)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Text(Self.remoteStateText(row.state))
+                        .font(.system(size: 11, weight: row.state == .needsYou ? .semibold : .regular))
+                        .foregroundStyle(Self.stateColor(row.state))
+                    Text(row.sessions > 1 ? "\(row.sessions) 個" : "")
+                        .font(.system(size: 10).monospacedDigit())
+                        .foregroundStyle(Color(red: 0x6f / 255, green: 0x6f / 255, blue: 0x7d / 255))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(minWidth: 40, alignment: .trailing)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(row.text + (row.sessions > 1 ? "，\(row.sessions) 個工作階段" : ""))
+            }
+            if hidden > 0 {
+                Text("還有 \(hidden) 個")
                     .font(.system(size: 10))
                     .foregroundStyle(Self.secondary)
             }
@@ -576,6 +612,15 @@ struct NotchContent: View {
         case .done: "完成（未看）"
         case .waiting: "等你下指令"
         case .idle: "閒置"
+        }
+    }
+
+    /// 其他電腦的狀態（沒有「等你什麼」的細節）
+    static func remoteStateText(_ state: AgentState) -> String {
+        switch state {
+        case .needsYou: "需要你"
+        case .done: "完成了"
+        default: stateText(NotchAgentRow(id: "", ai: .claude, folder: "", state: state, need: nil, minutes: 0))
         }
     }
 

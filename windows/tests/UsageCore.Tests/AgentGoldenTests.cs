@@ -71,6 +71,9 @@ public class AgentGoldenTests
                     var next = AgentNotices.NextCheck(sessions, t, policy);
                     log.Add($"{t} notices [{string.Join(", ", notices)}] next={(next is { } nx ? nx.ToString(CultureInfo.InvariantCulture) : "none")}");
                     break;
+                case "summary":
+                    log.Add($"{t} summary {Encoding.UTF8.GetString(AgentSummary.Encoded(sessions, t))}");
+                    break;
                 case "seen":
                     sessions.MarkSeen(t);
                     log.Add($"{t} seen → {Describe(sessions, t)}");
@@ -104,6 +107,11 @@ public class AgentGoldenTests
     [Fact] public void MessagesMatchGolden() => Compare("messages", c => Parse(c["raw"]!.GetValue<string>()));
 
     [Fact] public void SessionsMatchGolden() => Compare("sessions", Run);
+
+    [Fact]
+    public void RemoteMatchesGolden() => Compare("remote", c =>
+        [.. RemoteAgents.Parse(Encoding.UTF8.GetBytes(c["raw"]!.GetValue<string>()), c["local_now"]!.GetValue<long>())
+            .Select(r => $"{r.Device}|{AgentNames.Name(r.Ai)}|{AgentNames.Name(r.State)}|{r.Sessions}|{r.Text}")]);
 
     [Fact]
     public void EncodedMessageRoundTrips()

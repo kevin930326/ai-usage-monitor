@@ -6,6 +6,8 @@ import UsageKit
 @MainActor
 final class UsageModel {
     private(set) var snapshot: UsageSnapshot?
+    /// 其他電腦的 AI 狀態（ADR-0019 第 2 節，`GET /agents/state`）：中繼沒打開或讀不到時是空的，畫面不顯示這一區
+    private(set) var remoteAgents: [RemoteAgent] = []
     private(set) var errorMessage: String?
     private(set) var isLoading = false
     private(set) var liveActivityRunning = LiveActivityController.isRunning
@@ -68,6 +70,7 @@ final class UsageModel {
             snapshot = try await fetch()
             errorMessage = nil
             SharedStore.publish(snapshot)
+            remoteAgents = await fetchAgents()
             // App 開啟時順便更新卡片（FR-8）
             await updateLiveActivity()
         } catch {
@@ -141,6 +144,12 @@ final class UsageModel {
     private func updateLiveActivity() async {
         guard let snapshot, LiveActivityController.isRunning else { return }
         await LiveActivityController.update(snapshot: snapshot, mode: displayMode)
+    }
+
+    private func fetchAgents() async -> [RemoteAgent] {
+        guard demoScenario == nil else { return [] }
+        let now = Int64(Date.now.timeIntervalSince1970 * 1000)
+        return await (try? RelayClient(urlString: relayURL, readToken: readToken))?.fetchAgents(localNow: now) ?? []
     }
 
     private func fetch() async throws -> UsageSnapshot {

@@ -210,7 +210,12 @@ class UserAgentTest(unittest.TestCase):
         offenders = [str(f.relative_to(package)) for f in sorted(package.rglob("*.py")) if f.name != "http.py"
                      and any(m in f.read_text(encoding="utf-8")
                              for m in ("urllib.request", "http.client", "urlopen", "import socket", "import requests"))]
-        self.assertEqual(offenders, [])
+        # 例外：agent_sync 以本機的 Unix socket 確認 Mac App 在不在跑（hook.sock，連上立刻關、不送資料），不連網路
+        self.assertEqual(offenders, ["agent_sync.py"])
+        text = (package / "agent_sync.py").read_text(encoding="utf-8")
+        self.assertEqual(text.count("socket.socket("), 1)
+        self.assertIn("socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)", text)
+        self.assertNotIn(".connect((", text)
 
 
 class EdgeResponseTest(unittest.TestCase):

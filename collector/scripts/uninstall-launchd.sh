@@ -6,11 +6,15 @@
 set -euo pipefail
 
 LABEL="io.github.kevin930326.ai-usage-monitor"
-TARGET="$HOME/Library/LaunchAgents/$LABEL.plist"
 
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-rm -f "$TARGET"
-echo "已移除：$TARGET"
+for label in "$LABEL" "$LABEL.agent-sync"; do
+    target="$HOME/Library/LaunchAgents/$label.plist"
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    if [ -e "$target" ]; then
+        rm -f "$target"
+        echo "已移除：$target"
+    fi
+done
 
 DATA_DIR="${AI_USAGE_MONITOR_HOME:-$HOME/Library/Application Support/AIUsageMonitor}"
 HISTORY="$DATA_DIR/history.sqlite3"

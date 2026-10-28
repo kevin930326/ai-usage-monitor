@@ -105,6 +105,9 @@ KV 的替代做法（每台裝置一個鍵 `daily:<device_id>`，值為最近 40
 - **App 的範圍**：每小時資料與個人紀錄（`records`、`record_days`）只有這台 Mac 有。「所有電腦」與單一電腦的個人紀錄與累計由面板讀到的每日資料（最近一年）計算，最長連續天數是這段期間所有連續區段的最大值（過去較長、已結束的也算，跨電腦的日子合併計算；同樣長取較早結束的）；「一天中的時段」只有這台 Mac。
 - **關閉上傳**（第 3 節）以 `set-tier2.sh --disable`／`set-tier2.ps1 -Disable` 實作，不是 App 的設定（App 不寫 `config.json`、不持有密鑰）；Mac 關閉時一併刪除本機的其他電腦資料。
 - **磁碟空間不足**（ADR-0014 第 3 節）：收集器暫停寫 `history.sqlite3` 時，第二層的上傳與下載也暫停（上傳要記 `upload_state`）；其他電腦看到這台的 Token 停在暫停前，空間恢復後下一輪補傳。`/usage` 照常上傳。
+- **AI 狀態同步**（[ADR-0019](0019-windows-agent-state-and-sync.md) 第 2 節修訂）：裝置密鑰也能寫 `POST /agents/state`（這台電腦每個 AI 的狀態與工作階段數，
+  沒有資料夾名稱或內容），讀取密鑰讀 `GET /agents/state`。用同一張 `devices` 表與同一把密鑰，前提是這台已經啟用第二層；
+  每台電腦以 `set-tier2.sh --agent-sync`／`set-tier2.ps1 -AgentSync` 另外打開，中繼要設定 `AGENT_SYNC=on`。其他規則（撤銷、只存雜湊、不信任內容中的裝置欄位）相同。
 - **D1 綁定**在 `wrangler.toml` 預設註解（填了不存在的 `database_id` 會讓 `wrangler deploy` 失敗）；沒有綁定時第二層的端點回 503，`/usage` 不受影響。
 
 ## 參考專案

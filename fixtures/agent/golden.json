@@ -457,6 +457,70 @@
       ]
     }
   ],
+  "remote" : [
+    {
+      "name" : "two-devices",
+      "result" : [
+        "桌機|codex|needsYou|2|桌機：Codex 需要你",
+        "桌機|claude|working|1|桌機：Claude Code 工作中",
+        "筆電|claude|done|1|筆電：Claude Code 完成了"
+      ]
+    },
+    {
+      "name" : "waiting-and-idle-hidden",
+      "result" : [
+
+      ]
+    },
+    {
+      "name" : "too-old",
+      "result" : [
+        "桌機|claude|needsYou|1|桌機：Claude Code 需要你"
+      ]
+    },
+    {
+      "name" : "file-aged-locally",
+      "result" : [
+        "筆電|claude|needsYou|1|筆電：Claude Code 需要你"
+      ]
+    },
+    {
+      "name" : "future-updated-at",
+      "result" : [
+
+      ]
+    },
+    {
+      "name" : "bad-rows-skipped",
+      "result" : [
+        "桌機|claude|working|1|桌機：Claude Code 工作中"
+      ]
+    },
+    {
+      "name" : "name-cleaned",
+      "result" : [
+        "Mac mini 的名稱非常非常非常非常非常非常非常非常非常非常|claude|error|1|Mac mini 的名稱非常非常非常非常非常非常非常非常非常非常：Claude Code 出錯了"
+      ]
+    },
+    {
+      "name" : "wrong-version",
+      "result" : [
+
+      ]
+    },
+    {
+      "name" : "not-json",
+      "result" : [
+
+      ]
+    },
+    {
+      "name" : "missing-fetched",
+      "result" : [
+
+      ]
+    }
+  ],
   "sessions" : [
     {
       "name" : "basic-turn",
@@ -787,6 +851,36 @@
         "190000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@190000] next=none",
         "195000 claude PostToolUse[sub] → top=claude/aaaa [claude/aaaa/proj:done@190000]",
         "195000 notices [claude:done key=claude/aaaaaaaaaaaaaaaa/done@190000] next=none"
+      ]
+    },
+    {
+      "name" : "summary-two-ais",
+      "result" : [
+        "0 summary {\"v\":1,\"ais\":[]}",
+        "1000 claude UserPromptSubmit → top=claude/aaaa [claude/aaaa/proj:working@1000]",
+        "2000 claude UserPromptSubmit → top=claude/bbbb [claude/bbbb/proj:working@2000, claude/aaaa/proj:working@1000]",
+        "2500 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":2,\"since\":2000}]}",
+        "3000 claude PermissionRequest → top=claude/bbbb [claude/bbbb/proj:needsYou(permission)@3000, claude/aaaa/proj:working@1000]",
+        "4000 codex SessionStart → top=claude/bbbb [claude/bbbb/proj:needsYou(permission)@3000, claude/aaaa/proj:working@1000, codex/cccc/proj:waiting@4000]",
+        "5000 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":3000},{\"ai\":\"codex\",\"state\":\"waiting\",\"sessions\":1,\"since\":4000}]}",
+        "6000 claude Stop → top=claude/bbbb [claude/bbbb/proj:needsYou(permission)@3000, claude/aaaa/proj:done@6000, codex/cccc/proj:waiting@4000]",
+        "7000 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":3000},{\"ai\":\"codex\",\"state\":\"waiting\",\"sessions\":1,\"since\":4000}]}",
+        "400000 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"needsYou\",\"sessions\":2,\"since\":3000},{\"ai\":\"codex\",\"state\":\"idle\",\"sessions\":1,\"since\":4000}]}",
+        "500000 claude SessionEnd → top=claude/aaaa [claude/aaaa/proj:done@6000, codex/cccc/proj:idle@4000]",
+        "500001 claude SessionEnd → top=codex/cccc [codex/cccc/proj:idle@4000]",
+        "500002 codex SessionEnd → top=none []",
+        "500003 summary {\"v\":1,\"ais\":[]}"
+      ]
+    },
+    {
+      "name" : "summary-idle-and-error",
+      "result" : [
+        "0 codex UserPromptSubmit → top=codex/cccc [codex/cccc/proj:working@0]",
+        "1000 codex StopFailure → top=codex/cccc [codex/cccc/proj:error@1000]",
+        "2000 summary {\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"error\",\"sessions\":1,\"since\":1000}]}",
+        "3000 seen → top=codex/cccc [codex/cccc/proj:waiting@3000]",
+        "4000 summary {\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"waiting\",\"sessions\":1,\"since\":3000}]}",
+        "64000 summary {\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"idle\",\"sessions\":1,\"since\":3000}]}"
       ]
     }
   ]

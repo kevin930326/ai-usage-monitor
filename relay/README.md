@@ -20,11 +20,14 @@ Mac 收集器把最新一筆用量上傳到這裡，iPhone 再從這裡讀取。
 | `GET` | `/devices` | `Authorization: Bearer <ADMIN_TOKEN>` | 裝置清單（不含密鑰與雜湊） |
 | `POST` | `/devices` | `Authorization: Bearer <ADMIN_TOKEN>` | `201 {"device_id", "name", "key"}`：密鑰只回傳這一次 |
 | `POST` | `/devices/<id>/rotate` | `Authorization: Bearer <ADMIN_TOKEN>` | 新密鑰（`device_id` 與資料不變）；已撤銷 `409` |
-| `POST` | `/devices/<id>/revoke` | `Authorization: Bearer <ADMIN_TOKEN>` | 撤銷；內容 `{"delete_data": true}` 時一併刪除它的每日加總 |
+| `POST` | `/devices/<id>/revoke` | `Authorization: Bearer <ADMIN_TOKEN>` | 撤銷；內容 `{"delete_data": true}` 時一併刪除它的每日加總（AI 狀態一律刪除） |
+| `POST` | `/agents/state` | `Authorization: Bearer <裝置密鑰 aumd_…>` | `200 {"device_id", "accepted"}`：這台電腦的 AI 狀態 `{"ais": [{"ai", "state", "sessions", "since"}]}`，整台覆蓋；格式錯誤 `400`／`422`，超過 1 KB `413`（[ADR-0019](../docs/adr/0019-windows-agent-state-and-sync.md) 第 2 節） |
+| `GET` | `/agents/state` | `Authorization: Bearer <READ_TOKEN>` | `200 {"now", "devices": [{"device_id", "name", "ais", "updated_at"}]}`：30 分鐘內有更新、沒有撤銷的裝置（時間都是中繼的毫秒） |
 
-- 裝置密鑰只能寫 `/tokens/daily`；`READ_TOKEN`、`WRITE_TOKEN`、`ADMIN_TOKEN` 都不能上傳每日加總。中繼只存裝置密鑰的 SHA-256，`device_id` 由中繼依密鑰決定，內容中的裝置欄位一律不採用。
+- 裝置密鑰只能寫 `/tokens/daily` 與 `/agents/state`；`READ_TOKEN`、`WRITE_TOKEN`、`ADMIN_TOKEN` 都不能上傳每日加總或 AI 狀態。中繼只存裝置密鑰的 SHA-256，`device_id` 由中繼依密鑰決定，內容中的裝置欄位一律不採用。
 - 每列只收白名單欄位：`day`（400 天前到明天，UTC）、`provider`（`claude`／`codex`）、`model`（`claude-`、`gpt-`、`codex-`、`o`＋數字開頭，或 `other`，最長 64 字）、五種 Token、`task_seconds`、`longest_task_seconds`（0～10¹² 的整數）；每批最多 400 列、同一批不能有重複的列。
 - 沒有 D1 綁定時這些端點回 `503`；`ADMIN_TOKEN` 未設定或與其他密鑰相同時 `/devices` 回 `503`。`/usage` 不受影響。
+- **跨裝置的 AI 狀態**（選用）：部署設定的 `[vars]` 加 `AGENT_SYNC = "on"`、套用 `migrations/0002_agent_state.sql` 後才開放；沒打開時 `/agents/state` 回 `404`（收集器 1 小時後再試）。只存 AI（`claude`／`codex`）、六種狀態、工作階段數 0～32 與進入狀態的時間（夾在中繼時間的 24 小時內）；沒有資料夾名稱、工作階段 ID 或任何內容。每台最多 2 列、上傳時整台覆蓋，沒有歷史。
 - 管理指令用 `scripts/relay-device.sh`（`add`／`list`／`rotate`／`revoke [--delete-data]`）。
 - **每月清理**（ADR-0014 D-4）：排程（每月 1 日 19:00 UTC）刪除 400 天以前的每日加總，和上傳接受的日期範圍相同；每次最多 5,000 列（刪除也算 D1 的寫入，只佔免費方案每日額度的一小部分），刪不完的留到下個月。每台裝置最新的那一天不刪（留下的列早於下載範圍、不會回傳），`has_data` 才不會把「太久沒上傳」誤當成「撤銷時一併刪除了資料」。要在部署設定加 `[triggers]`，見下面的「每月清理的排程」。
 

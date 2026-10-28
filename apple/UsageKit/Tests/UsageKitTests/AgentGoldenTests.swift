@@ -15,6 +15,13 @@ import Testing
         var inputs: [Raw]
         var messages: [Raw]
         var sessions: [SessionCase]
+        var remote: [RemoteCase]
+    }
+
+    struct RemoteCase: Decodable {
+        var name: String
+        var local_now: Int64
+        var raw: String
     }
 
     struct Raw: Decodable {
@@ -45,6 +52,7 @@ import Testing
         var inputs: [Named]
         var messages: [Named]
         var sessions: [Named]
+        var remote: [Named]
     }
 
     struct Named: Codable, Equatable {
@@ -94,6 +102,8 @@ import Testing
                 }
                 let next = sessions.nextNoticeCheck(after: event.t, policy: policy).map(String.init) ?? "none"
                 log.append("\(event.t) notices [\(list.joined(separator: ", "))] next=\(next)")
+            case "summary":
+                log.append("\(event.t) summary \(String(decoding: AgentSummary.encoded(sessions, at: event.t), as: UTF8.self))")
             case "seen":
                 sessions.markSeen(at: event.t)
                 log.append("\(event.t) seen → \(describe(sessions, at: event.t))")
@@ -107,10 +117,15 @@ import Testing
         return Named(name: testCase.name, result: log)
     }
 
+    static func remote(_ testCase: RemoteCase) -> Named {
+        let list = RemoteAgents.parse(Data(testCase.raw.utf8), localNow: testCase.local_now)
+        return Named(name: testCase.name, result: list.map { "\($0.device)|\($0.ai.rawValue)|\($0.state.rawValue)|\($0.sessions)|\($0.text)" })
+    }
+
     @Test func matchesGolden() throws {
         let input = try JSONDecoder().decode(Input.self, from: Data(contentsOf: Self.folder.appendingPathComponent("cases.json")))
         let output = Output(inputs: input.inputs.map(Self.extract), messages: input.messages.map(Self.parse),
-                            sessions: input.sessions.map(Self.run))
+                            sessions: input.sessions.map(Self.run), remote: input.remote.map(Self.remote))
         let goldenURL = Self.folder.appendingPathComponent("golden.json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -118,12 +133,42 @@ import Testing
             try (encoder.encode(output) + Data("\n".utf8)).write(to: goldenURL)
         }
         let golden = try JSONDecoder().decode(Output.self, from: Data(contentsOf: goldenURL))
-        for (expected, actual) in zip(golden.inputs + golden.messages + golden.sessions,
-                                      output.inputs + output.messages + output.sessions) {
+        for (expected, actual) in zip(golden.inputs + golden.messages + golden.sessions + golden.remote,
+                                      output.inputs + output.messages + output.sessions + output.remote) {
             #expect(expected == actual, "\(actual.name)：\n預期 \(expected.result)\n實際 \(actual.result)")
         }
         #expect(golden.inputs.count == output.inputs.count && golden.messages.count == output.messages.count
-                && golden.sessions.count == output.sessions.count, "golden.json 與 cases.json 的情境數不同")
+                && golden.sessions.count == output.sessions.count && golden.remote.count == output.remote.count, "golden.json 與 cases.json 的情境數不同")
+    }
+
+    /// iPhone 直接讀中繼的回應：剛下載（經過 0），所有電腦都列出，30 分鐘以前的不列
+    @Test func relayResponseOnPhone() {
+        let now: Int64 = 1_800_000_000_000
+        let raw = """
+        {"now":\(now),"devices":[
+          {"device_id":"a","name":"桌機","updated_at":\(now - 60_000),"ais":[{"ai":"claude","state":"needsYou","sessions":1,"since":1}]},
+          {"device_id":"b","name":"舊筆電","updated_at":\(now - 31 * 60_000),"ais":[{"ai":"codex","state":"working","sessions":1,"since":1}]},
+          {"device_id":"c","name":"工作 PC","updated_at":\(now),"ais":[{"ai":"codex","state":"idle","sessions":0,"since":1}]}
+        ]}
+        """
+        let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now + 5_000)
+        #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1, id: "0/claude",
+                                     expiresAt: now + 5_000 + RemoteAgents.maxAge - 60_000 + 1)])
+        // 畫面停著不重新下載：中繼收到後滿 30 分鐘就不顯示
+        #expect(list[0].isShown(at: now + 5_000 + 29 * 60_000))
+        #expect(!list[0].isShown(at: now + 5_000 + 29 * 60_000 + 1))
+        #expect(list.first?.text == "桌機：Claude Code 需要你")
+        #expect(RemoteAgents.parseRelay(Data("[]".utf8), localNow: now).isEmpty)
+        // 同名的兩台：列表識別不同
+        let twins = """
+        {"now":\(now),"devices":[
+          {"device_id":"a","name":"MacBook","updated_at":\(now),"ais":[{"ai":"claude","state":"working","sessions":1,"since":1}]},
+          {"device_id":"b","name":"MacBook","updated_at":\(now),"ais":[{"ai":"claude","state":"working","sessions":1,"since":1}]}
+        ]}
+        """
+        let ids = RemoteAgents.parseRelay(Data(twins.utf8), localNow: now).map(\.id)
+        #expect(ids.count == 2 && Set(ids).count == 2)
+        #expect(RemoteAgents.parseRelay(Data("{\"devices\":[]}".utf8), localNow: now).isEmpty)
     }
 
     /// 隱私：擷取的結果只有事件、種類、ID、資料夾名稱，提示與工具內容不會出現在任何欄位

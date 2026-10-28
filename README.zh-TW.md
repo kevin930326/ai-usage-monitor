@@ -293,8 +293,10 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Codex CLI（由收集器執行） | OpenAI | Codex CLI 自己處理，收集器不讀取 `~/.codex/auth.json` | 取得 Codex 額度與方案名稱 | launchd 每 5 分鐘 |
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
 | Mac／PC 收集器（只在設定第二層後） | 你的 Worker `POST /tokens/daily`、`GET /tokens/daily`（只在存了讀取密鑰的電腦：Mac，或以 `set-tier2.ps1 -ReadKey` 設定的 PC） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每日 Token 加總；下載其他電腦的（見 [docs/tier2-setup.md](docs/tier2-setup.md)） | 有變動時每小時一次＋日期改變後的第一輪；下載每小時一次 |
+| Mac／PC 收集器（只在 `set-tier2.sh --agent-sync`／`set-tier2.ps1 -AgentSync` 打開後） | 你的 Worker `POST /agents/state`、`GET /agents/state`（[ADR-0019](docs/adr/0019-windows-agent-state-and-sync.md) 第 2 節） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每個 AI 的狀態、工作階段數與進入狀態的時間（沒有資料夾名稱、工作階段 ID 或任何內容）；下載其他電腦的，寫成 `agent-remote.json` | App 的彙總改變時（最短 1 分鐘一次）、沒變時每 10 分鐘，以及每 5 分鐘一輪 |
 | Mac 收集器 | `status.claude.com`、`status.openai.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
+| iPhone App | 你的 Worker `GET /agents/state` | 讀取密鑰 | 取得其他電腦的 AI 狀態（中繼設定 `AGENT_SYNC=on` 時才有） | 打開 App、回到前景、下拉更新 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
 | iPhone App | 你的 Worker `POST /pair/claim` | 不需要密鑰（一次性短碼） | 送出短碼、取得讀取密鑰 | 只在你按「輸入短碼」時 |
 | `setup-iphone.sh --pair code`（Mac） | 你的 Worker `POST /pair` | 寫入密鑰（從 Keychain 經標準輸入交給 curl） | 取得一次性短碼 | 只在你執行時 |
