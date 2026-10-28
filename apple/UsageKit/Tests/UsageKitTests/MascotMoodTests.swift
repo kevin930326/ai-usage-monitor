@@ -74,6 +74,11 @@ import Testing
         #expect(MascotMood.isQuotaUnavailable(failing, provider: "claude", readFailed: false, now: now))
         #expect(MascotMood.isQuotaUnavailable(old, provider: "claude", readFailed: false, now: now))
         #expect(!MascotMood.isQuotaUnavailable(fresh, provider: "claude", readFailed: false, now: now))
+        // 選的服務不在快照裡（例如只用 Codex、角色是 Claude），或沒有看得到的額度（第二輪 C-01）
+        #expect(MascotMood.isQuotaUnavailable(fresh, provider: "codex", readFailed: false, now: now))
+        let hidden = UsageSnapshot(updatedAt: now, providers: ["claude": ProviderUsage(windows: [
+            UsageWindow(id: "five_hour", label: "5 小時", usedPct: 10, hidden: true)])])
+        #expect(MascotMood.isQuotaUnavailable(hidden, provider: "claude", readFailed: false, now: now))
         #expect(MascotMood.quota(level: 0, unavailable: true) == .stale)
     }
 

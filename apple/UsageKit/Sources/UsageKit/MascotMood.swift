@@ -84,10 +84,12 @@ public enum MascotMood: String, Sendable, CaseIterable {
         return level >= 2 ? .out : level == 1 ? .worried : .normal
     }
 
-    /// 額度不明（閉眼）：還沒有資料、讀檔失敗（包括有舊資料時）、服務出錯或資料過期（Codex C-04）
+    /// 額度不明（閉眼）：還沒有資料、讀檔失敗（包括有舊資料時）、資料過期、選的服務沒有資料或出錯、
+    /// 或沒有任何看得到的額度（Codex C-04、第二輪 C-01）
     public static func isQuotaUnavailable(_ snapshot: UsageSnapshot?, provider: String, readFailed: Bool, now: Date) -> Bool {
-        guard let snapshot, !readFailed else { return true }
-        return snapshot.providers[provider]?.error != nil || snapshot.isStale(now: now)
+        guard let snapshot, !readFailed, !snapshot.isStale(now: now),
+              let usage = snapshot.providers[provider], usage.error == nil else { return true }
+        return usage.visibleWindows.isEmpty
     }
 }
 
