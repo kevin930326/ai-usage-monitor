@@ -397,11 +397,11 @@ private final class GlyphFont: @unchecked Sendable {
             guard CTFontGetGlyphsForCharacters(font, &unichar, &glyph, 1) else { continue }
             var advance = CGSize.zero
             CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
-            paths[ch] = (CTFontCreatePathForGlyph(font, glyph, nil) ?? CGMutablePath(), advance.width)
+            paths[ch] = (CTFontCreatePathForGlyph(font, glyph, nil) ?? CGMutablePath(), Double(advance.width))
         }
         self.paths = paths
         // textBaseline middle：基線放在中心往下約 x 高度的一半
-        middle = CTFontGetXHeight(font) / 2 + 0.5
+        middle = Double(CTFontGetXHeight(font)) / 2 + 0.5
     }
 
     nonisolated(unsafe) private static var cache: [Int: GlyphFont] = [:]
