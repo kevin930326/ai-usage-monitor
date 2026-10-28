@@ -160,9 +160,14 @@ public struct MascotDirector: Sendable {
             use(scripts.rest(start: t, from: pose, mode: poseMode))
         case .mode(let newMode):
             mode = newMode
-            // 收著：迷你角色換姿勢（睡著閉眼、醒來睜眼）一次，之後靜止
+            // 收著：迷你角色換姿勢（睡著閉眼、醒來睜眼）一次，之後靜止。
+            // 收合（或提醒）還在播：從現在的姿勢重新收合，位置與大小也要到迷你角色（Codex C-01）
             if !machine.isOpen {
-                use(scripts.collapsedRest(start: t, from: pose, mode: newMode))
+                if script.settledAt > t {
+                    use(scripts.close(start: t, from: pose, mode: isStill ? .none : newMode))
+                } else {
+                    use(scripts.collapsedRest(start: t, from: pose, mode: newMode))
+                }
                 break
             }
             // 動畫播放中：不打斷，播完時的 pose 事件會接到新模式的姿勢（ADR-0016 第 2 節的動畫鎖）

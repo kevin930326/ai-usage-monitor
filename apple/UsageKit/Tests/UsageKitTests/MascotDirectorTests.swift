@@ -167,6 +167,28 @@ import Testing
         #expect(d.ripple == nil)
     }
 
+    /// 收合途中 AI 變閒置（睡著）：角色仍然縮回迷你位置與大小，之後停止重畫（Codex C-01）
+    @Test func modeChangeDuringCloseStillReachesMini() throws {
+        let config = try Self.config()
+        let scripts = MascotScripts(config: config)
+        for working in [true, false] {
+            var d = MascotDirector(config: config, startTime: 0)
+            d.open(at: 0, intro: false)
+            d.setWorking(working, at: 1000)
+            d.advance(to: 3000)
+            d.close(at: 3000)
+            d.advance(to: 3100)
+            if working { d.setWorking(false, at: 3100) }
+            d.setAgentIdle(true, at: 3100)
+            d.advance(to: 6000)
+            let pose = d.pose(at: 6000), mini = scripts.collapsedPose(mode: .sleep)
+            for prop in [MascotProp.x, .y, .r, .pitch, .dash] {
+                #expect(abs(pose[prop] - mini[prop]) < 0.001, "\(working ? "工作中" : "閒置")：\(prop) = \(pose[prop])，應為 \(mini[prop])")
+            }
+            #expect(!d.isAnimating(at: 6000))
+        }
+    }
+
     @Test func idleStopsBetweenBlinks() throws {
         // 展開待著：眨眼中與視線追滑鼠時要重畫，其他時間畫面不動（停止重畫到下一次眨眼）
         let config = try Self.config()
