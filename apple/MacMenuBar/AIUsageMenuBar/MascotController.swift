@@ -89,6 +89,10 @@ struct NotchLayout: Equatable {
 
     var collapsedWidth: Double { max(250, notchWidth + 120) }
     var collapsedHeight: Double { max(32, notchHeight) }
+    /// 收合時瀏海在畫布上的範圍（上緣置中）
+    var collapsedRect: CGRect {
+        CGRect(x: Self.center - collapsedWidth / 2, y: 0, width: collapsedWidth, height: collapsedHeight)
+    }
     var miniX: Double { Self.center - notchWidth / 2 - 30 }
     var miniY: Double { collapsedHeight / 2 }
     /// 迷你圓環的中心；百分比接在右邊，「100%」也留在面板內

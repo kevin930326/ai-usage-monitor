@@ -119,6 +119,8 @@ final class PanelSettings {
         static let notchEnabled = "notch.enabled"
         static let mascotCharacter = "notch.character"
         static let mascotLook = "notch.look"
+        static let menuBarIconShown = "menubar.iconShown"
+        static let notchClickOpensPanel = "notch.clickOpensPanel"
         static let notchIntro = "notch.intro"
         static let mascotMotion = "notch.motion"
         static let mascotFollowPointer = "notch.followPointer"
@@ -233,10 +235,27 @@ final class PanelSettings {
         return true
     }
 
-    /// 打開面板的全域快捷鍵（FR-47）；預設不設定
+    /// 打開面板的全域快捷鍵（FR-47，ADR-0008 第 7、9 節）：沒設定過時是 ⌥⌘U；清除後存空資料，表示「不使用」
     var hotKey: HotKeyShortcut? {
-        didSet { defaults.set(hotKey?.encoded(), forKey: Key.hotKey) }
+        didSet { defaults.set(hotKey?.encoded() ?? Data(), forKey: Key.hotKey) }
     }
+
+    /// 顯示選單列圖示（ADR-0008 第 9 節，預設開）。和瀏海面板不能同時關：關最後一個時由設定頁擋下
+    var menuBarIconShown: Bool {
+        didSet { defaults.set(menuBarIconShown, forKey: Key.menuBarIconShown) }
+    }
+
+    /// 點收合的瀏海直接打開完整面板（預設關；滑過仍是原本的展開）
+    var notchClickOpensPanel: Bool {
+        didSet { defaults.set(notchClickOpensPanel, forKey: Key.notchClickOpensPanel) }
+    }
+
+    /// 選單列標籤已經出現過、取得了打開視窗的動作（不存）；圖示設成不顯示時，啟動後先放出來到這時為止
+    var windowActionsReady = false
+
+    /// 選單列圖示與瀏海面板至少要留一個（沒有的話就沒有地方打開 App）；瀏海要真的顯示才算（Fable F-12）
+    var canHideMenuBarIcon: Bool { notchEnabled && MascotController.shared.baseConfig != nil }
+    var canDisableNotch: Bool { menuBarIconShown }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -258,10 +277,15 @@ final class PanelSettings {
         notifyTooFast = defaults.bool(forKey: Key.notifyTooFast)
         notifyReset = defaults.bool(forKey: Key.notifyReset)
         notifyCreditExpiring = defaults.object(forKey: Key.notifyCreditExpiring) as? Bool ?? true
-        hotKey = defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
-        notchEnabled = defaults.object(forKey: Key.notchEnabled) as? Bool ?? true
+        hotKey = defaults.object(forKey: Key.hotKey) == nil ? .defaultShortcut
+            : defaults.data(forKey: Key.hotKey).flatMap(HotKeyShortcut.decode)
+        let notchOn = defaults.object(forKey: Key.notchEnabled) as? Bool ?? true
+        notchEnabled = notchOn
         mascotCharacter = defaults.string(forKey: Key.mascotCharacter).flatMap(MascotCharacter.init) ?? .claude
         mascotLook = defaults.string(forKey: Key.mascotLook)
+        // 兩個都關（例如舊版關了瀏海，又用 ⌘ 拖走圖示）時把圖示放回來
+        menuBarIconShown = (defaults.object(forKey: Key.menuBarIconShown) as? Bool ?? true) || !notchOn
+        notchClickOpensPanel = defaults.bool(forKey: Key.notchClickOpensPanel)
         notchIntro = defaults.string(forKey: Key.notchIntro).flatMap(NotchIntroChoice.init) ?? .firstOnly
         mascotMotion = defaults.string(forKey: Key.mascotMotion).flatMap(MascotMotionLevel.init) ?? .full
         mascotFollowPointer = defaults.object(forKey: Key.mascotFollowPointer) as? Bool ?? true

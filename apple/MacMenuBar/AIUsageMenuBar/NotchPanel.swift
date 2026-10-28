@@ -17,6 +17,8 @@ final class NotchPanelController {
 
     /// 瀏海面板顯示中（設定開著、不是截圖或示範）
     var isShown: Bool { panel != nil }
+    /// 完整面板分辨「別的視窗成為 key」用
+    var panelID: ObjectIdentifier? { panel.map(ObjectIdentifier.init) }
 
     /// 畫布左上角的螢幕座標（左下為原點；x 是畫布左緣，y 是螢幕頂端）：看滑鼠用
     func canvasOrigin() -> CGPoint? {
@@ -288,6 +290,12 @@ final class NotchHostingView: NSHostingView<AnyView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
+        // 設定「點瀏海直接打開完整面板」：只在真的收合時、點在瀏海那一塊才算；展開後上緣的分頁與圖釘照常（Fable F-04）
+        if PanelSettings.shared.notchClickOpensPanel, MascotController.shared.director?.machine.isOpen == false,
+           MascotController.shared.layout.collapsedRect.contains(canvasPoint(event)) {
+            FullPanelController.shared.toggle()
+            return
+        }
         if MascotController.shared.pointerDown(at: canvasPoint(event)) {
             characterTracking = true
         } else {
@@ -379,10 +387,13 @@ enum NotchMenu {
             })
         }
         entries.append(.separator)
+        // 選單列圖示可以關（ADR-0008 第 9 節）：完整面板、設定與結束都要能從這裡到達
+        entries.append(.item("打開完整面板", enabled: true, checked: false) { FullPanelController.shared.open() })
         entries.append(.item("設定…", enabled: true, checked: false) {
             AppActions.openSettings?()
             NSApplication.shared.activate()
         })
+        entries.append(.item(AppActions.quitTitle, enabled: true, checked: false) { NSApplication.shared.terminate(nil) })
         return entries
     }
 

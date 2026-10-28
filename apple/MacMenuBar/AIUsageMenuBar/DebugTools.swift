@@ -54,6 +54,7 @@ enum DebugTools {
             renderPanel(to: url, name: name)
             if name == "panel" {
                 renderMenuBarIcons(to: url)
+                renderFullPanel(to: url)
                 renderSettings(to: url)
                 renderWizard(to: url)
                 renderStats(to: url)
@@ -631,6 +632,36 @@ enum DebugTools {
                     .background(Color(nsColor: .windowBackgroundColor))
                 write(view, scheme: scheme, to: dir.appendingPathComponent("wizard\(suffix)-\(scheme.name).png"))
             }
+        }
+    }
+
+    /// 從瀏海打開的完整面板（ADR-0008 第 9 節）：模擬的螢幕上緣（選單列與瀏海），面板在瀏海正下方置中。
+    /// ImageRenderer 畫不出系統選單的材質，底色用視窗背景色
+    private static func renderFullPanel(to dir: URL) {
+        for scheme in [ColorScheme.light, .dark] {
+            let view = VStack(spacing: 6) {
+                ZStack(alignment: .top) {
+                    Rectangle().fill(scheme == .dark ? Color(white: 0.2) : Color(white: 0.93))
+                    HStack {
+                        Text("檔案　編輯　顯示方式").font(.system(size: 13))
+                        Spacer()
+                        Text("12:25").font(.system(size: 13))
+                    }
+                    .padding(.horizontal, 14)
+                    .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+                    UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10).fill(.black).frame(width: 250)
+                }
+                .frame(height: 32)
+                panel()
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+                    .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+                    .padding(.bottom, 24)
+            }
+            .frame(width: 560)
+            .background(scheme == .dark ? Color(white: 0.1) : Color(white: 0.8))
+            write(view, scheme: scheme, to: dir.appendingPathComponent("fullpanel-\(scheme.name).png"))
         }
     }
 

@@ -703,7 +703,7 @@ class CompareSnapshotsTests(unittest.TestCase):
 class SnapshotsScriptTests(unittest.TestCase):
     """snapshots.sh（SNAPSHOT_FROM 以現成的圖代替產生）：環境不同只放寬畫面差異；缺圖、壞圖一律失敗；
     各平台各自判斷環境；更新時少一張圖就失敗且不動原本的基準。"""
-    MAC = ["panel-light", "panel-dark", "stats-window-light", "stats-window-dark",
+    MAC = ["panel-light", "panel-dark", "fullpanel-light", "fullpanel-dark", "stats-window-light", "stats-window-dark",
            "stats-window-cache-read-light", "stats-window-cache-read-dark", "settings-light", "settings-dark",
            "menubar-icons-light", "menubar-icons-dark", "wizard-light", "wizard-dark",
            "tier2-card-revoked-device-light", "tier2-card-revoked-device-dark",

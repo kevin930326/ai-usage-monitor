@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 import SwiftUI
 
-/// 打開面板的全域快捷鍵（FR-47、ADR-0008 第 7 節）。預設不設定；使用者在設定中錄製。
+/// 打開面板的全域快捷鍵（FR-47、ADR-0008 第 7、9 節）。預設 ⌥⌘U，使用者可以在設定中錄製或清除。
 /// 用 Carbon 的 `RegisterEventHotKey`：不需要「輔助使用」權限，也不監看其他 App 的按鍵。
 struct HotKeyShortcut: Codable, Equatable {
     var keyCode: UInt32
@@ -52,6 +52,9 @@ struct HotKeyShortcut: Codable, Equatable {
         }
     }
 
+    /// 預設 ⌥⌘U（ADR-0008 第 9 節）
+    static let defaultShortcut = HotKeyShortcut(keyCode: UInt32(kVK_ANSI_U), modifiers: [.option, .command], key: "U")
+
     init(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, key: String) {
         self.keyCode = keyCode
         self.modifiers = modifiers.intersection(Self.relevant).rawValue
@@ -74,7 +77,7 @@ struct HotKeyShortcut: Codable, Equatable {
     ]
 }
 
-/// 註冊與取消全域快捷鍵。按下時打開（或關閉）選單列面板。
+/// 註冊與取消全域快捷鍵。按下時打開（或關閉）完整面板：瀏海面板開著時開在瀏海下方，否則是選單列的面板。
 @MainActor
 final class GlobalHotKey {
     static let shared = GlobalHotKey()
@@ -83,6 +86,8 @@ final class GlobalHotKey {
     private var handler: EventHandlerRef?
     /// 目前註冊的快捷鍵（註冊失敗時為 nil）
     private(set) var registered: HotKeyShortcut?
+    /// 啟動時註冊失敗（被系統或其他 App 占用）：設定頁顯示原因
+    private(set) var failed: HotKeyShortcut?
 
     /// 依設定註冊；nil＝取消。回傳是否成功（組合已被其他 App 占用時失敗）。
     @discardableResult
@@ -92,6 +97,7 @@ final class GlobalHotKey {
             self.hotKey = nil
         }
         registered = nil
+        failed = nil
         guard let shortcut else { return true }
         installHandler()
         var ref: EventHotKeyRef?
@@ -99,6 +105,7 @@ final class GlobalHotKey {
         let status = RegisterEventHotKey(shortcut.keyCode, shortcut.carbonModifiers, id, GetApplicationEventTarget(), 0, &ref)
         guard status == noErr, let ref else {
             UsageStore.log("hot key register failed: \(status)")
+            failed = shortcut
             return false
         }
         hotKey = ref
@@ -118,7 +125,7 @@ final class GlobalHotKey {
     }
 }
 
-/// 設定的「快捷鍵」：錄製、清除；預設不設定（ADR-0008 第 7 節）。
+/// 設定的「快捷鍵」：錄製、清除；預設 ⌥⌘U（ADR-0008 第 7 節）。
 struct HotKeySettingsSection: View {
     @Environment(PanelSettings.self) private var settings
     /// 截圖時不建立按鍵監看
@@ -134,7 +141,7 @@ struct HotKeySettingsSection: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("打開面板")
-                    Text("在任何 App 中按下這個組合打開或關閉選單列面板")
+                    Text("在任何 App 中按下這個組合打開或關閉完整面板（瀏海面板開著時開在瀏海正下方，否則是選單列的面板）。預設 ⌥⌘U")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -156,12 +163,18 @@ struct HotKeySettingsSection: View {
                     .buttonStyle(PanelPillButtonStyle())
                 }
             }
-            Text(note ?? "需要 ⌘、⌥ 或 ⌃ 其中之一（功能鍵 F1～F20 可以單獨使用）。右鍵點選單列圖示也可以立即更新、打開完整統計、設定或結束。")
+            Text(note ?? conflict ?? "需要 ⌘、⌥ 或 ⌃ 其中之一（功能鍵 F1～F20 可以單獨使用）。預設 ⌥⌘U 會蓋過其他 App 同樣的快捷鍵（例如瀏覽器的「顯示原始碼」），用不到可以清除。右鍵點選單列圖示或瀏海也可以打開完整面板、設定或結束。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onDisappear(perform: stopRecording)
+    }
+
+    /// 啟動時就註冊不了（被占用）：說明並請使用者換一個
+    private var conflict: String? {
+        guard let failed = GlobalHotKey.shared.failed, failed == settings.hotKey else { return nil }
+        return "\(failed.display) 已被系統或其他 App 使用，目前沒有作用；按上面的按鈕換一個組合"
     }
 
     private func toggleRecording() {

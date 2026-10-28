@@ -13,6 +13,8 @@ struct PanelView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
+    /// 完整面板開在哪個螢幕：高度上限照那個螢幕（Fable F-11）；選單列面板是 nil
+    @Environment(\.panelScreenHeight) private var panelScreenHeight
 
     /// Debug 截圖工具直接指定動畫進度；一般執行時為 nil，由面板自己驅動
     var fixedMotion: PanelMotion?
@@ -42,7 +44,7 @@ struct PanelView: View {
             }
             .scrollBounceBehavior(.basedOnSize)
             .frame(width: 360)
-            .frame(maxHeight: (NSScreen.main?.visibleFrame.height ?? 900) - 40)
+            .frame(maxHeight: (panelScreenHeight ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
             .fixedSize(horizontal: false, vertical: true)
             .modifier(behavior)
         } else {
@@ -54,16 +56,19 @@ struct PanelView: View {
         PanelBehavior(
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
             visible: $visible, onVisibleChange: { isVisible in
-                PanelVisibility.isVisible = isVisible && fixedMotion == nil
+                if fixedMotion == nil {
+                    PanelVisibility.visibleCount = max(0, PanelVisibility.visibleCount + (isVisible ? 1 : -1))
+                }
                 if isVisible {
                     // 只在面板看得見時開啟資料庫並查詢（ADR-0009 第 7 節）
                     historyStore.open(now: store.now)
                     playAppear()
                     // 點通知打開面板：捲到對應的卡片並亮一下（減少動態效果時只捲動）
-                    playPendingHighlight()
+                    playPendingHighlight(visibleNow: true)
                 } else {
                     stopAnimations()
-                    historyStore.close()
+                    // 另一個面板還開著時不關（共用同一個資料庫連線）
+                    if !PanelVisibility.isVisible { historyStore.close() }
                 }
             },
             snapshot: store.snapshot, now: store.now, history: historyStore.history.including(store.snapshot),
@@ -140,7 +145,7 @@ struct PanelView: View {
             playStatusPulse()
         case "highlight":
             AppActions.pendingHighlight = PanelSection.quota.rawValue
-            playPendingHighlight()
+            playPendingHighlight(visibleNow: true)
         case "collapse": settings.collapsed.insert(PanelSection.ring.rawValue)
         case "expand": settings.collapsed.remove(PanelSection.ring.rawValue)
         default: break
@@ -249,8 +254,9 @@ struct PanelView: View {
     }
 
     /// 點通知打開面板：捲到對應的卡片，卡片亮一下（0.6 秒）。減少動態效果時只捲動
-    private func playPendingHighlight() {
-        guard let id = AppActions.pendingHighlight else { return }
+    private func playPendingHighlight(visibleNow: Bool? = nil) {
+        // 收起來的那個面板（視圖還在）不要搶走請求（Fable F-10）
+        guard visibleNow ?? visible, let id = AppActions.pendingHighlight else { return }
         AppActions.pendingHighlight = nil
         guard let section = PanelSection(rawValue: id), settings.visibleSections.contains(section) else { return }
         scrollTarget = section
@@ -650,4 +656,9 @@ struct PanelPillButtonStyle: ButtonStyle {
             .padding(.vertical, 5)
             .background(Color.primary.opacity(configuration.isPressed ? 0.14 : 0.07), in: Capsule())
     }
+}
+
+extension EnvironmentValues {
+    /// 面板所在螢幕的可見高度（完整面板用；nil 時用主螢幕）
+    @Entry var panelScreenHeight: Double?
 }

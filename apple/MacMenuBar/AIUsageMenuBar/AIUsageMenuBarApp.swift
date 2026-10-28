@@ -14,7 +14,12 @@ struct AIUsageMenuBarApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
+        // 選單列圖示可以關（ADR-0008 第 9 節）；使用者用 ⌘ 拖走圖示時系統也會改這個值。
+        // 設成不顯示時，啟動後先放出來到標籤取得 openWindow／openSettings 為止（Fable F-01）
+        MenuBarExtra(isInserted: Binding(get: { settings.menuBarIconShown || !settings.windowActionsReady }, set: { shown in
+            guard settings.windowActionsReady else { return }
+            settings.menuBarIconShown = shown || !settings.canHideMenuBarIcon
+        })) {
             PanelView()
                 .followsAppearanceSetting()
                 .environment(store)
@@ -66,9 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // App 內建的收集器（ADR-0013）：首次打開自動註冊、搬家後重新註冊；偵測到舊安裝時不註冊
             Task { await CollectorService.shared.start() }
             AppActions.installRightClickMenu()
-            GlobalHotKey.shared.apply(PanelSettings.shared.hotKey)
+            // 截圖與示範模式不註冊（不搶正式 App 的快捷鍵，Fable F-20）
+            if !DebugTools.isDemo { GlobalHotKey.shared.apply(PanelSettings.shared.hotKey) }
             // 瀏海面板（ADR-0016）：設定預設開啟
             NotchPanelController.shared.apply()
+            // 瀏海其實沒顯示（設定檔讀不到）又關了選單列圖示：把圖示放回來，不會兩個入口都沒有（Fable F-12）
+            if !NotchPanelController.shared.isShown, !PanelSettings.shared.menuBarIconShown {
+                PanelSettings.shared.menuBarIconShown = true
+            }
             // hook 的 socket（ADR-0017）：先開始聽，AI 的事件才不會丟
             AgentMonitor.shared.start()
             // App 被移動或 hook 缺事件：設定裡顯示「需要修好」
