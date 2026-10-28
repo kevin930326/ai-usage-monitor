@@ -45,6 +45,8 @@ internal sealed class RingWindow : Window
     private MonitorInfo? monitor;
     /// <summary>收成標籤的那一邊（貼邊收合關閉時一律 None）</summary>
     private RingDock dock;
+    /// <summary>圓環實際貼著的左右邊緣（決定往下展開與外框的方向，與貼邊收合的設定無關）</summary>
+    private RingDock edge;
     /// <summary>展開後被推回工作區時，內容跟著移動的距離（DIP）</summary>
     private Vector shift;
     private RingExpandDirection direction;
@@ -170,7 +172,8 @@ internal sealed class RingWindow : Window
         ring = target;
         monitor = NativeMethods.Monitor(NativeMethods.MonitorFromPoint(
             new NativeMethods.POINT { X = target.Left + target.Width / 2, Y = target.Top + target.Height / 2 }, NativeMethods.MONITOR_DEFAULTTONEAREST));
-        dock = dockToEdge && monitor is not null ? RingFloatLayout.DockOf(target, monitor) : RingDock.None;
+        edge = monitor is not null ? RingFloatLayout.DockOf(target, monitor) : RingDock.None;
+        dock = dockToEdge ? edge : RingDock.None;
         Rest();
     }
 
@@ -299,7 +302,7 @@ internal sealed class RingWindow : Window
             var corner = Local(tab.Left, tab.Top);
             visible = new System.Windows.Rect(corner.X, corner.Y, tab.Width / scale, tab.Height / scale);
         }
-        return new FloatingScene(content, details, palette, face, ticks, ringDip, direction, dock, center, tabCenter, visible,
+        return new FloatingScene(content, details, palette, face, ticks, ringDip, direction, edge, center, tabCenter, visible,
                                  Reveal, Expand, VisualTreeHelper.GetDpi(this).PixelsPerDip) { Shift = shift };
     }
 
@@ -343,6 +346,7 @@ internal sealed class RingWindow : Window
             if (!dragging) return;
             // 拖動的是圓環本身：收起展開、從標籤拉出來
             dock = RingDock.None;
+            edge = RingDock.None;
             Rest();
         }
         NativeMethods.MoveWindow(Handle, pressRect.Left + dx, pressRect.Top + dy);
