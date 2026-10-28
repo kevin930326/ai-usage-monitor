@@ -90,6 +90,21 @@ import Testing
         #expect(MascotActivityProbe.logDirectories(fromConfig: nil).isEmpty)
     }
 
+    @Test func busyClaudeFolderDoesNotHideCodex() {
+        // Claude 有很多沒在動的專案：Codex 仍然看得到（各自的預算；Codex 第二輪 C-03）
+        let fs = FakeLister()
+        for i in 0..<(MascotActivityProbe.maxListings + 50) {
+            fs.add("/home/u/.claude/projects/p\(i)", directory: true, modified: Self.now)
+        }
+        let s = "/home/u/.codex/sessions"
+        fs.add("\(s)/2026", directory: true, modified: Self.now)
+        fs.add("\(s)/2026/10", directory: true, modified: Self.now)
+        fs.add("\(s)/2026/10/28", directory: true, modified: Self.now)
+        fs.add("\(s)/2026/10/28/rollout.jsonl", modified: Self.now.addingTimeInterval(-5))
+        #expect(MascotActivityProbe(roots: Self.roots, lister: fs).isWorking(now: Self.now))
+        #expect(fs.listed.count <= MascotActivityProbe.maxListings)
+    }
+
     @Test func environmentOverridesHome() {
         let roots = MascotActivityProbe.defaultRoots(environment: ["CLAUDE_CONFIG_DIR": "/c", "CODEX_HOME": "/x"],
                                                      home: URL(fileURLWithPath: "/home/u"))

@@ -99,9 +99,13 @@ public struct MascotActivityProbe: Sendable {
 
     /// 最近 `activeWindow` 秒內有沒有紀錄檔被改過
     public func isWorking(now: Date) -> Bool {
-        var budget = Self.maxListings
         let since = now.addingTimeInterval(-Self.activeWindow)
-        return roots.contains { root in scan(root.url, depth: root.depth, root: root, since: since, budget: &budget) }
+        // 每個服務各有一份預算：Claude 的專案再多，也不會讓 Codex 沒得看（Codex 第二輪 C-03）
+        let share = Self.maxListings / max(roots.count, 1)
+        return roots.contains { root in
+            var budget = share
+            return scan(root.url, depth: root.depth, root: root, since: since, budget: &budget)
+        }
     }
 
     private func scan(_ directory: URL, depth: Int, root: Root, since: Date, budget: inout Int) -> Bool {
