@@ -10,7 +10,7 @@
     - 關閉面板（--hide-panel）後等 60 秒，再取樣 30 秒
     - 再開關 5 次，比較第一次與最後一次關閉後的記憶體
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
-      （以圓環視窗變寬確認真的展開；沒展開時記「未展開」，不算失敗）
+      （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
   CPU% ＝ TotalProcessorTime 的差 ÷ 經過時間 ÷ 處理器數 × 100（工作管理員的算法）。
   結果印成 Markdown 表格，並寫到 -Output。CPU 超過門檻只印警告（CI 的 runner 雜訊大；正式紀錄以 x64 桌機為準），記憶體增加超過 5 MB 時結束碼 1。
 
@@ -144,7 +144,12 @@ try {
         Start-Sleep -Seconds 30
         $afterHover = Sample 30
         $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
-        $hoverNote = if ($w1 -gt $w0) { "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）" } else { "未展開（視窗寬 $w0 → $w1 px）" }
+        if ($w1 -gt $w0 -and $w2 -eq $w0) {
+            $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）"
+        } else {
+            $hoverNote = "未量到：展開或收起沒有確認（視窗寬 $w0 → $w1 → $w2 px）"
+            $hoverOpen = $null
+        }
     }
 
     Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
@@ -188,3 +193,5 @@ $text = $lines -join "`n"
 Write-Host $text
 foreach ($w in $warnings) { Write-Host "::warning::perf $w" }
 if ($memGrowth -gt 5) { exit 1 }
+# 桌機（不是 -Ci）上滑鼠移上去一定要量到；CI 的工作階段不一定送得到滑鼠移動
+if ($null -eq $hoverOpen -and -not $Ci) { Write-Host 'hover expansion was not measured'; exit 1 }
