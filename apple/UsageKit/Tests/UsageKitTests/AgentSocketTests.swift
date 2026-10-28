@@ -55,6 +55,38 @@ import Testing
         #expect(message.session != "sess-1" && AgentHookMessage.isSessionHash(message.session))
     }
 
+    /// App 的監聽 socket 是非阻塞的：連線先到、資料晚一點才到，也要收得到（實機量測時全部被丟掉過）
+    @Test func nonBlockingListenerStillWaitsForTheLine() async throws {
+        let dir = try Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        _ = try AgentSocket.prepare(in: dir)
+        let url = AgentSocket.socketURL(in: dir)
+        let server = try AgentSocket.listen(at: url)
+        defer { close(server) }
+        _ = fcntl(server, F_SETFL, fcntl(server, F_GETFL) | O_NONBLOCK)
+        let sender = socket(AF_UNIX, SOCK_STREAM, 0)
+        defer { close(sender) }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        withUnsafeMutableBytes(of: &address.sun_path) { raw in
+            _ = url.path.utf8CString.withUnsafeBytes { raw.copyMemory(from: $0) }
+        }
+        let connected = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(sender, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        }
+        #expect(connected == 0)
+        let client = accept(server, nil, nil)
+        try #require(client >= 0)
+        let line = AgentHookMessage(ai: .codex, event: .stop, need: nil, session: "0123456789abcdef", time: 1, folder: "x")
+        let late = Task.detached {
+            try await Task.sleep(for: .milliseconds(60))
+            let data = line.encoded() + Data("\n".utf8)
+            _ = data.withUnsafeBytes { write(sender, $0.baseAddress, $0.count) }
+        }
+        #expect(AgentSocket.receive(on: client) == line)
+        try await late.value
+    }
+
     @Test func hookGivesUpQuicklyWhenTheAppIsNotRunning() throws {
         let dir = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }

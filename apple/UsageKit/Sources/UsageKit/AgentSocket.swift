@@ -123,6 +123,8 @@ public enum AgentSocket {
         defer { close(client) }
         var uid: uid_t = 0, gid: gid_t = 0
         guard getpeereid(client, &uid, &gid) == 0, uid == getuid() else { return nil }
+        // App 的監聽 socket 是非阻塞的，BSD 的 accept 會讓連線繼承：改回阻塞，等資料由下面的讀取逾時把關
+        _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) & ~O_NONBLOCK)
         var on: Int32 = 1
         setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         var timeout = timeval(tv_sec: 0, tv_usec: suseconds_t(readTimeoutMs * 1000))
