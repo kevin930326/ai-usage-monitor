@@ -64,6 +64,7 @@ public struct MascotDirector: Sendable {
     /// 滑鼠在面板裡移動（只推進時間；不叫醒，睡覺由 AI 的狀態決定）
     public mutating func move(at time: Int) { apply { $0.move(at: time) } }
     public mutating func setAgentIdle(_ idle: Bool, at time: Int) { apply { $0.setAgentIdle(idle, at: time) } }
+    public mutating func silence(at time: Int) { apply { $0.silence(at: time) } }
 
     /// 臉朝游標轉（`dx`、`dy` 是游標相對角色中心的距離，px；整個螢幕都看，展開與收合都一樣）。
     /// 目標和現在差不到 `threshold`（弧度）時不更新，回傳 false，畫面不必重畫

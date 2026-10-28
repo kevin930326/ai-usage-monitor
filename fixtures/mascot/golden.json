@@ -543,6 +543,38 @@
         "4860 pose none"
       ],
       "name" : "menu-faces-queue"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 1
+      },
+      "log" : [
+        "0 open quick",
+        "100 start dizzy",
+        "200 status 1",
+        "200 queue alert",
+        "300 drop alert",
+        "3000 end dizzy",
+        "3000 pose none",
+        "6000 start wave",
+        "6100 status 2",
+        "6100 queue alert",
+        "6100 drop alert",
+        "6100 queue nod",
+        "7800 end wave",
+        "7800 pose none",
+        "8160 start nod",
+        "8500 queue hop",
+        "8600 status 1",
+        "8600 drop hop",
+        "8600 queue alert",
+        "8960 end nod",
+        "8960 pose none",
+        "9100 drop alert"
+      ],
+      "name" : "silence-drops-queued-and-pending-alert"
     }
   ]
 }

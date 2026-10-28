@@ -383,6 +383,13 @@ public struct MascotMachine: Sendable {
         }
     }
 
+    /// 開始靜音或勿擾：排隊或待播的額度提醒丟掉（之後的狀態改變以 `react: false` 只換表情；Codex C-03）
+    public mutating func silence(at time: Int) {
+        _ = begin(time)
+        if queued == .alert { dropQueued() }
+        if pending == .alert { dropPending() }
+    }
+
     // MARK: - 內部
 
     /// 睡覺中也照樣播（每個動畫從中性姿勢開始），播完回到睡覺的姿勢

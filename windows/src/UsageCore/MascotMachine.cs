@@ -368,6 +368,14 @@ public sealed class MascotMachine
         else Record(new MascotEvent.Bump());
     }
 
+    /// <summary>開始靜音或勿擾：排隊或待播的額度提醒丟掉（之後的狀態改變以 react: false 只換表情；Codex C-03）</summary>
+    public void Silence(long time)
+    {
+        Begin(time);
+        if (Queued == MascotRequest.Alert) DropQueued();
+        if (Pending == MascotRequest.Alert) DropPending();
+    }
+
     // ── 內部 ──
 
     /// <summary>睡覺中也照樣播（每個動畫從中性姿勢開始），播完回到睡覺的姿勢</summary>

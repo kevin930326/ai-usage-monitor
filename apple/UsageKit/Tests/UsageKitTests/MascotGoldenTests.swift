@@ -67,6 +67,7 @@ import Testing
             case "working": machine.setWorking(event.on ?? false, at: event.t)
             case "idle": machine.setAgentIdle(event.on ?? false, at: event.t)
             case "status": machine.setStatus(event.level ?? 0, at: event.t, react: event.react ?? true)
+            case "silence": machine.silence(at: event.t)
             case "advance": machine.advance(to: event.t)
             default: Issue.record("未知的事件 \(event.e)（\(testCase.name)）")
             }

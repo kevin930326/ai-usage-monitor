@@ -441,6 +441,8 @@ final class MascotController {
     /// 靜音 1 小時／勿擾到明天早上 8 點／取消
     func setQuiet(until date: Date?) {
         PanelSettings.shared.mascotQuietUntil = date
+        // 開始靜音：已經排隊的提醒也不播（Codex C-03）
+        if date != nil { mutate { $0.silence(at: time()) } }
     }
 
     // MARK: - 看滑鼠（整個螢幕）

@@ -1146,6 +1146,72 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "silence-drops-queued-and-pending-alert",
+      "note": "開始靜音或勿擾：排隊與待播的提醒丟掉，一般的動作照播（Codex C-03）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 200,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 300,
+          "e": "silence"
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        },
+        {
+          "t": 6000,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 6100,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 6100,
+          "e": "request",
+          "name": "nod"
+        },
+        {
+          "t": 8400,
+          "e": "advance"
+        },
+        {
+          "t": 8500,
+          "e": "request",
+          "name": "hop"
+        },
+        {
+          "t": 8600,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 9100,
+          "e": "silence"
+        },
+        {
+          "t": 12000,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }
