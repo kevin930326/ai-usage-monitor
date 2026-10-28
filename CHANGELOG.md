@@ -27,6 +27,7 @@
 - 文件：README 改為英文，原本的繁體中文版移到 `README.zh-TW.md`，兩者開頭互相連結；`scripts/check-readme-images.py` 也檢查 `README.zh-TW.md` 引用的圖片
 
 ### Added
+- Mac 瀏海面板與角色（ADR-0016）：滑鼠移到螢幕上方的瀏海會展開成 580×180 的面板，左邊是角色（Claude 或 Codex），右邊是兩個服務的額度，上方三個分頁（總覽、歷史開完整統計、設定開設定）；收合時瀏海兩旁顯示迷你角色與剩最少額度的迷你圓環。沒有瀏海的螢幕在選單列中間畫一個。第一次展開播約 4.7 秒的出場過場（可設為每次或關閉，「減少動態效果」時不播）。選單列圖示與原本的面板不變；設定可以關掉瀏海面板（預設開）
 - 發布（ADR-0015）：推 `v*` tag 時另建置 Windows App 的自含式 zip（x64、ARM64，不需要安裝 .NET）與 `SHA256SUMS-windows`，放進草稿 Release；`scripts/package-windows-app.py` 檢查不含 .pdb、測試組件與 Debug 專用字串、組件版本等於 tag。新增 `docs/release-checklist.md`（第一次發布的檢查清單）
 - 中繼的每月清理（ADR-0014 D-4）：Worker 加排程（每月 1 日 19:00 UTC），刪除第二層 400 天以前的每日加總（與上傳接受的範圍相同），每次最多 5,000 列（只佔 D1 免費方案每日寫入額度的一小部分，刪不完的留到下個月）；每台裝置最新的那一天保留，太久沒上傳的電腦不會被 Mac 當成「撤銷時已刪除資料」。要在部署設定加 `[triggers]` 並重新部署才生效（`setup-relay.sh` 新產生的設定已包含），見 relay/README.md
 - `history.sqlite3` 的損毀復原與每週備份（ADR-0014 D-1）：連續約 1 小時寫不進去、而且 `quick_check` 也失敗時，收集器把舊檔改名為 `history.corrupt-<時間>.sqlite3` 保留（最多 2 份）並建立新檔，Mac 面板 7 天內提示；只是被鎖住時不動檔案。每 7 天以 SQLite 線上備份 API 複製一份到 `backups/`（通過 `quick_check` 才換上），只留最近 2 份；備份後空間不足時跳過，失敗只記日誌。設定的「清除歷史」連同備份與保留的舊檔一起刪除

@@ -67,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await CollectorService.shared.start() }
             AppActions.installRightClickMenu()
             GlobalHotKey.shared.apply(PanelSettings.shared.hotKey)
+            // 瀏海面板（ADR-0016）：設定預設開啟
+            NotchPanelController.shared.apply()
             #if DEBUG
             DebugTools.runIfRequested()
             #endif

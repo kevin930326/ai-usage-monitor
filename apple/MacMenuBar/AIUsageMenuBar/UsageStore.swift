@@ -56,6 +56,7 @@ final class UsageStore {
         }
         // 重置時間到了（快照沒變）也要判斷通知
         QuotaNotifier.shared.evaluate(snapshot: snapshot, now: now)
+        MascotController.shared.updateStatus()
     }
 
     func reload() {
@@ -67,6 +68,7 @@ final class UsageStore {
             snapshot = loaded
             Self.log("loaded updated_at=\(loaded.updatedAt.ISO8601Format())")
             QuotaNotifier.shared.evaluate(snapshot: loaded, now: .now)
+            MascotController.shared.updateStatus()
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             errorMessage = "找不到 usage.json，請確認 Mac 收集器正在執行"
         } catch {

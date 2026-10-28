@@ -1,5 +1,5 @@
 #!/bin/bash
-# 截圖比對：用 ImageRenderer 產生 Mac 面板、完整統計、設定、選單列圖示、第二層統計卡片（撤銷的電腦），以及 iPhone 小工具、
+# 截圖比對：用 ImageRenderer 產生 Mac 面板、完整統計、設定、選單列圖示、第二層統計卡片（撤銷的電腦）、瀏海面板與角色，以及 iPhone 小工具、
 # 鎖定畫面 Live Activity、動態島（淺色、深色），和 apple/Snapshots/ 的基準比對，容許小誤差。
 #
 #   scripts/snapshots.sh                     # 比對（verify-all 會跑）
@@ -29,7 +29,8 @@ MAC_SET=(panel-light panel-dark stats-window-light stats-window-dark stats-windo
          settings-light settings-dark
          menubar-icons-light menubar-icons-dark wizard-light wizard-dark
          tier2-card-revoked-device-light tier2-card-revoked-device-dark tier2-card-deleted-device-light tier2-card-deleted-device-dark
-         tier2-card-all-cache-read-light tier2-card-all-cache-read-dark)
+         tier2-card-all-cache-read-light tier2-card-all-cache-read-dark
+         notch-collapsed notch-intro notch-expressions notch-menubar-light notch-menubar-dark)
 IOS_SET=(widget-small-light widget-small-dark widget-medium-light widget-medium-dark widget-large-light widget-large-dark
          live-activity-light live-activity-dark island-normal)
 IOS_BUNDLE=io.github.kevin930326.AIUsageMonitor
