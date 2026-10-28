@@ -257,7 +257,11 @@ struct NotchContent: View {
     private var marks: some View {
         HStack(spacing: 6) {
             if extras.pinned {
-                Button { MascotController.shared.setPinned(false) } label: {
+                // 點圖釘：取消保持展開並收起（同 Esc；游標還在面板上也收，Codex 第二輪 C-03）
+                Button {
+                    MascotController.shared.setPinned(false)
+                    MascotController.shared.closeNow()
+                } label: {
                     Image(systemName: "pin.fill")
                         .font(.system(size: 10, weight: .medium))
                         .frame(width: 20, height: 20)
