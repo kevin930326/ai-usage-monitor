@@ -18,7 +18,9 @@ except KeyError as missing:
 rows = [
     ("展開前（收合、靜止）", window(o - 6, o), "avg"),
     ("播放中：展開＋過場（0～5 秒）", window(o, o + 5), "peak"),
-    ("展開待著（過場後 8～18 秒，30 fps）", window(o + 8, o + 18), "avg"),
+    # 過場約 4.7 秒；10 秒沒有操作會睡著（展開後約 10 秒），醒著與睡著分開看
+    ("展開待著、醒著（展開後 5～10 秒）", window(o + 5, o + 10), "avg"),
+    ("展開待著、睡著（展開後 12～20 秒，呼吸）", window(o + 12, o + 20), "avg"),
     ("播放中：揮手（0～2 秒）", window(w, w + 2), "peak"),
     ("收合後 60～90 秒", window(c + 60, c + 90), "avg"),
     ("第二次收合後 5～18 秒", window(c2 + 5, c2 + 18), "avg"),
@@ -28,12 +30,12 @@ print("|---|---|---|---|")
 for name, r, kind in rows:
     cpu = avg(r, 1) if kind == "avg" else peak(r, 1)
     print(f"| {name} | {len(r)} | {cpu:.1f}（{'平均' if kind == 'avg' else '最大'}） | {peak(r, 2) / 1024:.1f} |")
-idle, closed, second = rows[2][1], rows[4][1], rows[5][1]
+awake, asleep, closed, second = rows[2][1], rows[3][1], rows[5][1], rows[6][1]
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 5 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 5)]
 checks = [
     ("每個階段都有取樣" + (f"（缺：{'、'.join(missing)}）" if missing else ""), not missing),
-    ("展開待著 ≤ 4%", bool(idle) and avg(idle, 1) <= 4),
+    ("展開待著（醒著、睡著）≤ 4%", bool(awake) and bool(asleep) and avg(awake, 1) <= 4 and avg(asleep, 1) <= 4),
     ("收合後 1 分鐘 ≤ 0.3%", bool(closed) and avg(closed, 1) <= 0.3),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]
