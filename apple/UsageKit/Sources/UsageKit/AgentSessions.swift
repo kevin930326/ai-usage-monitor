@@ -414,3 +414,34 @@ public struct AgentSessions: Sendable, Equatable {
         return (working, !working && !active)
     }
 }
+
+// MARK: - App 收事件的速率上限
+
+/// 每秒最多處理幾個「只代表還在跑」的事件（工具前後、子代理、壓縮）；同一使用者的程式塞假事件時不會吃滿 CPU。
+/// 決定狀態的事件（開始、結束、送出提示、需要你、通知、停止、出錯、中斷）稀少又關鍵，永遠不丟：
+/// 子代理多時正常使用一秒也可能超過上限，丟掉 Stop 會讓狀態卡在工作中（Fable F-02）。
+public struct AgentRateLimiter: Sendable {
+    public static let maxPerSecond = 40
+    private var second: Int64 = .min
+    private var count = 0
+
+    public init() {}
+
+    /// 這個事件可以在超過上限時丟掉嗎
+    public static func mayDrop(_ message: AgentHookMessage) -> Bool {
+        switch message.event {
+        case .preToolUse: message.need == nil
+        case .postToolUse, .postToolUseFailure, .subagentStart, .subagentStop, .preCompact, .postCompact: true
+        default: false
+        }
+    }
+
+    /// 要處理就回傳 true（`now` 是毫秒）
+    public mutating func admit(_ message: AgentHookMessage, at now: Int64) -> Bool {
+        guard Self.mayDrop(message) else { return true }
+        let current = now / 1000
+        if current != second { (second, count) = (current, 0) }
+        count += 1
+        return count <= Self.maxPerSecond
+    }
+}

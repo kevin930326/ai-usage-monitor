@@ -18,9 +18,8 @@ final class AgentMonitor {
     @ObservationIgnored private var expireTimer: Timer?
     @ObservationIgnored private var socketURL: URL?
     @ObservationIgnored private var terminateSource: DispatchSourceSignal?
-    /// 同一秒最多處理幾個事件（同一使用者的其他程式塞假事件時，最多讓狀態跳來跳去，不會吃滿 CPU）
-    @ObservationIgnored private var budget = (second: 0, count: 0)
-    static let maxPerSecond = 40
+    /// 每秒上限只套用在「還在跑」的事件；決定狀態的事件一定處理（見 AgentRateLimiter）
+    @ObservationIgnored private var limiter = AgentRateLimiter()
 
     private static var idleAfterMs: Int64 { Int64(PanelSettings.shared.mascotSleepMinutes) * 60_000 }
 
@@ -89,10 +88,7 @@ final class AgentMonitor {
             dropped += 1
             return
         }
-        let second = Int(now / 1000)
-        if budget.second != second { budget = (second, 0) }
-        budget.count += 1
-        guard budget.count <= Self.maxPerSecond else {
+        guard limiter.admit(message, at: now) else {
             dropped += 1
             return
         }
