@@ -40,7 +40,8 @@ final class NotchPanelController {
         #if DEBUG
         // 截圖、示範與面板的量測不顯示真的瀏海面板（瀏海面板自己的量測除外）
         let env = ProcessInfo.processInfo.environment
-        if (DebugTools.isDemo && env["AUM_DEMO_NOTCH_PERF"] != "1") || env["AUM_RENDER_DIR"] != nil { enabled = false }
+        if (DebugTools.isDemo && env["AUM_DEMO_NOTCH_PERF"] != "1" && (env["AUM_DEMO_LOOK_PERF"] ?? "").isEmpty)
+            || env["AUM_RENDER_DIR"] != nil { enabled = false }
         #endif
         if enabled {
             show()
@@ -96,6 +97,14 @@ final class NotchPanelController {
     }
 
     /// 展開、收合時調整視窗大小（畫布本身不動）
+    /// 截圖檢查用（`DebugTools`）
+    var debugContainer: NSView? { panel?.container }
+
+    /// 特效要不要由 Core Animation 循環播放（收合、只有特效在動）改變了
+    func effectLoopChanged() {
+        panel?.container.updateEffectLoop()
+    }
+
     func setExpanded(_ expanded: Bool) {
         guard let panel, let screen = panel.targetScreen ?? Self.targetScreen() else { return }
         panel.place(on: screen, layout: MascotController.shared.layout, expanded: expanded)
@@ -105,7 +114,7 @@ final class NotchPanelController {
 /// 不搶焦點、在所有桌面空間都看得到的面板
 final class NotchPanel: NSPanel {
     private(set) var targetScreen: NSScreen?
-    private let container = NotchContainerView()
+    let container = NotchContainerView()
 
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight),
@@ -159,13 +168,47 @@ final class NotchContainerView: NSView {
         .environment(UsageStore.shared)
         .environment(PanelSettings.shared)
         .environment(AgentMonitor.shared)))
+    /// 只有特效在動時的角色（ADR-0021）：獨立的畫面，每一格不會讓上面整個瀏海的畫面重新排版；不接收滑鼠
+    private let effectHosting = PassThroughHostingView(rootView: AnyView(NotchEffectHero()
+        .environment(MascotController.shared)
+        .environment(PanelSettings.shared)))
+    /// 收合時 AI 工作中的特效：Core Animation 循環播放預先畫好的一輪（`MascotEffectLoop`）
+    private let effectLoopView = PassThroughView()
+    private var effectLoopBox = CGRect.zero
     private var tracking: NSTrackingArea?
+
+    /// 收合、只有特效在動時播一輪；其他時候停掉並釋放圖片
+    func updateEffectLoop() {
+        let controller = MascotController.shared
+        let wanted = controller.renderRate == .effect && controller.director?.machine.isOpen == false
+        effectLoopView.layer?.removeAnimation(forKey: "effect")
+        effectLoopView.layer?.contents = nil
+        guard wanted, let loop = MascotEffectLoop.make(scale: Double(window?.backingScaleFactor ?? 2)) else {
+            if controller.effectLoopPlaying { controller.effectLoopPlaying = false }
+            return
+        }
+        effectLoopBox = loop.box
+        layoutCanvas()
+        let animation = CAKeyframeAnimation(keyPath: "contents")
+        animation.values = loop.images
+        animation.calculationMode = .discrete
+        animation.duration = loop.duration
+        animation.repeatCount = .infinity
+        animation.timeOffset = loop.offset
+        animation.isRemovedOnCompletion = false
+        effectLoopView.layer?.contents = loop.images.first
+        effectLoopView.layer?.add(animation, forKey: "effect")
+        if !controller.effectLoopPlaying { controller.effectLoopPlaying = true }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.masksToBounds = true
         addSubview(hosting)
+        addSubview(effectHosting)
+        effectLoopView.wantsLayer = true
+        addSubview(effectLoopView)
         layoutCanvas()
     }
 
@@ -177,6 +220,8 @@ final class NotchContainerView: NSView {
     func layoutCanvas() {
         hosting.frame = NSRect(x: (bounds.width - NotchLayout.canvasWidth) / 2, y: 0,
                                width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
+        effectHosting.frame = hosting.frame
+        effectLoopView.frame = effectLoopBox.offsetBy(dx: hosting.frame.minX, dy: hosting.frame.minY)
     }
 
     override func layout() {
@@ -210,6 +255,17 @@ final class NotchContainerView: NSView {
         let local = convert(event.locationInWindow, from: nil)
         return CGPoint(x: local.x - hosting.frame.minX, y: local.y - hosting.frame.minY)
     }
+}
+
+/// 只用來顯示、不接收滑鼠的 AppKit 畫面
+final class PassThroughView: NSView {
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
+/// 只用來顯示、不接收滑鼠的畫面（滑鼠交給下面的瀏海畫面）
+final class PassThroughHostingView: NSHostingView<AnyView> {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// 不搶焦點的面板裡，第一下點擊就要作用（分頁按鈕）。按在角色上的交給角色（點擊、按住捏扁），其他交給 SwiftUI。

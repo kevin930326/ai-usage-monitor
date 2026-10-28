@@ -32,6 +32,7 @@ struct NotchView: View {
                                 extras: extras,
                                 look: controller.look,
                                 effectsLive: controller.effectsLive,
+                                effectClock: { controller.effectTime(at: $0) },
                                 motion: controller.motion,
                                 heroRate: rate == .idle || rate == .breathing || rate == .gaze || rate == .effect ? rate : nil,
                                 heroClock: { controller.time($0) })
@@ -202,6 +203,105 @@ struct NotchShape: Shape {
     }
 }
 
+/// 只有外觀的特效在動時的角色（ADR-0021）：疊在瀏海畫布上、大小相同的另一個畫面，只有角色那一小塊每秒重畫 12 次
+struct NotchEffectHero: View {
+    @Environment(MascotController.self) private var controller
+    @Environment(PanelSettings.self) private var settings
+
+    var body: some View {
+        // 收合時由 Core Animation 循環播放預先畫好的一輪（`MascotEffectLoop`），這裡只畫展開時（或沒建好一輪時）
+        if controller.renderRate == .effect, let director = controller.director,
+           director.machine.isOpen || !controller.effectLoopPlaying {
+            NotchCanvas(director: director, time: controller.stoppedAt, layout: controller.layout, snapshot: nil, now: Date(),
+                        character: settings.mascotCharacter, look: controller.look, effectsLive: controller.effectsLive,
+                        effectClock: { controller.effectTime(at: $0) }, motion: controller.motion, heroRate: .effect,
+                        heroClock: { controller.time($0) })
+                .effectHero
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// 收合時的動態（ADR-0021）：角色停在收合的位置，只有小範圍在動，所以預先畫好一輪、交給 Core Animation 循環播放。
+/// App 自己每一格都不用重畫（SwiftUI 每秒更新 12 次光是排版與送出就要約 3% CPU）。
+/// - AI 工作中：會動的特效照特效動；其他外觀是簡化的敲鍵盤（小手上下、身體輕晃）。每秒 12 格
+/// - 睡著：慢慢的呼吸（約 4.4 秒一次）加一個飄起的小 z；特效停在那一格。每秒 4 格
+@MainActor
+enum MascotEffectLoop {
+    struct Loop {
+        var images: [CGImage]
+        /// 一輪的秒數
+        var duration: Double
+        /// 從一輪的哪裡開始（秒），接著目前的時鐘
+        var offset: Double
+        /// 在畫布上的範圍
+        var box: CGRect
+    }
+
+    /// 敲鍵盤：手 sin(t/62)、身體晃 sin(t/310)，一輪 2π·310 毫秒剛好是敲 5 下
+    static let typingMs = 2 * Double.pi * 310
+    /// 呼吸 sin(t/700)
+    static let breathMs = 2 * Double.pi * 700
+
+    /// 一輪怎麼畫：長度、每秒幾格、目前時鐘（決定從哪裡開始）、範圍，以及畫第 t 毫秒的那一格
+    struct Plan {
+        var length: Double
+        var fps: Double
+        var clock: Int
+        var box: CGRect
+        var draw: (Int) -> AnyView
+    }
+
+    /// `canvas` 的 `time` 是角色停住的那一刻；`effectTime` 換算特效的時鐘（App 裡停住時停在最後一格）。截圖也用這份
+    static func plan(_ canvas: NotchCanvas, now: Int, effectTime: @escaping (Int) -> Int?) -> Plan? {
+        let director = canvas.director
+        let base = director.pose(at: canvas.time)
+        switch director.mode {
+        case .work:
+            if let look = canvas.look, let effect = MascotLookRenderer.loopDuration(look, radius: base[.r] * base[.sc]) {
+                return Plan(length: effect, fps: 12, clock: effectTime(now) ?? 0, box: canvas.effectBox) {
+                    AnyView(canvas.effectFrame(effectTime: $0))
+                }
+            }
+            // 手放在身體前下方（同展開時敲鍵盤的位置），不畫鍵盤
+            let w = director.config.poses.work
+            let pose = base.with([.hands: 1, .type: 1, .sway: 0.5, .lx: w.left[0], .ly: w.left[1], .lz: w.left[2],
+                                  .rx: w.right[0], .ry: w.right[1], .rz: w.right[2]])
+            return Plan(length: typingMs, fps: 12, clock: now, box: canvas.effectBox) {
+                AnyView(canvas.effectFrame(effectTime: nil, pose: pose, time: $0))
+            }
+        case .sleep:
+            let pose = base.with([.breathe: 1])
+            let frozen = effectTime(now)
+            return Plan(length: breathMs, fps: 4, clock: now, box: canvas.effectBox) { t in
+                AnyView(canvas.effectFrame(effectTime: frozen, pose: pose, time: t,
+                                           dozeRise: Double(t).truncatingRemainder(dividingBy: breathMs) / breathMs))
+            }
+        default:
+            return nil
+        }
+    }
+
+    static func make(scale: Double) -> Loop? {
+        let controller = MascotController.shared
+        guard let director = controller.director else { return nil }
+        let canvas = NotchCanvas(director: director, time: controller.stoppedAt, layout: controller.layout, snapshot: nil,
+                                 now: Date(), character: PanelSettings.shared.mascotCharacter, look: controller.look,
+                                 effectsLive: true, motion: controller.motion)
+        guard let plan = plan(canvas, now: controller.time(), effectTime: { controller.effectTime(at: $0) }) else { return nil }
+        let count = max(1, Int((plan.length / 1000 * plan.fps).rounded()))
+        var images: [CGImage] = []
+        for k in 0..<count {
+            let renderer = ImageRenderer(content: plan.draw(Int((Double(k) * plan.length / Double(count)).rounded())))
+            renderer.scale = scale
+            guard let image = renderer.cgImage else { return nil }
+            images.append(image)
+        }
+        return Loop(images: images, duration: plan.length / 1000,
+                    offset: Double(plan.clock).truncatingRemainder(dividingBy: plan.length) / 1000, box: plan.box)
+    }
+}
+
 /// 某一刻的整個瀏海（純函式：director＋時間）
 struct NotchCanvas: View {
     let director: MascotDirector
@@ -215,6 +315,8 @@ struct NotchCanvas: View {
     var look: MascotLook?
     /// 外觀的特效在動（否則畫靜態的一格）
     var effectsLive = false
+    /// 特效的時鐘（App 裡由 MascotController 給，停住時停在最後一格）；截圖時 nil，用畫面的時間
+    var effectClock: ((Int) -> Int?)?
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
     /// 動畫程度：簡單時不畫粒子；關閉時也不眨眼、不看滑鼠
@@ -278,14 +380,53 @@ struct NotchCanvas: View {
             // 收合時特效在動：連看滑鼠也最多每秒 12 次
             let interval = effectsLive && !director.machine.isOpen ? max(heroRate.interval, MascotRenderRate.effect.interval)
                 : heroRate.interval
-            TimelineView(.animation(minimumInterval: interval)) { context in
-                let now = heroClock(context.date)
-                // 只有特效在動：角色本身停在那一刻（收合時工作中的姿勢不動，ADR-0021）
-                heroCanvas(at: heroRate == .effect ? time : now, effectTime: effectsLive ? now : nil)
+            if heroRate == .effect {
+                // 只有特效在動：角色由視窗上另一個小的畫面（`NotchEffectHero`）畫，這張畫布整個不動
+                Color.clear
+            } else {
+                TimelineView(.animation(minimumInterval: interval)) { context in
+                    let now = heroClock(context.date)
+                    heroCanvas(at: now, effectTime: effectTime(now))
+                }
             }
         } else {
-            heroCanvas(at: time, effectTime: effectsLive ? time : nil)
+            heroCanvas(at: time, effectTime: effectTime(time))
         }
+    }
+
+    /// 只有特效在動（ADR-0021）：角色本身停在 `time` 那一刻，只重畫角色周圍一小塊（含光暈）。
+    /// 放在獨立的 NSHostingView（`NotchEffectHero`），每一格只更新這一小塊，不會讓整個瀏海的畫面重新排版
+    var effectHero: some View {
+        let box = effectBox
+        return TimelineView(.animation(minimumInterval: MascotRenderRate.effect.interval)) { context in
+            effectFrame(effectTime: effectTime(heroClock?(context.date) ?? time))
+        }
+        .position(x: box.midX, y: box.midY)
+    }
+
+    /// 特效時角色那一小塊在畫布上的範圍（含光暈）
+    var effectBox: CGRect {
+        let pose = director.pose(at: time)
+        let side = (pose[.r] * pose[.sc] * 7).rounded(.up) + 8
+        return CGRect(x: pose[.x] - side / 2, y: pose[.y] - side / 2, width: side, height: side)
+    }
+
+    /// 角色停在 `time`、特效在 `effectTime` 的那一格（`effectBox` 大小）。收合時的動態另外給姿勢、畫的時間與 z 的進度
+    func effectFrame(effectTime: Int?, pose: MascotPose? = nil, time drawTime: Int? = nil, dozeRise: Double? = nil) -> some View {
+        let box = effectBox
+        var f = frame(at: time, effectTime: effectTime)
+        if let pose { f.pose = pose }
+        if let drawTime { f.time = drawTime }
+        f.dozeRise = dozeRise
+        return Canvas(rendersAsynchronously: false) { [f] canvas, _ in
+            canvas.translateBy(x: -box.minX, y: -box.minY)
+            MascotPainter(config: director.config).draw(f, in: &canvas, particles: false)
+        }
+        .frame(width: box.width, height: box.height)
+    }
+
+    private func effectTime(_ t: Int) -> Int? {
+        effectClock.map { $0(t) } ?? (effectsLive ? t : nil)
     }
 
     private func heroCanvas(at time: Int, effectTime: Int?) -> some View {

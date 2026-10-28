@@ -250,6 +250,11 @@ enum MenuBarIcon {
                 cg.saveGState()
                 cg.translateBy(x: center.x, y: center.y)
                 cg.scaleBy(x: 1, y: -1)
+                if look.style.isEffect {
+                    // 特效是在黑色瀏海上設計的：選單列（尤其淺色）先鋪深色圓底，才看得到球的輪廓與眼睛（Fable F-03、F-04）
+                    cg.setFillColor(CGColor(gray: 0.06, alpha: 0.92))
+                    cg.fillEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+                }
                 let face = MascotLookRenderer.Face(yaw: 0, pitch: 0, eye: eye, pillOpen: nil)
                 MascotLookRenderer.drawBody(look, radius: radius, face: face, time: nil, in: cg)
                 cg.restoreGState()

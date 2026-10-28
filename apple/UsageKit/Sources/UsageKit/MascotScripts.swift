@@ -88,7 +88,7 @@ public struct MascotScripts: Sendable {
         return s
     }
 
-    /// 收合時的姿勢依模式：睡覺時迷你角色也閉眼低頭（靜止，不呼吸、沒有 z）；其他模式是平常的迷你角色
+    /// 收合時的姿勢依模式：睡覺時迷你角色也閉眼低頭（姿勢本身靜止；Mac 收合時的呼吸與小 z 由 App 以 Core Animation 另外播，ADR-0021）；其他模式是平常的迷你角色
     public func collapsedPose(mode: MascotMode) -> MascotPose {
         switch mode {
         case .sleep:

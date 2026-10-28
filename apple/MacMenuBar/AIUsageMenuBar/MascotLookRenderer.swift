@@ -36,9 +36,30 @@ enum MascotLookRenderer {
         case .ascii: return Eyes(color: mix(look.color ?? ink, [255, 255, 255], 0.55), glow: true)
         case .wire: return Eyes(color: [0xEA, 0xFD, 0xFF], glow: true)
         case .neon: return Eyes(color: look.color ?? ink, glow: true)
-        // 大的 LED 眼睛是不亮的燈；迷你時格子太粗，另外畫暗色眼睛
-        case .led: return pill && !isMini(radius) ? nil : Eyes(color: [0x16, 0x0C, 0x02], glow: false)
+        // 大的 LED 眼睛是不亮的燈；迷你時格子太粗，另外畫暗色眼睛。表情（小圓點、×、眉毛）落在格子之間的黑縫，
+        // 用暗琥珀才看得到（Fable F-07）
+        case .led:
+            if pill { return isMini(radius) ? Eyes(color: [0x16, 0x0C, 0x02], glow: false) : nil }
+            return Eyes(color: mix([20, 10, 0], look.color ?? ink, 0.35), glow: false)
         case .pixel: return pill ? nil : Eyes(color: [0x11, 0x11, 0x14], glow: false)
+        }
+    }
+
+    /// 特效重複一輪的長度（毫秒）：收合時預先畫好一輪、交給 Core Animation 循環播放（`MascotEffectLoop`）。
+    /// 長度取特效本身週期的整數倍、約 3 秒，接回開頭時看不出斷點。不會動的外觀是 nil
+    static func loopDuration(_ look: MascotLook, radius R: Double) -> Double? {
+        switch look.style {
+        case .solid, .linear, .pixel: return nil
+        // 掃描光每 2.6R／(1/14) 毫秒掃過一次
+        case .led:
+            let scan = 2.6 * R * 14
+            return scan * max(1, (3000 / scan).rounded())
+        // 呼吸 sin(t/480)
+        case .neon: return 2 * .pi * 480
+        // 經線每轉 π／經線數就回到同樣的樣子
+        case .wire: return 2600 * .pi / Double(isMini(R) ? 3 : 6)
+        // 每 110 毫秒換一次跳字，取 27 次
+        case .ascii: return 110 * 27
         }
     }
 
@@ -115,7 +136,7 @@ enum MascotLookRenderer {
     private static let miniGlyphs = Array(".:+*")
 
     private static func drawGrid(_ look: MascotLook, radius R: Double, face: Face, time: Int?, in cg: CGContext) {
-        guard let color = look.color else { return }
+        guard look.color != nil else { return }
         let mini = isMini(R)
         let cell: Double = switch (look.style, mini) {
         case (.ascii, true): 2 * R / 5.6
@@ -125,42 +146,31 @@ enum MascotLookRenderer {
         default: max(3, R / 8.5)
         }
         let n = Int((2.1 * R / cell).rounded(.up)) | 1
-        let r = R / cell, cx = Double(n) / 2
-        let inside = r * r * (mini ? 0.9 : 0.97)
-        let pill = face.pillOpen.map { pillRects(face: face, radius: R, open: $0) } ?? []
-        let tint = look.effectTint
+        let cx = Double(n) / 2
         let frame = time.map { $0 / 110 }
         let font = look.style == .ascii ? GlyphFont.shared(size: mini ? cell * 1.35 : cell * 1.3) : nil
+        let set = mini ? miniGlyphs : glyphs
 
-        for j in 0..<n {
-            for i in 0..<n {
-                let ddx = Double(i) + 0.5 - cx, ddy = Double(j) + 0.5 - cx
-                guard ddx * ddx + ddy * ddy <= inside else { continue }
-                let ox = ddx * cell, oy = ddy * cell
-                let lum = pill.contains { $0.contains(x: ox, y: oy) } ? 0 : sphereLuminance(x: ox, y: oy, radius: R)
-                switch look.style {
-                case .ascii:
-                    guard lum >= 0.18, let font else { continue }
-                    let set = mini ? miniGlyphs : glyphs
-                    var index = Int(((lum - 0.3) / 0.7 * Double(set.count - 1)).rounded())
-                    if let frame {
-                        let h = hash(Double(i), Double(j), Double(frame))
-                        if h < 0.07 { index += h < 0.035 ? 1 : -1 }
-                    }
-                    index = min(max(index, 0), set.count - 1)
-                    cg.setFillColor(cgColor(color, 0.3 + 0.7 * lum))
-                    font.fill(set[index], at: CGPoint(x: ox, y: oy), in: cg)
-                case .led:
-                    cg.setFillColor(lum < 0.18 ? CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.07)
-                                               : cgColor(mix([20, 10, 0], color, min(1, lum * 1.1))))
-                    let d = cell * (mini ? 0.4 : 0.38)
-                    cg.fillEllipse(in: CGRect(x: ox - d, y: oy - d, width: 2 * d, height: 2 * d))
-                default:
-                    guard let tint else { continue }
-                    let c = lum < 0.18 ? tint.mid : lum > 0.82 ? tint.light : lum > 0.58 ? tint.mid : tint.shade
-                    cg.setFillColor(cgColor(c))
-                    cg.fill(CGRect(x: ox - cell / 2, y: oy - cell / 2, width: cell + 0.6, height: cell + 0.6))
+        // 每格的亮度與顏色只和外觀、大小、視線、眼睛有關：快取起來，每一格特效只重畫（Fable F-06，收合工作中的 CPU）
+        for c in GridCells.cells(look: look, radius: R, cell: cell, n: n, face: face, glyphCount: set.count) {
+            switch look.style {
+            case .ascii:
+                guard let font else { continue }
+                var index = c.index
+                if let frame {
+                    let h = hash(Double(c.i), Double(c.j), Double(frame))
+                    if h < 0.07 { index += h < 0.035 ? 1 : -1 }
                 }
+                index = min(max(index, 0), set.count - 1)
+                cg.setFillColor(c.color)
+                font.fill(set[index], at: CGPoint(x: c.x, y: c.y), in: cg)
+            case .led:
+                cg.setFillColor(c.color)
+                let d = cell * (mini ? 0.4 : 0.38)
+                cg.fillEllipse(in: CGRect(x: c.x - d, y: c.y - d, width: 2 * d, height: 2 * d))
+            default:
+                cg.setFillColor(c.color)
+                cg.fill(CGRect(x: c.x - cell / 2, y: c.y - cell / 2, width: cell + 0.6, height: cell + 0.6))
             }
         }
 
@@ -192,7 +202,7 @@ enum MascotLookRenderer {
     }
 
     /// 膠囊眼睛在身體座標中的範圍（同規格頁的 eyes()：寬 0.27R、高 0.52R × 張開，至少 0.08R）
-    private struct Pill {
+    fileprivate struct Pill {
         var x: Double, y: Double, w: Double, h: Double
         func contains(x px: Double, y py: Double) -> Bool {
             let r = min(w, h) / 2
@@ -201,7 +211,7 @@ enum MascotLookRenderer {
         }
     }
 
-    private static func pillRects(face: Face, radius R: Double, open: Double) -> [Pill] {
+    fileprivate static func pillRects(face: Face, radius R: Double, open: Double) -> [Pill] {
         [-1.0, 1.0].compactMap { s in
             project(face.yaw + s * face.eye.yaw, face.pitch + face.eye.pitch, R).map { q in
                 Pill(x: q.x, y: q.y, w: R * face.eye.width * q.fx, h: max(R * face.eye.height * q.fy * open, R * 0.08))
@@ -239,6 +249,33 @@ enum MascotLookRenderer {
         return s - s.rounded(.down)
     }
 
+    /// 格子特效每格算好的位置、亮度、顏色與字元（`drawGrid` 用）
+    fileprivate struct GridCell {
+        var i: Int, j: Int
+        var x: Double, y: Double
+        var color: CGColor
+        /// ASCII 的字元（跳字前）
+        var index: Int
+    }
+
+    fileprivate static func gridCell(_ look: MascotLook, i: Int, j: Int, x: Double, y: Double, lum: Double,
+                                     glyphCount: Int) -> GridCell? {
+        guard let color = look.color else { return nil }
+        switch look.style {
+        case .ascii:
+            guard lum >= 0.18 else { return nil }
+            let index = Int(((lum - 0.3) / 0.7 * Double(glyphCount - 1)).rounded())
+            return GridCell(i: i, j: j, x: x, y: y, color: cgColor(color, 0.3 + 0.7 * lum), index: index)
+        case .led:
+            let c = lum < 0.18 ? CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.07) : cgColor(mix([20, 10, 0], color, min(1, lum * 1.1)))
+            return GridCell(i: i, j: j, x: x, y: y, color: c, index: 0)
+        default:
+            guard let tint = look.effectTint else { return nil }
+            let c = lum < 0.18 ? tint.mid : lum > 0.82 ? tint.light : lum > 0.58 ? tint.mid : tint.shade
+            return GridCell(i: i, j: j, x: x, y: y, color: cgColor(c), index: 0)
+        }
+    }
+
     // MARK: - 線框球、霓虹
 
     private static func drawWire(_ look: MascotLook, radius R: Double, face: Face, time: Int?, in cg: CGContext) {
@@ -249,6 +286,8 @@ enum MascotLookRenderer {
         cg.setFillColor(CGColor(srgbRed: 4 / 255, green: 14 / 255, blue: 30 / 255, alpha: 0.88))
         cg.fillEllipse(in: full)
         cg.setShadow(offset: .zero, blur: mini ? R * 0.5 : R * 0.12, color: cgColor(color))
+        // 所有線條畫在同一層，發光只算一次（每條線各算一次陰影很花 CPU）
+        cg.beginTransparencyLayer(auxiliaryInfo: nil)
         cg.setLineWidth(max(1, R * 0.022))
         // 經線：慢慢轉，看滑鼠時跟著轉向
         let rot = Double(time ?? 0) / 2600 + face.yaw * 1.4
@@ -269,6 +308,7 @@ enum MascotLookRenderer {
         cg.setStrokeColor(cgColor(color))
         cg.setLineWidth(max(1, R * 0.035))
         cg.strokeEllipse(in: full)
+        cg.endTransparencyLayer()
         cg.restoreGState()
     }
 
@@ -303,6 +343,43 @@ enum MascotLookRenderer {
 
     private static func gradient(_ colors: [CGColor], _ locations: [CGFloat]) -> CGGradient? {
         CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB), colors: colors as CFArray, locations: locations)
+    }
+}
+
+/// 格子特效的快取：同一個外觀、大小、視線與眼睛只算一次（瀏海收合時姿勢停住，特效每秒 12 格都是同一份）
+private enum GridCells {
+    private struct Key: Hashable {
+        var look: String, radius: Double, cell: Double, yaw: Double, pitch: Double, open: Double?
+    }
+
+    nonisolated(unsafe) private static var cache: [Key: [MascotLookRenderer.GridCell]] = [:]
+    private static let lock = NSLock()
+
+    static func cells(look: MascotLook, radius R: Double, cell: Double, n: Int, face: MascotLookRenderer.Face,
+                      glyphCount: Int) -> [MascotLookRenderer.GridCell] {
+        let key = Key(look: look.id, radius: R, cell: cell, yaw: face.yaw, pitch: face.pitch, open: face.pillOpen)
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = cache[key] { return hit }
+        let r = R / cell, cx = Double(n) / 2
+        let inside = r * r * (MascotLookRenderer.isMini(R) ? 0.9 : 0.97)
+        let pill = face.pillOpen.map { MascotLookRenderer.pillRects(face: face, radius: R, open: $0) } ?? []
+        var cells: [MascotLookRenderer.GridCell] = []
+        for j in 0..<n {
+            for i in 0..<n {
+                let ddx = Double(i) + 0.5 - cx, ddy = Double(j) + 0.5 - cx
+                guard ddx * ddx + ddy * ddy <= inside else { continue }
+                let ox = ddx * cell, oy = ddy * cell
+                let lum = pill.contains { $0.contains(x: ox, y: oy) } ? 0 : MascotLookRenderer.sphereLuminance(x: ox, y: oy, radius: R)
+                if let c = MascotLookRenderer.gridCell(look, i: i, j: j, x: ox, y: oy, lum: lum, glyphCount: glyphCount) {
+                    cells.append(c)
+                }
+            }
+        }
+        // 看滑鼠、眨眼時每格的鍵都不同：只留最近的一些
+        if cache.count > 48 { cache.removeAll() }
+        cache[key] = cells
+        return cells
     }
 }
 

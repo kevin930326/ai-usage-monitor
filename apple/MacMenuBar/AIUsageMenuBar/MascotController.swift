@@ -108,6 +108,13 @@ final class MascotController {
     let looks: MascotLooks?
     /// 外觀的特效正在動（AI 工作中，或展開時）；否則畫靜態的一格
     private(set) var effectsLive = false
+    /// 特效自己的時鐘（毫秒）：停住時停在最後一格，再動時從那一格接著走，不會跳回第 0 格（Fable F-08）
+    private var effectBase = 0
+    /// 收合時的特效由 Core Animation 循環播放中（`MascotEffectLoop`）；這時 SwiftUI 不畫角色
+    var effectLoopPlaying = false
+    /// 目前循環播放的是哪個模式的一輪（nil 是沒在播）
+    private var effectLoopMode: MascotMode?
+    private var effectStart = 0
     private(set) var layout = NotchLayout.fake
     private(set) var director: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
@@ -177,8 +184,17 @@ final class MascotController {
     /// 設定裡選的外觀；nil 是跟著服務（沒選、或清單裡已經沒有這個代號）
     var look: MascotLook? { looks?.look(PanelSettings.shared.mascotLook) }
 
+    /// 特效那一格的時間；nil 是靜態的一格（動畫「簡單」「關閉」、減少動態效果、不會動的外觀）
+    func effectTime(at t: Int) -> Int? {
+        guard motion.animatesEffects, look?.style.animates == true else { return nil }
+        return effectsLive ? effectBase + max(t - effectStart, 0) : effectBase
+    }
+
     /// 外觀改了：特效要不要動可能跟著變
-    func lookChanged() { refresh() }
+    func lookChanged() {
+        refresh()
+        NotchPanelController.shared.effectLoopChanged()
+    }
 
     /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）。以開機時間計，
     /// `date`（TimelineView 給的牆鐘時刻）只取它和現在的差，系統時間倒退不影響（Fable F-02）
@@ -692,15 +708,29 @@ final class MascotController {
             && !(live && !director.isStill && director.mode == .work)
         // 外觀的特效（ADR-0021，ADR-0010 的例外）：展開時、或收合時 AI 工作中才動，每秒最多 12 次；
         // 收合閒置、睡著時停在靜態的一格
+        // 收合動畫播完才停（Fable F-08）
         let effects = motion.animatesEffects && look?.style.animates == true
-            && (director.machine.isOpen || (director.mode == .work && !director.isStill))
-        if effects != effectsLive { effectsLive = effects }
+            && (director.machine.isOpen || animating || (director.mode == .work && !director.isStill))
+        if effects != effectsLive {
+            if effects { effectStart = now } else { effectBase += max(now - effectStart, 0) }
+            effectsLive = effects
+        }
         var rate: MascotRenderRate = animating ? .animating
             : !idleMoving ? .stopped : breathing ? .breathing : gazeOnly ? .gaze : .idle
-        if effects, rate == .stopped || rate == .breathing { rate = .effect }
+        // 只取代「完全停止」：睡著的呼吸、看滑鼠照原本的頻率，特效跟著那個頻率動（Fable F-01）。
+        // 收合時 AI 工作中或睡著：所有外觀都有動態（敲鍵盤、呼吸），由 Core Animation 循環播放（ADR-0021 收合時的動態）
+        let collapsedMotion = motion.animatesEffects && !director.machine.isOpen && !animating && !director.isStill
+            && (director.mode == .work || director.mode == .sleep)
+        if effects || collapsedMotion, rate == .stopped { rate = .effect }
         if rate != renderRate {
             if rate != .animating { stoppedAt = now }
             renderRate = rate
+        }
+        // 收合時循環播放的那一輪（工作中、睡著各一種）改變了：重建
+        let loopMode = rate == .effect && !director.machine.isOpen ? director.mode : nil
+        if loopMode != effectLoopMode {
+            effectLoopMode = loopMode
+            NotchPanelController.shared.effectLoopChanged()
         }
         // 收合動畫播完才把視窗縮回瀏海大小（展開時是整張畫布）
         let expanded = director.machine.isOpen || animating
@@ -713,10 +743,11 @@ final class MascotController {
                 return
             }
         }
-        if live, rate == .stopped {
-            // 靜止待著：下一次眨眼時再開始重畫
+        if live, rate == .stopped || rate == .effect {
+            // 靜止待著：下一次眨眼時再開始重畫。特效由角色自己的 TimelineView 驅動，不用輪詢（Fable F-05）；
+            // 收合時 AI 工作狀態改變由 nextDeadline／mutate 叫醒，視線由 pollPointer
             rateTimer = oneShot(after: director.nextBlink(after: now) - now) { $0.refresh() }
-        } else if rate != .stopped {
+        } else if rate != .stopped, rate != .effect {
             // 動畫或待著的動作還在：之後再看一次（最多 0.25 秒後）
             rateTimer = oneShot(after: 250) { $0.refresh() }
         }

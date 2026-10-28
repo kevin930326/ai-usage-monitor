@@ -29,8 +29,10 @@ struct MascotFrame {
     /// 平常的表情（眼睛是膠囊、沒在閉眼時換成表情的眼睛與眉毛）
     var mood: MascotMood = .normal
     var sleeping: Bool
-    /// 收著時睡著：靜止的小 z
+    /// 收著時睡著：迷你角色旁的小 z
     var dozing = false
+    /// 收著睡著時小 z 飄起的進度（0…1，ADR-0021 收合時的動態）；nil 時 z 靜止
+    var dozeRise: Double?
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
@@ -248,7 +250,11 @@ struct MascotPainter {
         let eyes = showsMood ? (frame.mood.eyes ?? .pill) : frame.eyes
         let dash = max(h[.dash], frame.blink, showsMood ? frame.mood.lid : 0)
         // 外觀的眼睛顏色；nil 表示身體已經畫了膠囊眼（LED、像素）
-        let lookEyes = MascotLookRenderer.eyes(for: h[.tint] > 0.99 ? look : nil, radius: R, pill: eyes == .pill)
+        // 從白色變成外觀的過場中，眼睛顏色跟著混，不會在最後一刻跳色（Fable F-09）
+        let targetEyes = MascotLookRenderer.eyes(for: look, radius: R, pill: eyes == .pill)
+        let lookEyes = h[.tint] > 0.99 ? targetEyes
+            : MascotLookRenderer.Eyes(color: MascotLookRenderer.mix(MascotLookRenderer.ink, targetEyes?.color ?? MascotLookRenderer.ink,
+                                                                    max(h[.tint], 0)), glow: false)
         let ink = color(lookEyes?.color ?? MascotLookRenderer.ink)
 
         var body = context
@@ -421,8 +427,12 @@ struct MascotPainter {
         let zColor = Color(red: 0.85, green: 0.85, blue: 0.89)
         if frame.dozing {
             var g = context
-            g.opacity = 0.85
-            drawZ(at: CGPoint(x: x + R * 0.95, y: y - R * 0.45), size: max(R * 0.55, 5), in: &g, color: zColor)
+            let rise = frame.dozeRise ?? 0
+            // 飄起時淡入淡出；靜止時停在原處
+            g.opacity = frame.dozeRise.map { sin($0 * .pi) * 0.85 } ?? 0.85
+            // 收合的瀏海很矮：只往右上飄一小段，不會跑出瀏海
+            drawZ(at: CGPoint(x: x + R * (0.95 + rise * 0.4), y: y - R * (0.45 + rise * 0.4)), size: max(R * 0.55, 5), in: &g,
+                  color: zColor)
         }
         if frame.sleeping {
             for i in 0..<3 {
