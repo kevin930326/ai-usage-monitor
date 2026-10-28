@@ -119,5 +119,34 @@
       "exhausts_in_min" : 116,
       "urgent" : false
     }
+  },
+  {
+    "name" : "future-samples-ignored",
+    "result" : {
+      "exhausts_in_min" : 120,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "small-dip-not-reset",
+    "result" : {
+      "exhausts_in_min" : 96,
+      "urgent" : false
+    }
+  },
+  {
+    "name" : "faster-capped",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "faster" : 10,
+      "urgent" : true
+    }
+  },
+  {
+    "name" : "faster-near-threshold",
+    "result" : {
+      "exhausts_in_min" : 30,
+      "urgent" : true
+    }
   }
 ]

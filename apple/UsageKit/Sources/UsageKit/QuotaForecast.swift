@@ -8,6 +8,8 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
     public static let urgentWithin: TimeInterval = 3600
     /// 比平常快這麼多倍以上才顯示倍數
     public static let fasterThreshold = 1.5
+    /// 平常幾乎沒用時倍數沒有意義：最多 10（畫面寫「10 倍以上」）
+    public static let fasterCap = 10.0
     /// 「平常」看過去幾天、至少幾天有資料
     public static let baselineDays = 7
     public static let baselineMinimumDays = 3
@@ -47,7 +49,7 @@ public struct QuotaForecast: Hashable, Sendable, Codable {
         faster = history.usualRate(provider: provider, windowID: window.id, now: now).flatMap { usual in
             guard usual > 0 else { return nil }
             let ratio = (rate / usual * 10).rounded(.down) / 10
-            return ratio >= Self.fasterThreshold ? ratio : nil
+            return ratio >= Self.fasterThreshold ? min(ratio, Self.fasterCap) : nil
         }
     }
 }
@@ -76,16 +78,21 @@ public extension QuotaForecast {
         return "照目前速度約\(clock.first?.isNumber == true ? " " : "")\(clock) 用完"
     }
 
-    /// 「比平常快 2.1 倍」；沒有倍數時 nil
+    /// 「比平常快 2.1 倍」「比平常快 10 倍以上」；沒有倍數時 nil
     var fasterText: String? {
-        faster.map { "比平常快 \(String(format: "%.1f", $0)) 倍" }
+        faster.map { "比平常快 \(Self.times($0))" }
+    }
+
+    /// 「2.1 倍」；到上限時「10 倍以上」
+    static func times(_ faster: Double) -> String {
+        faster >= fasterCap ? "\(Int(fasterCap)) 倍以上" : "\(String(format: "%.1f", faster)) 倍"
     }
 
     /// 瀏海與小地方的短說法：「約 14:32 用完・快 2.1 倍」
     func shortLine(now: Date, calendar: Calendar = .current) -> String {
         let clock = Self.clock(exhaustsAt, now: now, calendar: calendar)
         let head = "約\(clock.first?.isNumber == true ? " " : "")\(clock) 用完"
-        return faster.map { "\(head)・快 \(String(format: "%.1f", $0)) 倍" } ?? head
+        return faster.map { "\(head)・快 \(Self.times($0))" } ?? head
     }
 
     /// 一行的完整說法：「照目前速度約 14:32 用完・比平常快 2.1 倍」

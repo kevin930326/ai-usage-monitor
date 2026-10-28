@@ -18,6 +18,7 @@ from .models import iso_utc, parse_iso
 
 URGENT_WITHIN = 3600
 FASTER_THRESHOLD = 1.5
+FASTER_CAP = 10.0  # 平常幾乎沒用時倍數沒有意義：最多 10（畫面寫「10 倍以上」）
 BASELINE_DAYS = 7
 BASELINE_MINIMUM_DAYS = 3
 RECENT_MINIMUM_SAMPLES = 4
@@ -127,7 +128,7 @@ def forecast(window_id: str, used_pct: float, resets_at: float | None, hidden: b
     if usual is not None and usual > 0:
         ratio = math.floor(rate / usual * 10) / 10
         if ratio >= FASTER_THRESHOLD:
-            faster = ratio
+            faster = min(ratio, FASTER_CAP)
     return {"exhausts_at": at, "urgent": at - now < URGENT_WITHIN, "faster": faster}
 
 

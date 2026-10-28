@@ -759,6 +759,197 @@
      "end": 60
     }
    ]
+  },
+  {
+   "name": "future-samples-ignored",
+   "note": "時鐘倒退：現在之後還有 6 筆（到 +30 分鐘）不算；只看 -60～0 的每小時 20 點，剩 40.1 點 120.3 分鐘後用完",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 59.9,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 30,
+     "every_min": 5,
+     "start": 40,
+     "end": 70
+    }
+   ]
+  },
+  {
+   "name": "small-dip-not-reset",
+   "note": "回看範圍內小幅下修（50 → 45，沒降到一半）不算重置，也不抵銷用量：用掉 10 + 15 = 25 點／60 分鐘，剩 40.1 點 96.2 分鐘後用完",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 59.9,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": -30,
+     "every_min": 5,
+     "start": 40,
+     "end": 50
+    },
+    {
+     "from_min": -25,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 45,
+     "end": 60
+    }
+   ]
+  },
+  {
+   "name": "faster-capped",
+   "note": "平常每小時只用 0.1 點、現在 40 點（400 倍）：倍數最多 10（畫面寫「10 倍以上」）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.1,
+     "resets_min": -9960
+    }
+   ]
+  },
+  {
+   "name": "faster-near-threshold",
+   "note": "平常 26.7 點：40 ÷ 26.7 ≈ 1.498，捨去後 1.4，不顯示倍數（三邊浮點要一致）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 36.7,
+     "resets_min": -9960
+    }
+   ]
   }
  ]
 }

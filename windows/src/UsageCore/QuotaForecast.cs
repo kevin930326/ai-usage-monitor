@@ -12,6 +12,8 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
 {
     public static readonly TimeSpan UrgentWithin = TimeSpan.FromHours(1);
     public const double FasterThreshold = 1.5;
+    /// <summary>平常幾乎沒用時倍數沒有意義：最多 10（畫面寫「10 倍以上」）</summary>
+    public const double FasterCap = 10;
     public const int BaselineDays = 7;
     public const int BaselineMinimumDays = 3;
 
@@ -30,7 +32,7 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
         if (UsualRate(history, provider, window.Id, now) is { } usual && usual > 0)
         {
             var ratio = Math.Floor(rate / usual * 10) / 10;
-            if (ratio >= FasterThreshold) faster = ratio;
+            if (ratio >= FasterThreshold) faster = Math.Min(ratio, FasterCap);
         }
         return new QuotaForecast(at, (at - now) < UrgentWithin, faster);
     }
@@ -84,7 +86,11 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
     }
 
     /// <summary>「比平常快 2.1 倍」；沒有倍數時 null</summary>
-    public string? FasterText => Faster is { } f ? $"比平常快 {f.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} 倍" : null;
+    public string? FasterText => Faster is { } f ? $"比平常快 {Times(f)}" : null;
+
+    /// <summary>「2.1 倍」；到上限時「10 倍以上」</summary>
+    public static string Times(double faster) =>
+        faster >= FasterCap ? $"{(int)FasterCap} 倍以上" : $"{faster.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} 倍";
 
     /// <summary>一行的完整說法：「照目前速度約 14:32 用完・比平常快 2.1 倍」</summary>
     public string Line(DateTimeOffset now, TimeZoneInfo? zone = null) =>
@@ -98,7 +104,7 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
     {
         var clock = Clock(ExhaustsAt, now, zone);
         var head = $"約{(char.IsDigit(clock[0]) ? " " : "")}{clock} 用完";
-        return Faster is { } f ? $"{head}・快 {f.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} 倍" : head;
+        return Faster is { } f ? $"{head}・快 {Times(f)}" : head;
     }
 
     /// <summary>「14:32」「明天 09:05」「週五 18:00」（本機時區）</summary>
