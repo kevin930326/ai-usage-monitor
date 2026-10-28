@@ -86,6 +86,8 @@ internal sealed class SettingsView : StackPanel
         Row("圓環大小", Choice([("小", RingSize.Small), ("中", RingSize.Medium), ("大", RingSize.Large)], settings.RingSize, v => settings.RingSize = v));
         Row("圓環透明度", OpacitySlider());
         Children.Add(Check("全螢幕的 App 在同一個螢幕時隱藏圓環", settings.HideInFullscreen, v => settings.HideInFullscreen = v));
+        Children.Add(Check("貼在螢幕左右邊緣時收成半圓的小標籤", settings.DockToEdge, v => settings.DockToEdge = v));
+        Children.Add(Check("圓環外圍顯示刻度（這個額度週期過了多少時間）", settings.RingTicks, v => settings.RingTicks = v));
 
         Section("一般");
         Children.Add(Check("登入 Windows 時自動啟動", settings.LaunchAtLogin, v => settings.LaunchAtLogin = v));

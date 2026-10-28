@@ -8,28 +8,10 @@ namespace AIUsageMonitor.Windows;
 /// <summary>
 /// 雙圓環（Mac 選單列圖示與面板的 DualRing，設計 skill 第 9 節）：外圈＝剩餘 %，內圈＝距離重置的剩餘時間比例。
 /// 四種狀態不只靠顏色：太快＝右上角提示色小點；剩 &lt; 20%＝外圈轉紅；過期＝整個轉灰且外圈改為虛線。
-/// 懸浮圓環、系統匣圖示與截圖共用。
+/// 系統匣圖示與面板共用；懸浮圓環見 RingFace.cs。
 /// </summary>
 internal static class RingDrawing
 {
-    /// <summary>懸浮圓環：底下一個圓形底（桌布上也看得清楚），外圈、內圈與小點</summary>
-    public static void DrawFloating(DrawingContext dc, RingContent c, double size, Palette p)
-    {
-        var center = new Point(size / 2, size / 2);
-        var disc = size / 2 - 0.5;
-        dc.DrawEllipse(Palette.Brush(p.Solid.Color, 0.94), new Pen(p.CardBorder, 1), center, disc, disc);
-        var lineWidth = size * 0.12;
-        var radius = size / 2 - size * 0.12 - lineWidth / 2;
-        DrawDual(dc, c, center, radius, lineWidth, p, appear: 1);
-        if (c.State == RingState.TooFast)
-        {
-            var dot = size * 0.085;
-            var at = new Point(size - dot - size * 0.04, dot + size * 0.04);
-            dc.DrawEllipse(p.Solid, null, at, dot + size * 0.03, dot + size * 0.03);
-            dc.DrawEllipse(p.Notice, null, at, dot, dot);
-        }
-    }
-
     /// <summary>系統匣圖示（16 單位的畫布，同 Mac 選單列圖示的比例：外圈半徑 6.6、寬 2.4，內圈 3.2、寬 1.8）</summary>
     public static void DrawTray(DrawingContext dc, RingContent c, double size, Palette p)
     {
@@ -64,7 +46,10 @@ internal static class RingDrawing
     }
 
     /// <summary>從 12 點鐘方向順時針畫 <paramref name="fraction"/> 的弧，底下是淡色軌道；<paramref name="dashed"/> 時兩者都是虛線</summary>
-    public static void Arc(DrawingContext dc, Point center, double radius, double width, double fraction, Color color, Color track, bool dashed)
+    public static void Arc(DrawingContext dc, Point center, double radius, double width, double fraction, Color color, Color track, bool dashed) =>
+        Arc(dc, center, radius, width, fraction, new SolidColorBrush(color), track, dashed);
+
+    public static void Arc(DrawingContext dc, Point center, double radius, double width, double fraction, Brush color, Color track, bool dashed)
     {
         // 虛線約 16 段：小圖示上也看得出斷開
         DashStyle? dash = null;
@@ -74,11 +59,14 @@ internal static class RingDrawing
             dash = new DashStyle([segment * 0.55, segment * 0.45], 0);
             dash.Freeze();
         }
-        var trackPen = new Pen(new SolidColorBrush(track), width) { DashStyle = dash ?? DashStyles.Solid };
-        dc.DrawEllipse(null, trackPen, center, radius, radius);
+        if (track.A > 0)
+        {
+            var trackPen = new Pen(new SolidColorBrush(track), width) { DashStyle = dash ?? DashStyles.Solid };
+            dc.DrawEllipse(null, trackPen, center, radius, radius);
+        }
         var clamped = Math.Clamp(fraction, 0, 1);
         if (clamped <= 0) return;
-        var pen = new Pen(new SolidColorBrush(color), width)
+        var pen = new Pen(color, width)
         {
             DashStyle = dash ?? DashStyles.Solid,
             StartLineCap = dashed ? PenLineCap.Flat : PenLineCap.Round,

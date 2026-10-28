@@ -9,6 +9,8 @@
     - 打開面板（第二個執行個體送 --show-panel）：前 2 秒（動畫）每 0.25 秒取樣記最大值，之後靜止 10 秒
     - 關閉面板（--hide-panel）後等 60 秒，再取樣 30 秒
     - 再開關 5 次，比較第一次與最後一次關閉後的記憶體
+    - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
+      （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
   CPU% ＝ TotalProcessorTime 的差 ÷ 經過時間 ÷ 處理器數 × 100（工作管理員的算法）。
   結果印成 Markdown 表格，並寫到 -Output。CPU 超過門檻只印警告（CI 的 runner 雜訊大；正式紀錄以 x64 桌機為準），記憶體增加超過 5 MB 時結束碼 1。
 
@@ -49,6 +51,17 @@ Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+public static IntPtr Find(int pid, string title) {
+    IntPtr h = IntPtr.Zero;
+    while ((h = FindWindowExW(IntPtr.Zero, h, null, title)) != IntPtr.Zero) {
+        uint owner; GetWindowThreadProcessId(h, out owner);
+        if (owner == pid && IsWindowVisible(h)) return h;
+    }
+    return IntPtr.Zero;
+}
 public static bool PanelVisible(int pid) {
     IntPtr h = IntPtr.Zero;
     while ((h = FindWindowExW(IntPtr.Zero, h, null, "AI Usage Monitor")) != IntPtr.Zero) {
@@ -112,6 +125,33 @@ try {
     $last = Sample 10
     $memGrowth = [Math]::Round($last.WorkingSetMB - $memFirst, 1)
 
+    # 滑鼠移上去展開、移開收起
+    $hoverNote = '未展開（找不到圓環或滑鼠移動沒有送到）'
+    $hoverPeak = $null; $hoverOpen = $null; $collapsePeak = $null; $afterHover = $null
+    $ring = [AumPerf.Win]::Find($app.Id, 'AI Usage Monitor Ring')
+    if ($ring -ne [IntPtr]::Zero) {
+        $r0 = New-Object AumPerf.Win+RECT
+        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r0)
+        [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
+        $hoverPeak = PeakDuring 1
+        $r1 = New-Object AumPerf.Win+RECT
+        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r1)
+        $hoverOpen = Sample 5
+        [void][AumPerf.Win]::SetCursorPos(5, 5)
+        $collapsePeak = PeakDuring 1.5
+        $r2 = New-Object AumPerf.Win+RECT
+        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r2)
+        Start-Sleep -Seconds 30
+        $afterHover = Sample 30
+        $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
+        if ($w1 -gt $w0 -and $w2 -eq $w0) {
+            $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）"
+        } else {
+            $hoverNote = "未量到：展開或收起沒有確認（視窗寬 $w0 → $w1 → $w2 px）"
+            $hoverOpen = $null
+        }
+    }
+
     Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
     Start-Sleep -Seconds 3
 } finally {
@@ -135,6 +175,16 @@ foreach ($r in $rows) {
     if ($null -ne $r[2] -and $r[1] -gt $r[2]) { $warnings += "$($r[0]): $($r[1])% > $($r[2])%" }
 }
 $lines += "| 重複開關 5 次後的記憶體增加 | — | ≤ +5 MB | $memGrowth |"
+if ($null -ne $hoverOpen) {
+    $lines += "| 圓環展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
+    $lines += "| 圓環展開、靜止 | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
+    $lines += "| 圓環收起動畫中（最大值） | $collapsePeak | 記錄 | — |"
+    $lines += "| 收起後（30 秒後） | $($afterHover.Cpu) | ≤ $($limits[2]) | $($afterHover.WorkingSetMB) |"
+    if ($hoverOpen.Cpu -gt $limits[1]) { $warnings += "ring expanded: $($hoverOpen.Cpu)% > $($limits[1])%" }
+    if ($afterHover.Cpu -gt $limits[2]) { $warnings += "after ring collapse: $($afterHover.Cpu)% > $($limits[2])%" }
+}
+$lines += ''
+$lines += "滑鼠移上去：$hoverNote"
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
 $lines += "處理器 $cores 個；$([Environment]::OSVersion.VersionString)；$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
@@ -143,3 +193,5 @@ $text = $lines -join "`n"
 Write-Host $text
 foreach ($w in $warnings) { Write-Host "::warning::perf $w" }
 if ($memGrowth -gt 5) { exit 1 }
+# 桌機（不是 -Ci）上滑鼠移上去一定要量到；CI 的工作階段不一定送得到滑鼠移動
+if ($null -eq $hoverOpen -and -not $Ci) { Write-Host 'hover expansion was not measured'; exit 1 }
