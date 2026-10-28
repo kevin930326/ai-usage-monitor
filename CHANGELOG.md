@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Fixed
+- 瀏海角色（Fable 對抗審查）：「簡單」「關閉」時待著 10 秒不再畫出睡覺的 z；動畫時間改以開機時間計，系統時間倒退時不會凍住又以 60 fps 重畫；展開中換螢幕不再縮回瀏海（收合後才換版面）；示範模式不讀 config.json 的紀錄位置；工作中偵測卡住 30 秒後不再擋住之後的檢查；角色有 VoiceOver 描述（服務、工作中／睡著／待命、額度狀態）
 - 「所有電腦」與單一其他電腦的最長連續天數只算目前這段連續，過去較長、已結束的連續被漏掉：改成從每日資料（最近一年）找所有連續區段的最大值，跨電腦的日子合併計算。Mac（UsageKit）與 Windows（UsageCore）一起改，golden 新增「過去較長、現在較短」與跨裝置的情境。這台 Mac 仍以收集器的個人紀錄為準
 - Windows 收集器（`install-task.ps1 -WithQuota`）每 5 分鐘閃出空白主控台視窗：claude、codex 改在隱藏的主控台（`CREATE_NEW_CONSOLE`＋`SW_HIDE`）與自己的 process group 執行，它們再啟動的孫程序共用這個看不到的主控台；claude 逾時時也連同孫程序一起結束（Job Object）。macOS 與 Linux 不變
 
