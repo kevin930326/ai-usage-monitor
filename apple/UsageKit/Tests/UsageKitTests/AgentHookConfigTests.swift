@@ -36,9 +36,25 @@ import Testing
     }
 
     @Test func commandIsShellQuoted() {
-        #expect(Self.claude == "'/Applications/AI Usage Monitor.app/Contents/Helpers/aum-hook' claude")
+        #expect(Self.claude == "'/Applications/AI Usage Monitor.app/Contents/Helpers/aum-hook' claude 2>/dev/null || true")
         #expect(AgentHookConfig.command(executable: "/a/it's/Contents/Helpers/aum-hook", ai: .codex)
-                == "'/a/it'\\''s/Contents/Helpers/aum-hook' codex")
+                == "'/a/it'\\''s/Contents/Helpers/aum-hook' codex 2>/dev/null || true")
+    }
+
+    /// App 被移動後 hook 指向不存在的程式：經 sh -c 執行也沒有任何輸出、結束碼 0，不會在 AI 的對話裡跳錯誤（Fable F-04）
+    @Test func missingExecutableIsSilent() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", AgentHookConfig.command(executable: "/nonexistent/AI Usage.app/Contents/Helpers/aum-hook", ai: .claude)]
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        process.standardInput = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+        #expect(out.fileHandleForReading.readDataToEndOfFile().isEmpty)
+        #expect(err.fileHandleForReading.readDataToEndOfFile().isEmpty)
     }
 
     @Test func installIntoEmptyOrMissingFile() throws {

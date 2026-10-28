@@ -29,9 +29,11 @@ public enum AgentHookConfig {
         case needsRepair(missing: [AgentHookEvent], wrongPath: Bool)
     }
 
-    /// hook 的指令：App 包裡的程式路徑（單引號包起來，經 shell 執行也安全）加上 AI 名稱
+    /// hook 的指令：App 包裡的程式路徑（單引號包起來，經 shell 執行也安全）加上 AI 名稱。
+    /// 結尾的 `2>/dev/null || true`：App 被移動或刪掉後找不到程式時安安靜靜結束——Claude Code 對非 0 的結束碼
+    /// 會在對話裡顯示 hook error 與標準錯誤的第一行（Fable F-04）。App 下次啟動時照樣偵測到「需要修好」
     public static func command(executable: String, ai: AgentKind) -> String {
-        "'" + executable.replacingOccurrences(of: "'", with: "'\\''") + "' " + ai.rawValue
+        "'" + executable.replacingOccurrences(of: "'", with: "'\\''") + "' " + ai.rawValue + " 2>/dev/null || true"
     }
 
     public static func isOurs(_ command: String) -> Bool {
