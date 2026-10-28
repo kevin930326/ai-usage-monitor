@@ -10,7 +10,7 @@
  *   每月排程（wrangler.toml 的 crons）                                 刪除 400 天以前的每日加總（pruneOldDays）
  *
  * - 裝置密鑰只存 SHA-256；device_id 由密鑰決定，上傳內容中的裝置欄位一律忽略。
- * - 裝置密鑰只能寫 /tokens/daily，不能寫 /usage；READ_TOKEN／WRITE_TOKEN／ADMIN_TOKEN 都不能上傳每日加總。
+ * - 裝置密鑰只能寫 /tokens/daily 與 /agents/state（agents.ts），不能寫 /usage；READ_TOKEN／WRITE_TOKEN／ADMIN_TOKEN 都不能上傳每日加總。
  * - 只保存白名單欄位（日期、服務、模型名稱、各類 Token、任務秒數、最長任務），其他欄位丟棄。
  */
 
@@ -38,6 +38,8 @@ export interface D1Database {
 
 export interface TokensEnv {
   DB?: D1Database;
+  /** `on` 時才開放 /agents/state（ADR-0019 第 2 節） */
+  AGENT_SYNC?: string;
   READ_TOKEN: string;
   WRITE_TOKEN: string;
   ADMIN_TOKEN?: string;
@@ -65,26 +67,26 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 // 裝置名稱會顯示在 Mac 面板：只收短的單行文字
 const NAME_MAX = 32;
-const KEY_PREFIX = "aumd_";
+export const KEY_PREFIX = "aumd_";
 
 type Fields = Record<string, unknown>;
 export type TokenRow = { day: string; provider: string; model: string } & Record<(typeof TOKEN_FIELDS)[number], number>;
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
-function json(body: unknown, status = 200): Response {
+export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
   });
 }
 
-function error(status: number, message: string): Response {
+export function error(status: number, message: string): Response {
   return json({ error: message }, status);
 }
 
-const isObject = (v: unknown): v is Fields => typeof v === "object" && v !== null && !Array.isArray(v);
+export const isObject = (v: unknown): v is Fields => typeof v === "object" && v !== null && !Array.isArray(v);
 
-async function sha256Hex(text: string): Promise<string> {
+export async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -97,12 +99,12 @@ async function safeEqual(a: string, b: string): Promise<boolean> {
   return diff === 0;
 }
 
-function bearer(request: Request): string | null {
+export function bearer(request: Request): string | null {
   const header = request.headers.get("Authorization") ?? "";
   return header.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
 }
 
-async function hasToken(request: Request, expected: string | undefined): Promise<boolean> {
+export async function hasToken(request: Request, expected: string | undefined): Promise<boolean> {
   const token = bearer(request);
   return !!expected && token !== null && (await safeEqual(token, expected));
 }
@@ -307,6 +309,8 @@ async function handleDevices(request: Request, db: D1Database, env: TokensEnv, p
     // 撤銷後雜湊換成不可能對上的值：舊密鑰無法再查到這台裝置
     db.prepare("UPDATE devices SET revoked_at = COALESCE(revoked_at, ?), key_hash = ? WHERE device_id = ?").bind(seconds, `revoked:${deviceId}`, deviceId),
   ];
+  // AI 狀態只是「現在」的快照，撤銷時一律刪除（ADR-0019 第 2 節）
+  statements.push(db.prepare("DELETE FROM agent_state WHERE device_id = ?").bind(deviceId));
   if (body.delete_data === true) statements.push(db.prepare("DELETE FROM daily_tokens WHERE device_id = ?").bind(deviceId));
   await db.batch(statements);
   return json({ device_id: deviceId, revoked: true, deleted_data: body.delete_data === true });

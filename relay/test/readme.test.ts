@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import { MAX_AGENT_BODY_BYTES } from "../src/agents.ts";
 import { MAX_BODY_BYTES } from "../src/index.ts";
 import { MAX_TOKENS_BODY_BYTES } from "../src/tokens.ts";
 
@@ -23,5 +24,9 @@ describe("README", () => {
 
   it("POST /tokens/daily 的大小上限與 MAX_TOKENS_BODY_BYTES 相同", () => {
     assert.equal(limitKB("/tokens/daily") * 1024, MAX_TOKENS_BODY_BYTES);
+  });
+
+  it("POST /agents/state 的大小上限與 MAX_AGENT_BODY_BYTES 相同", () => {
+    assert.equal(limitKB("/agents/state") * 1024, MAX_AGENT_BODY_BYTES);
   });
 });
