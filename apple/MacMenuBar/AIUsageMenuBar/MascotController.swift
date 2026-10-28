@@ -112,8 +112,8 @@ final class MascotController {
     private var effectBase = 0
     /// 收合時的特效由 Core Animation 循環播放中（`MascotEffectLoop`）；這時 SwiftUI 不畫角色
     var effectLoopPlaying = false
-    /// 目前循環播放的是哪個模式的一輪（nil 是沒在播）
-    private var effectLoopMode: MascotMode?
+    /// 目前循環播放的那一輪是依什麼畫的（nil 是沒在播）
+    private var effectLoopKey: EffectLoopKey?
     private var effectStart = 0
     private(set) var layout = NotchLayout.fake
     private(set) var director: MascotDirector?
@@ -190,10 +190,9 @@ final class MascotController {
         return effectsLive ? effectBase + max(t - effectStart, 0) : effectBase
     }
 
-    /// 外觀改了：特效要不要動可能跟著變
+    /// 外觀改了：特效要不要動可能跟著變；循環的那一輪由 `updateEffectLoop` 重建
     func lookChanged() {
         refresh()
-        NotchPanelController.shared.effectLoopChanged()
     }
 
     /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）。以開機時間計，
@@ -535,6 +534,8 @@ final class MascotController {
                                     quota: quota)
         if director?.mood != mood { mutate { $0.setMood(mood) } }
         setStatus(level)
+        // 換了服務、表情沒變時不會經過 refresh：循環的那一輪照新的配色重建（Codex C-01）
+        updateEffectLoop()
         // 每分鐘也重算脈動：等你超過睡覺分鐘數會變成閒置（沒有計時器，靠這裡停）
         updatePulse()
     }
@@ -726,12 +727,7 @@ final class MascotController {
             if rate != .animating { stoppedAt = now }
             renderRate = rate
         }
-        // 收合時循環播放的那一輪（工作中、睡著各一種）改變了：重建
-        let loopMode = rate == .effect && !director.machine.isOpen ? director.mode : nil
-        if loopMode != effectLoopMode {
-            effectLoopMode = loopMode
-            NotchPanelController.shared.effectLoopChanged()
-        }
+        updateEffectLoop()
         // 收合動畫播完才把視窗縮回瀏海大小（展開時是整張畫布）
         let expanded = director.machine.isOpen || animating
         if expanded != windowExpanded {
@@ -751,6 +747,28 @@ final class MascotController {
             // 動畫或待著的動作還在：之後再看一次（最多 0.25 秒後）
             rateTimer = oneShot(after: 250) { $0.refresh() }
         }
+    }
+
+    /// 收合時循環播放的那一輪依這些畫：任何一個改了就重建（相位照時鐘接著走）（Codex C-01）
+    private struct EffectLoopKey: Equatable {
+        var mode: MascotMode
+        var mood: MascotMood
+        var statusLevel: Int
+        var character: MascotCharacter
+        var look: String?
+        var layout: NotchLayout
+        var motion: MascotMotionLevel
+    }
+
+    private func updateEffectLoop() {
+        guard let director else { return }
+        let key = renderRate == .effect && !director.machine.isOpen
+            ? EffectLoopKey(mode: director.mode, mood: director.mood, statusLevel: director.machine.statusLevel,
+                            character: PanelSettings.shared.mascotCharacter, look: look?.id, layout: layout, motion: motion)
+            : nil
+        guard key != effectLoopKey else { return }
+        effectLoopKey = key
+        NotchPanelController.shared.effectLoopChanged()
     }
 
     private func oneShot(after ms: Int, _ action: @escaping @MainActor (MascotController) -> Void) -> Timer {
