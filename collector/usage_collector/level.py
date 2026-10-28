@@ -32,13 +32,17 @@ def update(conn: sqlite3.Connection) -> None:
 
 def update_safely(path: Path | None = None) -> None:
     """收集器每次執行（Token 統計與第二層之後）呼叫；不丟出例外，日誌只記類別"""
+    path = path or history.HISTORY_PATH
     try:
         with history._private_files():
-            conn = history.connect(path or history.HISTORY_PATH)
+            # 同其他寫入入口：既有的資料庫與 -wal／-shm 收緊成 0600，收不了就丟 HistoryError、這次不寫
+            history._tighten_permissions(path)
+            conn = history.connect(path)
             try:
                 update(conn)
             finally:
                 conn.close()
+        history._tighten_permissions(path)
     except history.HistoryError as e:
         log(f"略過等級資料：{e}")
     except Exception as e:

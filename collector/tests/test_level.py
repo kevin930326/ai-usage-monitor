@@ -1,4 +1,6 @@
+import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +17,7 @@ class LevelDaysTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.path = self.dir / "history.sqlite3"
         self.conn = history.connect(self.path)
-        self.addCleanup(self.conn.close)
+        self.addCleanup(lambda: self.conn.close())
         self.local = history.meta(self.conn, "device_id")
 
     def record(self, day, provider, tokens):
@@ -56,6 +58,27 @@ class LevelDaysTests(unittest.TestCase):
         self.record("2026-10-28", "claude", 400)
         level.update(self.conn)
         self.assertEqual(400, self.days()["2026-10-28"])
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX 權限")
+    def test_loose_permissions_are_tightened_or_nothing_is_written(self):
+        self.record("2026-10-28", "claude", 100)
+        self.conn.close()
+        os.chmod(self.path, 0o644)
+        level.update_safely(self.path)
+        self.assertEqual(0o600, self.path.stat().st_mode & 0o777)
+        self.conn = history.connect(self.path)
+        self.assertEqual({"2026-10-28": 100}, self.days())
+        # 收不了：不寫，日誌不含路徑
+        self.conn.execute("DELETE FROM level_days")
+        self.conn.close()
+        os.chmod(self.path, 0o644)
+        with mock.patch("usage_collector.history.os.chmod", side_effect=OSError("/Users/me")), \
+                mock.patch("usage_collector.level.log") as log:
+            level.update_safely(self.path)
+        self.assertNotIn("/Users", log.call_args.args[0])
+        os.chmod(self.path, 0o600)
+        self.conn = history.connect(self.path)
+        self.assertEqual({}, self.days())
 
     def test_table_exists_after_connect_and_never_raises(self):
         self.assertEqual({}, self.days())
