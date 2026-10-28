@@ -804,3 +804,40 @@ class SnapshotsScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NotchPerfSummaryTests(unittest.TestCase):
+    """notch-perf-summary.py：門檻與缺少取樣都要讓報表失敗（ADR-0016 第 6 節、Codex C-07）。"""
+    SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
+    MARKS = {"notch-open": 10, "notch-wave": 30, "notch-close": 40, "notch-close-2": 140}
+
+    def run_summary(self, samples, marks=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = Path(tmp) / "samples.tsv"
+            log = Path(tmp) / "app.log"
+            s.write_text("".join(f"{t} {cpu} {rss}\n" for t, cpu, rss in samples))
+            log.write_text("".join(f"perf-mark {v} {k}\n" for k, v in (marks or self.MARKS).items()))
+            return subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log)], capture_output=True, text=True)
+
+    @staticmethod
+    def full(skip=()):
+        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 170) if not any(a <= t < b for a, b in skip)]
+
+    def test_complete_samples_pass(self):
+        result = self.run_summary(self.full())
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_missing_intro_or_wave_samples_fail(self):
+        for gap in [(10, 15), (30, 32), (15, 20), (22, 30)]:
+            result = self.run_summary(self.full(skip=[gap]))
+            self.assertEqual(result.returncode, 1, (gap, result.stdout))
+            self.assertIn("缺", result.stdout)
+
+    def test_missing_mark_fails(self):
+        marks = dict(self.MARKS)
+        del marks["notch-wave"]
+        self.assertEqual(self.run_summary(self.full(), marks).returncode, 1)
+
+    def test_busy_idle_fails(self):
+        samples = [(t, 6.0 if 22 <= t < 30 else 0.0, 100_000) for t in range(0, 170)]
+        self.assertEqual(self.run_summary(samples).returncode, 1)

@@ -19,10 +19,17 @@ struct NotchView: View {
                 NotchCanvas(director: director, time: fixedTime, layout: controller.layout, snapshot: store.snapshot,
                             now: store.now, character: settings.mascotCharacter)
             } else {
+                // 面板形狀與額度卡只在動畫中（展開、收合、提醒）逐格重畫；展開待著與睡著時只有角色的 Canvas
+                // 自己的 TimelineView 在跑，不必每格重建文字與卡片
                 let rate = controller.renderRate
-                TimelineView(.animation(minimumInterval: rate.interval, paused: rate == .stopped)) { context in
-                    NotchCanvas(director: director, time: controller.time(context.date), layout: controller.layout,
-                                snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter)
+                TimelineView(.animation(minimumInterval: rate.interval, paused: rate != .animating)) { context in
+                    NotchCanvas(director: director,
+                                time: rate == .animating ? controller.time(context.date) : controller.stoppedAt,
+                                layout: controller.layout,
+                                snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter,
+                                motion: controller.motion,
+                                heroRate: rate == .idle || rate == .breathing ? rate : nil,
+                                heroClock: { controller.time($0) })
                 }
             }
         }
@@ -60,6 +67,11 @@ struct NotchCanvas: View {
     let character: MascotCharacter
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
+    /// 動畫程度：簡單時不畫粒子；關閉時也不眨眼、不看滑鼠
+    var motion = MascotMotionLevel.full
+    /// 展開待著或睡著：只有角色以這個頻率重畫（時間由 `heroClock` 換算）；nil 時角色照 `time` 畫
+    var heroRate: MascotRenderRate?
+    var heroClock: ((Date) -> Int)?
 
     var body: some View {
         let shape = director.panelShape(at: time)
@@ -71,19 +83,36 @@ struct NotchCanvas: View {
                 .offset(y: content.offset)
             miniRing
                 .opacity(shape.miniOpacity)
-            Canvas(rendersAsynchronously: false) { context, _ in
-                MascotPainter(config: director.config).draw(frame, in: &context, particles: true)
-            }
-            .allowsHitTesting(false)
+            hero
+                .allowsHitTesting(false)
         }
         .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
         .mask(NotchShape(width: shape.width, height: shape.height, corner: shape.corner))
         .accessibilityElement(children: .contain)
     }
 
-    private var frame: MascotFrame {
-        let gaze = gazeOverride ?? director.gaze(at: time)
-        return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time), blink: director.blink(at: time),
+    @ViewBuilder
+    private var hero: some View {
+        if let heroRate, let heroClock {
+            TimelineView(.animation(minimumInterval: heroRate.interval)) { context in
+                heroCanvas(at: heroClock(context.date))
+            }
+        } else {
+            heroCanvas(at: time)
+        }
+    }
+
+    private func heroCanvas(at time: Int) -> some View {
+        Canvas(rendersAsynchronously: false) { context, _ in
+            MascotPainter(config: director.config).draw(frame(at: time), in: &context, particles: motion.drawsParticles)
+        }
+    }
+
+    private func frame(at time: Int) -> MascotFrame {
+        let still = !motion.movesEyes
+        let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
+        return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
+                           blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            sleeping: director.mode == .sleep && director.machine.isOpen, effects: director.effects,
                            ripple: director.ripple, character: character)

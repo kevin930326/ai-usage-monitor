@@ -172,7 +172,8 @@ struct MascotPainter {
                                       startCenter: CGPoint(x: cx + b.bodyHighlight.x * r, y: cy + b.bodyHighlight.y * r),
                                       startRadius: r * 0.04,
                                       endCenter: CGPoint(x: cx - 0.08 * r, y: cy - 0.08 * r), endRadius: r * 1.22,
-                                      options: [.drawsAfterEndLocation])
+                                      // 起點的小圓裡面也要塗（canvas 的 createRadialGradient 會塗）；不加的話高光中心會露出一個小洞
+                                      options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
                 cg.restoreGState()
             }
         }

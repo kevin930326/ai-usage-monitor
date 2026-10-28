@@ -12,6 +12,8 @@ public struct MascotConfig: Sendable {
     public var ripple: Ripple
     public var expressions: Expressions
     public var gestures: Gestures
+    /// `machine` 裡狀態機以外的互動參數（停留多久害羞、點一下跳或揮手的機率）
+    public var interaction: Interaction
 
     public static func decode(_ data: Data) throws -> MascotConfig {
         let decoder = JSONDecoder()
@@ -19,7 +21,7 @@ public struct MascotConfig: Sendable {
         let file = try decoder.decode(File.self, from: data)
         return MascotConfig(timing: try MascotTiming.decode(fromConfig: data), panel: file.panel, hero: file.hero,
                             palette: file.palette, poses: file.poses, intro: file.intro, ripple: file.ripple,
-                            expressions: file.expressions, gestures: file.gestures)
+                            expressions: file.expressions, gestures: file.gestures, interaction: file.machine)
     }
 
     private struct File: Decodable {
@@ -31,6 +33,7 @@ public struct MascotConfig: Sendable {
         var ripple: Ripple
         var expressions: Expressions
         var gestures: Gestures
+        var machine: Interaction
     }
 
     public struct Size: Decodable, Sendable { public var width: Double; public var height: Double; public var corner: Double }
@@ -183,5 +186,10 @@ public struct MascotConfig: Sendable {
         public var shakeReversals: Int
         public var shakeResetMs: Int
         public var tapHitRadius: Double
+    }
+
+    public struct Interaction: Decodable, Sendable {
+        public var hoverShyMs: Int
+        public var tapHopProbability: Double
     }
 }

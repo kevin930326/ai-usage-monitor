@@ -24,6 +24,14 @@ struct NotchSettingsSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                Text("角色動畫").font(.subheadline.weight(.semibold)).padding(.top, 4)
+                FlowChips(choices: MascotMotionLevel.allCases.map { ($0, $0.title) }, selected: settings.mascotMotion) {
+                    settings.mascotMotion = $0
+                }
+                Text("完整：點一下、繞圈、甩動、停在角色上都有反應，額度提醒時跳一下，Claude 或 Codex 在跑時低頭敲鍵盤，睡著時呼吸。簡單：角色身體不動、只有眼睛會眨和看滑鼠，不播過場與反應，面板展開不回彈。關閉：角色完全靜止。三種都會用狀態點的顏色顯示額度。系統開了「減少動態效果」時，完整會當成簡單。「工作中」只看紀錄檔的修改時間，不讀內容。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

@@ -20,12 +20,47 @@ enum NotchIntroChoice: String, CaseIterable, Identifiable {
     }
 }
 
-/// 重畫的頻率（ADR-0016 第 6 節）：收合而且沒在動時完全停止；展開待著每秒 30 次；動畫中每秒 60 次
+/// 角色動畫的程度（ADR-0016 第 7 節）。系統開了「減少動態效果」時「完整」當成「簡單」。
+enum MascotMotionLevel: String, CaseIterable, Identifiable {
+    /// 全部：過場、粒子與光環、手勢、點擊與提醒的反應、工作與睡覺的動作、眨眼與看滑鼠
+    case full
+    /// 身體靜止、只有眼睛會動（眨眼、看滑鼠）：不播過場、反應、光環，也不偵測手勢；面板展開不回彈
+    case simple
+    /// 角色完全靜止：也不眨眼、不看滑鼠；只有狀態點的顏色會變（面板照常展開）
+    case off
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .full: "完整"
+        case .simple: "簡單"
+        case .off: "關閉"
+        }
+    }
+
+    /// 實際用的程度
+    static func effective(_ level: MascotMotionLevel, reduceMotion: Bool) -> MascotMotionLevel {
+        reduceMotion && level == .full ? .simple : level
+    }
+
+    var playsIntro: Bool { self == .full }
+    var drawsParticles: Bool { self == .full }
+    var detectsGestures: Bool { self == .full }
+    /// 身體會動：點擊、手勢、提醒的反應，工作與睡覺的動作
+    var animatesBody: Bool { self == .full }
+    /// 眼睛會動：眨眼、看滑鼠
+    var movesEyes: Bool { self != .off }
+}
+
+/// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、看滑鼠、工作）每秒 30 次、睡著 12 次；動畫中每秒 60 次
 enum MascotRenderRate: Equatable {
-    case stopped, idle, animating
+    case stopped, breathing, idle, animating
 
     var interval: Double {
         switch self {
+        // 睡著只有慢慢的呼吸（一次約 4 秒）與飄起來的 z：每秒 12 次就夠
+        case .breathing: 1.0 / 12
         case .stopped, .idle: 1.0 / 30
         case .animating: 1.0 / 60
         }
@@ -66,6 +101,8 @@ final class MascotController {
     private(set) var layout = NotchLayout.fake
     private(set) var director: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
+    /// 不在動畫中時，面板形狀與額度卡固定畫的那一刻（毫秒）；完全停止時角色也畫這一刻，不會停在眨眼一半
+    private(set) var stoppedAt = 0
     /// 這次啟動後是否已經播過過場（「只有第一次」）
     private(set) var playedIntro = false
 
@@ -73,6 +110,14 @@ final class MascotController {
     @ObservationIgnored private var deadlineTimer: Timer?
     @ObservationIgnored private var rateTimer: Timer?
     @ObservationIgnored private var closeTimer: Timer?
+    @ObservationIgnored private var workTimer: Timer?
+    @ObservationIgnored private var hoverTimer: Timer?
+    @ObservationIgnored private var gestures: MascotGestureDetector?
+    /// 按下時落在角色上（放開時才當成點擊）
+    @ObservationIgnored private var pressedOnCharacter = false
+    @ObservationIgnored private var probing = false
+    /// 目前 director 依哪個動畫程度建立（彈簧是否回彈）
+    @ObservationIgnored private var builtMotion = MascotMotionLevel.full
     /// 視窗目前該是整張畫布（展開中或收合動畫還沒播完）；建立或移動視窗時照這個決定大小
     @ObservationIgnored private(set) var windowExpanded = false
 
@@ -80,6 +125,11 @@ final class MascotController {
         baseConfig = configData.flatMap { try? MascotConfig.decode($0) }
         if baseConfig == nil { UsageStore.log("mascot-anim.json missing or invalid; notch panel disabled") }
         rebuild()
+        // 系統的「減少動態效果」改變時跟著換（Codex C-01）
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { MascotController.shared.motionChanged() }
+            }
     }
 
     static func bundledConfig() -> Data? {
@@ -103,7 +153,15 @@ final class MascotController {
         config.hero.mini = MascotConfig.Point(x: layout.miniX, y: layout.miniY, radius: config.hero.mini.radius)
         config.panel.collapsed.width = layout.collapsedWidth
         config.panel.collapsed.height = layout.collapsedHeight
+        // 簡單、關閉（含減少動態效果）：面板展開不回彈
+        if motion != .full { config.panel.openSpring.dampingRatio = 1 }
+        builtMotion = motion
         director = MascotDirector(config: config, startTime: time(), statusLevel: director?.machine.statusLevel ?? 0)
+        director?.setStill(!motion.animatesBody, at: time())
+        gestures = MascotGestureDetector(config: config)
+        pressedOnCharacter = false
+        // 重建後是收著的：停掉工作中的檢查（下次展開再開始）
+        stopWorkChecks()
         refresh()
     }
 
@@ -119,6 +177,7 @@ final class MascotController {
         director.open(at: time(), intro: intro)
         self.director = director
         refresh()
+        startWorkChecks()
     }
 
     /// 滑鼠移出：等 350 ms 再收回
@@ -131,15 +190,139 @@ final class MascotController {
     func closeNow() {
         closeTimer?.invalidate()
         closeTimer = nil
+        stopWorkChecks()
+        gestures?.reset()
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+        if pressedOnCharacter {
+            pressedOnCharacter = false
+            mutate { $0.release(at: time()) }
+        }
         mutate { $0.close(at: time()) }
     }
 
-    /// 滑鼠在面板裡移動（畫布座標）
+    /// 動畫程度（設定與「減少動態效果」）
+    var motion: MascotMotionLevel {
+        MascotMotionLevel.effective(PanelSettings.shared.mascotMotion,
+                                    reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    }
+
+    /// 設定改了：關閉時停掉進行中的工作姿勢，回到靜止
+    func motionChanged() {
+        // 身體不動的程度：正在播的反應與特效立刻停（Codex C-02、C-03）
+        mutate { $0.setStill(!motion.animatesBody, at: time()) }
+        // 彈簧的參數在建立時決定：收著時才重建（展開中等下次收合）
+        if motion != builtMotion, director?.machine.isOpen == false, !windowExpanded { rebuild() }
+        refresh()
+    }
+
+    /// 滑鼠在面板裡移動（畫布座標）：看滑鼠、叫醒，並偵測繞圈／甩動／停留（只在這個視窗裡）
     func pointerMoved(to point: CGPoint) {
         guard let director else { return }
         let t = time()
         let pose = director.pose(at: t)
-        mutate { $0.move(at: t, dx: point.x - pose[.x], dy: point.y - pose[.y]) }
+        let machine = director.machine
+        let canDetect = motion.detectsGestures && machine.isOpen && !machine.isIntro && !machine.isBusy
+            && !machine.isHolding && machine.mode != .sleep
+        let gesture = gestures?.move(to: point, at: t, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r],
+                                     canDetect: canDetect)
+        mutate {
+            $0.move(at: t, dx: point.x - pose[.x], dy: point.y - pose[.y])
+            if let gesture { $0.gesture(gesture, at: t) }
+        }
+        scheduleHoverCheck()
+    }
+
+    /// 停在角色上不動時沒有移動事件：在停留到期時檢查一次（Codex C-04）
+    private func scheduleHoverCheck() {
+        hoverTimer?.invalidate()
+        hoverTimer = nil
+        guard let deadline = gestures?.hoverDeadline else { return }
+        hoverTimer = oneShot(after: deadline - time()) { $0.hoverDue() }
+    }
+
+    private func hoverDue() {
+        hoverTimer = nil
+        guard let director else { return }
+        let machine = director.machine
+        let canDetect = motion.detectsGestures && machine.isOpen && !machine.isIntro && !machine.isBusy
+            && !machine.isHolding && machine.mode != .sleep
+        let t = time()
+        if let gesture = gestures?.checkHover(at: t, canDetect: canDetect) {
+            mutate { $0.gesture(gesture, at: t) }
+        }
+    }
+
+    /// 按下：落在角色上才算（按住 0.35 秒捏扁）；回傳是否由角色處理（其他位置交給分頁按鈕）
+    func pointerDown(at point: CGPoint) -> Bool {
+        guard let director, let gestures, motion.animatesBody, director.machine.isOpen else { return false }
+        let t = time()
+        let pose = director.pose(at: t)
+        guard gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r]) else { return false }
+        pressedOnCharacter = true
+        mutate { $0.press(at: t) }
+        return true
+    }
+
+    /// 放開：結束按住；在角色上放開算一次點擊（跳一下或揮手，機率照設定檔）
+    func pointerUp(at point: CGPoint) {
+        guard pressedOnCharacter, let director, let gestures else { return }
+        pressedOnCharacter = false
+        let t = time()
+        let pose = director.pose(at: t)
+        let onCharacter = gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r])
+        let choice: MascotRequest = Double.random(in: 0..<1) < director.config.interaction.tapHopProbability ? .hop : .wave
+        mutate {
+            $0.release(at: t)
+            if onCharacter { $0.click(at: t, choice: choice) }
+        }
+    }
+
+    // MARK: - 工作中（只看紀錄檔的修改時間）
+
+    /// 展開時每 5 秒看一次 Claude／Codex 紀錄檔的修改時間；收合即停（ADR-0016 第 7 節）
+    private func startWorkChecks() {
+        guard workTimer == nil else { return }
+        checkWorking()
+        let timer = Timer(timeInterval: 5, repeats: true) { _ in
+            MainActor.assumeIsolated { MascotController.shared.checkWorking() }
+        }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        workTimer = timer
+    }
+
+    private func stopWorkChecks() {
+        workTimer?.invalidate()
+        workTimer = nil
+    }
+
+    private func checkWorking() {
+        guard !probing, motion.animatesBody else { return }
+        probing = true
+        let dataDirectory = UsageStore.shared.locator.directory
+        let configURL = dataDirectory.appendingPathComponent("config.json")
+        // 測試、截圖與量測：只看暫存資料夾裡的紀錄，不碰真的 ~/.claude、~/.codex
+        var testing = UsageFileLocator.isTestEnvironment()
+        #if DEBUG
+        testing = testing || DebugTools.isDemo
+        #endif
+        Task.detached(priority: .utility) {
+            // 紀錄的位置同收集器：config.json 優先（只取兩個欄位），再來是環境變數與預設位置（Codex C-06）
+            let dirs = MascotActivityProbe.logDirectories(fromConfig: try? Data(contentsOf: configURL))
+            let roots = testing
+                ? MascotActivityProbe.defaultRoots(config: dirs, environment: [:], home: dataDirectory)
+                : MascotActivityProbe.defaultRoots(config: dirs)
+            let probe = MascotActivityProbe(roots: roots)
+            let working = probe.isWorking(now: Date())
+            await MainActor.run {
+                let controller = MascotController.shared
+                controller.probing = false
+                guard controller.director?.machine.isOpen == true,
+                      (controller.director?.machine.mode == .work) != working else { return }
+                controller.mutate { $0.setWorking(working, at: controller.time()) }
+            }
+        }
     }
 
     /// 依目前的快照與角色更新狀態點（讀到新資料、每分鐘、換角色時）
@@ -155,7 +338,7 @@ final class MascotController {
     }
 
     private var shouldPlayIntro: Bool {
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { return false }
+        if !motion.playsIntro { return false }
         switch PanelSettings.shared.notchIntro {
         case .every: return true
         case .firstOnly: return !playedIntro
@@ -189,16 +372,32 @@ final class MascotController {
             }
         }
         let animating = director.isAnimating(at: now)
-        let rate: MascotRenderRate = animating ? .animating : (director.isLive ? .idle : .stopped)
-        if rate != renderRate { renderRate = rate }
+        // 展開待著：眨眼、視線追滑鼠、工作中以每秒 30 次、睡著以 12 次重畫；畫面靜止時停止，到下一次眨眼再開始。
+        // 動畫關閉時展開待著也不重畫（沒有眨眼、看滑鼠）
+        let live = director.isLive && motion.movesEyes
+        let idleMoving = live && director.isIdleMoving(at: now)
+        let breathing = director.mode == .sleep && !director.isStill && director.blink(at: now) == 0
+        let rate: MascotRenderRate = animating ? .animating : (idleMoving ? (breathing ? .breathing : .idle) : .stopped)
+        if rate != renderRate {
+            if rate != .animating { stoppedAt = now }
+            renderRate = rate
+        }
         // 收合動畫播完才把視窗縮回瀏海大小（展開時是整張畫布）
         let expanded = director.machine.isOpen || animating
         if expanded != windowExpanded {
             windowExpanded = expanded
             NotchPanelController.shared.setExpanded(expanded)
+            // 收合動畫播完：動畫程度在展開中改過的話，現在重建
+            if !expanded, motion != builtMotion {
+                rebuild()
+                return
+            }
         }
-        if rate == .animating {
-            // 動畫還在跑：之後再看一次（最多 0.25 秒後）
+        if live, rate == .stopped {
+            // 靜止待著：下一次眨眼時再開始重畫
+            rateTimer = oneShot(after: director.nextBlink(after: now) - now) { $0.refresh() }
+        } else if rate != .stopped {
+            // 動畫或待著的動作還在：之後再看一次（最多 0.25 秒後）
             rateTimer = oneShot(after: 250) { $0.refresh() }
         }
     }

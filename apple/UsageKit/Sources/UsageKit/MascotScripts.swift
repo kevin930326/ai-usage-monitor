@@ -76,6 +76,18 @@ public struct MascotScripts: Sendable {
         return s
     }
 
+    /// 從任何姿勢（含過場途中）接到卡片上目前模式的姿勢：同快速展開，但服務色、狀態點、大小也是漸變，不跳格
+    /// （動畫程度改成靜止、或從靜止恢復時）
+    public func settle(start: Int, from base: MascotPose, mode: MascotMode) -> MascotScript {
+        var s = MascotScript(start: start, base: base)
+        appendRest(&s, mode: mode, duration: 300)
+        s.to([.x: hero.card.x, .y: hero.card.y, .r: hero.card.radius], 620, .expoOut)
+        s.to([.tint: 1, .dot: 1, .sc: 1], 300)
+        s.to([.glow: 0.5], 500)
+        s.finalize()
+        return s
+    }
+
     /// 收合：角色縮回瀏海左邊的迷你位置（同一顆球連續移動）
     public func close(start: Int, from base: MascotPose) -> MascotScript {
         var s = MascotScript(start: start, base: base)

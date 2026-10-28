@@ -18,6 +18,10 @@ public struct MascotDirector: Sendable {
     public private(set) var contentShownAt: Int?
     public private(set) var contentHiddenAt: Int?
     public private(set) var isIntro = false
+    /// 角色身體靜止（動畫程度「簡單」「關閉」）：不播反應、提醒、工作與睡覺的動作，只換狀態點的顏色
+    public private(set) var isStill = false
+    /// 目前的腳本是快速展開（展開途中換模式時重排用）
+    private var quickOpening = false
     /// 畫面看到的模式（依事件更新；`machine.mode` 是處理到目前時間的結果）
     public private(set) var mode = MascotMode.none
     private var statusFrom = 0.0
@@ -75,6 +79,23 @@ public struct MascotDirector: Sendable {
     private mutating func handle(_ entry: MascotLogEntry) {
         let t = entry.time
         let pose = script.pose(at: t)
+        // 快速展開之後換了別的腳本，就不再是「滑到卡片途中」
+        switch entry.event {
+        case .start, .release, .pose, .bump, .introEnd: quickOpening = false
+        default: break
+        }
+        if isStill {
+            switch entry.event {
+            case .start, .release, .pose, .bump, .introEnd, .mode(.sleep):
+                // 靜止時不換腳本；模式照記，姿勢維持平常的樣子
+                if case .mode(let newMode) = entry.event { mode = newMode }
+                return
+            case .mode(let newMode):
+                mode = newMode
+                return
+            default: break
+            }
+        }
         switch entry.event {
         case .open(let intro):
             spring = spring.retarget(1, at: t, stiffness: config.panel.openSpring.stiffness,
@@ -87,10 +108,12 @@ public struct MascotDirector: Sendable {
                                       confettiAt: config.intro.confettiAt, seed: seed &+ UInt64(truncatingIfNeeded: t))
                 contentShownAt = t + config.intro.contentAt
             } else {
-                use(scripts.quickOpen(start: t, from: pose, mode: mode))
+                use(scripts.quickOpen(start: t, from: pose, mode: isStill ? .none : mode))
+                quickOpening = true
                 contentShownAt = t + 220
             }
         case .close:
+            quickOpening = false
             // 內容先在 .12 秒內淡出，面板才收回
             let at = t + config.panel.contentFadeOutMs
             spring = spring.retarget(0, at: at, stiffness: config.panel.closeSpring.stiffness,
@@ -112,8 +135,12 @@ public struct MascotDirector: Sendable {
             use(scripts.rest(start: t, from: pose, mode: poseMode))
         case .mode(let newMode):
             mode = newMode
-            // 沒有動畫時姿勢馬上換（有動畫時，同一刻的 start 事件會接著取代）
-            if machine.isOpen || contentShownAt != nil, !isIntro {
+            // 動畫播放中：不打斷，播完時的 pose 事件會接到新模式的姿勢（ADR-0016 第 2 節的動畫鎖）
+            guard machine.isOpen, !isIntro, machine.playing == nil else { break }
+            if quickOpening, script.settledAt > t {
+                // 還在滑到角色卡：從現在的姿勢重新滑過去，終點換成新模式的姿勢（位置與大小照樣到卡片）
+                use(scripts.quickOpen(start: t, from: pose, mode: newMode))
+            } else {
                 use(scripts.rest(start: t, from: pose, mode: newMode))
             }
         case .status(let level):
@@ -126,6 +153,26 @@ public struct MascotDirector: Sendable {
         case .interrupt, .end, .queue, .drop, .ignore:
             break
         }
+    }
+
+    /// 改成靜止或恢復（動畫程度改變時）：改成靜止時，正在播的反應與特效立刻停，回到平常的姿勢
+    public mutating func setStill(_ still: Bool, at time: Int) {
+        guard still != isStill else { return }
+        isStill = still
+        if still {
+            effects = []
+            ripple = nil
+        }
+        guard machine.isOpen else { return }
+        let pose = script.pose(at: time)
+        if still, isIntro {
+            // 過場途中改成靜止：直接收尾，角色滑到卡片、內容出現（Codex 第二輪 C-01）
+            isIntro = false
+            if contentShownAt.map({ $0 > time }) ?? true { contentShownAt = time }
+        }
+        // 從現在的姿勢滑到卡片：靜止時是平常的姿勢；恢復時接回狀態機目前的模式（工作、睡覺；第二輪 C-01、C-02）
+        use(scripts.settle(start: time, from: pose, mode: still ? .none : machine.mode))
+        quickOpening = true
     }
 
     private mutating func use(_ next: MascotScript) {
@@ -154,22 +201,45 @@ public struct MascotDirector: Sendable {
 
     /// 眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊）
     public func blink(at time: Int) -> Double {
-        guard machine.isOpen, !isIntro, machine.playing == nil, mode != .sleep, eyes(at: time) == .pill,
+        guard machine.isOpen, !isIntro, isStill || (machine.playing == nil && mode != .sleep), eyes(at: time) == .pill,
               pose(at: time)[.dash] < 0.1 else { return 0 }
         let b = config.hero.blink
         let period = (b.minGapMs + b.maxGapMs) / 2
-        let jitter = Double(b.maxGapMs - b.minGapMs) / 2
         let bucket = Int((Double(time) / Double(period)).rounded(.down))
         for index in [bucket - 1, bucket] {
-            let offset = Int((MascotRandom.unit(seed: seed, index: UInt64(bitPattern: Int64(index))) - 0.5) * jitter)
-            let start = index * period + offset
-            let local = time - start
+            let local = time - blinkStart(index)
             guard local >= 0, local < b.closeMs + b.holdMs + b.openMs else { continue }
             if local < b.closeMs { return MascotEase.inCubic(Double(local) / Double(b.closeMs)) }
             if local < b.closeMs + b.holdMs { return 1 }
             return 1 - MascotEase.out(Double(local - b.closeMs - b.holdMs) / Double(b.openMs))
         }
         return 0
+    }
+
+    /// 第 `index` 次眨眼的開始時間（每段 `period` 裡依種子偏移）
+    private func blinkStart(_ index: Int) -> Int {
+        let b = config.hero.blink
+        let period = (b.minGapMs + b.maxGapMs) / 2
+        let jitter = Double(b.maxGapMs - b.minGapMs) / 2
+        return index * period + Int((MascotRandom.unit(seed: seed, index: UInt64(bitPattern: Int64(index))) - 0.5) * jitter)
+    }
+
+    /// `time` 之後下一次眨眼開始的時間（展開待著、畫面不動時，排這個時間再開始重畫）
+    public func nextBlink(after time: Int) -> Int {
+        let b = config.hero.blink
+        let period = (b.minGapMs + b.maxGapMs) / 2
+        let bucket = Int((Double(time) / Double(period)).rounded(.down))
+        return (bucket - 1...bucket + 2).map(blinkStart).filter { $0 > time }.min() ?? time + period
+    }
+
+    /// 展開待著時這一刻畫面會不會變：眨眼中、視線還在追滑鼠、睡覺（呼吸）或工作中（敲鍵盤）。
+    /// 都沒有時畫面靜止，可以停止重畫到下一次眨眼（ADR-0016 第 6 節）。
+    public func isIdleMoving(at time: Int) -> Bool {
+        guard machine.isOpen else { return false }
+        if !isStill, mode == .sleep || mode == .work { return true }
+        if blink(at: time) > 0 { return true }
+        let now = gaze(at: time)
+        return abs(now.yaw - gazeTarget.yaw) > 0.002 || abs(now.pitch - gazeTarget.pitch) > 0.002
     }
 
     public func panelShape(at time: Int) -> MascotPanelShape {
@@ -200,7 +270,7 @@ public struct MascotDirector: Sendable {
         if time < statusStart + 400 { return true }
         if let shown = contentShownAt, time < shown + config.panel.contentRiseMs { return true }
         if let hidden = contentHiddenAt, time < hidden + config.panel.contentFadeOutMs { return true }
-        return machine.playing != nil
+        return !isStill && machine.playing != nil
     }
 
     /// 畫面需要持續重畫（眨眼、看滑鼠、晃動、呼吸）：面板展開時

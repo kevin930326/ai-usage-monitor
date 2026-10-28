@@ -164,4 +164,130 @@ import Testing
         // 粒子在收合時清掉
         #expect(d.ripple == nil)
     }
+
+    @Test func idleStopsBetweenBlinks() throws {
+        // 展開待著：眨眼中與視線追滑鼠時要重畫，其他時間畫面不動（停止重畫到下一次眨眼）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, seed: 5, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.move(at: 2000, dx: 200, dy: 0)
+        #expect(d.isIdleMoving(at: 2050))           // 視線還在轉
+        let settled = stride(from: 2000, to: 9000, by: 10).first { !d.isIdleMoving(at: $0) }
+        #expect(settled != nil && settled! < 4000)
+        let next = d.nextBlink(after: 5000)
+        #expect(next > 5000 && next <= 5000 + config.hero.blink.maxGapMs + config.hero.blink.maxGapMs)
+        // 下一次眨眼之前畫面不動（不在睡覺邊緣：10 秒沒操作才睡）
+        let quiet = stride(from: 5000, to: min(next, 11_900), by: 10).allSatisfy { !d.isIdleMoving(at: $0) || d.blink(at: $0) > 0 }
+        #expect(quiet)
+        if next + 30 < 12_000 { #expect(d.isIdleMoving(at: next + 30)) }
+        // 工作中一直在動
+        d.setWorking(true, at: 6000)
+        #expect(d.isIdleMoving(at: 6100))
+    }
+
+    @Test func workDuringQuickOpenStillReachesTheCard() throws {
+        // 快速展開 100 ms 後開始工作：仍然滑到卡片位置，最後是工作姿勢（Codex C-01）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        let before = d.pose(at: 100)
+        d.setWorking(true, at: 100)
+        let after = d.pose(at: 100)
+        for prop in MascotProp.allCases { #expect(abs(before[prop] - after[prop]) < 0.05, "\(prop) 跳動") }
+        d.advance(to: 3000)
+        let end = d.pose(at: 3000)
+        #expect(abs(end[.x] - config.hero.card.x) < 0.01 && abs(end[.r] - config.hero.card.radius) < 0.01)
+        #expect(abs(end[.pitch] - config.poses.work.pitch) < 0.001)
+    }
+
+    @Test func workChangeDoesNotCutAReaction() throws {
+        // 揮手途中開始工作：揮手照樣播完，之後才是工作姿勢
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.request(.wave, at: 2000)
+        let waving = d.pose(at: 2600)
+        d.setWorking(true, at: 2600)
+        #expect(d.pose(at: 2600) == waving)
+        #expect(d.pose(at: 3000)[.wave] != 0 || d.pose(at: 3000)[.hands] > 0)
+        d.advance(to: 6000)
+        #expect(abs(d.pose(at: 6000)[.pitch] - config.poses.work.pitch) < 0.001)
+    }
+
+    @Test func stillCharacterOnlyChangesTheStatusColour() throws {
+        // 簡單／關閉：額度提醒、睡覺、工作都不動身體，只換狀態點的顏色（Codex C-02、C-03）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.setStill(true, at: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 1500)
+        let rest = d.pose(at: 1500)
+        d.setStatus(2, at: 1500)
+        d.setWorking(true, at: 1600)
+        #expect(d.statusColor(at: 2000) == 2)
+        #expect(!d.isAnimating(at: 2000))
+        for t in stride(from: 1500, through: 20_000, by: 250) {
+            d.advance(to: t)
+            #expect(d.pose(at: t) == rest, "\(t) ms 身體動了")
+            #expect(d.effects.isEmpty)
+        }
+        // 收著時的提醒也不鼓
+        d.close(at: 20_000)
+        d.advance(to: 22_000)
+        d.setStatus(1, at: 22_000)
+        #expect(!d.isAnimating(at: 22_500))
+    }
+
+    @Test func becomingStillStopsAReaction() throws {
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 2000)
+        d.request(.dizzy, at: 2000)
+        let mid = d.pose(at: 2500)
+        d.setStill(true, at: 2500)
+        #expect(d.pose(at: 2500) == mid)          // 不跳
+        #expect(d.effects.isEmpty)
+        d.advance(to: 4000)
+        let after = d.pose(at: 4000)
+        for prop in [MascotProp.hands, .orbit, .sway, .shiver] { #expect(abs(after[prop]) < 0.001) }
+    }
+
+    @Test func becomingStillDuringIntroEndsOnTheCard() throws {
+        // 過場途中改成靜止：角色到卡片、服務色與狀態點都在、過場結束（Codex 第二輪 C-01）
+        let config = try Self.config()
+        for at in [300, 1200, 4500] {
+            var d = MascotDirector(config: config, startTime: 0)
+            d.open(at: 0, intro: true)
+            d.advance(to: at)
+            let before = d.pose(at: at)
+            d.setStill(true, at: at)
+            #expect(d.pose(at: at) == before)
+            #expect(!d.isIntro && d.ripple == nil)
+            d.advance(to: at + 3000)
+            let end = d.pose(at: at + 3000)
+            #expect(abs(end[.x] - config.hero.card.x) < 0.01 && abs(end[.y] - config.hero.card.y) < 0.01, "\(at)")
+            #expect(abs(end[.r] - config.hero.card.radius) < 0.01 && end[.tint] == 1 && end[.dot] == 1, "\(at)")
+            #expect(d.content(at: at + 3000).opacity == 1)
+        }
+    }
+
+    @Test func workPoseComesBackAfterFullMotionReturns() throws {
+        // 工作中 → 簡單 → 完整：恢復低頭敲鍵盤（Codex 第二輪 C-02）
+        let config = try Self.config()
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.setWorking(true, at: 1000)
+        d.advance(to: 3000)
+        d.setStill(true, at: 3000)
+        d.advance(to: 5000)
+        #expect(d.pose(at: 5000)[.kb] == 0)
+        d.setStill(false, at: 5000)
+        d.advance(to: 8000)
+        let pose = d.pose(at: 8000)
+        #expect(abs(pose[.pitch] - config.poses.work.pitch) < 0.001 && pose[.kb] == 1 && pose[.type] == 1)
+        #expect(abs(pose[.x] - config.hero.card.x) < 0.01)
+    }
 }

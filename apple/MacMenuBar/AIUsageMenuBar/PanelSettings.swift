@@ -8,6 +8,9 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
     case bar
     case percent
     case ringPercent
+    /// 角色（ADR-0016）：設定裡選的角色，左上角是狀態點
+    case character
+    case characterPercent
 
     var id: String { rawValue }
 
@@ -17,8 +20,12 @@ enum MenuBarIconStyle: String, CaseIterable, Identifiable {
         case .bar: "橫條"
         case .percent: "只有 %"
         case .ringPercent: "圓環＋%"
+        case .character: "角色"
+        case .characterPercent: "角色＋%"
         }
     }
+
+    var showsCharacter: Bool { self == .character || self == .characterPercent }
 }
 
 /// 面板的區塊（FR-34、FR-35）。之後的區塊（走勢、統計…）在這裡加一個 case 與預設順序即可，
@@ -111,6 +118,7 @@ final class PanelSettings {
         static let notchEnabled = "notch.enabled"
         static let mascotCharacter = "notch.character"
         static let notchIntro = "notch.intro"
+        static let mascotMotion = "notch.motion"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -239,6 +247,7 @@ final class PanelSettings {
         notchEnabled = defaults.object(forKey: Key.notchEnabled) as? Bool ?? true
         mascotCharacter = defaults.string(forKey: Key.mascotCharacter).flatMap(MascotCharacter.init) ?? .claude
         notchIntro = defaults.string(forKey: Key.notchIntro).flatMap(NotchIntroChoice.init) ?? .firstOnly
+        mascotMotion = defaults.string(forKey: Key.mascotMotion).flatMap(MascotMotionLevel.init) ?? .full
     }
 
     /// 瀏海面板（ADR-0016）：預設開啟；關掉時選單列圖示與面板照常
@@ -260,6 +269,14 @@ final class PanelSettings {
     /// 過場：每次展開／只有第一次（預設）／關閉
     var notchIntro: NotchIntroChoice {
         didSet { defaults.set(notchIntro.rawValue, forKey: Key.notchIntro) }
+    }
+
+    /// 角色的動畫：完整（預設）／簡單／關閉；「減少動態效果」時完整當成簡單
+    var mascotMotion: MascotMotionLevel {
+        didSet {
+            defaults.set(mascotMotion.rawValue, forKey: Key.mascotMotion)
+            MascotController.shared.motionChanged()
+        }
     }
 
     var visibleSections: [PanelSection] {
