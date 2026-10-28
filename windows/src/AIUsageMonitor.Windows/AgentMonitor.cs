@@ -10,7 +10,8 @@ namespace AIUsageMonitor.Windows;
 /// 收 aum-hook.exe 的事件（ADR-0019 第 1 節）：hook 把一個事件寫成 <c>agent\inbox\</c> 的一個檔，再觸發具名事件叫醒 App。
 /// 這裡等那個事件（不輪詢；AppHost 每分鐘的計時器也呼叫 <see cref="Tick"/> 作為退路）、依檔名排序處理、套用到 <see cref="AgentSessions"/>，
 /// 並在需要你太久或長任務完成時以系統匣的通知提示（只寫 AI 與種類，沒有按鈕）。
-/// 啟動時建立鹽與 inbox（有了 inbox，hook 才會寫），先處理留下的再清空；結束時清空。
+/// 啟動時建立鹽與 inbox（有了 inbox，hook 才會寫）並處理留下的（只刪處理過的，不清空：啟動中途寫入的新事件不會被刪，Codex C-02）；
+/// 結束時清空。
 /// </summary>
 internal sealed class AgentMonitor : IDisposable
 {
@@ -55,10 +56,8 @@ internal sealed class AgentMonitor : IDisposable
             AppLog.Write($"agent inbox: {e.GetType().Name}");
             return;
         }
-        // App 沒在跑的時候 hook 不寫；留下的是上次結束前沒處理完的：先處理再清空
-        Pump();
-        AgentInbox.Clear(home);
-        seen.Clear();
+        // App 沒在跑的時候 hook 不寫；留下的是上次沒處理完的（當機）：照事件時間套用，太舊的由 Expire 淘汰
+        Tick();
     }
 
     /// <summary>hook 叫醒（具名事件）時</summary>
