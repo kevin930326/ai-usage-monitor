@@ -30,7 +30,7 @@ struct MenuBarLabel: View {
         if let snapshot = store.snapshot, let item = snapshot.window(for: settings.iconWindow, at: store.now) {
             let content = MenuBarIconContent(item: item, stale: snapshot.isStale(now: store.now), now: store.now,
                                              isLeast: settings.iconWindow == .automatic)
-            MenuBarIconView(content: content, style: settings.iconStyle)
+            MenuBarIconView(content: content, style: settings.iconStyle, character: settings.mascotCharacter)
         } else {
             Image(systemName: "gauge.with.dots.needle.0percent")
         }
@@ -82,6 +82,7 @@ struct MenuBarIconContent: Hashable {
 struct MenuBarIconView: View {
     let content: MenuBarIconContent
     let style: MenuBarIconStyle
+    var character: MascotCharacter = .claude
 
     var body: some View {
         HStack(spacing: 3) {
@@ -90,6 +91,11 @@ struct MenuBarIconView: View {
                 Image(nsImage: MenuBarIcon.image(content, style: style))
             case .ringPercent:
                 Image(nsImage: MenuBarIcon.image(content, style: style))
+                Text("\(content.remainingPct)%").monospacedDigit()
+            case .character:
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: character))
+            case .characterPercent:
+                Image(nsImage: MenuBarIcon.image(content, style: style, character: character))
                 Text("\(content.remainingPct)%").monospacedDigit()
             case .percent:
                 Text("\(content.remainingPct)%").monospacedDigit()
@@ -112,13 +118,14 @@ enum MenuBarIcon {
     private struct Key: Hashable {
         var content: MenuBarIconContent
         var style: MenuBarIconStyle
+        var character: MascotCharacter?
     }
 
-    static func image(_ content: MenuBarIconContent, style: MenuBarIconStyle) -> NSImage {
-        let key = Key(content: content, style: style)
+    static func image(_ content: MenuBarIconContent, style: MenuBarIconStyle, character: MascotCharacter? = nil) -> NSImage {
+        let key = Key(content: content, style: style, character: style.showsCharacter ? character ?? .claude : nil)
         if let cached = cache[key] { return cached }
         if cache.count > 64 { cache.removeAll() }
-        let image = draw(content, style: style)
+        let image = key.character.map { drawCharacter(content, character: $0) } ?? draw(content, style: style)
         cache[key] = image
         return image
     }
@@ -127,7 +134,7 @@ enum MenuBarIcon {
         let size: NSSize = switch style {
         case .bar: NSSize(width: 22, height: 16)
         case .percent: NSSize(width: 8, height: 16)
-        case .dualRing, .ringPercent: NSSize(width: 18, height: 16)
+        case .dualRing, .ringPercent, .character, .characterPercent: NSSize(width: 18, height: 16)
         }
         let notice = NSColor(UsageColors.notice)
         let main: NSColor = switch c.state {
@@ -164,10 +171,52 @@ enum MenuBarIcon {
                     outline.stroke()
                 }
                 if c.state == .tooFast { dot(at: NSPoint(x: 19.5, y: rect.maxY - 3.5), color: notice) }
+            case .character, .characterPercent:
+                break   // drawCharacter
             case .percent:
                 // 只有 % 時，非正常狀態在數字後加一個符號，形狀本身就能區分：↑ 太快、! 剩 < 20%、– 過期
                 symbol(c.state, in: rect, color: c.state == .tooFast ? notice : main)
             }
+            return true
+        }
+        image.isTemplate = false
+        image.accessibilityDescription = c.accessibilityText
+        return image
+    }
+
+    /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），左上角的狀態點同瀏海面板：綠正常、黃剩不到 20%、紅用完；
+    /// 用得太快右上角加提示色小點；資料過期時角色轉灰、眼睛閉成兩條線（不只靠顏色）。
+    private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter) -> NSImage {
+        let palette = MascotController.shared.baseConfig?.palette
+        func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
+            guard let rgb, rgb.count == 3 else { return fallback }
+            return NSColor(srgbRed: rgb[0] / 255, green: rgb[1] / 255, blue: rgb[2] / 255, alpha: 1)
+        }
+        let stale = c.state == .stale
+        let tint = palette.map { stale ? $0.white : character.tint($0) }
+        let fallback = NSColor(UsageColors.provider(character.provider))
+        let light = color(tint?.light, fallback), mid = color(tint?.mid, fallback), shade = color(tint?.shade, fallback)
+        let status: NSColor = switch c.state {
+        case .stale: .systemGray
+        case .critical: c.remainingPct <= 0 ? color(palette?.status.out, .systemRed) : color(palette?.status.high, .systemYellow)
+        case .normal, .tooFast: color(palette?.status.normal, .systemGreen)
+        }
+        let image = NSImage(size: NSSize(width: 18, height: 16), flipped: false) { rect in
+            let center = NSPoint(x: 9, y: rect.midY)
+            let radius: CGFloat = 6.8
+            let ball = NSBezierPath(ovalIn: NSRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            NSGradient(colors: [light, mid, shade], atLocations: [0, 0.55, 1], colorSpace: .sRGB)?
+                .draw(in: ball, relativeCenterPosition: NSPoint(x: -0.3, y: 0.35))
+            // 兩眼：中心距約直徑 27%，直立的膠囊；過期時閉成線
+            NSColor(white: 0.08, alpha: 1).setFill()
+            for side in [-1.0, 1.0] {
+                let x = center.x + side * radius * 0.27
+                let eye = stale ? NSRect(x: x - 1.1, y: center.y - 0.9, width: 2.2, height: 0.9)
+                                : NSRect(x: x - 0.75, y: center.y - 2.1, width: 1.5, height: 3.2)
+                NSBezierPath(roundedRect: eye, xRadius: 0.75, yRadius: 0.75).fill()
+            }
+            dot(at: NSPoint(x: center.x - radius + 1.4, y: rect.maxY - 2.6), color: status, radius: 2)
+            if c.state == .tooFast { dot(at: NSPoint(x: 16, y: rect.maxY - 3), color: NSColor(UsageColors.notice), radius: 1.8) }
             return true
         }
         image.isTemplate = false

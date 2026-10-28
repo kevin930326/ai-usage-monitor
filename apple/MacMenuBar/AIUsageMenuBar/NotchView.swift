@@ -22,7 +22,8 @@ struct NotchView: View {
                 let rate = controller.renderRate
                 TimelineView(.animation(minimumInterval: rate.interval, paused: rate == .stopped)) { context in
                     NotchCanvas(director: director, time: controller.time(context.date), layout: controller.layout,
-                                snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter)
+                                snapshot: store.snapshot, now: store.now, character: settings.mascotCharacter,
+                                motion: controller.motion)
                 }
             }
         }
@@ -60,6 +61,8 @@ struct NotchCanvas: View {
     let character: MascotCharacter
     /// 截圖用：看滑鼠的方向固定為正面
     var gazeOverride: (yaw: Double, pitch: Double)?
+    /// 動畫程度：簡單時不畫粒子與光環；關閉時也不眨眼、不看滑鼠
+    var motion = MascotMotionLevel.full
 
     var body: some View {
         let shape = director.panelShape(at: time)
@@ -72,7 +75,7 @@ struct NotchCanvas: View {
             miniRing
                 .opacity(shape.miniOpacity)
             Canvas(rendersAsynchronously: false) { context, _ in
-                MascotPainter(config: director.config).draw(frame, in: &context, particles: true)
+                MascotPainter(config: director.config).draw(frame, in: &context, particles: motion.drawsParticles)
             }
             .allowsHitTesting(false)
         }
@@ -82,8 +85,10 @@ struct NotchCanvas: View {
     }
 
     private var frame: MascotFrame {
-        let gaze = gazeOverride ?? director.gaze(at: time)
-        return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time), blink: director.blink(at: time),
+        let still = !motion.reacts
+        let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
+        return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
+                           blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            sleeping: director.mode == .sleep && director.machine.isOpen, effects: director.effects,
                            ripple: director.ripple, character: character)

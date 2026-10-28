@@ -54,14 +54,15 @@ struct SettingsView: View {
     private var menuBarSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("選單列圖示").font(.headline)
-            HStack(spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(MenuBarIconStyle.allCases) { style in
-                    StyleTile(style: style, preview: previewContent, selected: settings.iconStyle == style) {
+                    StyleTile(style: style, preview: previewContent, character: settings.mascotCharacter,
+                              selected: settings.iconStyle == style) {
                         settings.iconStyle = style
                     }
                 }
             }
-            Text("雙圓環：外圈＝剩餘額度，內圈＝距離重置的剩餘時間。用得太快時右上角加小點、剩不到 20% 轉紅、資料過期轉灰並改為虛線。「只有 %」樣式以 ↑ 太快、! 剩不到 20%、– 過期區分。")
+            Text("雙圓環：外圈＝剩餘額度，內圈＝距離重置的剩餘時間。用得太快時右上角加小點、剩不到 20% 轉紅、資料過期轉灰並改為虛線。「只有 %」樣式以 ↑ 太快、! 剩不到 20%、– 過期區分。角色樣式用瀏海面板選的角色，左上角的點：綠正常、黃剩不到 20%、紅用完；過期時轉灰並閉上眼睛。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -161,6 +162,7 @@ private struct DragToReorder: ViewModifier {
 private struct StyleTile: View {
     let style: MenuBarIconStyle
     let preview: MenuBarIconContent?
+    let character: MascotCharacter
     let selected: Bool
     let action: () -> Void
 
@@ -169,7 +171,7 @@ private struct StyleTile: View {
             VStack(spacing: 8) {
                 Group {
                     if let preview {
-                        MenuBarIconView(content: preview, style: style)
+                        MenuBarIconView(content: preview, style: style, character: character)
                     } else {
                         Image(systemName: "gauge.with.dots.needle.0percent")
                     }

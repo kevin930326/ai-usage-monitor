@@ -178,7 +178,41 @@ final class NotchContainerView: NSView {
     }
 }
 
-/// 不搶焦點的面板裡，第一下點擊就要作用（分頁按鈕）
+/// 不搶焦點的面板裡，第一下點擊就要作用（分頁按鈕）。按在角色上的交給角色（點擊、按住捏扁），其他交給 SwiftUI。
+/// 只處理這個視窗自己收到的事件，不裝全域滑鼠監聽（ADR-0016 第 7 節）。
 final class NotchHostingView: NSHostingView<AnyView> {
+    private var characterTracking = false
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        if MascotController.shared.pointerDown(at: canvasPoint(event)) {
+            characterTracking = true
+        } else {
+            super.mouseDown(with: event)
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if characterTracking {
+            MascotController.shared.pointerMoved(to: canvasPoint(event))
+        } else {
+            super.mouseDragged(with: event)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if characterTracking {
+            characterTracking = false
+            MascotController.shared.pointerUp(at: canvasPoint(event))
+        } else {
+            super.mouseUp(with: event)
+        }
+    }
+
+    /// 畫布座標（左上為原點）；畫布就是這個 view
+    private func canvasPoint(_ event: NSEvent) -> CGPoint {
+        let local = convert(event.locationInWindow, from: nil)
+        return CGPoint(x: local.x, y: isFlipped ? local.y : bounds.height - local.y)
+    }
 }
