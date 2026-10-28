@@ -93,6 +93,11 @@ public extension QuotaForecast {
         [text(now: now, calendar: calendar), fasterText].compactMap { $0 }.joined(separator: "・")
     }
 
+    /// 朗讀用：緊急只靠顏色與圖示分辨不出來，加上「不到 1 小時」
+    func spokenLine(now: Date, calendar: Calendar = .current) -> String {
+        line(now: now, calendar: calendar) + (urgent ? "，不到 1 小時" : "")
+    }
+
     /// 「14:32」「明天 09:05」「週五 18:00」
     static func clock(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
         let time = String(format: "%02d:%02d", calendar.component(.hour, from: date), calendar.component(.minute, from: date))

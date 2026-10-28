@@ -206,6 +206,7 @@ private struct ProviderSection: View {
                             Label(forecast.line(now: now), systemImage: forecast.urgent ? "exclamationmark.circle.fill" : "speedometer")
                                 .font(.footnote.weight(.medium))
                                 .foregroundStyle(forecast.urgent ? UsageColors.critical : UsageColors.notice)
+                                .accessibilityLabel(forecast.spokenLine(now: now))
                         }
                     }
                     .padding(.vertical, 2)

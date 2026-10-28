@@ -90,6 +90,9 @@ public sealed record QuotaForecast(DateTimeOffset ExhaustsAt, bool Urgent, doubl
     public string Line(DateTimeOffset now, TimeZoneInfo? zone = null) =>
         FasterText is { } faster ? $"{Text(now, zone)}・{faster}" : Text(now, zone);
 
+    /// <summary>朗讀用：緊急只靠顏色與符號分辨不出來，加上「不到 1 小時」（同 Swift 的 spokenLine）</summary>
+    public string SpokenLine(DateTimeOffset now, TimeZoneInfo? zone = null) => Line(now, zone) + (Urgent ? "，不到 1 小時" : "");
+
     /// <summary>小地方的短說法：「約 14:32 用完・快 2.1 倍」</summary>
     public string ShortLine(DateTimeOffset now, TimeZoneInfo? zone = null)
     {

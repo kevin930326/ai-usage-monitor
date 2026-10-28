@@ -593,7 +593,7 @@ struct NotchContent: View {
                     .foregroundStyle(forecast.urgent ? Self.urgent : Self.notice)
                     .padding(.top, 7)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(forecast.line(now: now))
+                    .accessibilityLabel(forecast.spokenLine(now: now))
                 } else if let reset = windows.first?.resetsAt, let text = ResetCountdown.text(until: reset, now: now) {
                     Text("\(text)後重置")
                         .font(.system(size: 10))

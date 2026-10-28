@@ -105,13 +105,15 @@ public static class RingText
     public static string AccessibilityText(ProviderWindow item, bool stale, DateTimeOffset now, bool isLeast)
     {
         var text = $"{(isLeast ? "剩餘最少的額度：" : "")}{item.DisplayName}，剩 {SwiftMath.Round(item.Window.EffectiveRemainingPct(now))}%";
-        return RingStates.Of(item.Window, stale, now) switch
+        text = RingStates.Of(item.Window, stale, now) switch
         {
             RingState.TooFast => text + "，用得較快",
             RingState.Critical => text + "，剩不到 20%",
             RingState.Stale => text + "，資料已過期",
             _ => text,
         };
+        // 會在重置前用完時一併念出預測（ADR-0018 第 3 節）
+        return QuotaForecast.Current(item.Window, stale, now) is { } forecast ? $"{text}，{forecast.SpokenLine(now)}" : text;
     }
 
     /// <summary>頁首的更新時間：「09:30 更新」；過期時「資料已過期 · 09:30 更新」（設計 skill 第 6 節）。</summary>

@@ -58,6 +58,17 @@ public class IncidentTests
         Assert.Equal("照目前速度約明天 00:30 用完・比平常快 2.1 倍", Line(12.5, 2.1));
         Assert.Equal("照目前速度約週五 12:00 用完", Line(48));
         Assert.Equal("約明天 00:30 用完・快 2.1 倍", new QuotaForecast(noon.AddHours(12.5), false, 2.1).ShortLine(noon, taipei));
+        Assert.Equal("照目前速度約 12:30 用完，不到 1 小時", new QuotaForecast(noon.AddHours(0.5), true, null).SpokenLine(noon, taipei));
+        Assert.Equal("照目前速度約 14:30 用完", new QuotaForecast(noon.AddHours(2.5), false, null).SpokenLine(noon, taipei));
+    }
+
+    [Fact]
+    public void RingReadsForecastAndIncident()
+    {
+        var data = Load("usage-forecast-incidents.json");
+        var text = RingContent.From(data, new WindowChoice("claude", "five_hour"), data.UpdatedAt).AccessibilityText;
+        Assert.Contains("照目前速度約", text);
+        Assert.Contains("服務異常：", text);
     }
 
     [Fact]

@@ -258,6 +258,8 @@ struct QuotaForecastLine: View {
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(color)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(forecast.spokenLine(now: now))
     }
 }
 

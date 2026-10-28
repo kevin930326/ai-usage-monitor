@@ -98,5 +98,7 @@ import Testing
         #expect(line(1, faster: 1.5) == "照目前速度約 13:00 用完・比平常快 1.5 倍")
         let short = QuotaForecast(exhaustsAt: now.addingTimeInterval(12.5 * 3600), urgent: false, faster: 2.1)
         #expect(short.shortLine(now: now, calendar: calendar) == "約明天 00:30 用完・快 2.1 倍")
+        let urgent = QuotaForecast(exhaustsAt: now.addingTimeInterval(1800), urgent: true)
+        #expect(urgent.spokenLine(now: now, calendar: calendar) == "照目前速度約 12:30 用完，不到 1 小時")
     }
 }

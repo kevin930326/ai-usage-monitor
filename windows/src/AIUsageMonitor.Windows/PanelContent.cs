@@ -227,9 +227,13 @@ internal sealed class PanelContent : Border
     /// 「照目前速度約 14:32 用完・比平常快 2.1 倍」（ADR-0018 第 3 節）：不到 60 分鐘紅色、其他提示色；顏色以外一律有文字。
     /// 取代原本的「用得較快，約 N 分鐘後用完」。
     /// </summary>
-    private UIElement ForecastLine(QuotaForecast forecast, DateTimeOffset now, double top) =>
-        Text((forecast.Urgent ? "⚠ " : "") + forecast.Line(now), 12, forecast.Urgent ? p.Critical : p.Notice, FontWeights.Medium,
-             new Thickness(0, top, 0, 0), wrap: true);
+    private UIElement ForecastLine(QuotaForecast forecast, DateTimeOffset now, double top)
+    {
+        var line = Text((forecast.Urgent ? "⚠ " : "") + forecast.Line(now), 12, forecast.Urgent ? p.Critical : p.Notice, FontWeights.Medium,
+                        new Thickness(0, top, 0, 0), wrap: true);
+        System.Windows.Automation.AutomationProperties.SetName(line, forecast.SpokenLine(now));
+        return line;
+    }
 
     /// <summary>
     /// 服務狀態頁的事故（ADR-0018 第 4 節）：只顯示名稱。Windows App 不放網址與超連結（ADR-0015 第 2 節），

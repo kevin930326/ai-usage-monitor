@@ -74,7 +74,11 @@ public sealed record RingContent(string Provider, int RemainingPct, int? TimeRem
     public static RingContent From(UsageSnapshot? snapshot, WindowChoice choice, DateTimeOffset now)
     {
         if (snapshot?.Window(choice, now) is not { } item) return Empty;
-        return From(item, snapshot.IsStale(now), now, choice.IsAutomatic);
+        var content = From(item, snapshot.IsStale(now), now, choice.IsAutomatic);
+        // 服務狀態頁的事故（ADR-0018 第 4 節）：顏色以外，螢幕閱讀程式也念得到
+        return snapshot.Providers.GetValueOrDefault(item.Provider)?.Incidents?.FirstOrDefault(i => i.IsDisruption) is { } incident
+            ? content with { AccessibilityText = $"{content.AccessibilityText}，服務異常：{incident.Name}" }
+            : content;
     }
 
     public static RingContent From(ProviderWindow item, bool stale, DateTimeOffset now, bool isLeast)
