@@ -22,6 +22,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UsageCore\UsageCore.csproj" />
+    <!-- AI 狀態的 hook（ADR-0019）：和 App 發佈在同一個資料夾 -->
+    <ProjectReference Include="..\AumHook\AumHook.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\AppIcon.ico" />

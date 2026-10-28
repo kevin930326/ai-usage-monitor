@@ -81,6 +81,20 @@ internal sealed class TrayIcon : IDisposable
         shownDark = palette.Dark;
     }
 
+    /// <summary>
+    /// 通知（ADR-0019：NIF_INFO，Windows 10 起顯示成系統通知；不需要註冊 AUMID）。只有標題與一行文字，沒有任何按鈕。
+    /// 系統匣圖示沒有顯示時發不出來，回傳 false
+    /// </summary>
+    public bool Notify(string title, string body)
+    {
+        if (!added) return false;
+        var data = Data(NativeMethods.NIF_INFO, icon);
+        data.InfoTitle = Truncate(title, 63);
+        data.Info = Truncate(body, 255);
+        data.InfoFlags = NativeMethods.NIIF_INFO | NativeMethods.NIIF_RESPECT_QUIET_TIME;
+        return NativeMethods.Shell_NotifyIcon(NativeMethods.NIM_MODIFY, ref data);
+    }
+
     private NativeMethods.NOTIFYICONDATA Data(uint flags, IntPtr withIcon) => new()
     {
         Size = Marshal.SizeOf<NativeMethods.NOTIFYICONDATA>(),

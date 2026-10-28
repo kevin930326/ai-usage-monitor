@@ -254,3 +254,63 @@ internal static class GlassDrawing
         }
     }
 }
+
+/// <summary>
+/// AI 狀態（ADR-0019）：需要你＝玻璃外緣一圈琥珀色外框；完成未看＝右下角綠色勾勾徽章；出錯＝右下角紅色驚嘆號徽章（白邊）。
+/// 不只靠顏色：外框與兩種徽章的形狀都不同。文字在展開膠囊、提示與螢幕閱讀器。
+/// </summary>
+internal static class AgentOverlay
+{
+    public static void Draw(DrawingContext dc, RingAgent? agent, Geometry outline, Point center, double radius, Palette p)
+    {
+        if (agent is null) return;
+        if (agent.State == AgentState.NeedsYou)
+        {
+            var pen = new Pen(p.Notice, Math.Max(1.6, radius * 0.07));
+            pen.Freeze();
+            dc.DrawGeometry(null, pen, outline);
+            return;
+        }
+        var done = agent.State == AgentState.Done;
+        var dot = Math.Max(3.5, radius * 0.2);
+        var at = new Point(center.X + radius * 0.7, center.Y + radius * 0.7);
+        dc.DrawEllipse(Palette.Brush(Colors.Black, 0.16), null, new Point(at.X, at.Y + 0.6), dot + 1.6, dot + 1.6);
+        dc.DrawEllipse(Brushes.White, null, at, dot + 1.4, dot + 1.4);
+        dc.DrawEllipse(done ? p.Fresh : p.Critical, null, at, dot, dot);
+        var mark = new Pen(Brushes.White, Math.Max(1.1, dot * 0.3)) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+        mark.Freeze();
+        if (done)
+        {
+            var check = new StreamGeometry();
+            using (var g = check.Open())
+            {
+                g.BeginFigure(new Point(at.X - dot * 0.45, at.Y + dot * 0.02), false, false);
+                g.LineTo(new Point(at.X - dot * 0.1, at.Y + dot * 0.38), true, false);
+                g.LineTo(new Point(at.X + dot * 0.48, at.Y - dot * 0.36), true, false);
+            }
+            check.Freeze();
+            dc.DrawGeometry(null, mark, check);
+        }
+        else
+        {
+            dc.DrawLine(mark, new Point(at.X, at.Y - dot * 0.5), new Point(at.X, at.Y + dot * 0.1));
+            dc.DrawEllipse(Brushes.White, null, new Point(at.X, at.Y + dot * 0.48), mark.Thickness * 0.55, mark.Thickness * 0.55);
+        }
+    }
+
+    public static Brush Tint(RingAgent agent, Palette p) => agent.State switch
+    {
+        AgentState.NeedsYou => p.Notice,
+        AgentState.Done => p.Fresh,
+        _ => p.Critical,
+    };
+
+    /// <summary>系統匣圖示：右下角的小點（需要你琥珀色、完成綠色、出錯紅色）；16 單位的畫布</summary>
+    public static void DrawTray(DrawingContext dc, RingAgent? agent, double k, Palette p)
+    {
+        if (agent is null) return;
+        var at = new Point(13.4 * k, 13.4 * k);
+        dc.DrawEllipse(p.Dark ? Brushes.Black : Brushes.White, null, at, 3.1 * k, 3.1 * k);
+        dc.DrawEllipse(Tint(agent, p), null, at, 2.3 * k, 2.3 * k);
+    }
+}

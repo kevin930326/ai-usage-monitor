@@ -236,7 +236,9 @@ internal static class NativeMethods
 
     // ---------- 系統匣 ----------
     public const uint NIM_ADD = 0, NIM_MODIFY = 1, NIM_DELETE = 2, NIM_SETVERSION = 4;
-    public const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_SHOWTIP = 0x80;
+    public const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_INFO = 0x10, NIF_SHOWTIP = 0x80;
+    /// <summary>通知的圖示（資訊）；遵守「專注」與全螢幕時的安靜時間</summary>
+    public const uint NIIF_INFO = 0x1, NIIF_RESPECT_QUIET_TIME = 0x80;
     public const uint NOTIFYICON_VERSION_4 = 4;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

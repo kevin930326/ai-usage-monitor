@@ -119,7 +119,8 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 - **繼續只看修改時間**：分不出需要你、完成、出錯，不採用（保留為退回機制）。
 - **HTTP hook（Claude Code 的 `type: "http"`）**：要開本機連接埠，任何本機程式（含瀏覽器頁面）都可能連到；Codex 也不支援。不採用。
-- **hook 寫檔、App 監看資料夾**：會在磁碟留下事件紀錄，違反隱私底線。不採用。
+- **hook 寫檔、App 監看資料夾**：會在磁碟留下事件紀錄，違反隱私底線。不採用。Windows 例外（[ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節）：
+  App 不能用 socket 或具名管道，改由 hook 寫一個沒有資料夾名稱與內容的小檔、App 處理完立刻刪除，啟動與結束時清空。
 - **用 shell 腳本當 hook**：啟動要經過 shell、`jq` 不一定有、要自己處理 JSON 跳脫；不如打包一個小程式。
 - **Codex 改寫 `config.toml`**：TOML 合併容易弄壞使用者的檔案；`hooks.json` 是官方支援、會和其他來源疊加的位置。（只逐行看 `[features]` 的 `hooks`／`codex_hooks` 是否為 false，用來提示。）
 - **用 `JSONSerialization` 改設定檔**：會打亂使用者檔案的鍵順序與格式；自己寫一個保留順序的小解析器（`OrderedJSON`），只動 `hooks` 底下我們的項目。
@@ -128,4 +129,4 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 - 使用者要按一次「連接」；Codex 另外要在 `/hooks` 信任一次。
 - App 被移動後 hook 指向舊路徑。Claude Code 經 `sh -c` 執行指令，結束碼非 0 也非 2 時會在**對話裡**顯示 hook error 與標準錯誤的第一行（2026-10-28 官方文件），所以指令結尾加上 `2>/dev/null || true`：找不到程式時什麼都不做、不擋 AI，App 下次啟動時顯示「需要修好」。修好會改變指令，Codex 要再到 `/hooks` 信任一次。（考慮過讓指令指向資料夾裡固定位置的符號連結，搬 App 就不必修；但多一個要維護的連結，App 被刪掉時連結也會留著，先不採用。）
-- Windows（第 4 部分）用同一套事件、狀態與 golden，傳送改用 Windows 的 AF_UNIX socket 或具名管道（另寫 ADR，尚未寫）。指令**不能**照搬 `'<路徑>' claude`：Claude Code 在 Windows 沒有 Git Bash 時用 PowerShell，這種寫法是語法錯誤；Windows 改用官方的 exec 形式（`"command": "<exe>", "args": ["claude"]`，不經 shell），`isOurs` 也要同時看 `command` 與 `args`。
+- Windows（第 4 部分）用同一套事件、狀態與 golden，傳送改成 hook 寫檔＋具名事件叫醒 App（[ADR-0019](0019-windows-agent-state-and-sync.md)；ADR-0015 不准 socket 與具名管道）。指令**不能**照搬 `'<路徑>' claude`：Claude Code 在 Windows 沒有 Git Bash 時用 PowerShell，這種寫法是語法錯誤；Windows 改用官方的 exec 形式（`"command": "<exe>", "args": ["claude"]`，不經 shell），`isOurs` 也要同時看 `command` 與 `args`。

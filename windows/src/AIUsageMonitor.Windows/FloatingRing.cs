@@ -45,6 +45,7 @@ internal static class FloatingRingRenderer
             var disc = new EllipseGeometry(s.TabCenter, r, r);
             GlassDrawing.Draw(dc, disc, disc.Bounds, p, critical);
             s.Face.DrawTab(dc, s.Content, s.TabCenter, r, visible, p, options);
+            AgentOverlay.Draw(dc, s.Content.Agent?.State == AgentState.NeedsYou ? s.Content.Agent : null, Inset(disc, s.TabCenter, r), s.TabCenter, r, p);
             dc.Pop();
             return;
         }
@@ -64,6 +65,7 @@ internal static class FloatingRingRenderer
         {
             GlassDrawing.Draw(dc, new EllipseGeometry(center, r, r), new Rect(center.X - r, center.Y - r, 2 * r, 2 * r), p, critical);
             s.Face.Draw(dc, s.Content, center, r, p, options);
+            AgentOverlay.Draw(dc, s.Content.Agent, Inset(new EllipseGeometry(center, r, r), center, r), center, r, p);
             return;
         }
 
@@ -93,9 +95,11 @@ internal static class FloatingRingRenderer
         }
         GlassDrawing.Draw(dc, shape, rect, p, critical);
         s.Face.Draw(dc, s.Content, center, r, p, options);
+        AgentOverlay.Draw(dc, s.Content.Agent, shape, center, r, p);
 
         var rowsOpacity = Math.Clamp((e - 0.35) / 0.65, 0, 1);
-        if (rowsOpacity <= 0 || s.Details.Rows.Count == 0) return;
+        // 沒有額度資料（還沒有 usage.json、服務都失敗）時仍寫出 AI 的狀態（Codex C-05）
+        if (rowsOpacity <= 0 || (s.Details.Rows.Count == 0 && s.Content.Agent is null)) return;
         var info = RingShape.Info(s.Direction, s.Dock, s.RingDip);
         var area = new Rect(center.X + info.Left, center.Y + info.Top, info.Width, info.Height);
         dc.PushClip(shape);
@@ -103,7 +107,14 @@ internal static class FloatingRingRenderer
         var rowHeight = RingShape.RowsHeight / 2;
         for (var i = 0; i < s.Details.Rows.Count && i < 2; i++)
         {
-            DrawRow(dc, s.Details.Rows[i], new Rect(area.Left, area.Top + i * rowHeight, area.Width, rowHeight), p, s.PixelsPerDip);
+            var row = new Rect(area.Left, area.Top + i * rowHeight, area.Width, rowHeight);
+            // AI 要你注意時，第二行改成 AI 的狀態（第一行的額度保留）
+            if (i == 1 && s.Content.Agent is { } agent) DrawAgentRow(dc, agent, row, p, s.PixelsPerDip);
+            else DrawRow(dc, s.Details.Rows[i], row, p, s.PixelsPerDip);
+        }
+        if (s.Details.Rows.Count < 2 && s.Content.Agent is { } only)
+        {
+            DrawAgentRow(dc, only, new Rect(area.Left, area.Top + s.Details.Rows.Count * rowHeight, area.Width, rowHeight), p, s.PixelsPerDip);
         }
         dc.Pop();
         dc.Pop();
@@ -149,6 +160,27 @@ internal static class FloatingRingRenderer
         if (filled > 0) dc.DrawRoundedRectangle(new SolidColorBrush(tint), null, new Rect(bar.Left, bar.Top, Math.Max(filled, 3), bar.Height), 1.5, 1.5);
         if (bottomText.Length > 0) dc.DrawText(countdown, new Point(area.Right - countdown.WidthIncludingTrailingWhitespace, barTop - 6));
     }
+
+    /// <summary>AI 狀態的一行：圖示、「Claude Code 需要你」（狀態色）；下面一行說明</summary>
+    private static void DrawAgentRow(DrawingContext dc, RingAgent agent, Rect area, Palette p, double ppd)
+    {
+        var top = area.Top + 3;
+        var provider = AgentNames.Name(agent.Ai);
+        GlassRingFace.DrawIcon(dc, provider, new Rect(area.Left, top + 1, 12, 12), new SolidColorBrush(p.ProviderColor(provider)));
+        var title = GlassRingFace.Formatted(agent.Title, 11.5, FontWeights.SemiBold, AgentOverlay.Tint(agent, p), ppd);
+        title.MaxTextWidth = Math.Max(10, area.Width - 17);
+        title.MaxLineCount = 1;
+        title.Trimming = TextTrimming.CharacterEllipsis;
+        dc.DrawText(title, new Point(area.Left + 17, top));
+        var detail = GlassRingFace.Formatted(agent.Detail, 10, FontWeights.Normal, p.Secondary, ppd);
+        detail.MaxTextWidth = Math.Max(10, area.Width - 17);
+        detail.MaxLineCount = 1;
+        detail.Trimming = TextTrimming.CharacterEllipsis;
+        dc.DrawText(detail, new Point(area.Left + 17, top + 15));
+    }
+
+    /// <summary>圓底內縮一點的外框（筆畫整個落在玻璃裡，不被視窗邊緣切掉）</summary>
+    private static Geometry Inset(Geometry disc, Point center, double r) => disc is EllipseGeometry ? new EllipseGeometry(center, r - 1.2, r - 1.2) : disc;
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
