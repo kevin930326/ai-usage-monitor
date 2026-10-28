@@ -89,7 +89,8 @@ import Testing
         #expect(String(decoding: try Data(contentsOf: target), as: UTF8.self).contains(AgentHookConfig.marker))
         #expect(try permissions(target) == 0o600)
         #expect(try permissions(backup) == 0o600)
-        #expect(backup.deletingLastPathComponent().resolvingSymlinksInPath() == dotfiles.resolvingSymlinksInPath())
+        // 比路徑字串：Linux 的 Foundation 會在資料夾 URL 結尾加 /
+        #expect(backup.deletingLastPathComponent().resolvingSymlinksInPath().path == dotfiles.resolvingSymlinksInPath().path)
         #expect(try AgentHookFiles.status(file: file, ai: .claude, command: command) == .installed)
     }
 
