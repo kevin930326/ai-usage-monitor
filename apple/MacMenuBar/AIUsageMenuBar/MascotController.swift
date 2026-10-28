@@ -115,8 +115,8 @@ final class MascotController {
     private(set) var showsHint = false
     /// 展開時右邊那張卡：額度或 AI 工作階段
     private(set) var page = NotchPage.overview
-    /// 等你下一個指令時收合瀏海的脈動：這次脈動開始的時間；不在脈動中為 nil
-    private(set) var pulseStart: Int?
+    /// 等你下一個指令時收合瀏海在脈動（循環由 Core Animation 跑，App 不用每 7 秒醒來）
+    private(set) var pulsing = false
 
     /// 啟動時的系統開機時間（秒）；時間基準用它而不是牆鐘，改系統時間或校時倒退時動畫不會卡住
     @ObservationIgnored private let epoch = ProcessInfo.processInfo.systemUptime
@@ -125,7 +125,6 @@ final class MascotController {
     @ObservationIgnored private var closeTimer: Timer?
     @ObservationIgnored private var workTimer: Timer?
     @ObservationIgnored private var gazeTimer: Timer?
-    @ObservationIgnored private var pulseTimer: Timer?
     /// 上一次游標相對角色的位置與連續沒變的次數（沒變一陣子就降低讀取頻率）
     @ObservationIgnored private var lastPointer: CGPoint?
     @ObservationIgnored private var pointerStillTicks = 0
@@ -445,32 +444,11 @@ final class MascotController {
         let wanted = settings.notchWaitingPulse && NotchPanelController.shared.isShown && director?.machine.isOpen == false
             && motion != .off && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && !settings.isMascotQuiet(at: Date())
             && monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter) == .waiting
-        guard wanted != (pulseTimer != nil) else { return }
-        pulseTimer?.invalidate()
-        pulseTimer = nil
-        pulseStart = nil
-        guard wanted else { return }
-        let timer = Timer(timeInterval: Self.pulseEveryMs / 1000, repeats: true) { _ in
-            MainActor.assumeIsolated { MascotController.shared.pulse() }
-        }
-        timer.tolerance = 0.5
-        RunLoop.main.add(timer, forMode: .common)
-        pulseTimer = timer
+        if pulsing != wanted { pulsing = wanted }
     }
 
-    static let pulseEveryMs = 7000.0
+    static let pulseEveryMs = 7000
     static let pulseMs = 1600
-
-    private func pulse() {
-        // 狀態可能在計時器之間變了（例如等你超過睡覺分鐘數變成閒置）
-        updatePulse()
-        guard pulseTimer != nil else { return }
-        let start = time()
-        pulseStart = start
-        _ = oneShot(after: Self.pulseMs) { controller in
-            if controller.pulseStart == start { controller.pulseStart = nil }
-        }
-    }
 
     private func applyActivity() {
         guard motion.animatesBody, let machine = director?.machine else { return }
@@ -501,6 +479,8 @@ final class MascotController {
                                     quota: quota)
         if director?.mood != mood { mutate { $0.setMood(mood) } }
         setStatus(level)
+        // 每分鐘也重算脈動：等你超過睡覺分鐘數會變成閒置（沒有計時器，靠這裡停）
+        updatePulse()
     }
 
     /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：靜音、勿擾時只換表情，不播提醒也不鼓一下

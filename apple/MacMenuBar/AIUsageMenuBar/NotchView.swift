@@ -34,7 +34,7 @@ struct NotchView: View {
                                 heroRate: rate == .idle || rate == .breathing || rate == .gaze ? rate : nil,
                                 heroClock: { controller.time($0) })
                 }
-                .overlay { NotchPulse(start: controller.pulseStart, clock: { controller.time($0) }, shape: collapsedShape) }
+                .overlay { NotchPulse(active: controller.pulsing, shape: collapsedShape) }
             }
         }
     }
@@ -97,16 +97,15 @@ struct NotchAgentRow: Equatable, Identifiable {
 /// 需要你的琥珀色（同提醒光環「偏高」那組）
 let notchAmber = Color(red: 245 / 255, green: 190 / 255, blue: 60 / 255)
 
-/// 等你下一個指令時收合瀏海的脈動：沿著外框的一圈淡光，亮起再淡掉（1.6 秒）。
-/// 交給 Core Animation 做（繪圖伺服器跑動畫，App 不用每格重畫）：收著時每 7 秒一次，平均 CPU 要在 0.3% 以下
+/// 等你下一個指令時收合瀏海的脈動：沿著外框的一圈淡光，每 7 秒亮起再淡掉（1.6 秒）。
+/// 整個循環交給 Core Animation（繪圖伺服器跑重複動畫）：App 不用計時器、不重畫，收著時平均 CPU 要在 0.3% 以下
 struct NotchPulse: View {
-    let start: Int?
-    let clock: ((Date) -> Int)?
+    let active: Bool
     var shape = NotchShape(width: 0, height: 0, corner: 0)
 
     var body: some View {
-        if let start {
-            PulseLayer(start: start, shape: shape)
+        if active {
+            PulseLayer(shape: shape)
                 .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -126,14 +125,13 @@ struct NotchPulse: View {
     }
 }
 
-/// 脈動的外框：CAShapeLayer 加一次透明度的關鍵影格動畫（`start` 換了才再加）
+/// 脈動的外框：CAShapeLayer 加一個無限重複的透明度關鍵影格動畫（7 秒一輪：前 1.6 秒亮起再淡掉，其餘不亮）。
+/// 不再脈動時整個視圖拿掉，動畫跟著消失
 private struct PulseLayer: NSViewRepresentable {
-    let start: Int
     let shape: NotchShape
 
     final class View: NSView {
         let line = CAShapeLayer()
-        var start: Int?
 
         override init(frame: NSRect) {
             super.init(frame: frame)
@@ -143,6 +141,15 @@ private struct PulseLayer: NSViewRepresentable {
             line.lineWidth = 3
             line.opacity = 0
             layer?.addSublayer(line)
+            let steps = 16
+            let lit = Double(MascotController.pulseMs) / Double(MascotController.pulseEveryMs)
+            let animation = CAKeyframeAnimation(keyPath: "opacity")
+            animation.values = (0...steps).map { NotchPulse.opacity(phase: Double($0) / Double(steps)) } + [0]
+            animation.keyTimes = ((0...steps).map { Double($0) / Double(steps) * lit } + [1]).map { NSNumber(value: $0) }
+            animation.duration = Double(MascotController.pulseEveryMs) / 1000
+            animation.calculationMode = .linear
+            animation.repeatCount = .infinity
+            line.add(animation, forKey: "pulse")
         }
 
         required init?(coder: NSCoder) { nil }
@@ -162,13 +169,6 @@ private struct PulseLayer: NSViewRepresentable {
         view.line.frame = bounds
         view.line.path = view.layer?.isGeometryFlipped == true ? path : path.copy(using: &flip)
         CATransaction.commit()
-        guard view.start != start else { return }
-        view.start = start
-        let animation = CAKeyframeAnimation(keyPath: "opacity")
-        animation.values = (0...16).map { NotchPulse.opacity(phase: Double($0) / 16) }
-        animation.duration = Double(MascotController.pulseMs) / 1000
-        animation.calculationMode = .linear
-        view.line.add(animation, forKey: "pulse")
     }
 }
 
