@@ -1008,7 +1008,7 @@
         {
           "t": 200,
           "e": "request",
-          "name": "face"
+          "name": "facesick"
         },
         {
           "t": 3000,
@@ -1109,6 +1109,40 @@
         },
         {
           "t": 2000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "menu-faces-queue",
+      "note": "選單的表情各自是一個要求：播放中的不被換掉，排隊只留最後一個（Codex C-02）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "request",
+          "name": "facehappy"
+        },
+        {
+          "t": 300,
+          "e": "request",
+          "name": "facesick"
+        },
+        {
+          "t": 500,
+          "e": "request",
+          "name": "facesad"
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        },
+        {
+          "t": 6000,
           "e": "advance"
         }
       ]

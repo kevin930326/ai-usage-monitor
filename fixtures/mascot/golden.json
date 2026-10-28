@@ -474,11 +474,11 @@
         "0 start nod",
         "100 queue pinch",
         "200 drop pinch",
-        "200 queue face",
+        "200 queue facesick",
         "800 end nod",
         "800 pose none",
-        "1160 start face",
-        "3360 end face",
+        "1160 start facesick",
+        "3360 end facesick",
         "3360 pose none",
         "5000 start tilt",
         "5400 interrupt tilt",
@@ -523,6 +523,26 @@
         "300 status 0"
       ],
       "name" : "quiet-status-changes-face-only"
+    },
+    {
+      "final" : {
+        "mode" : "none",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 start facehappy",
+        "300 queue facesick",
+        "500 drop facesick",
+        "500 queue facesad",
+        "2300 end facehappy",
+        "2300 pose none",
+        "2660 start facesad",
+        "4860 end facesad",
+        "4860 pose none"
+      ],
+      "name" : "menu-faces-queue"
     }
   ]
 }

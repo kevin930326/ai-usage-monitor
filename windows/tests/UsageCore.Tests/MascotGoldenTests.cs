@@ -80,7 +80,7 @@ public class MascotGoldenTests
         var timing = Timing();
         foreach (var animation in Enum.GetValues<MascotAnimation>())
         {
-            var key = animation == MascotAnimation.Squeeze ? "squeeze_release" : MascotNames.Name(animation);
+            var key = MascotTiming.DurationKey(animation);
             Assert.True(timing.DurationsMs.ContainsKey(key), $"mascot-anim.json 缺少 {key} 的長度");
         }
         Assert.Equal(900, timing.Duration(MascotAnimation.Hop));

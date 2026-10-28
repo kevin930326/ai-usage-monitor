@@ -93,3 +93,33 @@ public enum MascotQuiet {
         return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
     }
 }
+
+extension MascotMood {
+    /// 選單「表情」的動畫播的是哪個表情（沒有對應的回傳 nil）
+    public static func face(of animation: MascotAnimation) -> MascotMood? {
+        switch animation {
+        case .faceHappy: .happy
+        case .faceWorried: .worried
+        case .faceSad: .sad
+        case .faceSick: .sick
+        case .faceSurprised: .surprised
+        case .faceOut: .out
+        case .faceStale: .stale
+        default: nil
+        }
+    }
+
+    /// 選單要求這個表情時送的要求（平常的表情沒有）
+    public var faceRequest: MascotRequest? {
+        switch self {
+        case .happy: .faceHappy
+        case .worried: .faceWorried
+        case .sad: .faceSad
+        case .sick: .faceSick
+        case .surprised: .faceSurprised
+        case .out: .faceOut
+        case .stale: .faceStale
+        case .normal: nil
+        }
+    }
+}

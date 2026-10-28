@@ -34,8 +34,31 @@ import Testing
         d.setMood(.worried)
         d.requestFace(.sick, at: 1000)
         #expect(d.mood(at: 1500) == .sick)
-        d.advance(to: 1000 + config.timing.duration(of: .face) + 10)
+        d.advance(to: 1000 + config.timing.duration(of: .faceSick) + 10)
         #expect(d.mood(at: d.machine.now) == .worried)
+    }
+
+    /// 連續選不同的表情：播放中的維持到播完，後面的照排隊順序（只留最後一個）播到才換（Codex C-02）
+    @Test func queuedFacesDoNotChangeThePlayingFace() throws {
+        let config = try Self.config()
+        let face = config.timing.duration(of: .faceHappy), rest = config.timing.restBeforeQueuedMs
+        var d = MascotDirector(config: config, startTime: 0)
+        d.open(at: 0, intro: false)
+        d.advance(to: 1000)
+        d.requestFace(.happy, at: 1000)
+        d.requestFace(.sick, at: 1200)
+        #expect(d.mood(at: 1300) == .happy)
+        d.requestFace(.sad, at: 1400)
+        #expect(d.mood(at: 1500) == .happy)
+        // 播完、回位期間又選一個：回位中仍是平常的表情，接著播排在前面的「難過」
+        d.advance(to: 1000 + face + 10)
+        #expect(d.mood(at: d.machine.now) == .normal)
+        d.requestFace(.surprised, at: 1000 + face + 50)
+        d.advance(to: 1000 + face + rest + 20)
+        #expect(d.mood(at: d.machine.now) == .sad)
+        d.advance(to: 1000 + 2 * face + rest + 30)
+        d.advance(to: 1000 + 2 * face + 2 * rest + 40)
+        #expect(d.mood(at: d.machine.now) == .surprised)
     }
 
     @Test func collapsedSleepIsAStillPoseWithDoze() throws {

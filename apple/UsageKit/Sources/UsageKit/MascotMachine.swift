@@ -6,14 +6,22 @@ import Foundation
 
 /// 動畫（一次只播一個）
 public enum MascotAnimation: String, Sendable, CaseIterable {
-    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, face, squeeze, wake, alert
+    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, squeeze, wake, alert
+    // 選單的「表情」：每個表情是各自的動畫，排隊與取代照一般規則，播到才換表情（Codex C-02）
+    case faceHappy = "facehappy", faceWorried = "faceworried", faceSad = "facesad", faceSick = "facesick"
+    case faceSurprised = "facesurprised", faceOut = "faceout", faceStale = "facestale"
+
+    /// 表情動畫（長度都用 `face`）
+    public var isFace: Bool { rawValue.hasPrefix("face") }
 }
 
 /// 按鈕（右鍵選單）或狀態觸發的動畫：播放中就排隊，只保留最後一個。
 /// 短反應（hop、wave、nod、tilt、giggle、look）也是單擊的隨機反應；`pinch` 是選單的「捏一下」（不必按住），
-/// `face` 是選單的「表情」（顯示哪個表情由畫面決定，狀態機只管長度與排隊）
+/// `face…` 是選單的「表情」（每個表情各自一個要求，狀態機只管長度與排隊）
 public enum MascotRequest: String, Sendable, CaseIterable {
-    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, face, alert
+    case hop, wave, nod, tilt, giggle, look, dizzy, shy, scared, pinch, alert
+    case faceHappy = "facehappy", faceWorried = "faceworried", faceSad = "facesad", faceSick = "facesick"
+    case faceSurprised = "facesurprised", faceOut = "faceout", faceStale = "facestale"
 
     /// 單擊時隨機挑的短反應（可以被連點 5 下打斷）
     public static let taps: [MascotRequest] = [.hop, .wave, .nod, .tilt, .giggle, .look]
@@ -77,8 +85,12 @@ public struct MascotTiming: Decodable, Sendable, Equatable {
 
     /// 動畫長度；捏扁是放開後的長度
     public func duration(of animation: MascotAnimation) -> Int {
-        let key = animation == .squeeze ? "squeeze_release" : animation.rawValue
-        return durationsMs[key] ?? 1000
+        durationsMs[Self.durationKey(of: animation)] ?? 1000
+    }
+
+    /// 設定檔裡的長度鍵（捏扁是放開後的長度；表情都用 `face`）
+    public static func durationKey(of animation: MascotAnimation) -> String {
+        animation == .squeeze ? "squeeze_release" : animation.isFace ? "face" : animation.rawValue
     }
 }
 

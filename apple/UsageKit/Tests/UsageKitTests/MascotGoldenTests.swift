@@ -101,7 +101,7 @@ import Testing
     @Test func configHasEveryAnimationDuration() throws {
         let timing = try Self.timing()
         for animation in MascotAnimation.allCases {
-            let key = animation == .squeeze ? "squeeze_release" : animation.rawValue
+            let key = MascotTiming.durationKey(of: animation)
             #expect(timing.durationsMs[key] != nil, "mascot-anim.json 缺少 \(key) 的長度")
         }
         // 規格第 5、6 節的數字

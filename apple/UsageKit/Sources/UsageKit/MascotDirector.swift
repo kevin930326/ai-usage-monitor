@@ -27,7 +27,6 @@ public struct MascotDirector: Sendable {
     /// 平常的表情（額度、之後的 AI 狀態）；立即生效
     public private(set) var mood = MascotMood.normal
     /// 右鍵選單「表情」要顯示的（`face` 動畫播放中用它）
-    public private(set) var faceMood = MascotMood.happy
     private var statusFrom = 0.0
     private var statusTo = 0.0
     private var statusStart = 0
@@ -82,15 +81,15 @@ public struct MascotDirector: Sendable {
     /// 平常的表情（額度、AI 狀態）：立即換，不排隊
     public mutating func setMood(_ mood: MascotMood) { self.mood = mood }
 
-    /// 右鍵選單的「表情」：記下要顯示哪個，再照按鈕的規則排隊播 `face`
+    /// 右鍵選單的「表情」：每個表情是各自的要求，照按鈕的規則排隊，播到才換表情（Codex C-02）
     public mutating func requestFace(_ mood: MascotMood, at time: Int) {
-        faceMood = mood
-        request(.face, at: time)
+        guard let request = mood.faceRequest else { return }
+        self.request(request, at: time)
     }
 
-    /// 這一刻的表情：播「表情」時是選的那個，其他時候是平常的表情
+    /// 這一刻的表情：播「表情」時是那個動畫的表情，其他時候是平常的表情
     public func mood(at time: Int) -> MascotMood {
-        if let playing = machine.playing, playing.animation == .face, time >= playing.start { return faceMood }
+        if let playing = machine.playing, time >= playing.start, let face = MascotMood.face(of: playing.animation) { return face }
         return mood
     }
 

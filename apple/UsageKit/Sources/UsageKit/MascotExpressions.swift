@@ -69,8 +69,8 @@ extension MascotScripts {
             s.to([.hands: 0], 250, .inCubic, at: 550)
             s.setEyes(.pill, at: 950)
             s.to([.follow: 1], 150, at: 950)
-        case .face:
-            // 選單的「表情」：正面看著你一下，眼睛與眉毛照畫面指定的表情（`MascotDirector.faceMood`）
+        case .faceHappy, .faceWorried, .faceSad, .faceSick, .faceSurprised, .faceOut, .faceStale:
+            // 選單的「表情」：正面看著你一下，眼睛與眉毛照這個動畫的表情（`MascotMood.face(of:)`）
             s.to([.follow: 0, .yaw: 0, .pitch: 0.04], 220, .inOut)
             s.to([.jump: -0.08], 140, .out, at: 60)
             s.to([.jump: 0], 160, .inCubic, at: 200)

@@ -7,12 +7,21 @@ namespace AIUsageMonitor.Core;
 // 同一串事件一定排出同樣的播放順序。和 Mac 的 UsageKit/MascotMachine.swift 是同一份規則，兩邊以
 // fixtures/mascot 的 golden 比對；改規則時兩邊一起改。
 
-/// <summary>動畫（一次只播一個）</summary>
-public enum MascotAnimation { Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Face, Squeeze, Wake, Alert }
+/// <summary>動畫（一次只播一個）。選單的「表情」每個表情是各自的動畫（FaceHappy…），排隊與取代照一般規則，
+/// 播到才換表情（Codex C-02）</summary>
+public enum MascotAnimation
+{
+    Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Squeeze, Wake, Alert,
+    FaceHappy, FaceWorried, FaceSad, FaceSick, FaceSurprised, FaceOut, FaceStale,
+}
 
 /// <summary>按鈕（右鍵選單）或狀態觸發的動畫：播放中就排隊，只保留最後一個。短反應（Hop、Wave、Nod、Tilt、Giggle、Look）
-/// 也是單擊的隨機反應；Pinch 是選單的「捏一下」，Face 是選單的「表情」（顯示哪個表情由畫面決定）</summary>
-public enum MascotRequest { Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Face, Alert }
+/// 也是單擊的隨機反應；Pinch 是選單的「捏一下」，Face… 是選單的「表情」（每個表情各自一個要求）</summary>
+public enum MascotRequest
+{
+    Hop, Wave, Nod, Tilt, Giggle, Look, Dizzy, Shy, Scared, Pinch, Alert,
+    FaceHappy, FaceWorried, FaceSad, FaceSick, FaceSurprised, FaceOut, FaceStale,
+}
 
 public static class MascotRequests
 {
@@ -65,9 +74,13 @@ public sealed record MascotTiming
     /// <summary>動畫長度；捏扁是放開後的長度</summary>
     public int Duration(MascotAnimation animation)
     {
-        var key = animation == MascotAnimation.Squeeze ? "squeeze_release" : MascotNames.Name(animation);
-        return DurationsMs.TryGetValue(key, out var ms) ? ms : 1000;
+        return DurationsMs.TryGetValue(DurationKey(animation), out var ms) ? ms : 1000;
     }
+
+    /// <summary>設定檔裡的長度鍵（捏扁是放開後的長度；表情都用 face）</summary>
+    public static string DurationKey(MascotAnimation animation) =>
+        animation == MascotAnimation.Squeeze ? "squeeze_release"
+            : animation.ToString().StartsWith("Face", StringComparison.Ordinal) ? "face" : MascotNames.Name(animation);
 }
 
 /// <summary>播放中的動畫；End 為 null 表示按住捏扁中（放開後才有結束時間）</summary>
