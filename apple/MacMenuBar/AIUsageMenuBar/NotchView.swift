@@ -85,10 +85,29 @@ struct NotchCanvas: View {
                 .opacity(shape.miniOpacity)
             hero
                 .allowsHitTesting(false)
+                .accessibilityElement()
+                .accessibilityLabel(heroDescription)
+                .accessibilityAddTraits(.isImage)
         }
         .frame(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
         .mask(NotchShape(width: shape.width, height: shape.height, corner: shape.corner))
         .accessibilityElement(children: .contain)
+    }
+
+    /// VoiceOver：角色、在做什麼、額度狀態（畫面上只靠姿勢與狀態點顏色，Fable F-07）
+    private var heroDescription: String {
+        let mode = director.isStill ? .none : director.mode
+        let activity = switch mode {
+        case .work: "工作中"
+        case .sleep: "睡著了"
+        case .none: "待命"
+        }
+        let status = switch director.machine.statusLevel {
+        case 0: "額度正常"
+        case 1: "額度剩不到 20%"
+        default: "額度用完或出錯"
+        }
+        return "\(character.title) 角色，\(activity)，\(status)"
     }
 
     @ViewBuilder
