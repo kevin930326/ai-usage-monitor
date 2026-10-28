@@ -106,7 +106,8 @@ final class MascotController {
     /// 這次啟動後是否已經播過過場（「只有第一次」）
     private(set) var playedIntro = false
 
-    @ObservationIgnored private let epoch = Date()
+    /// 啟動時的系統開機時間（秒）；時間基準用它而不是牆鐘，改系統時間或校時倒退時動畫不會卡住
+    @ObservationIgnored private let epoch = ProcessInfo.processInfo.systemUptime
     @ObservationIgnored private var deadlineTimer: Timer?
     @ObservationIgnored private var rateTimer: Timer?
     @ObservationIgnored private var closeTimer: Timer?
@@ -136,9 +137,11 @@ final class MascotController {
         Bundle.main.url(forResource: "mascot-anim", withExtension: "json").flatMap { try? Data(contentsOf: $0) }
     }
 
-    /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）
-    func time(_ date: Date = Date()) -> Int {
-        Int((date.timeIntervalSince(epoch) * 1000).rounded())
+    /// 毫秒時間基準（單調遞增；只用來排先後與算動畫進度）。以開機時間計，
+    /// `date`（TimelineView 給的牆鐘時刻）只取它和現在的差，系統時間倒退不影響（Fable F-02）
+    func time(_ date: Date? = nil) -> Int {
+        let uptime = ProcessInfo.processInfo.systemUptime + (date?.timeIntervalSinceNow ?? 0)
+        return Int(((uptime - epoch) * 1000).rounded())
     }
 
     /// 依版面調整設定（迷你角色的位置、收合時的大小）後重建；換螢幕時呼叫
