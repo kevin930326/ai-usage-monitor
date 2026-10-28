@@ -13,21 +13,44 @@ public enum AgentHookFiles {
     /// 每個設定檔最多留幾份我們的備份（設定檔可能有金鑰，副本不無限累積；Fable F-11）
     public static let keepBackups = 3
 
+    /// 讀了之後、替換之前，設定檔被別的程式改了，重試幾次還是一樣（Codex C-03）
+    public struct ChangedDuringWrite: Error, Equatable, LocalizedError {
+        public var errorDescription: String? { "設定檔正在被其他程式修改，稍後再試" }
+    }
+
+    /// 替換前發現檔案變了時，重新讀取、合併幾次
+    static let attempts = 3
+
     /// 連接或修好：合併我們的 hook，寫入前先備份
     public static func connect(file: URL, ai: AgentKind, command: String, now: Date = .now) throws -> Result {
-        let file = resolved(file)
-        let old = try read(file)
-        let new = try AgentHookConfig.install(into: old, ai: ai, command: command)
-        guard new != old else { return .unchanged }
-        return .written(backup: try write(new, to: file, replacing: old, now: now))
+        try connect(file: file, ai: ai, command: command, now: now, beforeReplace: nil)
+    }
+
+    static func connect(file: URL, ai: AgentKind, command: String, now: Date, beforeReplace: (() -> Void)?) throws -> Result {
+        try update(file: file, now: now, beforeReplace: beforeReplace) { old in
+            let new = try AgentHookConfig.install(into: old, ai: ai, command: command)
+            return new == old ? nil : new
+        }
     }
 
     /// 移除：只刪我們的 hook，寫入前先備份
     public static func disconnect(file: URL, now: Date = .now) throws -> Result {
+        try update(file: file, now: now, beforeReplace: nil) { try AgentHookConfig.uninstall(from: $0) }
+    }
+
+    /// 讀、合併、寫；替換前再讀一次，和合併時讀到的不同（別的程式剛改過）就從頭再合併，不覆蓋別人的變更。
+    /// 仍有很短的空檔（沒有跨程式的檔案鎖），但不會拿舊內容蓋掉讀了之後才寫入的設定
+    private static func update(file: URL, now: Date, beforeReplace: (() -> Void)?,
+                               merge: (Data?) throws -> Data?) throws -> Result {
         let file = resolved(file)
-        let old = try read(file)
-        guard let new = try AgentHookConfig.uninstall(from: old) else { return .unchanged }
-        return .written(backup: try write(new, to: file, replacing: old, now: now))
+        for _ in 0..<attempts {
+            let old = try read(file)
+            guard let new = try merge(old) else { return .unchanged }
+            beforeReplace?()
+            guard try read(file) == old else { continue }
+            return .written(backup: try write(new, to: file, replacing: old, now: now))
+        }
+        throw ChangedDuringWrite()
     }
 
     public static func status(file: URL, ai: AgentKind, command: String) throws -> AgentHookConfig.Status {

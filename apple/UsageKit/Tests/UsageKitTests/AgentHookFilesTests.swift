@@ -116,6 +116,41 @@ import Testing
         #expect(manager.fileExists(atPath: other.path))
     }
 
+    @Test func changeAfterReadingIsMergedNotOverwritten() throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"model":"opus"}"#.utf8).write(to: file)
+        var changed = false
+        let result = try AgentHookFiles.connect(file: file, ai: .claude, command: command, now: now) {
+            // 讀了之後、替換之前，別的程式改了設定（只改一次）
+            guard !changed else { return }
+            changed = true
+            try? Data(#"{"model":"sonnet","theme":"dark"}"#.utf8).write(to: file)
+        }
+        guard case .written(let backup?) = result else {
+            Issue.record("應該寫入並備份")
+            return
+        }
+        let text = String(decoding: try Data(contentsOf: file), as: UTF8.self)
+        #expect(text.contains("sonnet") && text.contains("dark"))
+        #expect(try AgentHookFiles.status(file: file, ai: .claude, command: command) == .installed)
+        // 備份是實際被替換的版本
+        #expect(String(decoding: try Data(contentsOf: backup), as: UTF8.self).contains("sonnet"))
+    }
+
+    @Test func keepsChangingGivesUp() throws {
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(#"{"n":0}"#.utf8).write(to: file)
+        var n = 0
+        #expect(throws: AgentHookFiles.ChangedDuringWrite()) {
+            try AgentHookFiles.connect(file: file, ai: .claude, command: command, now: now) {
+                n += 1
+                try? Data(#"{"n":\#(n)}"#.utf8).write(to: file)
+            }
+        }
+        #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == #"{"n":3}"#)
+        #expect(try backups().isEmpty)
+    }
+
     @Test func codexHooksDisabledReadsOnlyTheFeatureFlag() {
         func disabled(_ text: String) -> Bool { AgentHookFiles.codexHooksDisabled(configTOML: Data(text.utf8)) }
         #expect(!AgentHookFiles.codexHooksDisabled(configTOML: nil))
