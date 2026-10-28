@@ -1,0 +1,746 @@
+{
+ "comment": "額度預測（ADR-0018 第 1 節）。now 固定；時間都以分鐘相對 now。series 每隔 every_min 分鐘一筆，已用 % 從 start 線性到 end；resets_min 沒寫時同 window。Swift、C#、Python 讀同一份，結果和 golden.json 比對。",
+ "now": "2026-10-28T12:00:00Z",
+ "cases": [
+  {
+   "name": "five-hour-before-reset",
+   "note": "每小時 20 點、剩 40%：2 小時後用完，重置在 3 小時後",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 60,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 60
+    }
+   ]
+  },
+  {
+   "name": "urgent-under-an-hour",
+   "note": "每小時 40 點、剩 20%：30 分鐘後用完（紅）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "resets-first",
+   "note": "重置會先到：不顯示",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 45,
+    "resets_min": 60
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 45
+    }
+   ]
+  },
+  {
+   "name": "exactly-at-reset",
+   "note": "剛好在重置那一刻用完：不算（要早於重置）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 60,
+    "resets_min": 120
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 60
+    }
+   ]
+  },
+  {
+   "name": "too-few-samples",
+   "note": "回看範圍內只有 3 筆：資料不足，不猜",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 30,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "span-too-short",
+   "note": "只涵蓋 20 分鐘（要 30 分鐘）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -20,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 70,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "stale",
+   "stale": true,
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "hidden",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180,
+    "hidden": true
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "already-out",
+   "note": "已用完是「用完」不是預測",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 100,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 60,
+     "end": 100
+    }
+   ]
+  },
+  {
+   "name": "idle-lately",
+   "note": "最近沒在用（速度 0）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 50,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 50,
+     "end": 50
+    }
+   ]
+  },
+  {
+   "name": "other-length",
+   "note": "3 小時這種長度沒有近期速度的規則",
+   "window": {
+    "id": "3h",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "unknown-reset",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": null
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    }
+   ]
+  },
+  {
+   "name": "reset-in-window",
+   "note": "30 分鐘前重置：同一輪只剩 7 筆、跨度 30 分鐘，照新的一輪算",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 20,
+    "resets_min": 270
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": -35,
+     "every_min": 5,
+     "start": 70,
+     "end": 95,
+     "resets_min": -30
+    },
+    {
+     "from_min": -30,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 5,
+     "end": 20,
+     "resets_min": 270
+    }
+   ]
+  },
+  {
+   "name": "faster-than-usual",
+   "note": "平常這個時段每小時 10 點、現在 40 點：快 4.0 倍",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -9960
+    }
+   ]
+  },
+  {
+   "name": "not-much-faster",
+   "note": "平常 30 點、現在 40 點：1.3 倍，不顯示倍數",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 40.0,
+     "resets_min": -9960
+    }
+   ]
+  },
+  {
+   "name": "faster-floors",
+   "note": "平常 25 點：40 ÷ 25 = 1.6 倍（剛好過門檻）",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 35.0,
+     "resets_min": -9960
+    }
+   ]
+  },
+  {
+   "name": "baseline-two-days",
+   "note": "只有 2 天有資料：不算平常",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -2760
+    }
+   ]
+  },
+  {
+   "name": "baseline-even-median",
+   "note": "4 天：5、10、20、40 → 中位數 15，40 ÷ 15 = 2.66 → 2.6",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 15.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 30.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 50.0,
+     "resets_min": -5640
+    }
+   ]
+  },
+  {
+   "name": "baseline-zero",
+   "note": "平常這個時段都不用（中位數 0）：不寫倍數",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -1320
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 10.0,
+     "resets_min": -9960
+    }
+   ]
+  },
+  {
+   "name": "baseline-skips-reset",
+   "note": "平常的某天中間重置（95→100→0→5）：跨重置那段不算，那天約每小時 9.2 點，其他 6 天 10 點，中位數 10",
+   "window": {
+    "id": "five_hour",
+    "used_pct": 80,
+    "resets_min": 180
+   },
+   "series": [
+    {
+     "from_min": -60,
+     "to_min": 0,
+     "every_min": 5,
+     "start": 40,
+     "end": 80
+    },
+    {
+     "from_min": -2940,
+     "to_min": -2880,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -2760
+    },
+    {
+     "from_min": -4380,
+     "to_min": -4320,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -4200
+    },
+    {
+     "from_min": -5820,
+     "to_min": -5760,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -5640
+    },
+    {
+     "from_min": -7260,
+     "to_min": -7200,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -7080
+    },
+    {
+     "from_min": -8700,
+     "to_min": -8640,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -8520
+    },
+    {
+     "from_min": -10140,
+     "to_min": -10080,
+     "every_min": 5,
+     "start": 10,
+     "end": 20.0,
+     "resets_min": -9960
+    },
+    {
+     "from_min": -1500,
+     "to_min": -1470,
+     "every_min": 5,
+     "start": 95,
+     "end": 100,
+     "resets_min": -1470
+    },
+    {
+     "from_min": -1465,
+     "to_min": -1440,
+     "every_min": 5,
+     "start": 0.83333333333,
+     "end": 5,
+     "resets_min": -1170
+    }
+   ]
+  },
+  {
+   "name": "weekly",
+   "note": "每週額度：最近 24 小時用了 20 點，剩 60%，3 天後用完，4 天後重置",
+   "window": {
+    "id": "weekly",
+    "used_pct": 40,
+    "resets_min": 5760
+   },
+   "series": [
+    {
+     "from_min": -1440,
+     "to_min": 0,
+     "every_min": 30,
+     "start": 20,
+     "end": 40
+    }
+   ]
+  },
+  {
+   "name": "weekly-too-short",
+   "note": "每週額度只有 6 小時的資料（要 12 小時）",
+   "window": {
+    "id": "weekly",
+    "used_pct": 40,
+    "resets_min": 5760
+   },
+   "series": [
+    {
+     "from_min": -360,
+     "to_min": 0,
+     "every_min": 30,
+     "start": 30,
+     "end": 40
+    }
+   ]
+  }
+ ]
+}
