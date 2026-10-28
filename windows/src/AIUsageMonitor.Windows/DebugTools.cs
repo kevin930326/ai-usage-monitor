@@ -171,6 +171,8 @@ internal static class DebugTools
             }
             Shot("agent-needs-you-tab", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
                                              RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
+            Shot("agent-needs-you-nodata", Desk(dark, palette, RingContent.Empty.WithAgent(AgentStates[0].Agent), RingDetails.Empty,
+                                                RingExpandDirection.Right, RingDock.None, 1, ticks: false));
             Shot("agent-needs-you-down", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
                                               RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
         }

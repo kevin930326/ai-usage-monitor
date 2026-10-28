@@ -98,7 +98,8 @@ internal static class FloatingRingRenderer
         AgentOverlay.Draw(dc, s.Content.Agent, shape, center, r, p);
 
         var rowsOpacity = Math.Clamp((e - 0.35) / 0.65, 0, 1);
-        if (rowsOpacity <= 0 || s.Details.Rows.Count == 0) return;
+        // 沒有額度資料（還沒有 usage.json、服務都失敗）時仍寫出 AI 的狀態（Codex C-05）
+        if (rowsOpacity <= 0 || (s.Details.Rows.Count == 0 && s.Content.Agent is null)) return;
         var info = RingShape.Info(s.Direction, s.Dock, s.RingDip);
         var area = new Rect(center.X + info.Left, center.Y + info.Top, info.Width, info.Height);
         dc.PushClip(shape);
@@ -111,9 +112,9 @@ internal static class FloatingRingRenderer
             if (i == 1 && s.Content.Agent is { } agent) DrawAgentRow(dc, agent, row, p, s.PixelsPerDip);
             else DrawRow(dc, s.Details.Rows[i], row, p, s.PixelsPerDip);
         }
-        if (s.Details.Rows.Count == 1 && s.Content.Agent is { } only)
+        if (s.Details.Rows.Count < 2 && s.Content.Agent is { } only)
         {
-            DrawAgentRow(dc, only, new Rect(area.Left, area.Top + rowHeight, area.Width, rowHeight), p, s.PixelsPerDip);
+            DrawAgentRow(dc, only, new Rect(area.Left, area.Top + s.Details.Rows.Count * rowHeight, area.Width, rowHeight), p, s.PixelsPerDip);
         }
         dc.Pop();
         dc.Pop();
