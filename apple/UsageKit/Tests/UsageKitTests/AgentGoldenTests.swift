@@ -132,6 +132,27 @@ import Testing
         #expect(AgentHookMessage.parse(data) == message)
     }
 
+    /// 有 hook 的 AI 照 hook，沒有的照修改時間；全部閒置才睡
+    @Test func activityPrefersHookAndFallsBackPerAgent() {
+        let quiet: [AgentKind: (working: Bool, active: Bool)] = [.claude: (false, false), .codex: (false, false)]
+        var sessions = AgentSessions(idleAfter: 300_000)
+        #expect(sessions.activity(at: 0, fallback: quiet) == (false, true))
+        #expect(sessions.activity(at: 0, fallback: [.codex: (true, true)]) == (true, false))
+        let message = { (event: AgentHookEvent, ai: AgentKind) in
+            AgentHookMessage(ai: ai, event: event, need: nil, session: "0123456789abcdef", time: 1, folder: "")
+        }
+        sessions.apply(message(.userPromptSubmit, .claude), at: 0)
+        // Claude 的紀錄檔沒動（例如在跑很久的指令），但 hook 說工作中
+        #expect(sessions.activity(at: 1000, fallback: quiet) == (true, false))
+        sessions.apply(message(.stop, .claude), at: 2000)
+        #expect(sessions.activity(at: 3000, fallback: quiet) == (false, false))
+        // 完成後看過、等你超過睡覺時間：Codex 也沒動就睡
+        sessions.markSeen(at: 4000)
+        #expect(sessions.activity(at: 4000 + 300_000, fallback: quiet) == (false, true))
+        // hook 只管有工作階段的 AI：Codex 的紀錄檔還在動就醒著
+        #expect(sessions.activity(at: 4000 + 300_000, fallback: [.claude: (true, true), .codex: (false, true)]) == (false, false))
+    }
+
     @Test func installedEventsAreHandled() {
         for ai in AgentKind.allCases {
             #expect(!AgentHookEvent.installed(for: ai).isEmpty)

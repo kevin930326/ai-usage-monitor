@@ -330,4 +330,27 @@ public sealed class AgentSessions(long idleAfter)
     public bool Has(AgentKind ai) => sessions.Any(s => s.Ai == ai);
 
     public AgentState? Top(AgentKind ai, long now) => Ordered(now).FirstOrDefault(s => s.Ai == ai)?.State(now, IdleAfter);
+
+    /// <summary>
+    /// 角色的工作中與睡覺：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間（fallback）。
+    /// 只有「工作中」算工作；所有 AI 都閒置才睡覺。
+    /// </summary>
+    public (bool Working, bool Idle) Activity(long now, IReadOnlyDictionary<AgentKind, (bool Working, bool Active)> fallback)
+    {
+        bool working = false, active = false;
+        foreach (var ai in Enum.GetValues<AgentKind>())
+        {
+            if (Top(ai, now) is { } state)
+            {
+                working |= state == AgentState.Working;
+                active |= state != AgentState.Idle;
+            }
+            else if (fallback.TryGetValue(ai, out var probe))
+            {
+                working |= probe.Working;
+                active |= probe.Active;
+            }
+        }
+        return (working, !working && !active);
+    }
 }

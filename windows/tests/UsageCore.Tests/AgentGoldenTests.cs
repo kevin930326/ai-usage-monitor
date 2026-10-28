@@ -101,6 +101,24 @@ public class AgentGoldenTests
     }
 
     [Fact]
+    public void ActivityPrefersHookAndFallsBackPerAgent()
+    {
+        var quiet = new Dictionary<AgentKind, (bool, bool)> { [AgentKind.Claude] = (false, false), [AgentKind.Codex] = (false, false) };
+        var sessions = new AgentSessions(300_000);
+        Assert.Equal((false, true), sessions.Activity(0, quiet));
+        Assert.Equal((true, false), sessions.Activity(0, new Dictionary<AgentKind, (bool, bool)> { [AgentKind.Codex] = (true, true) }));
+        AgentHookMessage M(AgentHookEvent e) => new(AgentKind.Claude, e, null, "0123456789abcdef", 1, "");
+        sessions.Apply(M(AgentHookEvent.UserPromptSubmit), 0);
+        Assert.Equal((true, false), sessions.Activity(1000, quiet));
+        sessions.Apply(M(AgentHookEvent.Stop), 2000);
+        Assert.Equal((false, false), sessions.Activity(3000, quiet));
+        sessions.MarkSeen(4000);
+        Assert.Equal((false, true), sessions.Activity(4000 + 300_000, quiet));
+        Assert.Equal((false, false), sessions.Activity(4000 + 300_000,
+            new Dictionary<AgentKind, (bool, bool)> { [AgentKind.Claude] = (true, true), [AgentKind.Codex] = (false, true) }));
+    }
+
+    [Fact]
     public void InstalledEventsMatchTheOfficialLists()
     {
         Assert.DoesNotContain(AgentHookEvent.Notification, AgentNames.Installed(AgentKind.Codex));

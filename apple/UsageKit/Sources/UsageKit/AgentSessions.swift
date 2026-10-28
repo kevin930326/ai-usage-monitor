@@ -360,4 +360,21 @@ public struct AgentSessions: Sendable, Equatable {
     public func top(_ ai: AgentKind, at now: Int64) -> AgentState? {
         ordered(at: now).first { $0.ai == ai }?.state(at: now, idleAfter: idleAfter)
     }
+
+    /// 角色的工作中與睡覺（ADR-0016 第 5 節）：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間
+    /// （`fallback`：沒接 hook 的 AI 是否工作中、最近是否有動）。只有「工作中」算工作；所有 AI 都閒置才睡覺
+    /// （需要你、出錯、完成未看、等你還沒超過睡覺時間都算醒著）。
+    public func activity(at now: Int64, fallback: [AgentKind: (working: Bool, active: Bool)]) -> (working: Bool, idle: Bool) {
+        var working = false, active = false
+        for ai in AgentKind.allCases {
+            if let state = top(ai, at: now) {
+                working = working || state == .working
+                active = active || state != .idle
+            } else if let probe = fallback[ai] {
+                working = working || probe.working
+                active = active || probe.active
+            }
+        }
+        return (working, !working && !active)
+    }
 }
