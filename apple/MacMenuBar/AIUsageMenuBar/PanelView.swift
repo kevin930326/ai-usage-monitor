@@ -23,6 +23,8 @@ struct PanelView: View {
 
     @State private var motion = PanelMotion.settled
     @State private var visible = false
+    /// 這個面板有沒有算進 `PanelVisibility.visibleCount`：重複的通知不重複算，畫面拆掉時一定扣回（Codex C-02）
+    @State private var counted = false
     @State private var refreshHint: RefreshHint?
     @State private var resetSignature: [String: [String: Date]] = [:]
     /// 面板關閉時加一，讓關閉前排定的動畫完成回呼失效（NFR-8）
@@ -47,16 +49,28 @@ struct PanelView: View {
             .frame(maxHeight: (panelScreenHeight ?? NSScreen.main?.visibleFrame.height ?? 900) - 40)
             .fixedSize(horizontal: false, vertical: true)
             .modifier(behavior)
+            .onDisappear { releaseVisibility() }
         } else {
             content.frame(width: 360).modifier(behavior)
+                .onDisappear { releaseVisibility() }
         }
+    }
+
+    /// 畫面被拆掉（完整面板關閉時釋放）：可見度的 `onChange` 不一定來得及跑，這裡把計數扣回、關資料庫（Codex C-02）
+    private func releaseVisibility() {
+        guard counted else { return }
+        counted = false
+        PanelVisibility.visibleCount = max(0, PanelVisibility.visibleCount - 1)
+        stopAnimations()
+        if !PanelVisibility.isVisible { historyStore.close() }
     }
 
     private var behavior: PanelBehavior {
         PanelBehavior(
             motion: fixedMotion ?? motion, animates: animates, live: visible || fixedMotion != nil, colorScheme: colorScheme,
             visible: $visible, onVisibleChange: { isVisible in
-                if fixedMotion == nil {
+                if fixedMotion == nil, isVisible != counted {
+                    counted = isVisible
                     PanelVisibility.visibleCount = max(0, PanelVisibility.visibleCount + (isVisible ? 1 : -1))
                 }
                 if isVisible {
