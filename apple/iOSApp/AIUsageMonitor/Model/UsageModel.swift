@@ -70,9 +70,11 @@ final class UsageModel {
             snapshot = try await fetch()
             errorMessage = nil
             SharedStore.publish(snapshot)
-            remoteAgents = await fetchAgents()
+            // 其他電腦的 AI 狀態同時抓：卡片不用它，不等它（中繼慢時最多 10 秒，Fable 總審查 F-06）
+            async let agents = fetchAgents()
             // App 開啟時順便更新卡片（FR-8）
             await updateLiveActivity()
+            remoteAgents = await agents
         } catch {
             // 保留上一次成功的資料，只顯示錯誤
             errorMessage = error.localizedDescription
