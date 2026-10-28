@@ -315,8 +315,6 @@ enum DebugMascot {
         .background(scheme == .dark ? Color(white: 0.08) : Color(white: 0.97))
     }
 }
-#endif
-
 /// 截圖用的日期（日數 → YYYY-MM-DD，和 MascotLevel 的日曆日算法相同）
 enum LevelDebug {
     static func day(_ n: Int) -> String {
@@ -327,3 +325,4 @@ enum LevelDebug {
         return String(format: "%04d-%02d-%02d", c.year!, c.month!, c.day!)
     }
 }
+#endif
