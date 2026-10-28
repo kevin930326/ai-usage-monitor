@@ -65,9 +65,7 @@ internal sealed class AgentMonitor : IDisposable
     {
         if (!started) return;
         var now = Now;
-        var changed = false;
-        foreach (var message in AgentInbox.Drain(home, seen)) changed |= Sessions.Apply(message, now);
-        Evaluate(changed, now);
+        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now), now);
     }
 
     /// <summary>每分鐘：時間經過的狀態改變（工作中太久、需要你太久）與退路的掃描</summary>
@@ -75,10 +73,7 @@ internal sealed class AgentMonitor : IDisposable
     {
         if (!started) return;
         var now = Now;
-        var changed = false;
-        foreach (var message in AgentInbox.Drain(home, seen)) changed |= Sessions.Apply(message, now);
-        changed |= Sessions.Expire(now);
-        Evaluate(changed, now);
+        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now), now);
     }
 
     /// <summary>使用者看過了（打開面板、點圓環）：完成未看與出錯變成等你</summary>

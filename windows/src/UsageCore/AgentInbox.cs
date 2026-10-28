@@ -107,7 +107,20 @@ public static class AgentInbox
         return result;
     }
 
-    /// <summary>App 啟動與結束時：inbox 清空（啟動時先 Drain 處理再清）</summary>
+    /// <summary>
+    /// 把讀出的事件套用到工作階段，時間用事件在 hook 端的時間（夾在「現在」與 12 小時前之間），不是讀出的時間：
+    /// 每分鐘的退路掃描或當機後留下的事件，任務跑了多久、需要你多久都照實際發生的時間算，太舊的由 Expire 立刻淘汰（Codex C-03）。
+    /// 回傳是否有改變
+    /// </summary>
+    public static bool Apply(AgentSessions sessions, IEnumerable<AgentHookMessage> messages, long now)
+    {
+        var changed = false;
+        foreach (var message in messages)
+            changed |= sessions.Apply(message, Math.Clamp(message.Time, now - AgentSessions.ForgetAfter, now));
+        return sessions.Expire(now) | changed;
+    }
+
+    /// <summary>App 結束時：inbox 清空</summary>
     public static void Clear(string home)
     {
         try

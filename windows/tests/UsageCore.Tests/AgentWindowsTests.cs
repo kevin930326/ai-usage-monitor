@@ -153,6 +153,30 @@ public sealed class AgentWindowsTests : IDisposable
     }
 
     [Fact]
+    public void LateBatchesUseTheEventTime()
+    {
+        var sessions = new AgentSessions(600_000);
+        const long t0 = 1_761_650_000_000;
+        var sid = "0123456789abcdef";
+        // 每分鐘的退路掃描才讀到：開始與完成相隔 5 分鐘，算長任務
+        AgentInbox.Apply(sessions, [
+            new AgentHookMessage(AgentKind.Claude, AgentHookEvent.UserPromptSubmit, null, sid, t0, ""),
+            new AgentHookMessage(AgentKind.Claude, AgentHookEvent.Stop, null, sid, t0 + 300_000, ""),
+        ], t0 + 360_000);
+        var notice = Assert.Single(AgentNotices.Due(sessions, t0 + 360_000, new AgentNoticePolicy()));
+        Assert.Equal(AgentNoticeKind.Done, notice.Kind);
+        // 當機前留下的 13 小時前的需要你：立刻淘汰
+        var old = new AgentSessions(600_000);
+        AgentInbox.Apply(old, [new AgentHookMessage(AgentKind.Codex, AgentHookEvent.PermissionRequest, AgentNeed.Permission, sid, t0, "")],
+                         t0 + 13 * 3_600_000);
+        Assert.Empty(old.Sessions);
+        // 未來的時間（時鐘被調過）不超過現在
+        var future = new AgentSessions(600_000);
+        AgentInbox.Apply(future, [new AgentHookMessage(AgentKind.Codex, AgentHookEvent.PermissionRequest, AgentNeed.Permission, sid, t0 + 999_999, "")], t0);
+        Assert.Equal(t0, Assert.Single(future.Sessions).Since);
+    }
+
+    [Fact]
     public void FullInboxStopsTheHook()
     {
         AgentInbox.EnsureSalt(home);
