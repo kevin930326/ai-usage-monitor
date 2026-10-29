@@ -258,10 +258,7 @@ public sealed class MascotDirector
     /// </summary>
     public double Blink(long time, bool tab = false)
     {
-        var face = MoodAt(time);
-        if (tab && Mode is MascotMode.Sleep or MascotMode.Work) return 0;
-        if (!((Machine.IsOpen || tab) && !IsIntro && (IsStill || (Machine.Playing is null && Mode != MascotMode.Sleep)) && Eyes(time) == MascotEyes.Pill
-              && face.Eyes() is null && face.Lid() < 1 && Pose(time)[MascotProp.Dash] < 0.1)) return 0;
+        if (!CanBlink(time, tab)) return 0;
         var b = Config.Hero.Blink;
         var period = (b.MinGapMs + b.MaxGapMs) / 2;
         var bucket = (long)Math.Floor((double)time / period);
@@ -274,6 +271,15 @@ public sealed class MascotDirector
             return 1 - MascotEase.Out.Apply((double)(local - b.CloseMs - b.HoldMs) / b.OpenMs);
         }
         return 0;
+    }
+
+    /// <summary>這一刻的狀態會不會眨眼（不看時間表）：表情換掉膠囊眼、閉著眼、睡覺、工作中時不眨，貼邊的標籤不必排眨眼的計時器（Codex C-01）</summary>
+    public bool CanBlink(long time, bool tab = false)
+    {
+        if (tab && Mode is MascotMode.Sleep or MascotMode.Work or MascotMode.Think) return false;
+        var face = MoodAt(time);
+        return (Machine.IsOpen || tab) && !IsIntro && (IsStill || (Machine.Playing is null && Mode != MascotMode.Sleep)) && Eyes(time) == MascotEyes.Pill
+               && face.Eyes() is null && face.Lid() < 1 && Pose(time)[MascotProp.Dash] < 0.1;
     }
 
     /// <summary>第 index 次眨眼的開始時間（每段 period 裡依種子偏移）</summary>
