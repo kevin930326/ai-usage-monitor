@@ -303,7 +303,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | `setup-relay.sh`（Mac） | Cloudflare（以 wrangler） | 你登入 Cloudflare 的 wrangler 帳號 | 建 KV、部署 Worker、設定兩把密鑰；確認網址回應 | 只在你執行時 |
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘） |
 | Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
-| Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行 | — | — | 只在你按下時 |
+| Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行；點面板上的事故時用預設瀏覽器打開事故頁（只接受 `https://status.claude.com/incidents/…`、`https://status.openai.com/incidents/…`，App 本身不連線） | — | — | 只在你按下時 |
 | Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
 上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏與預測（`forecast`：預計用完的時間、是否不到 1 小時、比平常快幾倍）、公開狀態頁的進行中事故（`incidents`：最多 3 項，名稱／影響程度／事故頁連結／開始時間），以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。

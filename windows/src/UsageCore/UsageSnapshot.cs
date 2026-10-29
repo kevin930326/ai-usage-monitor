@@ -89,10 +89,13 @@ public sealed record ProviderUsage(string? Plan, string? Error, IReadOnlyList<Us
 
 /// <summary>
 /// usage.json 裡的進行中事故（ADR-0018 第 4 節），對應 UsageKit 的 <c>ServiceIncident</c>：只有名稱、等級、事故頁與開始時間。
-/// Windows App 不放網址與超連結（ADR-0015 第 2 節，<c>check-no-network.py</c>），只顯示名稱；<c>Url</c> 只是解析後保留的資料。
+/// Windows App 的事故那行可以點，用預設瀏覽器打開 <see cref="Link"/>（ADR-0015 第 2 節的例外，只接受白名單的事故頁）。
 /// </summary>
 public sealed record ServiceIncident(string Name, string Impact, string? Url = null, DateTimeOffset? StartedAt = null)
 {
+    /// <summary>可以打開的事故頁（<see cref="IncidentLink"/> 的規則）；不符合時 null，那行只顯示文字</summary>
+    public string? Link => IncidentLink.Link(Url);
+
     /// <summary>有影響的事故（minor 以上；維護與 none 不算），同 Swift 的 <c>MascotMood.hasIncident</c></summary>
     public bool IsDisruption => Impact is "minor" or "major" or "critical";
 }

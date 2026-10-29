@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -241,6 +242,12 @@ internal sealed class AppHost : IDisposable
         now = Clock.Now;
         var window = new PanelWindow(Model, AppPalette);
         window.RefreshRequested += () => _ = RefreshAsync();
+        window.IncidentRequested += url =>
+        {
+            // 瀏覽器會搶走焦點，面板失焦時自己會關；打不開時面板留著（原因記在 windows-app.log）。
+            // ShellExecute 在瀏覽器冷啟動時可能卡數百毫秒，放到背景執行，面板不凍住
+            _ = Task.Run(() => IncidentPage.Open(url));
+        };
         window.SettingsRequested += () =>
         {
             window.SafeClose();

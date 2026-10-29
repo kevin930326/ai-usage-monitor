@@ -101,6 +101,16 @@ import Testing
         #expect(ServiceIncident.link("https://status.openai.com/incidents/01J") != nil)
     }
 
+    /// Mac 與 Windows 共用的事故連結規則（`fixtures/incident-links.json`；C# 的 IncidentTests 讀同一份）
+    @Test func incidentLinksMatchSharedCases() throws {
+        struct Case: Decodable { var url: String?; var link: String? }
+        struct Cases: Decodable { var cases: [Case] }
+        let data = try Data(contentsOf: Self.folder.appendingPathComponent("incident-links.json"))
+        for c in try JSONDecoder().decode(Cases.self, from: data).cases {
+            #expect(ServiceIncident.link(c.url)?.absoluteString == c.link, "\(c.url ?? "nil")")
+        }
+    }
+
     @Test func onlyMinorOrWorseIsDisruption() {
         for impact in ["minor", "major", "critical"] { #expect(ServiceIncident(name: "x", impact: impact).isDisruption) }
         for impact in ["none", "maintenance", "apocalyptic"] { #expect(!ServiceIncident(name: "x", impact: impact).isDisruption) }
