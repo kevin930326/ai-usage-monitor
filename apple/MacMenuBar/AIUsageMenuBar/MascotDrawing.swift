@@ -84,11 +84,8 @@ struct MascotPainter {
             let tint = frame.character.tint(config.palette)
             return (tint.light, tint.mid, tint.shade)
         }
-        switch look.style {
-        case .solid: return (look.light ?? [], look.mid ?? [], look.shade ?? [])
-        case .led, .pixel, .ascii: return look.effectTint
-        case .linear, .neon, .wire: return nil
-        }
+        if look.style.isGrid { return look.effectTint }
+        return look.style == .solid ? (look.light ?? [], look.mid ?? [], look.shade ?? []) : nil
     }
 
     private func statusColor(_ level: Double) -> [Double] {
