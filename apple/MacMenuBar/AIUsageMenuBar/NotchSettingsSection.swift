@@ -68,7 +68,7 @@ struct NotchSettingsSection: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 SwitchRow(title: "眼睛跟著游標",
-                          detail: "整個螢幕都看，只讀游標位置、不需要權限",
+                          detail: "整個螢幕都看（收合時 AI 工作中與睡著不看），只讀游標位置、不需要權限",
                           isOn: $settings.mascotFollowPointer)
                 Text("睡覺").font(.subheadline.weight(.semibold)).padding(.top, 4)
                 FlowChips(choices: PanelSettings.sleepMinuteChoices.map { ($0, "\($0) 分鐘") }, selected: settings.mascotSleepMinutes) {

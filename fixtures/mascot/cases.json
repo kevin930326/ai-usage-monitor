@@ -1321,6 +1321,115 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "follow-collapsed-working-stops",
+      "note": "收合時 AI 工作中不追滑鼠；展開後又追（2026-10-29 使用者決定）",
+      "events": [
+        {
+          "t": 0,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "follow-open-working-follows",
+      "note": "展開時一律追，AI 工作中也是",
+      "events": [
+        {
+          "t": 0,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "follow-collapsed-idle-follows",
+      "note": "收合、醒著沒事：照舊追",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "close"
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "follow-collapsed-sleep-stops",
+      "note": "收合、睡著：不追",
+      "events": [
+        {
+          "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "follow-collapsed-work-ends-follows-again",
+      "note": "收合時工作結束：回到醒著沒事，又追",
+      "events": [
+        {
+          "t": 0,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "follow-collapsed-needs-you-follows",
+      "note": "收合時有 AI 需要你（舉手）：醒著、不是在敲鍵盤，照舊追",
+      "events": [
+        {
+          "t": 0,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }

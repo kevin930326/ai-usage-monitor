@@ -2,6 +2,7 @@
   "cases" : [
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -20,6 +21,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -36,6 +38,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -54,6 +57,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -73,6 +77,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -92,6 +97,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "playing" : "dizzy",
@@ -117,6 +123,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -135,6 +142,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -151,6 +159,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "sleep",
         "open" : true,
         "status" : 1
@@ -168,6 +177,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -187,6 +197,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -202,6 +213,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -222,6 +234,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 1
@@ -239,6 +252,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 1
@@ -253,6 +267,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -271,6 +286,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 1
@@ -293,6 +309,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : false,
         "status" : 0
@@ -311,6 +328,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -329,6 +347,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -347,6 +366,7 @@
     },
     {
       "final" : {
+        "follow" : false,
         "mode" : "sleep",
         "open" : false,
         "status" : 0
@@ -362,6 +382,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -381,6 +402,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -396,6 +418,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "sleep",
         "open" : true,
         "playing" : "shy",
@@ -415,6 +438,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -433,6 +457,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "sleep",
         "open" : true,
         "status" : 0
@@ -446,6 +471,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "sleep",
         "open" : true,
         "status" : 0
@@ -465,6 +491,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -490,6 +517,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -512,6 +540,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -526,6 +555,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -546,6 +576,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 1
@@ -578,6 +609,7 @@
     },
     {
       "final" : {
+        "follow" : false,
         "mode" : "sleep",
         "open" : false,
         "status" : 0
@@ -595,6 +627,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "raise",
         "open" : true,
         "status" : 0
@@ -610,6 +643,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : false,
         "status" : 0
@@ -621,6 +655,7 @@
     },
     {
       "final" : {
+        "follow" : true,
         "mode" : "none",
         "open" : true,
         "status" : 0
@@ -636,6 +671,82 @@
         "4060 pose none"
       ],
       "name" : "cheer-open-queues-wave"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "work",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode work"
+      ],
+      "name" : "follow-collapsed-working-stops"
+    },
+    {
+      "final" : {
+        "follow" : true,
+        "mode" : "work",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode work",
+        "100 open quick"
+      ],
+      "name" : "follow-open-working-follows"
+    },
+    {
+      "final" : {
+        "follow" : true,
+        "mode" : "none",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 close"
+      ],
+      "name" : "follow-collapsed-idle-follows"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "sleep",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode sleep"
+      ],
+      "name" : "follow-collapsed-sleep-stops"
+    },
+    {
+      "final" : {
+        "follow" : true,
+        "mode" : "none",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode work",
+        "100 mode none"
+      ],
+      "name" : "follow-collapsed-work-ends-follows-again"
+    },
+    {
+      "final" : {
+        "follow" : true,
+        "mode" : "raise",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode work",
+        "100 mode raise"
+      ],
+      "name" : "follow-collapsed-needs-you-follows"
     }
   ]
 }

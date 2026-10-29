@@ -157,6 +157,12 @@ public sealed class MascotMachine
     /// <summary>有 AI 需要你（要權限、問你問題）：舉手，優先於工作中與睡覺</summary>
     public bool IsNeedsYou { get; private set; }
 
+    /// <summary>
+    /// 臉跟著游標轉（ADR-0016 第 6 節，2026-10-29 使用者決定）：展開時一律追；收合時醒著沒事（待命、舉手）照舊追，
+    /// AI 工作中不追（低頭敲鍵盤的動畫才不會被打斷）、睡著不追。和 Swift 的 followsPointer 相同，fixtures/mascot 的 golden 比對
+    /// </summary>
+    public bool FollowsPointer => IsOpen || (Mode != MascotMode.Work && Mode != MascotMode.Sleep);
+
     public bool IsIntro => IntroUntil is not null;
     public bool IsBusy => Playing is not null || RestUntil is not null;
     private bool IsBusyWithLong => IsBusy && Playing?.Kind != MascotAnimationKind.Tap;
