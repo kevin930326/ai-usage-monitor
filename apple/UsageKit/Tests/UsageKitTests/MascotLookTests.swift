@@ -29,6 +29,11 @@ import Testing
             // 亮 > 主色 > 暗（三階分得出明暗）
             #expect(tones.light.reduce(0, +) > tones.mid.reduce(0, +) && tones.mid.reduce(0, +) > tones.shade.reduce(0, +))
         }
+        // 亮 = 往白色 60%、暗 = 半亮度（ADR-0021 第 5 節）：LED 琥珀 #FFB547
+        let led = try #require(file.looks.first { $0.id == "X9" }?.effectTint)
+        #expect(led.mid == [255, 181, 71])
+        #expect(zip(led.light, [255, 225.4, 181.4]).allSatisfy { abs($0 - $1) < 0.01 })
+        #expect(led.shade == [127.5, 90.5, 35.5])
     }
 
     @Test func rejectsIncompleteLooks() throws {
