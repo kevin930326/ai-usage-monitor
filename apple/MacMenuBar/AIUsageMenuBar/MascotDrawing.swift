@@ -66,6 +66,22 @@ struct MascotPainter {
         drawEffects(frame, placed: placed, in: &context)
     }
 
+    /// 看滑鼠時的角色圖層（`MascotHeroLayerView`）：角色與特效，不含光暈與漣漪（光暈留在瀏海畫布上、不必每格重畫）
+    func drawCharacter(_ frame: MascotFrame, in cg: CGContext) {
+        var surface = MascotCGSurface(cg)
+        drawCharacter(frame, in: &surface)
+    }
+
+    func drawCharacter<S: MascotSurface>(_ frame: MascotFrame, in surface: inout S) {
+        let placed = drawHero(frame, in: &surface, glow: false)
+        drawEffects(frame, placed: placed, in: &surface)
+    }
+
+    /// 只畫光暈（角色交給 `MascotHeroLayerView` 時，瀏海畫布上留下的部分）
+    func drawGlow(_ frame: MascotFrame, in context: inout GraphicsContext) {
+        drawHero(frame, in: &context, glowOnly: true)
+    }
+
     // MARK: - 顏色
 
     private func mix(_ a: [Double], _ b: [Double], _ t: Double) -> [Double] {
@@ -169,7 +185,8 @@ struct MascotPainter {
 
     /// 畫角色；回傳實際畫的位置與半徑（特效依它放）
     @discardableResult
-    func drawHero(_ frame: MascotFrame, in context: inout GraphicsContext) -> (x: Double, y: Double, r: Double) {
+    func drawHero<S: MascotSurface>(_ frame: MascotFrame, in context: inout S, glow: Bool = true,
+                                    glowOnly: Bool = false) -> (x: Double, y: Double, r: Double) {
         let h = frame.pose, now = Double(frame.time)
         let R = h[.r] * h[.sc]
         guard R >= 0.5 else { return (h[.x], h[.y], 0) }
@@ -184,17 +201,18 @@ struct MascotPainter {
         let look = frame.look
         let target = bodyTint(frame)
 
-        if h[.glow] > 0 {
+        if glow, h[.glow] > 0 {
             let gc = glowColor(frame)
             let alpha = min(0.6, hero.glow.alpha * h[.glow] * (look?.glowScale ?? 1))
             let g = Gradient(stops: [.init(color: color(gc, alpha), location: 0),
                                      .init(color: color(gc, 0), location: 1)])
             let rect = CGRect(x: x - R * 3.3, y: y - R * 3.3, width: R * 6.6, height: R * 6.6)
-            context.fill(Path(rect), with: .radialGradient(g, center: CGPoint(x: x, y: y),
-                                                           startRadius: R * hero.glow.inner, endRadius: R * hero.glow.outer))
+            context.fillRadial(Path(rect), gradient: g, center: CGPoint(x: x, y: y),
+                               startRadius: R * hero.glow.inner, endRadius: R * hero.glow.outer)
         }
+        if glowOnly { return (x, y, R) }
 
-        func sphere(_ cx: Double, _ cy: Double, _ r: Double, alpha: Double = 1, in g: inout GraphicsContext) {
+        func sphere(_ cx: Double, _ cy: Double, _ r: Double, alpha: Double = 1, in g: inout S) {
             guard r > 0.05 else { return }
             let t = target == nil ? 0 : h[.tint]
             let to = target ?? (white.light, white.mid, white.shade)
@@ -243,14 +261,14 @@ struct MascotPainter {
                 hands.append(Hand(x: p.x * k, y: p.y * k, z: p.z, s: 1 + p.z * hero.hand.depthScale))
             }
         }
-        func drawHand(_ p: Hand, in g: inout GraphicsContext) {
+        func drawHand(_ p: Hand, in g: inout S) {
             let cx = x + p.x * R * sx, cy = y + p.y * R * sy, r = R * hero.hand.radius * p.s * min(max(h[.hands] * 1.3, 0), 1)
             let alpha = min(max(h[.hands] * 2, 0), 1)
             var drawn = false
             if let look, look.style.isEffect || look.style == .linear, h[.tint] > 0.99, r > 0.05 {
                 g.withCGContext { cg in
                     cg.setAlpha(alpha)
-                    drawn = MascotLookRenderer.drawHand(look, center: CGPoint(x: cx, y: cy), radius: r, in: cg)
+                    drawn = MascotLookRenderer.drawHand(look, center: CGPoint(x: cx, y: cy), radius: r, glowScale: g.glowScale, in: cg)
                 }
             }
             if !drawn { sphere(cx, cy, r, alpha: alpha, in: &g) }
@@ -279,13 +297,13 @@ struct MascotPainter {
             // 外觀的身體；過場時從白色漸變過去
             let face = MascotLookRenderer.Face(yaw: yaw, pitch: pitch, eye: hero.eye,
                                                pillOpen: eyes == .pill ? h[.open] * (1 - dash) : nil)
-            let t = h[.tint]
+            let t = h[.tint], glowScale = body.glowScale
             body.withCGContext { cg in
                 if t < 0.99 {
                     cg.setAlpha(t)
                     cg.beginTransparencyLayer(auxiliaryInfo: nil)
                 }
-                MascotLookRenderer.drawBody(look, radius: R, face: face, time: frame.effectTime, in: cg)
+                MascotLookRenderer.drawBody(look, radius: R, face: face, time: frame.effectTime, glowScale: glowScale, in: cg)
                 if t < 0.99 { cg.endTransparencyLayer() }
             }
         }
@@ -308,7 +326,8 @@ struct MascotPainter {
                 g.translateBy(x: p.x, y: p.y)
                 g.rotate(by: .radians(roll))
                 let rx = R * 0.17 * p.fx, ry = R * 0.09
-                g.fill(Path(ellipseIn: CGRect(x: -rx, y: -ry, width: 2 * rx, height: 2 * ry)), with: .color(Color(red: 1, green: 0.47, blue: 0.59)))
+                g.fill(Path(ellipseIn: CGRect(x: -rx, y: -ry, width: 2 * rx, height: 2 * ry)),
+                       color: Color(red: 1, green: 0.47, blue: 0.59))
             }
         }
         if showsMood, frame.mood.brow != .none {
@@ -329,7 +348,7 @@ struct MascotPainter {
                 var path = Path()
                 path.move(to: CGPoint(x: -w / 2, y: 0))
                 path.addLine(to: CGPoint(x: w / 2, y: 0))
-                g.stroke(path, with: .color(ink), style: StrokeStyle(lineWidth: R * b.thickness, lineCap: .round))
+                g.stroke(path, color: ink, style: StrokeStyle(lineWidth: R * b.thickness, lineCap: .round))
             }
         }
         for s in [-1.0, 1.0] where lookEyes != nil {
@@ -337,7 +356,7 @@ struct MascotPainter {
             var g = context
             g.opacity = p.a
             // ASCII、線框、霓虹的眼睛會發光
-            if lookEyes?.glow == true { g.addFilter(.shadow(color: ink, radius: R * 0.15)) }
+            if lookEyes?.glow == true { g.addShadow(color: ink, radius: R * 0.15) }
             g.translateBy(x: p.x, y: p.y)
             g.rotate(by: .radians(roll))
             let round = StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round)
@@ -348,19 +367,19 @@ struct MascotPainter {
                 let height = max(hh, R * 0.1)
                 g.translateBy(x: 0, y: dash * R * 0.1)
                 g.fill(Path(roundedRect: CGRect(x: -w / 2, y: -height / 2, width: w, height: height),
-                            cornerRadius: min(w, height) / 2), with: .color(ink))
+                            cornerRadius: min(w, height) / 2), color: ink)
             case .happy:
                 let w = R * 0.16 * p.fx
                 var path = Path()
                 path.move(to: CGPoint(x: -w, y: R * 0.06))
                 path.addQuadCurve(to: CGPoint(x: w, y: R * 0.06), control: CGPoint(x: 0, y: -R * 0.2))
                 var style = round; style.lineWidth = R * 0.12
-                g.stroke(path, with: .color(ink), style: style)
+                g.stroke(path, color: ink, style: style)
             case .dot:
                 // 表情（擔心、驚訝）的小圓點比嚇到時大一點，迷你角色上也看得到
                 let k = showsMood ? 0.13 : 0.1
                 g.fill(Path(ellipseIn: CGRect(x: -R * k * p.fx, y: -R * k * p.fy, width: 2 * R * k * p.fx, height: 2 * R * k * p.fy)),
-                       with: .color(ink))
+                       color: ink)
             case .xx:
                 let w = R * 0.12 * p.fx
                 var path = Path()
@@ -368,7 +387,7 @@ struct MascotPainter {
                 path.addLine(to: CGPoint(x: s * w, y: 0))
                 path.addLine(to: CGPoint(x: -s * w, y: R * 0.13))
                 var style = round; style.lineWidth = R * 0.1
-                g.stroke(path, with: .color(ink), style: style)
+                g.stroke(path, color: ink, style: style)
             case .cross:
                 let w = R * 0.11 * p.fx, hh = R * 0.11 * p.fy
                 var path = Path()
@@ -377,7 +396,7 @@ struct MascotPainter {
                 path.move(to: CGPoint(x: -w, y: hh))
                 path.addLine(to: CGPoint(x: w, y: -hh))
                 var style = round; style.lineWidth = R * 0.085
-                g.stroke(path, with: .color(ink), style: style)
+                g.stroke(path, color: ink, style: style)
             case .spiral:
                 g.rotate(by: .radians(now / 110 * s))
                 var path = Path()
@@ -389,7 +408,7 @@ struct MascotPainter {
                     t += 0.25
                 }
                 var style = round; style.lineWidth = R * 0.065
-                g.stroke(path, with: .color(ink), style: style)
+                g.stroke(path, color: ink, style: style)
             }
         }
 
@@ -400,16 +419,16 @@ struct MascotPainter {
             var g = context
             g.opacity = h[.kb]
             g.fill(Path(roundedRect: CGRect(x: kx - kw / 2, y: ky - kh / 2, width: kw, height: kh), cornerRadius: kh / 2),
-                   with: .color(color(MascotConfig.rgb(k.color))))
+                   color: color(MascotConfig.rgb(k.color)))
             let shine = CGRect(x: kx + kw * k.shine.x, y: ky + kh * k.shine.y, width: kw * k.shine.width, height: kh * k.shine.height)
-            g.fill(Path(shine), with: .color(.white.opacity(k.shine.alpha)))
+            g.fill(Path(shine), color: .white.opacity(k.shine.alpha))
             let keyColor = color(MascotConfig.rgb(k.keys.color))
             let lit = color(look?.glow ?? frame.character.tint(config.palette).glow)
             for i in 0..<k.keys.count {
                 let on = sin(now / 62 + Double(i) * k.keys.phase) > k.keys.onAbove
                 let rect = CGRect(x: kx + kw * (k.keys.x + Double(i) * k.keys.step), y: ky + kh * k.keys.y,
                                   width: kw * k.keys.width, height: kh * k.keys.height)
-                g.fill(Path(rect), with: .color(on ? lit : keyColor))
+                g.fill(Path(rect), color: on ? lit : keyColor)
             }
         }
 
@@ -423,7 +442,7 @@ struct MascotPainter {
             drop.addQuadCurve(to: CGPoint(x: cx + s, y: cy + s * 0.2), control: CGPoint(x: cx + s * 0.9, y: cy - s * 0.6))
             drop.addArc(center: CGPoint(x: cx, y: cy + s * 0.2), radius: s, startAngle: .zero, endAngle: .degrees(180), clockwise: false)
             drop.addQuadCurve(to: CGPoint(x: cx, y: cy - s * 1.6), control: CGPoint(x: cx - s * 0.9, y: cy - s * 0.6))
-            context.fill(drop, with: .color(Color(red: 0.62, green: 0.82, blue: 1)))
+            context.fill(drop, color: Color(red: 0.62, green: 0.82, blue: 1))
         }
         return (x, y, R)
     }
@@ -431,20 +450,20 @@ struct MascotPainter {
     // MARK: - 特效
 
     /// 小電腦（螢幕＋底座）：思考泡泡右邊，表示是別台電腦在跑。size 是角色半徑
-    private func drawComputer(at c: CGPoint, size R: Double, in context: inout GraphicsContext) {
+    private func drawComputer<S: MascotSurface>(at c: CGPoint, size R: Double, in context: inout S) {
         let w = R * 0.66, h = R * 0.46, line = max(0.8, R * 0.09)
         let screen = CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h)
         let tint = Color(red: 0.85, green: 0.85, blue: 0.89)
-        context.stroke(Path(roundedRect: screen, cornerRadius: R * 0.07), with: .color(tint), lineWidth: line)
+        context.stroke(Path(roundedRect: screen, cornerRadius: R * 0.07), color: tint, style: StrokeStyle(lineWidth: line))
         var stand = Path()
         stand.move(to: CGPoint(x: c.x, y: screen.maxY))
         stand.addLine(to: CGPoint(x: c.x, y: screen.maxY + R * 0.12))
         stand.move(to: CGPoint(x: c.x - w * 0.28, y: screen.maxY + R * 0.14))
         stand.addLine(to: CGPoint(x: c.x + w * 0.28, y: screen.maxY + R * 0.14))
-        context.stroke(stand, with: .color(tint), style: StrokeStyle(lineWidth: line, lineCap: .round))
+        context.stroke(stand, color: tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
     }
 
-    private func drawEffects(_ frame: MascotFrame, placed: (x: Double, y: Double, r: Double), in context: inout GraphicsContext) {
+    private func drawEffects<S: MascotSurface>(_ frame: MascotFrame, placed: (x: Double, y: Double, r: Double), in context: inout S) {
         let (x, y, R) = placed
         guard R >= 2 else { return }
         let now = Double(frame.time)
@@ -462,7 +481,7 @@ struct MascotPainter {
                 let r = R * 0.128
                 let center = CGPoint(x: x + R * 0.95 + Double(i) * R * 0.367, y: y - R * 0.95)
                 context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
-                             with: .color(i < lit ? on : Color.white.opacity(0.22)))
+                             color: i < lit ? on : Color.white.opacity(0.22))
             }
             // 小電腦：收合時在點的右邊；展開時在中間那顆點的上方（放在右邊會超出角色卡）
             if frame.remoteBadge {
@@ -496,7 +515,7 @@ struct MascotPainter {
             case .ring(let level):
                 let r = R * (1.1 + MascotEase.out(u) * 1.9)
                 context.stroke(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)),
-                               with: .color(color(statusColor(Double(level)), (1 - u) * 0.9)), lineWidth: 2.4 * (1 - u) + 0.4)
+                               color: color(statusColor(Double(level)), (1 - u) * 0.9), style: StrokeStyle(lineWidth: 2.4 * (1 - u) + 0.4))
             case .heart:
                 drawHeart(at: CGPoint(x: x + R * 0.95, y: y - R * 0.7 - u * R), size: R * 0.22 * (0.6 + 0.4 * min(1, u * 4)),
                           alpha: 1 - u, in: &context)
@@ -505,25 +524,23 @@ struct MascotPainter {
                 g.opacity = u < 0.8 ? 1 : (1 - u) / 0.2
                 let k = min(1, u * 6)
                 let yellow = Color(red: 1, green: 0xD2 / 255, blue: 0x5E / 255)
-                g.draw(Text("!").font(.system(size: R * 0.62, weight: .semibold)).foregroundColor(yellow),
-                       at: CGPoint(x: x + R * 0.85, y: y - R * 0.7 - k * 4), anchor: .bottomLeading)
-                g.draw(Text("!").font(.system(size: R * 0.45, weight: .semibold)).foregroundColor(yellow),
-                       at: CGPoint(x: x + R * 1.15, y: y - R * 0.92 - k * 4), anchor: .bottomLeading)
+                g.drawMark("!", size: R * 0.62, color: yellow, at: CGPoint(x: x + R * 0.85, y: y - R * 0.7 - k * 4))
+                g.drawMark("!", size: R * 0.45, color: yellow, at: CGPoint(x: x + R * 1.15, y: y - R * 0.92 - k * 4))
             }
         }
     }
 
     /// 「z」：左下角在 `origin`，高 `size`
-    private func drawZ(at origin: CGPoint, size s: Double, in context: inout GraphicsContext, color: Color) {
+    private func drawZ<S: MascotSurface>(at origin: CGPoint, size s: Double, in context: inout S, color: Color) {
         var path = Path()
         path.move(to: CGPoint(x: origin.x, y: origin.y - s))
         path.addLine(to: CGPoint(x: origin.x + s * 0.8, y: origin.y - s))
         path.addLine(to: CGPoint(x: origin.x, y: origin.y))
         path.addLine(to: CGPoint(x: origin.x + s * 0.8, y: origin.y))
-        context.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: max(s * 0.17, 0.9), lineCap: .round, lineJoin: .round))
+        context.stroke(path, color: color, style: StrokeStyle(lineWidth: max(s * 0.17, 0.9), lineCap: .round, lineJoin: .round))
     }
 
-    private func drawStar(at c: CGPoint, size s: Double, in context: inout GraphicsContext) {
+    private func drawStar<S: MascotSurface>(at c: CGPoint, size s: Double, in context: inout S) {
         var path = Path()
         for i in 0..<10 {
             let r = i % 2 == 1 ? s * 0.45 : s, a = Double(i) * .pi / 5 - .pi / 2
@@ -531,10 +548,10 @@ struct MascotPainter {
             if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
         }
         path.closeSubpath()
-        context.fill(path, with: .color(Color(red: 1, green: 0xD2 / 255, blue: 0x5E / 255)))
+        context.fill(path, color: Color(red: 1, green: 0xD2 / 255, blue: 0x5E / 255))
     }
 
-    private func drawHeart(at c: CGPoint, size s: Double, alpha: Double, in context: inout GraphicsContext) {
+    private func drawHeart<S: MascotSurface>(at c: CGPoint, size s: Double, alpha: Double, in context: inout S) {
         var path = Path()
         path.move(to: CGPoint(x: c.x, y: c.y + s * 0.9))
         path.addCurve(to: CGPoint(x: c.x, y: c.y - s * 0.35), control1: CGPoint(x: c.x - s * 1.4, y: c.y),
@@ -543,6 +560,6 @@ struct MascotPainter {
                       control2: CGPoint(x: c.x + s * 1.4, y: c.y))
         var g = context
         g.opacity = alpha
-        g.fill(path, with: .color(Color(red: 1, green: 0x6b / 255, blue: 0x8a / 255)))
+        g.fill(path, color: Color(red: 1, green: 0x6b / 255, blue: 0x8a / 255))
     }
 }
