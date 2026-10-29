@@ -8,7 +8,7 @@
     - 閒置（圓環顯示、面板關閉）30 秒
     - 打開面板（第二個執行個體送 --show-panel）：前 2 秒（動畫）每 0.25 秒取樣記最大值，之後靜止 10 秒
     - 關閉面板（--hide-panel）後等 60 秒，再取樣 30 秒
-    - 再開關 5 次，比較第一次與最後一次關閉後的記憶體
+    - 再開關 5 次（暖機，只記錄）、再 10 次，比較這 10 次前後的記憶體（洩漏檢查）
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
       （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
     - 角色（預設的圖示樣式，ADR-0015 第 7 節「角色」）：上面的「閒置」是收合、沒在動（含每秒 4 次讀游標），「展開、靜止」是展開待著；
@@ -137,16 +137,24 @@ try {
     Send '--hide-panel' $false
     Start-Sleep -Seconds 60
     $after = Sample 30
-    $memFirst = $after.WorkingSetMB
-    for ($i = 0; $i -lt 5; $i++) {
-        Send '--show-panel' $true
-        Start-Sleep -Seconds 2
-        Send '--hide-panel' $false
-        Start-Sleep -Seconds 2
+    # 洩漏檢查：前 5 次開關是暖機（系統動畫開著時 WPF 第一次播動畫會建立快取，工作集一次多幾 MB），只記錄；
+    # 判斷洩漏用第 5 次到第 15 次之間的增加（每次都留下東西的話 10 次會累積起來）
+    function Cycles([int]$count) {
+        for ($i = 0; $i -lt $count; $i++) {
+            Send '--show-panel' $true
+            Start-Sleep -Seconds 2
+            Send '--hide-panel' $false
+            Start-Sleep -Seconds 2
+        }
+        Start-Sleep -Seconds 20
+        Sample 10
     }
-    Start-Sleep -Seconds 20
-    $last = Sample 10
-    $memGrowth = [Math]::Round($last.WorkingSetMB - $memFirst, 1)
+    $memFirst = $after
+    $warm = Cycles 5
+    $last = Cycles 10
+    $memWarmup = [Math]::Round($warm.WorkingSetMB - $memFirst.WorkingSetMB, 1)
+    $memGrowth = [Math]::Round($last.WorkingSetMB - $warm.WorkingSetMB, 1)
+    $privateGrowth = [Math]::Round($last.PrivateMB - $warm.PrivateMB, 1)
 
     # 滑鼠移上去展開、移開收起
     $hoverNote = '未展開（找不到圓環或滑鼠移動沒有送到）'
@@ -215,7 +223,8 @@ foreach ($r in $rows) {
     $lines += "| $($r[0]) | $($r[1]) | $limit | $($r[3]) |"
     if ($null -ne $r[2] -and $r[1] -gt $r[2]) { $warnings += "$($r[0]): $($r[1])% > $($r[2])%" }
 }
-$lines += "| 重複開關 5 次後的記憶體增加 | — | ≤ +5 MB | $memGrowth |"
+$lines += "| 面板開關 5 次（暖機）的記憶體增加 | — | 記錄 | $memWarmup |"
+$lines += "| 再開關 10 次的記憶體增加（工作集／私有） | — | ≤ +5 MB | $memGrowth／$privateGrowth |"
 if ($null -ne $hoverOpen) {
     $lines += "| 圖示展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
     $lines += "| 圖示展開待著（角色眨眼、看滑鼠） | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
