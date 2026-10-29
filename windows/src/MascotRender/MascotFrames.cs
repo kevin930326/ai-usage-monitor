@@ -1,0 +1,32 @@
+using AIUsageMonitor.Core;
+
+namespace AIUsageMonitor.Mascot;
+
+public static class MascotFrames
+{
+    /// <summary>從狀態機組出某一刻的畫面（同 Mac NotchCanvas.frame(at:)）。still：動畫「關閉」時眼睛不動（不眨眼、不看滑鼠）；
+    /// gaze 有值時用它（截圖固定視線）</summary>
+    public static MascotFrame From(MascotDirector director, long time, MascotCharacter character, MascotLook? look,
+        long? effectTime = null, bool still = false, (double Yaw, double Pitch)? gaze = null)
+    {
+        var g = gaze ?? (still ? (0, 0) : director.Gaze(time));
+        return new MascotFrame
+        {
+            Time = time,
+            Pose = director.Pose(time),
+            Eyes = director.Eyes(time),
+            Blink = still ? 0 : director.Blink(time),
+            GazeYaw = g.Yaw,
+            GazePitch = g.Pitch,
+            StatusColor = director.StatusColor(time),
+            Mood = director.MoodAt(time),
+            Sleeping = director.ShowsSleep,
+            Dozing = director.ShowsDoze,
+            Effects = director.Effects.ToList(),
+            Ripple = director.Ripple,
+            Character = character,
+            Look = look,
+            EffectTime = effectTime,
+        };
+    }
+}

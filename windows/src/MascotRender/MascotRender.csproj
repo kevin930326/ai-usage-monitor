@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 角色的繪製（ADR-0015 第 1 節 2026-10-29 修訂）：SkiaSharp 畫在記憶體裡的點陣圖，App 再交給 WPF 顯示。
+       不參考 WPF，Mac 也能建置、跑測試並輸出截圖（和 Mac 的 MascotDrawing 並排比對）。
+       唯一的第三方套件是 SkiaSharp：版本固定、packages.lock.json 鎖住雜湊（windows/tools/check-no-network.py 檢查） -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AIUsageMonitor.Mascot</RootNamespace>
+    <AssemblyName>AIUsageMonitor.Mascot</AssemblyName>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- CI（GitHub Actions 設 CI=true）只照鎖定檔還原：雜湊不同或鎖定檔過時就失敗 -->
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UsageCore\UsageCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="[4.153.1]" />
+  </ItemGroup>
+</Project>
