@@ -674,7 +674,8 @@ internal sealed class MascotController : IDisposable
             var blinking = Motion.MovesEyes() && director.Blink(now, tab: true) > 0;
             if (Rate != MascotRenderRate.Stopped) StoppedAt = now;
             SetRate(blinking ? MascotRenderRate.Gaze : MascotRenderRate.Stopped, null);
-            if (Motion.MovesEyes()) Start(rateTimer, blinking ? 80 : director.NextBlink(now) - now);
+            // 排在眨眼開始後 1 毫秒：剛好在開始的那一刻醒來時閉眼程度還是 0，會整段跳過（Codex C-01）
+            if (Motion.MovesEyes()) Start(rateTimer, blinking ? 80 : director.NextBlink(now) - now + 1);
             Changed?.Invoke();
             return;
         }
