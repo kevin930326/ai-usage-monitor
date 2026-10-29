@@ -83,9 +83,10 @@ checks = [
      and avg(raised_open, 1) <= 4),
     ("收合、背景執行中 ≤ 0.3%", bool(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"])
      and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
-    # 看滑鼠的高幀率（icons 第 4 部分）：展開時每秒 30 格約 5%（SwiftUI 每一格約 0.25%），停下後和展開待著同一個門檻
-    ("展開、游標一直移動 ≤ 8%；停下後 ≤ 4%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 8
-     and avg(gaze_open_still, 1) <= 4),
+    # 看滑鼠的高幀率（icons 第 4 部分）：展開時每秒 30 格約 5%（SwiftUI 每一格約 0.25%）。停下約 1 秒後高幀率要停：
+    # 停了約 0.1%，沒停就和移動時一樣約 5%，所以門檻 1%（Codex C-02）
+    ("展開、游標一直移動 ≤ 8%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 8
+     and avg(gaze_open_still, 1) <= 1),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]
 print()

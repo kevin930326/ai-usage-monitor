@@ -876,6 +876,13 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("❌ 展開、游標一直移動", result.stdout)
 
+    def test_gaze_open_tracking_that_never_stops_fails(self):
+        # 停下後高幀率沒停（一直約 5%）就失敗（Codex C-02）
+        busy = [(t, 5.0 if 277 <= t < 286 else cpu, rss) for t, cpu, rss in self.full()]
+        result = self.run_summary(busy)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 展開、游標一直移動", result.stdout)
+
     def test_busy_background_loop_fails(self):
         # 背景執行中（ADR-0017 第 7 節）：收著時的呼吸與慢速泡泡交給 Core Animation，超過 0.3% 就失敗
         busy = [(t, 0.8 if 238 <= t < 254 else cpu, rss) for t, cpu, rss in self.full()]
