@@ -25,8 +25,8 @@ internal sealed class RingWindow : Window
     public static readonly DependencyProperty ExpandProperty = DependencyProperty.Register(
         nameof(Expand), typeof(double), typeof(RingWindow), new PropertyMetadata(0.0, (d, _) => ((RingWindow)d).surface.InvalidateVisual()));
 
-    /// <summary>展開與收合的時間（秒，0.18～0.25）</summary>
-    private const double ExpandSeconds = 0.22;
+    /// <summary>展開與收合的時間（秒，0.18～0.25）；角色的大小跟著它自己的彈簧（約 0.5 秒），視窗留到它收完</summary>
+    private double ExpandSeconds => Mascot is not null ? 0.5 : 0.22;
     private const double RevealSeconds = 0.2;
     /// <summary>滑鼠離開後多久才收起（避免一碰就閃）</summary>
     private static readonly TimeSpan CollapseDelay = TimeSpan.FromSeconds(0.4);
@@ -37,6 +37,8 @@ internal sealed class RingWindow : Window
     private IntPtr handle;
     private bool pressed;
     private bool dragging;
+    /// <summary>按在展開的角色上（按住捏扁、放開是點擊；不拖動、不打開面板）</summary>
+    private bool pressedMascot;
     private NativeMethods.POINT pressCursor;
     private PixelRect pressRect;
 
@@ -153,11 +155,41 @@ internal sealed class RingWindow : Window
         else surface.InvalidateVisual();
     }
 
-    /// <summary>換圓環面（之後的角色，MASCOT-SPEC.md）</summary>
+    /// <summary>換圓環面：圓環或角色（ADR-0015 第 6 節）</summary>
     public void SetFace(IRingFace next)
     {
+        if (ReferenceEquals(face, next)) return;
+        if (Mascot is { } old)
+        {
+            old.Controller.Changed -= surface.InvalidateVisual;
+            old.Controller.CloseRequested -= CollapseNow;
+            old.Controller.HeroOnScreen = null;
+            old.Controller.ContainsPointer = null;
+        }
         face = next;
+        if (Mascot is { } mascot)
+        {
+            mascot.Controller.Changed += surface.InvalidateVisual;
+            mascot.Controller.CloseRequested += CollapseNow;
+            // 貼邊的標籤是靜態的一格：不看滑鼠（ADR-0015 第 7 節「角色」）
+            mascot.Controller.HeroOnScreen = () => IsVisible && monitor is not null && !(dock != RingDock.None && Reveal <= 0)
+                ? (ring.Left + ring.Width / 2.0, ring.Top + ring.Height / 2.0, monitor.Scale) : null;
+            mascot.Controller.ContainsPointer = () => IsMouseOver;
+        }
+        CollapseNow();
         surface.InvalidateVisual();
+    }
+
+    private MascotFace? Mascot => face as MascotFace;
+
+    /// <summary>右鍵選單開著或保持展開時不收（角色）</summary>
+    private bool KeepsOpen => Mascot?.Controller.KeepsOpen == true;
+
+    /// <summary>保持展開（角色的右鍵選單）：展開並留著</summary>
+    public void OpenPinned()
+    {
+        ignoreUntilLeave = false;
+        Open();
     }
 
     public void SetSize(double sizeDip)
@@ -196,6 +228,7 @@ internal sealed class RingWindow : Window
     private void Rest()
     {
         transition++;
+        if (hoverOpen) Mascot?.Controller.CloseNow();
         hoverOpen = false;
         collapseTimer.Stop();
         StopAnimation(ExpandProperty, 0);
@@ -209,6 +242,7 @@ internal sealed class RingWindow : Window
         collapseTimer.Stop();
         if (hoverOpen) return;
         hoverOpen = true;
+        Mascot?.Controller.PointerEntered();
         direction = RingFloatLayout.Direction(ring, monitor, ringDip);
         var expanded = RingFloatLayout.Expanded(ring, direction, monitor, ringDip);
         var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, monitor, ringDip);
@@ -232,8 +266,9 @@ internal sealed class RingWindow : Window
 
     private void Collapse()
     {
-        if (!hoverOpen) return;
+        if (!hoverOpen || KeepsOpen) return;
         hoverOpen = false;
+        Mascot?.Controller.CloseNow();
         var id = ++transition;
         Animate(ExpandProperty, 0, ExpandSeconds, () =>
         {
@@ -318,12 +353,20 @@ internal sealed class RingWindow : Window
     {
         base.OnMouseLeave(e);
         ignoreUntilLeave = false;
-        if (!pressed && hoverOpen) collapseTimer.Start();
+        if (!pressed && hoverOpen && !KeepsOpen) collapseTimer.Start();
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
+        // 展開時按在角色上：交給角色（按住捏扁、放開是點擊）
+        if (hoverOpen && Mascot is { } mascot && mascot.ToCanvas(e.GetPosition(surface)) is { } point
+            && mascot.Controller.PointerDown(point.X, point.Y))
+        {
+            pressedMascot = CaptureMouse();
+            e.Handled = true;
+            return;
+        }
         NativeMethods.GetCursorPos(out pressCursor);
         pressRect = ring;
         pressed = CaptureMouse();
@@ -334,6 +377,11 @@ internal sealed class RingWindow : Window
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+        // 手勢只在這個視窗裡偵測（繞圈、甩動、停留）
+        if (hoverOpen && Mascot is { } mascot && mascot.ToCanvas(e.GetPosition(surface)) is { } point)
+        {
+            mascot.Controller.PointerMoved(point.X, point.Y);
+        }
         if (!pressed) return;
         NativeMethods.GetCursorPos(out var cursor);
         var dx = cursor.X - pressCursor.X;
@@ -355,6 +403,14 @@ internal sealed class RingWindow : Window
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
+        if (pressedMascot)
+        {
+            pressedMascot = false;
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            if (Mascot is { } mascot && mascot.ToCanvas(e.GetPosition(surface)) is { } point) mascot.Controller.PointerUp(point.X, point.Y);
+            e.Handled = true;
+            return;
+        }
         if (!pressed) return;
         var wasDragging = dragging;
         Finish();
@@ -375,6 +431,12 @@ internal sealed class RingWindow : Window
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
         base.OnLostMouseCapture(e);
+        if (pressedMascot)
+        {
+            pressedMascot = false;
+            Mascot?.Controller.PointerUp(double.NaN, double.NaN);
+            return;
+        }
         if (!pressed) return;
         // 拖動中失去捕捉（例如按了 Win 鍵）：當作放開
         var wasDragging = dragging;
@@ -384,6 +446,7 @@ internal sealed class RingWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        SetFace(GlassRingFace.Shared);
         collapseTimer.Stop();
         BeginAnimation(ExpandProperty, null);
         BeginAnimation(RevealProperty, null);

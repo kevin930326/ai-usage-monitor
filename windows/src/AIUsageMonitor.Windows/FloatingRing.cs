@@ -33,6 +33,11 @@ internal static class FloatingRingRenderer
 {
     public static void Draw(DrawingContext dc, FloatingScene s)
     {
+        if (s.Face is MascotFace mascot)
+        {
+            DrawMascot(dc, s, mascot);
+            return;
+        }
         var p = s.Palette;
         var r = RingShape.DiscRadius(s.RingDip);
         var options = new RingFaceOptions(s.Ticks, s.PixelsPerDip);
@@ -70,34 +75,40 @@ internal static class FloatingRingRenderer
         }
 
         center += s.Shift * e;
+        var (shape, rect) = Expanded(s, center, r, e);
+        GlassDrawing.Draw(dc, shape, rect, p, critical);
+        s.Face.Draw(dc, s.Content, center, r, p, options);
+        AgentOverlay.Draw(dc, s.Content.Agent, shape, center, r, p);
+        DrawRows(dc, s, shape, center, Math.Clamp((e - 0.35) / 0.65, 0, 1), p);
+    }
+
+    /// <summary>展開到 e 時的形狀：左右展開是膠囊，上下展開是外框</summary>
+    private static (Geometry Shape, Rect Rect) Expanded(FloatingScene s, Point center, double r, double e)
+    {
         var full = RingShape.Shape(s.Direction, s.Dock, s.RingDip);
         var rect = new Rect(
             new Point(center.X + Lerp(-r, full.Left, e), center.Y + Lerp(-r, full.Top, e)),
             new Point(center.X + Lerp(r, full.Right, e), center.Y + Lerp(r, full.Bottom, e)));
-        Geometry shape;
         if (s.Direction is RingExpandDirection.Left or RingExpandDirection.Right)
         {
             var radius = rect.Height / 2;
-            shape = GlassDrawing.RoundedRect(rect, radius, radius, radius, radius);
+            return (GlassDrawing.RoundedRect(rect, radius, radius, radius, radius), rect);
         }
-        else
-        {
-            // 外框：圓環那一角與圓底同心，其他三角較小
-            var ringCorner = Lerp(r, r + RingShape.FramePad, e);
-            var other = Lerp(r, RingShape.FrameCorner, e);
-            var left = s.Dock != RingDock.Right;
-            var down = s.Direction == RingExpandDirection.Down;
-            shape = GlassDrawing.RoundedRect(rect,
-                left && down ? ringCorner : other,
-                !left && down ? ringCorner : other,
-                !left && !down ? ringCorner : other,
-                left && !down ? ringCorner : other);
-        }
-        GlassDrawing.Draw(dc, shape, rect, p, critical);
-        s.Face.Draw(dc, s.Content, center, r, p, options);
-        AgentOverlay.Draw(dc, s.Content.Agent, shape, center, r, p);
+        // 外框：圓環那一角與圓底同心，其他三角較小
+        var ringCorner = Lerp(r, r + RingShape.FramePad, e);
+        var other = Lerp(r, RingShape.FrameCorner, e);
+        var left = s.Dock != RingDock.Right;
+        var down = s.Direction == RingExpandDirection.Down;
+        return (GlassDrawing.RoundedRect(rect,
+            left && down ? ringCorner : other,
+            !left && down ? ringCorner : other,
+            !left && !down ? ringCorner : other,
+            left && !down ? ringCorner : other), rect);
+    }
 
-        var rowsOpacity = Math.Clamp((e - 0.35) / 0.65, 0, 1);
+    /// <summary>展開後的兩行：額度（或 AI 的狀態）</summary>
+    private static void DrawRows(DrawingContext dc, FloatingScene s, Geometry shape, Point center, double rowsOpacity, Palette p)
+    {
         // 沒有額度資料（還沒有 usage.json、服務都失敗）時仍寫出 AI 的狀態（Codex C-05）
         if (rowsOpacity <= 0 || (s.Details.Rows.Count == 0 && s.Content.Agent is null)) return;
         var info = RingShape.Info(s.Direction, s.Dock, s.RingDip);
@@ -118,6 +129,89 @@ internal static class FloatingRingRenderer
         }
         dc.Pop();
         dc.Pop();
+    }
+
+    private static readonly Brush MascotBody = Frozen(new SolidColorBrush(MascotFace.Body));
+    private static readonly Pen MascotEdge = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(40, 255, 255, 255))), 1));
+    private static readonly Pen AmberPen = Frozen(new Pen(Frozen(new SolidColorBrush(MascotFace.Amber)), 3));
+    private static readonly Palette MascotPalette = new(true);
+
+    private static T Frozen<T>(T freezable) where T : Freezable
+    {
+        freezable.Freeze();
+        return freezable;
+    }
+
+    /// <summary>
+    /// 角色（ADR-0015 第 6 節）：身體不透明（同 Mac 瀏海的卡片色，只有圓角外透明）、文字一律深色外觀；展開的大小跟著狀態機的面板進度
+    /// （和 Mac 一樣的彈簧），額度兩行的透明度跟著 <see cref="MascotDirector.Content"/>。需要你時外框琥珀色；等你時外框白色脈動。
+    /// </summary>
+    private static void DrawMascot(DrawingContext dc, FloatingScene s, MascotFace face)
+    {
+        var r = RingShape.DiscRadius(s.RingDip);
+        var controller = face.Controller;
+        var t = controller.Rate == MascotRenderRate.Stopped ? controller.StoppedAt : controller.Time();
+        var needsYou = s.Content.Agent?.State == AgentState.NeedsYou;
+        if (s.Reveal <= 0 && s.TabVisible is { } visible)
+        {
+            dc.PushClip(new RectangleGeometry(visible));
+            var tab = new EllipseGeometry(s.TabCenter, r, r);
+            dc.DrawGeometry(MascotBody, MascotEdge, tab);
+            dc.PushClip(tab);
+            face.DrawTab(dc, s.Content, s.TabCenter, r, visible, MascotPalette, new RingFaceOptions(false, s.PixelsPerDip));
+            dc.Pop();
+            if (needsYou) dc.DrawGeometry(null, AmberPen, new EllipseGeometry(s.TabCenter, r - 1.5, r - 1.5));
+            dc.Pop();
+            return;
+        }
+        var reveal = Ease(s.Reveal);
+        var center = new Point(s.TabCenter.X + (s.RingCenter.X - s.TabCenter.X) * reveal, s.TabCenter.Y + (s.RingCenter.Y - s.TabCenter.Y) * reveal);
+        if (s.TabVisible is { } edge && s.Dock != RingDock.None)
+        {
+            var x0 = s.Dock == RingDock.Left ? edge.Left : center.X;
+            var x1 = s.Dock == RingDock.Left ? center.X : edge.Right;
+            if (x1 > x0) dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), null, new Rect(x0, center.Y - r, x1 - x0, 2 * r));
+        }
+        // 視窗收著時一律是圓底；展開中照狀態機的進度（彈簧可能超過 1 一點，視窗只有完整展開那麼大）
+        var progress = s.Expand > 0 && controller.Director is { } d ? Math.Clamp(d.PanelShape(t).Progress, 0, 1) : 0;
+        center += s.Shift * progress;
+        var (shape, rect) = progress > 0 ? Expanded(s, center, r, progress)
+            : (new EllipseGeometry(center, r, r), new Rect(center.X - r, center.Y - r, 2 * r, 2 * r));
+        dc.DrawGeometry(MascotBody, MascotEdge, shape);
+        dc.PushClip(shape);
+        if (progress > 0) face.DrawRipple(dc, rect, s.PixelsPerDip);
+        face.DrawHero(dc, center, r, progress, s.PixelsPerDip);
+        dc.Pop();
+        if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center, r, s.PixelsPerDip);
+        if (progress <= 0 && face.ShowsPercent && s.Content.Provider.Length > 0) DrawPercent(dc, s.Content, center, r, s.PixelsPerDip);
+        if (needsYou) dc.DrawGeometry(null, AmberPen, Inset(shape, center, r));
+        else if (controller.PulseAt is { } pulse && progress <= 0)
+        {
+            var opacity = MascotController.PulseOpacity((double)(controller.Time() - pulse) / MascotController.PulseMs);
+            if (opacity > 0) dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), 255, 255, 255)), 3), Inset(shape, center, r));
+        }
+        var rows = controller.Director?.Content(t).Opacity ?? 0;
+        DrawRows(dc, s, shape, center, progress > 0 ? rows : 0, MascotPalette);
+    }
+
+    /// <summary>「角色＋%」：圓底下緣的剩餘 %（剩不到 20% 紅色）</summary>
+    private static void DrawPercent(DrawingContext dc, RingContent content, Point center, double r, double ppd)
+    {
+        var color = content.State == RingState.Critical ? MascotPalette.Critical : MascotPalette.Primary;
+        var text = GlassRingFace.Formatted($"{content.RemainingPct}%", Math.Max(8, r * 0.36), FontWeights.SemiBold, color, ppd);
+        var box = new Rect(center.X - text.WidthIncludingTrailingWhitespace / 2 - 3, center.Y + r * 0.92 - text.Height,
+            text.WidthIncludingTrailingWhitespace + 6, text.Height);
+        dc.DrawRoundedRectangle(MascotBody, null, box, box.Height / 2, box.Height / 2);
+        dc.DrawText(text, new Point(box.Left + 3, box.Top));
+    }
+
+    /// <summary>等級（ADR-0020，只看這台電腦）：角色右下角的小標籤</summary>
+    private static void DrawLevel(DrawingContext dc, int level, Point center, double r, double ppd)
+    {
+        var text = GlassRingFace.Formatted($"Lv {level}", 9, FontWeights.SemiBold, MascotPalette.Primary, ppd);
+        var box = new Rect(center.X + r * 0.25, center.Y + r * 0.62, text.WidthIncludingTrailingWhitespace + 8, text.Height + 2);
+        dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(200, 0x2a, 0x2a, 0x30)), null, box, box.Height / 2, box.Height / 2);
+        dc.DrawText(text, new Point(box.Left + 4, box.Top + 1));
     }
 
     /// <summary>一行：圖示、名稱、（用得較快）、右邊 %；下面細進度條與重置倒數</summary>
