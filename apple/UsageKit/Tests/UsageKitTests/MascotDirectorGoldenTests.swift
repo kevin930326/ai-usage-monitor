@@ -117,6 +117,7 @@ import Testing
         case "idle": director.setAgentIdle(event.on ?? false, at: t)
         case "needs": director.setNeedsYou(event.on ?? false, at: t)
         case "background": director.setBackground(event.on ?? false, at: t)
+        case "remote": director.setRemoteWorking(event.on ?? false, at: t)
         case "cheer": director.cheer(at: t, react: event.react ?? true)
         case "status": director.setStatus(event.level ?? 0, at: t, react: event.react ?? true)
         case "look": director.look(at: t, dx: event.dx ?? 0, dy: event.dy ?? 0, snap: event.snap ?? false)

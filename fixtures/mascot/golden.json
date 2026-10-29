@@ -790,6 +790,50 @@
         "100 mode think"
       ],
       "name" : "think-open-follows"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "think",
+        "open" : false,
+        "remote" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode sleep",
+        "100 mode think"
+      ],
+      "name" : "remote-working-thinks-with-computer"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "sleep",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode sleep",
+        "100 mode think",
+        "200 mode work",
+        "300 mode think",
+        "600 mode raise",
+        "700 mode think",
+        "800 mode sleep"
+      ],
+      "name" : "remote-working-priority"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "think",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode think"
+      ],
+      "name" : "remote-working-local-background-no-computer"
     }
   ]
 }

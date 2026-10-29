@@ -39,6 +39,7 @@ public class MascotGoldenTests
                 case "advance": machine.Advance(t); break;
                 case "needs": machine.SetNeedsYou(e["on"]?.GetValue<bool>() ?? false, t); break;
                 case "background": machine.SetBackground(e["on"]?.GetValue<bool>() ?? false, t); break;
+                case "remote": machine.SetRemoteWorking(e["on"]?.GetValue<bool>() ?? false, t); break;
                 case "cheer": machine.Cheer(t, e["react"]?.GetValue<bool>() ?? true); break;
                 default: throw new InvalidOperationException($"未知的事件 {e["e"]}");
             }
@@ -54,6 +55,7 @@ public class MascotGoldenTests
         if (machine.Playing is { } playing) final["playing"] = MascotNames.Name(playing.Animation);
         if (machine.Pending is { } pending) final["pending"] = MascotNames.Name(pending);
         if (machine.Queued is { } queued) final["queued"] = MascotNames.Name(queued);
+        if (machine.ThinksRemotely) final["remote"] = true;
         return new JsonObject
         {
             ["final"] = final,

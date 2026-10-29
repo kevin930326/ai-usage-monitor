@@ -182,6 +182,11 @@ public struct MascotMachine: Sendable {
     public private(set) var isNeedsYou = false
     /// AI 回合結束但還在背景工作（ADR-0017 第 7 節）：工作中之後、睡覺之前
     public private(set) var isBackground = false
+    /// 只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：同背景執行中，想（think），畫面在泡泡旁加小電腦
+    public private(set) var isRemoteWorking = false
+
+    /// think 的原因只有其他電腦（本機不是背景執行中）：畫面在泡泡旁畫小電腦
+    public var thinksRemotely: Bool { mode == .think && isRemoteWorking && !isBackground }
 
     private var holdArmAt: Int?
     private var justReleased = false
@@ -387,6 +392,13 @@ public struct MascotMachine: Sendable {
         updateMode()
     }
 
+    /// 其他電腦在工作：本機沒在工作時想（think），不睡
+    public mutating func setRemoteWorking(_ working: Bool, at time: Int) {
+        _ = begin(time)
+        isRemoteWorking = working
+        updateMode()
+    }
+
     /// AI 完成一個回合：展開時照按鈕的規則排隊揮手；收著時瀏海鼓一下、迷你角色揮手。
     /// `react` 為 false（靜音、勿擾）時什麼都不做
     public mutating func cheer(at time: Int, react: Bool = true) {
@@ -400,7 +412,7 @@ public struct MascotMachine: Sendable {
     }
 
     private mutating func updateMode() {
-        setMode(isNeedsYou ? .raise : isWorking ? .work : isBackground ? .think : isAgentIdle ? .sleep : .none)
+        setMode(isNeedsYou ? .raise : isWorking ? .work : isBackground || isRemoteWorking ? .think : isAgentIdle ? .sleep : .none)
     }
 
     /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；

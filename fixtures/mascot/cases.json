@@ -1510,6 +1510,101 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "remote-working-thinks-with-computer",
+      "note": "只有其他電腦在工作（ADR-0019）：收合時想、不看游標、不睡，泡泡旁畫小電腦",
+      "events": [
+        {
+          "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "remote",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "remote-working-priority",
+      "note": "本機工作中、需要你優先；本機背景執行中＋遠端工作中畫本機的（沒有小電腦）；遠端結束後仍閒置就睡",
+      "events": [
+        {
+          "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "remote",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 300,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 400,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 500,
+          "e": "background",
+          "on": false
+        },
+        {
+          "t": 600,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 700,
+          "e": "needs",
+          "on": false
+        },
+        {
+          "t": 800,
+          "e": "remote",
+          "on": false
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "remote-working-local-background-no-computer",
+      "note": "本機背景執行中＋遠端工作中：think，不畫小電腦",
+      "events": [
+        {
+          "t": 0,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "remote",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }
