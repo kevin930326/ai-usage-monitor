@@ -162,6 +162,8 @@ internal sealed class PanelContent : Border
                 : model.Error, 12, model.Error is null ? p.Secondary : p.Notice, margin: new Thickness(0, 4, 0, 0), wrap: true));
             body.Children.Add(Text(DataPaths.Usage, 11, p.Tertiary, margin: new Thickness(0, 6, 0, 0), wrap: true));
             yield return Card(body);
+            // 只收集 Token（--tokens-only，ADR-0011）時沒有額度資料，但有歷史就有等級（Codex C-01）
+            if (model.Level is { } only) yield return LevelCard(only);
             yield break;
         }
         var now = model.Now;
