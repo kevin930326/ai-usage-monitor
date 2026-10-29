@@ -135,6 +135,25 @@ public class MascotDirectorGoldenTests
         });
     }
 
+    /// <summary>貼邊的標籤只在會眨眼的表情排眨眼的計時器：過期、用完、擔心與睡覺、工作中不眨（Codex C-01，第 5 部分第二輪）</summary>
+    [Fact]
+    public void TabBlinksOnlyWithPillEyes()
+    {
+        var director = new MascotDirector(Config());
+        director.Advance(10_000);
+        Assert.True(director.CanBlink(10_000, tab: true));
+        foreach (var mood in new[] { MascotMood.Stale, MascotMood.Out, MascotMood.Worried })
+        {
+            director.SetMood(mood);
+            Assert.False(director.CanBlink(10_000, tab: true), mood.ToString());
+            Assert.Equal(0, director.Blink(director.NextBlink(10_000) + 60, tab: true));
+        }
+        director.SetMood(MascotMood.Normal);
+        director.SetWorking(true, 10_000);
+        director.Advance(12_000);
+        Assert.False(director.CanBlink(12_000, tab: true));
+    }
+
     [Fact]
     public void GoldenMatchesDirector()
     {

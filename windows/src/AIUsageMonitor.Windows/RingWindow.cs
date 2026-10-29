@@ -182,8 +182,12 @@ internal sealed class RingWindow : Window
             mascot.Controller.Changed += surface.InvalidateVisual;
             mascot.Controller.CloseRequested += CollapseNow;
             // 貼邊的標籤是靜態的一格：不看滑鼠（ADR-0015 第 7 節「角色」）
+            // 角色實際畫的位置（展開中往膠囊左端移、推回工作區的距離都照畫的那一格，Codex C-02）；還沒畫過時用圓環中心
             mascot.Controller.HeroOnScreen = () => IsVisible && monitor is not null && !Docked
-                ? (ring.Left + ring.Width / 2.0, ring.Top + ring.Height / 2.0, monitor.Scale) : null;
+                ? mascot.HeroCenter is { } c
+                    ? (stage.Left + c.X * monitor.Scale, stage.Top + c.Y * monitor.Scale, monitor.Scale)
+                    : (ring.Left + ring.Width / 2.0, ring.Top + ring.Height / 2.0, monitor.Scale)
+                : null;
             mascot.Controller.ContainsPointer = () => IsMouseOver;
             mascot.Controller.SetDocked(Docked);
         }
@@ -254,7 +258,7 @@ internal sealed class RingWindow : Window
         if (hoverOpen) return;
         hoverOpen = true;
         Mascot?.Controller.PointerEntered();
-        direction = RingFloatLayout.Direction(ring, monitor, ringDip);
+        direction = RingFloatLayout.Direction(ring, monitor, ringDip, capsule: Mascot is not null);
         var expanded = RingFloatLayout.Expanded(ring, direction, monitor, ringDip);
         var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, monitor, ringDip);
         shift = new Vector(dx / monitor.Scale, dy / monitor.Scale);

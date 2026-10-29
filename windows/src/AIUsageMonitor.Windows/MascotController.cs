@@ -667,14 +667,21 @@ internal sealed class MascotController : IDisposable
         }
         var now = Time();
         if (director.NextDeadline is { } deadline) Start(deadlineTimer, deadline - now);
-        if (docked && !director.Machine.IsOpen)
+        var tabBusy = Motion.AnimatesEffects() && !director.IsStill && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think;
+        if (docked && !director.Machine.IsOpen && !tabBusy)
         {
-            // 標籤只畫停住的一格：狀態機照常到期，但不重畫
+            // 醒著的標籤：停住的一格（看向螢幕內側、不看滑鼠），只在眨眼的那 0.3 秒重畫
+            var blinking = Motion.MovesEyes() && director.Blink(now, tab: true) > 0;
             if (Rate != MascotRenderRate.Stopped) StoppedAt = now;
-            SetRate(MascotRenderRate.Stopped, null);
+            SetRate(blinking ? MascotRenderRate.Gaze : MascotRenderRate.Stopped, null);
+            // 排在眨眼開始後 1 毫秒：剛好在開始的那一刻醒來時閉眼程度還是 0，會整段跳過（Codex C-01）。
+            // 表情不眨眼（過期、用完、擔心）時不排：表情改變時 Mutate 會再 Refresh（第二輪 Codex C-01）
+            if (Motion.MovesEyes() && (blinking || director.CanBlink(now, tab: true)))
+                Start(rateTimer, blinking ? 80 : director.NextBlink(now) - now + 1);
             Changed?.Invoke();
             return;
         }
+        // 工作中、睡著的標籤照收合的一輪（敲鍵盤＋泡泡、閉眼＋z）
         var animating = director.IsAnimating(now);
         var motion = Motion;
         var live = director.IsLive && motion.MovesEyes();

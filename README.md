@@ -248,6 +248,8 @@ If Python is missing, it asks whether to install it with winget; downloaded file
 - **Download the zip** (no .NET needed): from [Releases](https://github.com/kevin930326/ai-usage-monitor/releases), download `AIUsageMonitor-windows-x64-1.0.0.zip` for your architecture (`-arm64-` for ARM64), compare it with `SHA256SUMS-windows` using `Get-FileHash <zip> -Algorithm SHA256`, extract it to a fixed location and open `AIUsageMonitor.exe`. It has no code signature, so the first launch shows SmartScreen; click More info → Run anyway.
 - **Install with the repo's script** (verifies the SHA-256 for you; run it again to update): in the repo folder, run `powershell -ExecutionPolicy Bypass -File scripts\install-windows-app.ps1 -FromRelease`. Without `-FromRelease` it builds from source with the .NET 10 SDK.
 
+**Opening it again after Quit** (right-click menu → Quit): the script adds **AI Usage Monitor** to your Start menu, so open it from there. Or press Win+R and run `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp\AIUsageMonitor.exe` (for the zip, open `AIUsageMonitor.exe` from the folder where you extracted it). It also starts again at the next sign-in if "Launch at login" is on.
+
 For details and the real-device checklist see [windows/README.md](windows/README.md) (ADR-0015).
 
 ### Uninstall
