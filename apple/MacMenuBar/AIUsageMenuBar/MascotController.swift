@@ -384,6 +384,14 @@ final class MascotController {
             && !machine.isHolding && machine.mode != .sleep
         let gesture = gestures?.move(to: point, at: t, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r],
                                      canDetect: canDetect)
+        // 游標在瀏海上每動一次都會來（每秒 60～120 次）：沒有手勢、而且照重畫頻率在畫時只安靜地往前推狀態機的時間
+        // （`move` 只做這件事，到期的轉換由 deadlineTimer 處理），不觸發 SwiftUI 重排整個瀏海
+        if gesture == nil, renderRate.followsGaze, var quiet = directorValue {
+            quiet.move(at: t)
+            directorValue = quiet
+            scheduleHoverCheck()
+            return
+        }
         mutate {
             $0.move(at: t)
             if let gesture { $0.gesture(gesture, at: t) }
