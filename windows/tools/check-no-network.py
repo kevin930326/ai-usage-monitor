@@ -146,15 +146,21 @@ def check_skia(path: Path, code: str, rel: Path) -> list[str]:
         return [f"{rel}: 找不到或讀不懂 packages.lock.json"]
     problems = []
     frameworks = lock.get("dependencies") or {}
-    if not frameworks:
+    if not any("/" not in f for f in frameworks):
         return [f"{rel}: packages.lock.json 沒有任何 framework"]
     for framework, packages in frameworks.items():
-        # 每個 framework 都要有這三個（空的鎖定檔不算數，Fable F-07）
-        if set(packages) - {n for n, e in packages.items() if e.get("type") == "Project"} != SKIA_LOCKED:
-            problems.append(f"{rel}: packages.lock.json 的 {framework} 要剛好有 {', '.join(sorted(SKIA_LOCKED))}")
-        direct = packages.get("SkiaSharp", {})
-        if direct.get("type") != "Direct" or direct.get("requested") != f"[{version}, {version}]":
-            problems.append(f"{rel}: packages.lock.json 的 SkiaSharp 要直接參考 [{version}, {version}]（{framework}）")
+        names = set(packages) - {n for n, e in packages.items() if e.get("type") == "Project"}
+        if "/" in framework:
+            # 平台的區段（net10.0/win-x64）：只記原生檔
+            if not names or not names <= SKIA_LOCKED - {"SkiaSharp"}:
+                problems.append(f"{rel}: packages.lock.json 的 {framework} 只能有 SkiaSharp 的原生檔")
+        else:
+            # 每個 framework 都要有這三個（空的鎖定檔不算數，Fable F-07）
+            if names != SKIA_LOCKED:
+                problems.append(f"{rel}: packages.lock.json 的 {framework} 要剛好有 {', '.join(sorted(SKIA_LOCKED))}")
+            direct = packages.get("SkiaSharp", {})
+            if direct.get("type") != "Direct" or direct.get("requested") != f"[{version}, {version}]":
+                problems.append(f"{rel}: packages.lock.json 的 SkiaSharp 要直接參考 [{version}, {version}]（{framework}）")
         for name, entry in packages.items():
             if entry.get("type") == "Project":
                 continue
