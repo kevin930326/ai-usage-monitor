@@ -66,10 +66,9 @@ final class NotchPanelController {
                     MainActor.assumeIsolated { NotchPanelController.shared.place() }
                 })
         }
+        // 新的面板：控制器還在看滑鼠的話（`heroOnLayer` 沒變、不會再通知）由 `place` 啟動角色的圖層
         place()
         panel?.orderFrontRegardless()
-        // 新的面板：控制器還在看滑鼠的話（`heroOnLayer` 沒變、不會再通知）由這裡啟動角色的圖層
-        heroLayerChanged()
         MascotController.shared.panelVisibilityChanged()
     }
 
@@ -91,6 +90,8 @@ final class NotchPanelController {
         MascotController.shared.setLayout(layout)
         // 和控制器記錄的大小一致（收著時的提醒動畫也算展開中），之後的 setExpanded 才不會漏掉（Codex C-03）
         panel.place(on: screen, layout: layout, expanded: MascotController.shared.windowExpanded)
+        // 換了螢幕或解析度：看滑鼠的圖層重新取倍率、更新率與裁切的形狀（Fable G2-09）
+        heroLayerChanged()
     }
 
     static func targetScreen() -> NSScreen? {

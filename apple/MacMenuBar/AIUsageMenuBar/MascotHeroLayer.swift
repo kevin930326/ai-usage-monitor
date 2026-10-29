@@ -45,7 +45,9 @@ final class MascotHeroLayerView: NSView {
         var remoteBadge: Bool
         var remoteBadgeAbove: Bool
         var dozing: Bool
+        var dozeRise: Double?
         var sleeping: Bool
+        var statusColor: Double
 
         init(_ f: MascotFrame) {
             pose = f.pose.values
@@ -57,7 +59,9 @@ final class MascotHeroLayerView: NSView {
             remoteBadge = f.remoteBadge
             remoteBadgeAbove = f.remoteBadgeAbove
             dozing = f.dozing
+            dozeRise = f.dozeRise
             sleeping = f.sleeping
+            statusColor = f.statusColor
         }
     }
 
