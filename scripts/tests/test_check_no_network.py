@@ -1,4 +1,5 @@
 """windows/tools/check-no-network.py：Windows App 不連網、不碰密鑰的靜態檢查（ADR-0015 第 2 節，F-12）。"""
+import json
 import subprocess
 import sys
 import tempfile
@@ -100,6 +101,76 @@ class CheckNoNetworkTests(unittest.TestCase):
         self.assertEqual(self.run_on({"AIUsageMonitor.Windows/A.cs": "class A { void M() { CredReadW(); } }"}).returncode, 1)
         csproj = '<Project><ItemGroup><PackageReference Include="X" Version="1" /></ItemGroup></Project>'
         self.assertEqual(self.run_on({"AIUsageMonitor.Windows/A.csproj": csproj}).returncode, 1)
+
+    def test_skia_is_the_only_package_exception(self):
+        csproj = ('<Project><PropertyGroup><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>'
+                  '<ItemGroup><PackageReference Include="SkiaSharp" Version="[4.153.1]" /></ItemGroup></Project>')
+        def lock(*names, version="4.153.1", hashed=True):
+            deps = {n: {"type": "Transitive", "resolved": version, "contentHash": "x" if hashed else ""} for n in names}
+            if "SkiaSharp" in deps:
+                deps["SkiaSharp"].update(type="Direct", requested=f"[{version}, {version}]")
+            deps["AIUsageMonitor.Core"] = {"type": "Project"}
+            return json.dumps({"version": 1, "dependencies": {"net10.0": deps}})
+        good = lock("SkiaSharp", "SkiaSharp.NativeAssets.Win32", "SkiaSharp.NativeAssets.macOS")
+        ok = {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": good}
+        self.assertEqual(self.run_on(ok).returncode, 0, self.run_on(ok).stdout)
+        # 同一個 csproj 放在 App 裡仍然不行
+        self.assertEqual(self.run_on({"AIUsageMonitor.Windows/A.csproj": csproj}).returncode, 1)
+        # 版本沒有固定、多一個套件、沒有鎖定檔、鎖定檔多了套件或版本不同、沒有雜湊
+        cases = [
+            {"MascotRender/MascotRender.csproj": csproj.replace("[4.153.1]", "4.153.1"), "MascotRender/packages.lock.json": good},
+            {"MascotRender/MascotRender.csproj": csproj.replace("</ItemGroup>", '<PackageReference Include="X" Version="[1.0.0]" /></ItemGroup>'),
+             "MascotRender/packages.lock.json": good},
+            {"MascotRender/MascotRender.csproj": csproj},
+            {"MascotRender/MascotRender.csproj": csproj.replace("true</Restore", "false</Restore"), "MascotRender/packages.lock.json": good},
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": lock("SkiaSharp", "Evil.Package")},
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": lock("SkiaSharp", version="4.154.0")},
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": lock("SkiaSharp", hashed=False)},
+            # 空的鎖定檔、少了原生檔、SkiaSharp 不是直接參考（Fable F-07）
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": json.dumps({"version": 1, "dependencies": {"net10.0": {}}})},
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": json.dumps({"version": 1})},
+            {"MascotRender/MascotRender.csproj": csproj, "MascotRender/packages.lock.json": lock("SkiaSharp")},
+            {"MascotRender/MascotRender.csproj": csproj,
+             "MascotRender/packages.lock.json": good.replace('"Direct"', '"Transitive"')},
+        ]
+        for files in cases:
+            self.assertEqual(self.run_on(files).returncode, 1, files)
+        # 同一個 csproj 裡的其他套件項目、放在別的資料夾的 MascotRender.csproj 都不行（Codex C-01）
+        for item in ('<PackageDownload Include="Other" Version="[1.0.0]" />', '<GlobalPackageReference Include="Other" Version="1.0.0" />',
+                     '<PackageVersion Include="Other" Version="1.0.0" />'):
+            files = {**ok, "MascotRender/MascotRender.csproj": csproj.replace("</ItemGroup>", item + "</ItemGroup>")}
+            self.assertEqual(self.run_on(files).returncode, 1, item)
+        self.assertEqual(self.run_on({"Other/MascotRender/MascotRender.csproj": csproj,
+                                      "Other/MascotRender/packages.lock.json": good}).returncode, 1)
+        # 繪製的程式碼也不能連網
+        self.assertEqual(self.run_on({**ok, "MascotRender/A.cs": "class A { HttpClient c; }"}).returncode, 1)
+
+    def test_packages_cannot_come_in_through_shared_files_or_other_projects(self):
+        # Fable F-01：共用設定、別的資料夾的新專案、中央套件管理、nuget.config 都不能帶套件進來
+        reference = '<Project><ItemGroup><PackageReference Include="Evil" Version="1.0.0" /></ItemGroup></Project>'
+        cases = [
+            {"../Directory.Build.props": reference},
+            {"AIUsageMonitor.Windows/Directory.Build.props": reference},
+            {"Other/Other.csproj": reference},
+            {"../Directory.Build.targets": reference.replace("PackageReference", "PackageDownload")},
+            {"Directory.Packages.props": '<Project><ItemGroup><PackageVersion Include="Evil" Version="1" /></ItemGroup></Project>'},
+            {"../Directory.Build.props": '<Project><ItemGroup><GlobalPackageReference Include="Evil" /></ItemGroup></Project>'},
+            {"../nuget.config": "<configuration />"},
+        ]
+        for files in cases:
+            self.assertEqual(self.run_on(files).returncode, 1, files)
+        # 測試專案可以參考測試套件
+        self.assertEqual(self.run_on({"../tests/T/T.csproj": reference}).returncode, 0)
+
+    def test_release_has_no_native_pdb(self):
+        tmp = Path(tempfile.mkdtemp(prefix="aum-release-"))
+        self.addCleanup(lambda: subprocess.run(["rm", "-rf", str(tmp)]))
+        (tmp / "AIUsageMonitor.exe").write_bytes(b"ok")
+        (tmp / "AIUsageMonitor.pdb").write_bytes(b"ok")
+        args = [sys.executable, str(SCRIPT), "--release", str(tmp)]
+        self.assertEqual(subprocess.run(args, capture_output=True).returncode, 0)
+        (tmp / "libSkiaSharp.pdb").write_bytes(b"x")
+        self.assertEqual(subprocess.run(args, capture_output=True).returncode, 1)
 
     def test_xaml_namespaces_are_allowed(self):
         xaml = '<Application xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" />'

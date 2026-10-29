@@ -66,6 +66,8 @@ fi
 # Windows App（ADR-0015）：Mac 上只能編譯與跑純邏輯測試；畫面、截圖與效能在 CI 的 Windows runner
 if [ "${SKIP_WINDOWS:-0}" != 1 ]; then
   run usagecore-tests   dotnet test windows/tests/UsageCore.Tests
+  # 角色的繪製（SkiaSharp，Mac 也能跑）：截圖與 Mac 基準的並排比對圖在 build/win-mascot/
+  run mascotrender-tests dotnet test windows/tests/MascotRender.Tests
   run windows-no-network python3 windows/tools/check-no-network.py
   for rid in win-x64 win-arm64; do
     run "windows-$rid" dotnet publish windows/src/AIUsageMonitor.Windows -c Release -r "$rid" --self-contained false \
