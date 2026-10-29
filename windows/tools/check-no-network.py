@@ -3,9 +3,10 @@
 
 - 原始碼不得出現網路（System.Net、HttpClient、Socket、WinHttp、WebSocket…）與認證（CredRead、PasswordVault…）的 API
 - 啟動其他程式（Process.Start、ProcessStartInfo）只能在 SystemServices.cs（觸發收集器的 schtasks.exe）
-- App、UsageCore 與 hook（AumHook，ADR-0019）不得有 PackageReference（不帶第三方程式）。唯一的例外（2026-10-29，ADR-0015
-  第 1 節）：角色的繪製 MascotRender 只能參考 SkiaSharp、版本以 [x.y.z] 固定，並且有 packages.lock.json（只含 SkiaSharp 與它的
-  Win32、macOS 原生檔，版本相同、有雜湊）
+- windows/（測試除外）的專案與共用設定（*.csproj、*.props、*.targets、Directory.*）不得參考套件（PackageReference、
+  GlobalPackageReference、PackageDownload、PackageVersion），也不得有 nuget.config、Directory.Packages.props（不帶第三方程式）。
+  唯一的例外（2026-10-29，ADR-0015 第 1 節）：角色的繪製 MascotRender.csproj 只能參考 SkiaSharp、版本以 [x.y.z] 固定，並且有
+  packages.lock.json（每個 framework 都有 SkiaSharp 與它的 Win32、macOS 原生檔，只有這三個，版本相同、有雜湊）
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
 - 唯一的例外（2026-10-29，ADR-0015 第 2 節）：事故頁連結。網址只能出現在 UsageCore/IncidentLink.cs，而且只能是
   https://status.claude.com/incidents/、https://status.openai.com/incidents/ 兩個前綴；用預設瀏覽器打開
@@ -13,7 +14,8 @@
   IncidentLink.Link 檢查
 - 這是擋誤用的靜態檢查，不追資料流：SystemServices.cs 裡用 explorer.exe 開網址、IncidentPage 裡把沒檢查過的字串交給
   ShellExecute、用字串串接組出網址，都要靠 code review 擋（ADR-0015 第 2 節）
-- 傳入 Release 版的執行檔（--release <資料夾>）時，另外確認不含 Debug 專用的字串（示範資料、截圖參數）
+- 傳入 Release 版的執行檔（--release <資料夾>）時，另外確認不含 Debug 專用的字串（示範資料、截圖參數），也沒有原生檔的
+  .pdb（libSkiaSharp.pdb 約 90 MB，由 windows/src/Directory.Build.targets 移除）
 
 用法：python3 windows/tools/check-no-network.py [--release <publish 資料夾>] [--root <windows 資料夾>（測試用）]
 """
@@ -49,6 +51,9 @@ SHELL_OPEN = re.compile(r"\bUseShellExecute\b(?!\s*=\s*false\b)")
 SKIA_PROJECT = ("MascotRender", "MascotRender.csproj")
 SKIA_REFERENCE = re.compile(r'<PackageReference\s+Include="SkiaSharp"\s+Version="\[(\d+\.\d+\.\d+)\]"\s*/>')
 SKIA_LOCKED = {"SkiaSharp", "SkiaSharp.NativeAssets.Win32", "SkiaSharp.NativeAssets.macOS"}
+# 參考套件的寫法（含中央套件管理）與會改套件來源、版本的檔案
+PACKAGE_ITEM = re.compile(r"<(PackageReference|GlobalPackageReference|PackageDownload|PackageVersion)\b")
+PACKAGE_FILES = ("nuget.config", "directory.packages.props")
 # Release 版不該有的字串（DebugTools.cs 的參數與示範資料）；.NET 的字串以 UTF-16LE 存放
 DEBUG_STRINGS = ["--render", "--demo", "aum-demo-", "DebugTools", "DemoJson"]
 
@@ -66,8 +71,28 @@ def strip_strings(text: str) -> str:
     return _TOKENS.sub(lambda m: '""' if m.group(1) else "", text)
 
 
-def check_sources(root: Path = ROOT) -> list[str]:
+def check_packages(root: Path = ROOT) -> list[str]:
+    """整個 windows/（測試除外）的專案與共用設定：只有 MascotRender.csproj 能參考套件（Fable F-01）"""
     problems = []
+    for path in sorted(root.rglob("*")):
+        rel_parts = path.relative_to(root).parts
+        if not path.is_file() or rel_parts[0] == "tests" or "obj" in rel_parts or "bin" in rel_parts:
+            continue
+        rel = path.relative_to(root.parent)
+        if path.name.lower() in PACKAGE_FILES:
+            problems.append(f"{rel}: 不允許（會改套件來源或版本）")
+            continue
+        if path.suffix not in (".csproj", ".props", ".targets") and not path.name.startswith("Directory."):
+            continue
+        if path.suffix == ".csproj" and path.parts[-2:] == SKIA_PROJECT:
+            continue
+        for m in PACKAGE_ITEM.finditer(path.read_text(encoding="utf-8")):
+            problems.append(f"{rel}: 不允許 {m.group(1)}（只有 MascotRender 能參考 SkiaSharp）")
+    return problems
+
+
+def check_sources(root: Path = ROOT) -> list[str]:
+    problems = check_packages(root)
     for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore", root / "src" / "AumHook",
                    root / "src" / "MascotRender"):
         for path in sorted(folder.rglob("*")):
@@ -102,8 +127,6 @@ def check_sources(root: Path = ROOT) -> list[str]:
                 problems.append(f"{rel}: 只有 SystemServices.cs 可以啟動其他程式")
             if path.suffix == ".csproj" and path.parts[-2:] == SKIA_PROJECT:
                 problems += check_skia(path, code, rel)
-            elif path.suffix == ".csproj" and "PackageReference" in code:
-                problems.append(f"{rel}: 不允許 PackageReference（App 與 UsageCore 不帶第三方套件）")
     return problems
 
 
@@ -122,7 +145,16 @@ def check_skia(path: Path, code: str, rel: Path) -> list[str]:
     except (OSError, ValueError):
         return [f"{rel}: 找不到或讀不懂 packages.lock.json"]
     problems = []
-    for framework, packages in lock.get("dependencies", {}).items():
+    frameworks = lock.get("dependencies") or {}
+    if not frameworks:
+        return [f"{rel}: packages.lock.json 沒有任何 framework"]
+    for framework, packages in frameworks.items():
+        # 每個 framework 都要有這三個（空的鎖定檔不算數，Fable F-07）
+        if set(packages) - {n for n, e in packages.items() if e.get("type") == "Project"} != SKIA_LOCKED:
+            problems.append(f"{rel}: packages.lock.json 的 {framework} 要剛好有 {', '.join(sorted(SKIA_LOCKED))}")
+        direct = packages.get("SkiaSharp", {})
+        if direct.get("type") != "Direct" or direct.get("requested") != f"[{version}, {version}]":
+            problems.append(f"{rel}: packages.lock.json 的 SkiaSharp 要直接參考 [{version}, {version}]（{framework}）")
         for name, entry in packages.items():
             if entry.get("type") == "Project":
                 continue
@@ -138,6 +170,9 @@ def check_release(folder: Path) -> list[str]:
     binaries = [p for p in folder.rglob("*") if p.suffix in (".dll", ".exe") and p.name.startswith(("AIUsageMonitor", "aum-hook"))]
     if not binaries:
         return [f"{folder}: 找不到 AIUsageMonitor 的執行檔"]
+    for path in folder.rglob("*.pdb"):
+        if not path.name.startswith(("AIUsageMonitor", "aum-hook")):
+            problems.append(f"{path.name}: 發行檔不帶第三方原生檔的 .pdb")
     for path in binaries:
         data = path.read_bytes()
         for s in DEBUG_STRINGS:
