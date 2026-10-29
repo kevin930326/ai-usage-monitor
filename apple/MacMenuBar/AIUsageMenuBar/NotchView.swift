@@ -373,12 +373,14 @@ struct NotchCanvas: View {
     /// VoiceOver：角色、在做什麼、額度狀態（畫面上只靠姿勢與表情，Fable F-07）
     private var heroDescription: String {
         let mode = director.isStill ? .none : director.mode
-        let activity = switch mode {
-        case .raise: "舉手，有 AI 需要你"
-        case .work: "工作中"
-        case .sleep: "睡著了"
-        case .think: "AI 在背景執行"
-        case .none: "待命"
+        let activity = if director.machine.thinksRemotely || extras.staticRemote { "其他電腦的 AI 工作中" } else {
+            switch mode {
+            case .raise: "舉手，有 AI 需要你"
+            case .work: "工作中"
+            case .sleep: "睡著了"
+            case .think: "AI 在背景執行"
+            case .none: "待命"
+            }
         }
         let status = switch director.mood {
         case .stale: "額度資料過期或讀取失敗"
