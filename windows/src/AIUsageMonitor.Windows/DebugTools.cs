@@ -9,6 +9,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using AIUsageMonitor.Core;
 
 namespace AIUsageMonitor.Windows;
@@ -119,6 +120,7 @@ internal static class DebugTools
                 Save(Path.Combine(output, $"tray-agent-{name}-{theme}.png"), TrayIcon.RenderBitmap(content, palette, 64), failures);
             }
             RenderRing2(Path.Combine(output, "ring2"), palette, theme, now, failures);
+            RenderMascot(Path.Combine(output, "mascot"), palette, theme, now, failures);
             foreach (var scenario in Scenarios)
             {
                 var model = new PanelModel(UsageDecoder.Decode(DemoJson(scenario, now)), null, now, null);
@@ -195,6 +197,57 @@ internal static class DebugTools
         }
     }
 
+    // ---------- 角色（ADR-0015 第 6 節、ADR-0016） ----------
+
+    /// <summary>
+    /// 懸浮圖示是角色時：收合（正常、偏高、用完、Codex、工作中、睡著、需要你、角色＋%、外觀）、展開（往右、往左、往下、過場中）、
+    /// 貼邊的標籤、等你的脈動，各畫在淺色與深色桌布上：<c>mascot/&lt;畫面&gt;-&lt;桌布&gt;-&lt;外觀&gt;.png</c>。
+    /// 狀態機從時間 0 開始擺好，畫固定的那一刻（同 Mac 的 DebugMascot）
+    /// </summary>
+    private static void RenderMascot(string output, Palette palette, string theme, DateTimeOffset now, List<string> failures)
+    {
+        Directory.CreateDirectory(output);
+        RingContent Content(string scenario) => RingContent.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
+        RingDetails Details(string scenario) => RingDetails.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
+        foreach (var wallpaper in new[] { "light", "dark" })
+        {
+            var dark = wallpaper == "dark";
+            void Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
+                      RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
+                      RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null)
+            {
+                var settings = new AppSettings { MascotProvider = provider, MascotLook = look, MascotFollowPointer = false };
+                var controller = new MascotController(settings, null, null, Dispatcher.CurrentDispatcher);
+                controller.Shot(time, setup, level, pulseAt);
+                var face = new MascotFace(controller) { ShowsPercent = style == RingStyle.MascotPercent };
+                var content = Content(scenario).WithAgent(agent);
+                Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"),
+                     Desk(dark, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face), failures);
+                controller.Dispose();
+            }
+            Action<MascotDirector> Open(bool intro = false) => d => d.Open(0, intro);
+            Shot("collapsed", 3000, _ => { });
+            Shot("collapsed-codex", 3000, _ => { }, provider: "codex");
+            Shot("collapsed-high", 3000, d => { d.SetStatus(1, 0, react: false); d.SetMood(MascotMood.Worried); }, scenario: "critical");
+            Shot("collapsed-out", 3000, d => { d.SetStatus(2, 0, react: false); d.SetMood(MascotMood.Out); });
+            Shot("collapsed-work", 3300, d => d.SetWorking(true, 0));
+            Shot("collapsed-sleep", 3300, d => d.SetAgentIdle(true, 0));
+            Shot("collapsed-needs-you", 3000, d => d.SetNeedsYou(true, 0), agent: AgentStates[0].Agent);
+            Shot("collapsed-percent", 3000, _ => { }, style: RingStyle.MascotPercent);
+            Shot("collapsed-pulse", 3800, _ => { }, pulseAt: 3000);
+            Shot("collapsed-neon", 3000, _ => { }, look: "X8");
+            Shot("collapsed-led", 3000, _ => { }, look: "X9");
+            Shot("expand-right", 3000, Open(), expand: 1, level: 7);
+            Shot("expand-left", 3000, Open(), scenario: "too_fast", direction: RingExpandDirection.Left, expand: 1);
+            Shot("expand-down", 3000, Open(), scenario: "critical", direction: RingExpandDirection.Down, dock: RingDock.Left, expand: 1);
+            Shot("expand-work", 3000, d => { d.Open(0, false); d.SetWorking(true, 0); }, expand: 1);
+            Shot("expand-agent", 3000, Open(), expand: 1, agent: AgentStates[0].Agent);
+            Shot("intro", 1500, Open(intro: true), expand: 1);
+            Shot("dock-tab", 3000, _ => { }, direction: RingExpandDirection.Down, dock: RingDock.Left, reveal: 0);
+            Shot("dock-tab-right", 3000, _ => { }, direction: RingExpandDirection.Down, dock: RingDock.Right, reveal: 0);
+        }
+    }
+
     private static readonly (string Name, RingAgent Agent)[] AgentStates =
     [
         ("needs-you", new RingAgent(AgentKind.Claude, AgentState.NeedsYou, AgentNeed.Permission)),
@@ -207,7 +260,8 @@ internal static class DebugTools
     /// 圓環離邊緣 8 DIP（同 RingPlacement.SnapMargin）
     /// </summary>
     private static BitmapSource Desk(bool darkWallpaper, Palette palette, RingContent content, RingDetails details,
-                                     RingExpandDirection direction, RingDock dock, double expand, bool ticks, double reveal = 1)
+                                     RingExpandDirection direction, RingDock dock, double expand, bool ticks, double reveal = 1,
+                                     IRingFace? face = null)
     {
         const double margin = 20;
         var r = RingShape.DiscRadius(RingSizeDip);
@@ -231,7 +285,7 @@ internal static class DebugTools
         var tabCenter = dock == RingDock.Left ? new Point(0, center.Y) : dock == RingDock.Right ? new Point(width, center.Y) : center;
         Rect? visible = dock == RingDock.None ? null
             : new Rect(dock == RingDock.Left ? 0 : width - RingSizeDip / 2, center.Y - RingSizeDip / 2, RingSizeDip / 2, RingSizeDip);
-        var scene = new FloatingScene(content, details, palette, GlassRingFace.Shared, ticks, RingSizeDip, direction, dock,
+        var scene = new FloatingScene(content, details, palette, face ?? GlassRingFace.Shared, ticks, RingSizeDip, direction, dock,
                                       center, tabCenter, visible, reveal, expand, Scale);
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
