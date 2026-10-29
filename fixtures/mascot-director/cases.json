@@ -1,0 +1,355 @@
+{
+  "_comment": "角色畫面（MascotDirector）的跨平台 golden 輸入（ADR-0016 第 1 節、winmascot-release 第 1 部分）：每個情境是一串依時間排列的事件（毫秒）與取樣的時間範圍。取樣前先 advance 到那個時間，同一時間先處理事件再取樣。Swift（UsageKit MascotDirectorGoldenTests）以 AUM_UPDATE_GOLDEN=1 產生 golden.json，C#（UsageCore.Tests MascotDirectorGoldenTests）必須算出同樣的值（數字容許 1e-6）。事件除了 fixtures/mascot 的那些，另有 look（dx、dy、snap）、still（on）、mood（name）、face（name，右鍵選單的表情）。參數讀 shared/mascot-anim.json。",
+  "cases": [
+    {
+      "name": "intro-then-close",
+      "note": "過場（漣漪、碎片、內容浮現）播完再收合",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": true
+        },
+        {
+          "t": 6000,
+          "e": "close"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 5600,
+          "step": 175
+        },
+        {
+          "from": 6000,
+          "to": 6900,
+          "step": 90
+        }
+      ]
+    },
+    {
+      "name": "quick-open-wave-queue-dizzy",
+      "note": "快速展開、揮手中按轉暈排隊",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 1000,
+          "e": "request",
+          "name": "wave"
+        },
+        {
+          "t": 1300,
+          "e": "request",
+          "name": "dizzy"
+        },
+        {
+          "t": 8000,
+          "e": "close"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 7900,
+          "step": 130
+        },
+        {
+          "from": 8000,
+          "to": 8700,
+          "step": 70
+        }
+      ]
+    },
+    {
+      "name": "collapsed-modes",
+      "note": "收著時工作中、需要你、完成、睡著、醒來；再展開",
+      "events": [
+        {
+          "t": 0,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 1500,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "needs",
+          "on": false
+        },
+        {
+          "t": 3200,
+          "e": "cheer"
+        },
+        {
+          "t": 6000,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 6500,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 8000,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 9500,
+          "e": "idle",
+          "on": false
+        },
+        {
+          "t": 11000,
+          "e": "working",
+          "on": true
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 12500,
+          "step": 110
+        }
+      ]
+    },
+    {
+      "name": "status-bump-and-alert",
+      "note": "收著時額度變偏高（鼓一下），展開後用完（提醒動畫）",
+      "events": [
+        {
+          "t": 0,
+          "e": "status",
+          "level": 1
+        },
+        {
+          "t": 2500,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 4000,
+          "e": "status",
+          "level": 2
+        },
+        {
+          "t": 7000,
+          "e": "status",
+          "level": 0,
+          "react": false
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 8000,
+          "step": 95
+        }
+      ]
+    },
+    {
+      "name": "squeeze-and-faces",
+      "note": "按住捏扁、放開回彈；右鍵表情；轉暈手勢",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 1000,
+          "e": "press"
+        },
+        {
+          "t": 2000,
+          "e": "release"
+        },
+        {
+          "t": 3500,
+          "e": "face",
+          "name": "sad"
+        },
+        {
+          "t": 6500,
+          "e": "gesture",
+          "name": "circle"
+        },
+        {
+          "t": 10500,
+          "e": "request",
+          "name": "shy"
+        },
+        {
+          "t": 13500,
+          "e": "request",
+          "name": "scared"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 15500,
+          "step": 120
+        }
+      ]
+    },
+    {
+      "name": "gaze-and-mood",
+      "note": "看滑鼠（平滑、直接轉到位）與平常的表情",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 1200,
+          "e": "look",
+          "dx": 200,
+          "dy": -80
+        },
+        {
+          "t": 1800,
+          "e": "look",
+          "dx": -300,
+          "dy": 150
+        },
+        {
+          "t": 2600,
+          "e": "look",
+          "dx": 40,
+          "dy": 0,
+          "snap": true
+        },
+        {
+          "t": 3000,
+          "e": "mood",
+          "name": "worried"
+        },
+        {
+          "t": 3600,
+          "e": "mood",
+          "name": "stale"
+        },
+        {
+          "t": 4200,
+          "e": "mood",
+          "name": "normal"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 5000,
+          "step": 60
+        }
+      ]
+    },
+    {
+      "name": "still-during-intro",
+      "note": "過場途中改成靜止，之後恢復並工作中",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": true
+        },
+        {
+          "t": 1500,
+          "e": "still",
+          "on": true
+        },
+        {
+          "t": 2500,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 4000,
+          "e": "still",
+          "on": false
+        },
+        {
+          "t": 6000,
+          "e": "request",
+          "name": "hop"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 7500,
+          "step": 90
+        }
+      ]
+    },
+    {
+      "name": "blink",
+      "note": "展開待著的眨眼時間（依種子）",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        }
+      ],
+      "samples": [
+        {
+          "from": 1000,
+          "to": 20000,
+          "step": 40
+        }
+      ]
+    },
+    {
+      "name": "sleep-open-and-tap-wake",
+      "note": "展開時睡著、點一下叫醒；收合後完成",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 500,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "click",
+          "choice": "hop"
+        },
+        {
+          "t": 6000,
+          "e": "close"
+        },
+        {
+          "t": 7000,
+          "e": "idle",
+          "on": false
+        },
+        {
+          "t": 7200,
+          "e": "cheer"
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 10000,
+          "step": 100
+        }
+      ]
+    }
+  ]
+}
