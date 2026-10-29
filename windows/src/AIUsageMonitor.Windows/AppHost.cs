@@ -437,6 +437,11 @@ internal sealed class AppHost : IDisposable
             menu.Items.Add(item);
         }
         if (!fromTray && settings.RingStyle != RingStyle.Ring) AddMascotItems(menu);
+        // 鍵盤與朗讀程式也能跳回工作階段（膠囊那一列是畫出來的、圓環不接收焦點；Codex C-03）：跳膠囊那一列彙總選出的這台工作階段
+        if (RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), agents.Remote) is { Session: not null } local)
+        {
+            Add(local.Ai == AgentKind.Claude ? "切到 Claude 的工作階段" : "切到 Codex 的工作階段", () => JumpTo(local));
+        }
         Add("打開面板", () => OpenPanel(fromTray));
         Add("立即更新", () => _ = RefreshAsync());
         Add("設定…", OpenSettings);
