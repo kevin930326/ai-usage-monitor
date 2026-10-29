@@ -21,6 +21,9 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
 {
     /// <summary>角色的身體（球）半徑占圓底半徑的比例</summary>
     public const double HeroFill = 0.62;
+    /// <summary>收合時 AI 工作中或睡著：思考泡泡與 z 在角色右上方，角色縮小並往左下移，才放得進圓底</summary>
+    private const double BusyFill = 0.44;
+    private static readonly Vector BusyShift = new(-0.14, 0.10);
     /// <summary>膠囊與圓底的顏色：不透明（同 Mac 瀏海的卡片色），只有圓角外透明</summary>
     public static readonly Color Body = Color.FromRgb(0x12, 0x12, 0x16);
     /// <summary>需要你的琥珀色（同 Mac 的 notchAmber）</summary>
@@ -52,21 +55,27 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     /// <summary>畫布座標的那一刻（停止時畫停住的那一刻）</summary>
     private long FrameTime() => controller.Rate == MascotRenderRate.Stopped ? controller.StoppedAt : controller.Time();
 
-    /// <summary>角色畫在 center、圓底半徑 r；progress 是展開的進度（0 收合、1 展開）</summary>
-    public void DrawHero(DrawingContext dc, Point center, double r, double progress, double ppd, bool still = false)
+    /// <summary>
+    /// 角色畫在 center、圓底半徑 r；progress 是展開的進度（0 收合、1 展開）。展開時畫在整個膠囊 bounds 裡
+    /// （過場中角色在膠囊中間，離圓底很遠）
+    /// </summary>
+    public void DrawHero(DrawingContext dc, Point center, double r, double progress, double ppd, bool still = false, Rect? bounds = null)
     {
         if (controller.Director is not { } director) return;
         var cfg = controller.Config.Hero;
         var p = Math.Clamp(progress, 0, 1);
         double ax = Lerp(cfg.Mini.X, cfg.Card.X, p), ay = Lerp(cfg.Mini.Y, cfg.Card.Y, p), ar = Lerp(cfg.Mini.Radius, cfg.Card.Radius, p);
-        var k = HeroFill * r / ar;
-        mapping = (center, k, ax, ay);
-        // 跳一下、揮手時角色會超出圓底：畫的範圍是圓底的 2.3 倍
+        var busy = !still && director.Mode is MascotMode.Work or MascotMode.Sleep ? 1 - p : 0;
+        var heroCenter = center + BusyShift * (r * busy);
+        var k = Lerp(HeroFill, BusyFill, busy) * r / ar;
+        mapping = (heroCenter, k, ax, ay);
+        // 收合時跳一下、揮手會超出圓底：畫的範圍是圓底的 2.3 倍
         var half = r * 1.15;
-        var area = new Rect(center.X - half, center.Y - half, half * 2, half * 2);
+        var area = p > 0 && bounds is { } b ? b : new Rect(center.X - half, center.Y - half, half * 2, half * 2);
+        var origin = heroCenter - area.TopLeft;
         if (!still && controller.Loop is { } loop && controller.LoopKey is { } key && p <= 0)
         {
-            var frames = LoopFrames(loop, key, area, ppd, k, ax, ay);
+            var frames = LoopFrames(loop, key, area, ppd, origin, k, ax, ay);
             var index = (int)(controller.Time() % (long)Math.Max(loop.Length, 1) * loop.Fps / 1000) % frames.Count;
             dc.DrawImage(frames[index], area);
             return;
@@ -74,27 +83,28 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         var t = still ? controller.StoppedAt : FrameTime();
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null);
-        dc.DrawImage(hero.Render(area, ppd, canvas => Paint(canvas, frame, area, ppd, k, ax, ay)), area);
+        dc.DrawImage(hero.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
     }
 
-    private void Paint(SKCanvas canvas, MascotFrame frame, Rect area, double ppd, double k, double ax, double ay)
+    /// <summary>origin：角色的錨點在畫的範圍裡的位置（DIP）</summary>
+    private void Paint(SKCanvas canvas, MascotFrame frame, double ppd, Vector origin, double k, double ax, double ay)
     {
         canvas.Scale((float)ppd);
-        canvas.Translate((float)(area.Width / 2), (float)(area.Height / 2));
+        canvas.Translate((float)origin.X, (float)origin.Y);
         canvas.Scale((float)k);
         canvas.Translate((float)-ax, (float)-ay);
         var placed = controller.Painter.DrawHero(frame, canvas);
         controller.Painter.DrawEffects(frame, placed, canvas);
     }
 
-    private List<BitmapSource> LoopFrames(MascotCollapsedMotion loop, object key, Rect area, double ppd, double k, double ax, double ay)
+    private List<BitmapSource> LoopFrames(MascotCollapsedMotion loop, object key, Rect area, double ppd, Vector origin, double k, double ax, double ay)
     {
         var full = (key, Math.Round(area.Width, 2), ppd);
         if (loops.TryGetValue(full, out var cached)) return cached;
         // 換了狀態（工作↔睡覺、表情、外觀）：舊的一輪不會再用
         loops.Clear();
         var frames = Enumerable.Range(0, loop.Count)
-            .Select(i => Slot.Snapshot(area, ppd, canvas => Paint(canvas, loop.Frame(loop.TimeOf(i)), area, ppd, k, ax, ay)))
+            .Select(i => Slot.Snapshot(area, ppd, canvas => Paint(canvas, loop.Frame(loop.TimeOf(i)), ppd, origin, k, ax, ay)))
             .ToList();
         loops[full] = frames;
         return frames;

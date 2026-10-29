@@ -180,7 +180,7 @@ internal static class FloatingRingRenderer
         dc.DrawGeometry(MascotBody, MascotEdge, shape);
         dc.PushClip(shape);
         if (progress > 0) face.DrawRipple(dc, rect, s.PixelsPerDip);
-        face.DrawHero(dc, center, r, progress, s.PixelsPerDip);
+        face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect);
         dc.Pop();
         if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center, r, s.PixelsPerDip);
         if (progress <= 0 && face.ShowsPercent && s.Content.Provider.Length > 0) DrawPercent(dc, s.Content, center, r, s.PixelsPerDip);
