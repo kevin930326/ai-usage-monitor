@@ -694,7 +694,13 @@ internal sealed class MascotController : IDisposable
             pointerStillTicks = 0;
             ScheduleGaze(1000.0 / 12);
         }
-        if (HeroOnScreen?.Invoke() is not { } hero || !NativeMethods.GetCursorPos(out var cursor)) return;
+        // 讀不到角色的位置或游標（同 Mac，Codex C-01）：高幀率也要停，回到低頻輪詢；恢復後重新對準
+        if (HeroOnScreen?.Invoke() is not { } hero || !NativeMethods.GetCursorPos(out var cursor))
+        {
+            lastPointer = null;
+            EndTracking();
+            return;
+        }
         var t = Time();
         if (director.Pose(t)[MascotProp.Follow] <= 0.01)
         {
