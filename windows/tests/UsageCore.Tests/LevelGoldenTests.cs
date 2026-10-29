@@ -4,7 +4,8 @@ using Xunit;
 namespace AIUsageMonitor.Core.Tests;
 
 /// <summary>
-/// 角色養成的跨平台一致性（ADR-0020）：讀 fixtures/level/cases.json，用 UsageCore 的 MascotLevel 算出結果，
+/// 角色養成的跨平台一致性（ADR-0020）：讀 fixtures/level/cases.json，用 UsageCore 的 MascotLevel（有 stored 時先以
+/// MascotLevelLedger 和 level.json 的內容合併）算出結果，
 /// 和 Swift（apple/UsageKit/Tests/UsageKitTests/LevelGoldenTests.swift）產生的 golden.json 比對。
 /// </summary>
 public class LevelGoldenTests
@@ -21,6 +22,12 @@ public class LevelGoldenTests
             for (var i = 0; i < r["count"]!.GetValue<int>(); i++)
                 days[start.AddDays(i).ToString("yyyy-MM-dd")] = r["tokens"]!.GetValue<long>();
         }
+        Dictionary<string, long>? stored = null;
+        if (c["stored"] is { } raw)
+        {
+            stored = MascotLevelLedger.Decode(raw.GetValue<string>());
+            if (stored is not null) days = MascotLevelLedger.Merge(stored, days);
+        }
         var level = MascotLevel.From(days, c["today"]!.GetValue<string>());
         var result = new JsonObject { ["name"] = c["name"]!.GetValue<string>() };
         if (level is not null)
@@ -35,6 +42,7 @@ public class LevelGoldenTests
                 ["xp"] = level.Xp,
             };
         }
+        if (c["stored"] is not null) result["stored_ok"] = stored is not null;
         return result;
     }
 
@@ -46,6 +54,44 @@ public class LevelGoldenTests
         Assert.Equal(golden.Count, cases.Count);
         for (var i = 0; i < cases.Count; i++)
             Assert.True(JsonNode.DeepEquals(golden[i], Run(cases[i]!)), $"{golden[i]!["name"]}: {Run(cases[i]!).ToJsonString()}");
+    }
+
+    /// <summary>清除歷史（level_days 清空）後，level.json 讓等級不變（ADR-0020 第 1 節，2026-10-29 修訂）</summary>
+    [Fact]
+    public void ClearingHistoryKeepsLevel()
+    {
+        var cases = JsonNode.Parse(File.ReadAllText(Level("cases.json")))!["cases"]!.AsArray();
+        JsonNode Result(string name) => Run(cases.First(c => c!["name"]!.GetValue<string>() == name)!)["result"]!;
+        Assert.True(JsonNode.DeepEquals(Result("before-clear-history"), Result("clear-history-keeps-level")));
+        Assert.True(Result("before-clear-history")["level"]!.GetValue<int>() >= 2);
+    }
+
+    [Fact]
+    public void LedgerFileKeepsDaysAfterHistoryIsCleared()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "aum-level-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var file = Path.Combine(folder, MascotLevelLedger.FileName);
+            var days = new Dictionary<string, long> { ["2026-10-27"] = 50_000, ["2026-10-28"] = 80_000, ["2026-10-29"] = 20_000 };
+            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29"));
+            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long>(), "2026-10-29"));
+            Assert.Equal(days, MascotLevelLedger.Decode(File.ReadAllText(file)));
+            var stamp = File.GetLastWriteTimeUtc(file);
+            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long> { ["2026-10-28"] = 1 }, "2026-10-29"));
+            Assert.Equal(stamp, File.GetLastWriteTimeUtc(file));
+
+            // 壞掉：改名保留、從歷史重建
+            File.WriteAllText(file, "{\"days\": {");
+            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29"));
+            Assert.True(File.Exists(Path.Combine(folder, MascotLevelLedger.CorruptName)));
+            Assert.Equal(days, MascotLevelLedger.Decode(File.ReadAllText(file)));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -28,6 +30,10 @@ internal sealed class AppHost : IDisposable
     private SettingsWindow? settingsWindow;
     private RefreshOutcome? hint;
     private DateTimeOffset now = Clock.Now;
+    /// <summary>角色等級（面板打開時在背景讀，讀不到時沿用上次的值）與這次執行看過的每一天（level.json 讀不到時也不倒退）</summary>
+    private MascotLevel? level;
+    private Dictionary<string, long> levelDays = [];
+    private bool levelLoading;
     private bool disposed;
 
     public AppHost(Dispatcher dispatcher)
@@ -123,7 +129,33 @@ internal sealed class AppHost : IDisposable
         tray.Update(content, TrayPalette);
     }
 
-    private PanelModel Model => new(store.Snapshot, store.Error, now, hint);
+    private PanelModel Model => new(store.Snapshot, store.Error, now, hint, level);
+
+    /// <summary>
+    /// 面板打開時讀這台電腦的每日主數字（history.sqlite3 的 record_days，唯讀、讀完就關），併進 level.json 後算等級
+    /// （ADR-0020 第 1、4 節）。在背景執行緒做，讀完再更新面板；同時只有一個。
+    /// </summary>
+    private void LoadLevel()
+    {
+        if (levelLoading) return;
+        levelLoading = true;
+        var known = levelDays;
+        var today = LocalCalendar.Key(DateOnly.FromDateTime(Clock.Now.LocalDateTime));
+        Task.Run(() =>
+        {
+            var history = new HistoryReader(DataPaths.History).LocalLevelDays() ?? [];
+            return MascotLevelLedger.Update(DataPaths.Level, MascotLevelLedger.Merge(known, history), today);
+        }).ContinueWith(task =>
+        {
+            levelLoading = false;
+            if (task.IsCompletedSuccessfully)
+            {
+                levelDays = task.Result;
+                level = MascotLevel.From(levelDays, today);
+            }
+            panel?.SetModel(Model);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
 
     /// <summary>外觀改變（設定或系統的深淺色）：圓環、系統匣、面板重畫；面板的材質在下次打開時套用</summary>
     private void ApplyLook()
@@ -239,6 +271,7 @@ internal sealed class AppHost : IDisposable
         // 打開面板＝看過了：完成未看與出錯的徽章拿掉
         agents.MarkSeen();
         now = Clock.Now;
+        LoadLevel();
         var window = new PanelWindow(Model, AppPalette);
         window.RefreshRequested += () => _ = RefreshAsync();
         window.SettingsRequested += () =>

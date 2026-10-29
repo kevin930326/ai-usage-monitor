@@ -191,5 +191,112 @@
       "to_next" : 0,
       "xp" : 249985
     }
+  },
+  {
+    "name" : "before-clear-history",
+    "result" : {
+      "active_days" : 10,
+      "current_streak" : 10,
+      "level" : 3,
+      "longest_streak" : 10,
+      "to_next" : 128,
+      "xp" : 172
+    }
+  },
+  {
+    "name" : "clear-history-keeps-level",
+    "result" : {
+      "active_days" : 10,
+      "current_streak" : 10,
+      "level" : 3,
+      "longest_streak" : 10,
+      "to_next" : 128,
+      "xp" : 172
+    },
+    "stored_ok" : true
+  },
+  {
+    "name" : "ledger-and-history-take-larger-per-day",
+    "result" : {
+      "active_days" : 3,
+      "current_streak" : 3,
+      "level" : 1,
+      "longest_streak" : 3,
+      "to_next" : 3,
+      "xp" : 47
+    },
+    "stored_ok" : true
+  },
+  {
+    "name" : "corrupt-ledger-rebuilds-from-history",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 37,
+      "xp" : 13
+    },
+    "stored_ok" : false
+  },
+  {
+    "name" : "ledger-days-not-an-object",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : false
+  },
+  {
+    "name" : "ledger-not-an-object",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : false
+  },
+  {
+    "name" : "ledger-empty-file",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : false
+  },
+  {
+    "name" : "ledger-skips-bad-entries",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 38,
+      "xp" : 12
+    },
+    "stored_ok" : true
+  },
+  {
+    "name" : "ledger-newer-schema-still-read",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : true
   }
 ]

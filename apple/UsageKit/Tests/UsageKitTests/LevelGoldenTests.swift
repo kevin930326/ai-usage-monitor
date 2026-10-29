@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import UsageKit
 
-/// 角色養成的跨平台一致性（ADR-0020）：讀 `fixtures/level/cases.json`，用 `MascotLevel` 算出結果，
+/// 角色養成的跨平台一致性（ADR-0020）：讀 `fixtures/level/cases.json`，用 `MascotLevel`（有 `stored` 時先以
+/// `MascotLevelLedger` 和 `level.json` 的內容合併）算出結果，
 /// 和 `fixtures/level/golden.json` 比對。Windows 的 C# 測試讀同一份，必須算出同樣的結果。
 ///
 /// 規則有意改變時：`AUM_UPDATE_GOLDEN=1 swift test --filter LevelGoldenTests` 重新產生 golden.json，
@@ -20,6 +21,8 @@ import Testing
         var days: [String: Int64]
         /// 連續的日子：從 `from` 起 `count` 天，每天 `tokens`
         var runs: [Run]?
+        /// `level.json` 的原始內容（可能壞掉）；`days` 是歷史資料庫的 `level_days`
+        var stored: String?
     }
 
     struct Run: Decodable {
@@ -40,6 +43,8 @@ import Testing
     struct Named: Codable, Equatable {
         var name: String
         var result: Result?
+        /// 有 `stored` 的情境：`level.json` 讀不讀得懂（讀不懂時從歷史重算）
+        var stored_ok: Bool?
     }
 
     /// 日數 → `YYYY-MM-DD`（civil_from_days），只用來展開 `runs`
@@ -62,11 +67,13 @@ import Testing
             let start = MascotLevel.dayNumber(r.from)!
             for i in 0..<r.count { days[dayText(start + i)] = r.tokens }
         }
+        let stored = c.stored.map { MascotLevelLedger.decode(Data($0.utf8)) }
+        if let ledger = stored ?? nil { days = MascotLevelLedger.merge(ledger, days) }
         let level = MascotLevel(days: days, today: c.today)
         return Named(name: c.name, result: level.map {
             Result(xp: $0.xp, level: $0.level, to_next: $0.toNext, current_streak: $0.currentStreak,
                    longest_streak: $0.longestStreak, active_days: $0.activeDays)
-        })
+        }, stored_ok: stored.map { $0 != nil })
     }
 
     @Test func goldenMatches() throws {
@@ -82,6 +89,27 @@ import Testing
         let golden = try JSONDecoder().decode([Named].self, from: Data(contentsOf: goldenURL))
         #expect(golden.count == output.count, "golden.json 與 cases.json 的情境數不同")
         for (g, o) in zip(golden, output) { #expect(g == o, "\(o.name)") }
+    }
+
+    /// 清除歷史（`level_days` 清空）後，`level.json` 讓等級不變（ADR-0020 第 1 節，2026-10-29 修訂）
+    @Test func clearingHistoryKeepsLevel() throws {
+        let input = try JSONDecoder().decode(Input.self, from: Data(contentsOf: Self.folder.appendingPathComponent("cases.json")))
+        let byName = Dictionary(uniqueKeysWithValues: input.cases.map { ($0.name, Self.run($0)) })
+        let before = try #require(byName["before-clear-history"]?.result)
+        #expect(byName["clear-history-keeps-level"]?.result == before)
+        #expect(before.level >= 2)
+    }
+
+    @Test func ledgerRoundTripsAndMergesByMax() throws {
+        let days: [String: Int64] = ["2026-10-28": 20_000, "2026-10-29": 1]
+        let data = MascotLevelLedger.encode(days, today: "2026-10-29")
+        #expect(MascotLevelLedger.decode(data) == days)
+        #expect(MascotLevelLedger.encode(days, today: "2026-10-29") == data)
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["schema_version"] as? Int == 1)
+        #expect(object["level"] as? Int == 1)
+        #expect(MascotLevelLedger.merge(["2026-10-29": 5, "bad": 9, "2026-10-27": 0], ["2026-10-29": 3, "2026-10-28": 2])
+            == ["2026-10-29": 5, "2026-10-28": 2])
     }
 
     @Test func dayNumbersRoundTrip() {
