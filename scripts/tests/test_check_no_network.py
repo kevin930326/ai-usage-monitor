@@ -73,6 +73,28 @@ class CheckNoNetworkTests(unittest.TestCase):
         elsewhere = "class Other { void M(string u) { Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } }\n" + page
         self.assertEqual(self.run_on({"AIUsageMonitor.Windows/SystemServices.cs": elsewhere}).returncode, 1)
         self.assertEqual(self.run_on({"AIUsageMonitor.Windows/A.cs": "class A { object o = new { UseShellExecute = true }; }"}).returncode, 1)
+        # 只出現一次、但在 IncidentPage 前面
+        before = "class Other { void M(string u) { Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } }\n" \
+                 "class IncidentPage { bool Open(string u) => IncidentLink.Link(u) != null; }"
+        self.assertEqual(self.run_on({"AIUsageMonitor.Windows/SystemServices.cs": before}).returncode, 1)
+
+    def test_shell_open_cannot_hide_behind_strings_or_other_values(self):
+        """Fable F-04：字串裡的類別名稱、不是常值 true 的寫法、同名但在別的專案的檔案"""
+        fake = 'class Other { string s = "class IncidentPage IncidentLink.Link("; void M(string u) { ' \
+               'Process.Start(new ProcessStartInfo(u) { UseShellExecute = true }); } }'
+        self.assertEqual(self.run_on({"AIUsageMonitor.Windows/SystemServices.cs": fake}).returncode, 1)
+        for value in ["!false", "flag"]:
+            with self.subTest(value=value):
+                body = f"class A {{ void M(string u, bool flag) {{ var i = new ProcessStartInfo(u); i.UseShellExecute = {value}; }} }}"
+                self.assertEqual(self.run_on({"AIUsageMonitor.Windows/SystemServices.cs": body}).returncode, 1)
+        schtasks = 'class A { void M() { Process.Start(new ProcessStartInfo("schtasks.exe") { UseShellExecute = false }); } }'
+        self.assertEqual(self.run_on({"AIUsageMonitor.Windows/SystemServices.cs": schtasks}).returncode, 0)
+        self.assertEqual(self.run_on({"UsageCore/SystemServices.cs": schtasks}).returncode, 1)
+        self.assertEqual(self.run_on({"AumHook/SystemServices.cs": schtasks}).returncode, 1)
+
+    def test_incident_url_must_be_exactly_a_prefix(self):
+        bad = 'class L { string P = "https://status.claude.com/incidents/../evil"; }'
+        self.assertEqual(self.run_on({"UsageCore/IncidentLink.cs": bad}).returncode, 1)
 
     def test_credentials_and_package_references_fail(self):
         self.assertEqual(self.run_on({"AIUsageMonitor.Windows/A.cs": "class A { void M() { CredReadW(); } }"}).returncode, 1)
