@@ -249,10 +249,6 @@ internal sealed class PanelContent : Border
     }
 
     /// <summary>
-    /// 服務狀態頁的事故（ADR-0018 第 4 節）：只顯示名稱。Windows App 不放網址與超連結（ADR-0015 第 2 節），
-    /// 要看詳情到官方狀態頁
-    /// </summary>
-    /// <summary>
     /// 事故那行（ADR-0018 第 4 節）。有合法的事故頁（<see cref="IncidentLink"/>）時整行是按鈕：點了或按 Enter／空白鍵用預設瀏覽器打開
     /// （ADR-0015 第 2 節的例外）；文字後面加「↗」，滑鼠提示與朗讀寫「在瀏覽器打開事故頁」。沒有連結時只顯示文字。
     /// </summary>
