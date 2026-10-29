@@ -16,8 +16,8 @@ final class MascotHeroLayerView: NSView {
     private let linkTarget = LinkTarget()
     private var lastDraw = Int.min
     #if DEBUG
-    /// 量測用：這一秒畫了幾格（`DebugTools.perfFrames`）
-    private var frames = (count: 0, since: 0)
+    /// 量測用：約每秒記一次這段時間平均每秒畫了幾格（`DebugTools.perfFrames`）；since 是這段的開始、last 是上一格
+    private var frames = (count: 0, since: 0, last: 0)
     #endif
     /// 每一格畫在這個圖層自己的 backing store 上（`setNeedsDisplay` → `draw(in:)`）：不經過 NSView 的 draw
     /// （AppKit 會先錄成 display list 再重播），也不必每格把新的圖片送給 render server
@@ -121,7 +121,8 @@ final class MascotHeroLayerView: NSView {
         // 馬上畫第一格：和瀏海畫布藏起角色在同一次更新裡送出，不會空一格
         lastDraw = controller.time()
         #if DEBUG
-        frames = (0, lastDraw)
+        // 眨眼那一下（約 0.3 秒）由 SwiftUI 畫、圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
+        if lastDraw - frames.last > 1500 { frames = (0, lastDraw, lastDraw) }
         #endif
         // 位置由瀏海的視窗（`layoutCanvas`）放；大小先定好，第一格的圖層才放得對
         setFrameSize(box.size)
@@ -161,9 +162,10 @@ final class MascotHeroLayerView: NSView {
         let frame = canvas.heroFrame(at: controller.time())
         #if DEBUG
         frames.count += 1
+        frames.last = frame.time
         if frame.time - frames.since >= 1000 {
-            DebugTools.perfFrames(frames.count, open: director.machine.isOpen)
-            frames = (0, frame.time)
+            DebugTools.perfFrames(frames.count * 1000 / (frame.time - frames.since), open: director.machine.isOpen)
+            frames = (0, frame.time, frame.time)
         }
         #endif
         let mascot = MascotPainter(config: director.config)
