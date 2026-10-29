@@ -124,7 +124,11 @@ internal sealed class SettingsView : StackPanel
             + "三種都用眼睛的樣子顯示額度。「工作中」與睡覺照下面「AI 狀態」連接的 hook；沒連接的 AI 只看紀錄檔的修改時間，不讀內容。"));
         Children.Add(Check("眼睛跟著游標（收合時 AI 工作中與睡著不看）", settings.MascotFollowPointer, v => settings.MascotFollowPointer = v));
         Row("睡覺", Choice([.. AppSettings.SleepMinuteChoices.Select(m => ($"閒置 {m} 分鐘後", m))],
-            settings.MascotSleepMinutes, v => settings.MascotSleepMinutes = v));
+            settings.MascotSleepMinutes, v =>
+            {
+                settings.MascotSleepMinutes = v;
+                settings.MascotSleepChosen = true;
+            }));
         Children.Add(Check("AI 等你下一個指令時，收合的角色外框輕輕脈動", settings.MascotWaitingPulse, v => settings.MascotWaitingPulse = v));
 
         Section("一般");

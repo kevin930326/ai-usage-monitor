@@ -101,6 +101,9 @@ public struct MascotScripts: Sendable {
         case .work:
             // 工作中：低頭看鍵盤（同參考頁 −0.42），不看游標（`followsPointer`，2026-10-29）。手由 App 的收合循環另外畫
             return collapsedPose.with([.pitch: config.poses.work.pitch, .follow: 0])
+        case .think:
+            // 背景執行中：平常的迷你角色、臉朝正前方不看游標；思考泡泡與呼吸由 App 的收合循環另外畫
+            return collapsedPose.with([.follow: 0])
         case .none:
             return collapsedPose
         }
@@ -189,7 +192,8 @@ public struct MascotScripts: Sendable {
         case .raise:
             s.to([.sx: 1, .sy: 1, .jump: 0, .orbit: 0, .shiver: 0, .blush: 0, .dash: 0, .sway: 0, .breathe: 0,
                   .type: 0, .kb: 0, .follow: 1].merging(raiseHands) { $1 }, duration ?? config.poses.raiseMs, .backSoft)
-        case .none:
+        case .none, .think:
+            // 背景執行中展開時和平常一樣（眨眼、看滑鼠）；狀態寫在工作階段列表
             var target: [MascotProp: Double] = [.sx: 1, .sy: 1, .jump: 0, .orbit: 0, .shiver: 0, .blush: 0, .yaw: 0,
                                                 .pitch: 0, .roll: 0, .dash: 0, .hands: 0, .wave: 0, .sway: 0, .breathe: 0,
                                                 .type: 0, .kb: 0, .follow: 1]

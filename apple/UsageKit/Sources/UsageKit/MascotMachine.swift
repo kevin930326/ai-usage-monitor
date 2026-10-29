@@ -50,8 +50,9 @@ public enum MascotGesture: String, Sendable, CaseIterable {
 
 /// 模式和動畫是兩回事：動畫播完回到目前模式的姿勢。模式由 AI 的狀態決定（工作中優先於睡覺），不看滑鼠
 public enum MascotMode: String, Sendable {
-    /// raise：有 AI 需要你（舉手）；優先於工作中與睡覺
-    case none, sleep, work, raise
+    /// raise：有 AI 需要你（舉手）；優先於工作中與睡覺。
+    /// think：AI 回合結束但還有背景工作（ADR-0017 第 7 節）：收合時慢速的思考泡泡與呼吸，不敲鍵盤、不看滑鼠、不睡
+    case none, sleep, work, raise, think
 }
 
 /// 動畫的類型：短反應可以被連點 5 下打斷，長動畫中的點擊不計次
@@ -179,6 +180,8 @@ public struct MascotMachine: Sendable {
     public private(set) var isAgentIdle = false
     /// 有 AI 需要你（要權限、問你問題）：舉手，優先於工作中與睡覺
     public private(set) var isNeedsYou = false
+    /// AI 回合結束但還在背景工作（ADR-0017 第 7 節）：工作中之後、睡覺之前
+    public private(set) var isBackground = false
 
     private var holdArmAt: Int?
     private var justReleased = false
@@ -193,7 +196,7 @@ public struct MascotMachine: Sendable {
 
     /// 臉跟著游標轉（ADR-0016 第 6 節，2026-10-29 使用者決定）：展開時一律追；收合時醒著沒事（待命、舉手）照舊追，
     /// AI 工作中不追（低頭敲鍵盤的動畫才不會被打斷）、睡著不追
-    public var followsPointer: Bool { isOpen || (mode != .work && mode != .sleep) }
+    public var followsPointer: Bool { isOpen || (mode != .work && mode != .sleep && mode != .think) }
 
     public var isIntro: Bool { introUntil != nil }
     public var isBusy: Bool { playing != nil || restUntil != nil }
@@ -377,6 +380,13 @@ public struct MascotMachine: Sendable {
         updateMode()
     }
 
+    /// 背景執行中：收合時換成慢速的思考泡泡（同工作中，動畫播放中不打斷）
+    public mutating func setBackground(_ background: Bool, at time: Int) {
+        _ = begin(time)
+        isBackground = background
+        updateMode()
+    }
+
     /// AI 完成一個回合：展開時照按鈕的規則排隊揮手；收著時瀏海鼓一下、迷你角色揮手。
     /// `react` 為 false（靜音、勿擾）時什麼都不做
     public mutating func cheer(at time: Int, react: Bool = true) {
@@ -390,7 +400,7 @@ public struct MascotMachine: Sendable {
     }
 
     private mutating func updateMode() {
-        setMode(isNeedsYou ? .raise : isWorking ? .work : isAgentIdle ? .sleep : .none)
+        setMode(isNeedsYou ? .raise : isWorking ? .work : isBackground ? .think : isAgentIdle ? .sleep : .none)
     }
 
     /// 額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；

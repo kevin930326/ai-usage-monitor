@@ -232,6 +232,8 @@ internal static class DebugTools
             Shot("collapsed-out", 3000, d => { d.SetStatus(2, 0, react: false); d.SetMood(MascotMood.Out); });
             Shot("collapsed-work", 3300, d => d.SetWorking(true, 0));
             Shot("collapsed-sleep", 3300, d => d.SetAgentIdle(true, 0));
+            // 背景執行中（ADR-0017 第 7 節）：呼吸加慢速思考泡泡
+            Shot("collapsed-think", 3300, d => d.SetBackground(true, 0));
             Shot("collapsed-needs-you", 3000, d => d.SetNeedsYou(true, 0), agent: AgentStates[0].Agent);
             Shot("collapsed-percent", 3000, _ => { }, style: RingStyle.MascotPercent);
             Shot("collapsed-pulse", 3800, _ => { }, pulseAt: 3000);

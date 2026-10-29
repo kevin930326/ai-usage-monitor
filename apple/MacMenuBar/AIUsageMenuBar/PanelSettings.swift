@@ -290,7 +290,7 @@ final class PanelSettings {
         mascotMotion = defaults.string(forKey: Key.mascotMotion).flatMap(MascotMotionLevel.init) ?? .full
         mascotFollowPointer = defaults.object(forKey: Key.mascotFollowPointer) as? Bool ?? true
         let minutes = defaults.integer(forKey: Key.mascotSleepMinutes)
-        mascotSleepMinutes = Self.sleepMinuteChoices.contains(minutes) ? minutes : 5
+        mascotSleepMinutes = Self.sleepMinuteChoices.contains(minutes) ? minutes : Self.defaultSleepMinutes
         mascotQuietUntil = defaults.object(forKey: Key.mascotQuietUntil) as? Date
         notchHintShown = defaults.bool(forKey: Key.notchHintShown)
         let seconds = defaults.object(forKey: Key.agentNeedsYouSeconds) as? Int ?? 20
@@ -345,9 +345,12 @@ final class PanelSettings {
         }
     }
 
-    static let sleepMinuteChoices = [1, 3, 5, 10, 15, 30]
+    static let sleepMinuteChoices = [1, 3, 5, 10, 15, 20, 30]
+    /// 睡覺的預設（ADR-0017 第 4 節，2026-10-29 從 5 改成 20：AI 叫背景指令等 CI 時 5 分鐘就睡太快）。
+    /// 只有使用者選過才存進 UserDefaults，所以改過的人不受影響
+    static let defaultSleepMinutes = 20
 
-    /// Claude 與 Codex 都閒置超過幾分鐘角色就睡（預設 5）
+    /// Claude 與 Codex 都閒置超過幾分鐘角色就睡（預設 20，ADR-0017 第 4 節）
     var mascotSleepMinutes: Int {
         didSet {
             defaults.set(mascotSleepMinutes, forKey: Key.mascotSleepMinutes)

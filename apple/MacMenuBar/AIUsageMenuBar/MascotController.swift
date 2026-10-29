@@ -521,11 +521,15 @@ final class MascotController {
         let monitor = AgentMonitor.shared
         let (working, idle) = monitor.sessions.activity(at: monitor.now, fallback: fallbackActivity)
         let needsYou = monitor.sessions.count(.needsYou, at: monitor.now) > 0
-        guard machine.isWorking != working || machine.isAgentIdle != idle || machine.isNeedsYou != needsYou else { return }
+        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
+        let background = monitor.sessions.count(.background, at: monitor.now) > 0
+        guard machine.isWorking != working || machine.isAgentIdle != idle || machine.isNeedsYou != needsYou
+            || machine.isBackground != background else { return }
         mutate {
             $0.setWorking(working, at: time())
             $0.setAgentIdle(idle, at: time())
             $0.setNeedsYou(needsYou, at: time())
+            $0.setBackground(background, at: time())
         }
     }
 
@@ -748,7 +752,7 @@ final class MascotController {
         // 只取代「完全停止」：睡著的呼吸、看滑鼠照原本的頻率，特效跟著那個頻率動（Fable F-01）。
         // 收合時 AI 工作中或睡著：所有外觀都有動態（敲鍵盤、呼吸），由 Core Animation 循環播放（ADR-0021 收合時的動態）
         let collapsedMotion = motion.animatesEffects && !director.machine.isOpen && !animating && !director.isStill
-            && (director.mode == .work || director.mode == .sleep)
+            && (director.mode == .work || director.mode == .sleep || director.mode == .think)
         if effects || collapsedMotion, rate == .stopped { rate = .effect }
         if rate != renderRate {
             if rate != .animating { stoppedAt = now }

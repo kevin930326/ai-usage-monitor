@@ -31,7 +31,9 @@ public static class AgentSummary
             var state = top.State(now, sessions.IdleAfter);
             // 同一個狀態有幾個工作階段時取最早進入的：哪一個最近有事件不影響彙總（Fable F-01）
             var since = mine.Where(s => s.State(now, sessions.IdleAfter) == state).Min(s => s.Since);
-            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(state)}\"," +
+            // 背景執行中寫成工作中（ADR-0017 第 7 節）：中繼與舊版 App 不用改格式
+            var shared = state == AgentState.Background ? AgentState.Working : state;
+            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(shared)}\"," +
                      $"\"sessions\":{mine.Count.ToString(CultureInfo.InvariantCulture)},\"since\":{since.ToString(CultureInfo.InvariantCulture)}}}");
         }
         return Encoding.UTF8.GetBytes($"{{\"v\":{Version},\"ais\":[{string.Join(",", rows)}]}}");
@@ -50,6 +52,7 @@ public sealed record RemoteAgent(string Device, AgentKind Ai, AgentState State, 
         AgentState.NeedsYou => "需要你",
         AgentState.Error => "出錯了",
         AgentState.Working => "工作中",
+        AgentState.Background => "背景執行中",
         AgentState.Done => "完成了",
         AgentState.Waiting => "等你",
         _ => "閒置",
@@ -61,6 +64,8 @@ public static class RemoteAgents
     public const string FileName = "agent-remote.json";
     /// <summary>中繼收到的時間超過這麼久就不顯示（那台電腦關機或斷線）</summary>
     public const long MaxAge = 30 * 60_000;
+    /// <summary>「完成了」「出錯」進入那個狀態超過這麼久，當成「等你」不顯示（ADR-0017 第 9 節，同 AgentSync.swift）</summary>
+    public const long FadeAfter = 30 * 60_000;
     private const int MaxDevices = 16;
     private const int MaxName = 32;
 
@@ -97,8 +102,10 @@ public static class RemoteAgents
                     if (AgentNames.Kind(Text(row["ai"])) is not { } ai || seen.Contains(ai)
                         || State(Text(row["state"])) is not { } state || Int(row["sessions"]) is not { } sessions || sessions is < 0 or > 32) continue;
                     seen.Add(ai);
-                    if (state is AgentState.NeedsYou or AgentState.Error or AgentState.Working or AgentState.Done)
-                        list.Add(new RemoteAgent(name, ai, state, (int)sessions));
+                    if (state is not (AgentState.NeedsYou or AgentState.Error or AgentState.Working or AgentState.Done)) continue;
+                    // 完成、出錯：從進入的時間算 30 分鐘（中繼的時鐘＋下載後經過的時間）；App 每分鐘重讀一次
+                    if (state is AgentState.Done or AgentState.Error && Int(row["since"]) is { } since && now - since + elapsed >= FadeAfter) continue;
+                    list.Add(new RemoteAgent(name, ai, state, (int)sessions));
                 }
             }
             catch (ArgumentException) { }   // 這台的物件有重複的鍵：略過

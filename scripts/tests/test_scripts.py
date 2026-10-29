@@ -849,7 +849,8 @@ class NotchPerfSummaryTests(unittest.TestCase):
     MARKS = {"notch-open": 10, "notch-sleep": 22, "notch-wave": 32, "notch-nod": 35, "notch-tilt": 38, "notch-giggle": 41,
              "notch-look": 44, "notch-pinch": 47, "notch-face": 50, "notch-close": 55, "gaze-move-asleep": 60,
              "gaze-move": 73, "gaze-still": 88, "notch-close-2": 155, "agent-cheer": 158, "waiting-pulse": 161,
-             "agent-raise": 185, "agent-lower": 205, "agent-raise-open": 215, "agent-lower-open": 230}
+             "agent-raise": 185, "agent-lower": 205, "agent-raise-open": 215, "agent-lower-open": 230,
+             "collapsed-think": 235}
 
     def run_summary(self, samples, marks=None, ticks=()):
         with tempfile.TemporaryDirectory() as tmp:
@@ -862,11 +863,18 @@ class NotchPerfSummaryTests(unittest.TestCase):
 
     @staticmethod
     def full(skip=()):
-        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 235) if not any(a <= t < b for a, b in skip)]
+        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 257) if not any(a <= t < b for a, b in skip)]
 
     def test_complete_samples_pass(self):
         result = self.run_summary(self.full())
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_busy_background_loop_fails(self):
+        # 背景執行中（ADR-0017 第 7 節）：收著時的呼吸與慢速泡泡交給 Core Animation，超過 0.3% 就失敗
+        busy = [(t, 0.8 if 238 <= t < 254 else cpu, rss) for t, cpu, rss in self.full()]
+        result = self.run_summary(busy)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 收合、背景執行中", result.stdout)
 
     def test_missing_intro_or_wave_samples_fail(self):
         for gap in [(10, 15), (32, 34), (15, 20), (24, 32), (35, 37), (44, 46), (50, 52), (62, 70), (75, 88)]:
@@ -880,29 +888,29 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(self.run_summary(self.full(), marks).returncode, 1)
 
     def test_busy_idle_fails(self):
-        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 235)]
+        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_redraw_while_collapsed_asleep_fails(self):
         # 收合、睡著時游標移動不能重畫（第二輪：睡著時降到每秒讀 1 次游標）
-        samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 235)]
+        samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_busy_waiting_pulse_fails(self):
         # 等你下指令的脈動和收合靜止同一個門檻（每 7 秒亮 1.6 秒，平均不能超過 0.3%）
-        samples = [(t, 1.0 if 163 <= t < 184 else 0.0, 100_000) for t in range(0, 235)]
+        samples = [(t, 1.0 if 163 <= t < 184 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_busy_while_raised_fails(self):
         # 舉著手靜止：收著時和收合靜止同一個門檻（Codex C-05）
-        samples = [(t, 1.0 if 188 <= t < 204 else 0.0, 100_000) for t in range(0, 235)]
+        samples = [(t, 1.0 if 188 <= t < 204 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_minute_tick_is_excluded_only_from_gaze_rows(self):
         # 每分鐘的時鐘更新落在「睡著、游標移動」裡：扣掉那一秒後照樣通過
-        spike = [(t, 5.0 if t == 65 else 0.0, 100_000) for t in range(0, 235)]
+        spike = [(t, 5.0 if t == 65 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(spike).returncode, 1)
         self.assertEqual(self.run_summary(spike, ticks=[64.5]).returncode, 0)
         # 沒落在看滑鼠的階段時不扣：收合後 60～90 秒照樣算進去
-        busy = [(t, 9.5 if t == 130 else 0.0, 100_000) for t in range(0, 235)]
+        busy = [(t, 9.5 if t == 130 else 0.0, 100_000) for t in range(0, 257)]
         self.assertEqual(self.run_summary(busy, ticks=[129.5]).returncode, 1)

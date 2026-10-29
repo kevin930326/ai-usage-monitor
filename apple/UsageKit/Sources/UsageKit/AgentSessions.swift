@@ -127,7 +127,8 @@ public struct AgentHookInput: Sendable, Equatable {
 // MARK: - socket：App 收到的一行
 
 /// hook 經 Unix socket 送給 App 的一行 JSON：
-/// `{"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}`
+/// `{"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project","pid":4242}`。
+/// `pid`（AI 程序的 PID，ADR-0017 第 7 節）只有知道時才寫（大於 0），沒有這個鍵就是不知道
 public struct AgentHookMessage: Sendable, Equatable, Codable {
     public var ai: AgentKind
     public var event: AgentHookEvent
@@ -139,13 +140,15 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
     public var folder: String
     /// 事件來自子代理
     public var sub: Bool
+    /// AI 程序的 PID（偵測背景工作用）；0 是不知道
+    public var pid: Int32
 
     public static let version = 1
     /// 一行最多多少位元組（App 讀超過就丟掉）
     public static let maxLength = 1024
 
     public init(ai: AgentKind, event: AgentHookEvent, need: AgentNeed?, session: String, time: Int64, folder: String,
-                sub: Bool = false) {
+                sub: Bool = false, pid: Int32 = 0) {
         self.ai = ai
         self.event = event
         self.need = need
@@ -153,13 +156,15 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
         self.time = time
         self.folder = folder
         self.sub = sub
+        self.pid = max(pid, 0)
     }
 
     /// 送出的一行（不含換行）；鍵的順序固定，Swift 與 C# 輸出相同
     public func encoded() -> Data {
-        let fields: [(String, Any)] = [("v", Self.version), ("ai", ai.rawValue), ("ev", event.rawValue),
+        var fields: [(String, Any)] = [("v", Self.version), ("ai", ai.rawValue), ("ev", event.rawValue),
                                        ("need", need?.rawValue ?? ""), ("sub", sub), ("sid", session), ("t", time),
                                        ("dir", folder)]
+        if pid > 0 { fields.append(("pid", Int(pid))) }
         let body = fields.map { key, value -> String in
             let encoded: String = if let text = value as? String { Self.quote(text) } else if let flag = value as? Bool {
                 flag ? "true" : "false"
@@ -174,7 +179,7 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
     public static func parse(_ data: Data) -> AgentHookMessage? {
         guard data.count <= maxLength,
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              Set(object.keys) == ["v", "ai", "ev", "need", "sub", "sid", "t", "dir"],
+              Set(object.keys).subtracting(["pid"]) == ["v", "ai", "ev", "need", "sub", "sid", "t", "dir"],
               let sub = object["sub"] as? Bool,
               let version = object["v"] as? Int, version == Self.version,
               let ai = (object["ai"] as? String).flatMap(AgentKind.init(rawValue:)),
@@ -187,7 +192,12 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
         // 種類只能是空字串或白名單內的值
         let need: AgentNeed?
         if needText.isEmpty { need = nil } else if let value = AgentNeed(rawValue: needText) { need = value } else { return nil }
-        let message = AgentHookMessage(ai: ai, event: event, need: need, session: session, time: time, folder: folder, sub: sub)
+        var pid: Int32 = 0
+        if let value = object["pid"] {
+            guard let number = value as? Int, number > 0, number <= Int(Int32.max) else { return nil }
+            pid = Int32(number)
+        }
+        let message = AgentHookMessage(ai: ai, event: event, need: need, session: session, time: time, folder: folder, sub: sub, pid: pid)
         return message.encoded() == data ? message : nil
     }
 
@@ -211,20 +221,35 @@ public struct AgentHookMessage: Sendable, Equatable, Codable {
 
 // MARK: - 每個工作階段的狀態與彙總
 
-/// 工作階段的狀態；彙總時依 `rank` 取最高的（需要你 > 出錯 > 工作中 > 完成未看 > 等你 > 閒置）
+/// 工作階段的狀態；彙總時依 `rank` 取最高的（需要你 > 出錯 > 工作中 > 背景執行中 > 完成未看 > 等你 > 閒置）。
+/// 背景執行中（ADR-0017 第 7 節）不是存的狀態：完成未看或等你、AI 程序底下還有回合中新產生的子孫程序時顯示成它
 public enum AgentState: String, Sendable, Codable, CaseIterable {
-    case needsYou, error, working, done, waiting, idle
+    case needsYou, error, working, background, done, waiting, idle
 
     public var rank: Int {
         switch self {
-        case .needsYou: 5
-        case .error: 4
-        case .working: 3
+        case .needsYou: 6
+        case .error: 5
+        case .working: 4
+        case .background: 3
         case .done: 2
         case .waiting: 1
         case .idle: 0
         }
     }
+}
+
+/// 一個程序的識別：PID 加開始時間（微秒；Windows 是建立時間），PID 被重用時開始時間不同（ADR-0017 第 7 節）
+public struct AgentProcess: Sendable, Hashable, Comparable {
+    public var pid: Int32
+    public var start: Int64
+
+    public init(pid: Int32, start: Int64) {
+        self.pid = pid
+        self.start = start
+    }
+
+    public static func < (a: AgentProcess, b: AgentProcess) -> Bool { (a.pid, a.start) < (b.pid, b.start) }
 }
 
 public struct AgentSession: Sendable, Equatable {
@@ -241,9 +266,31 @@ public struct AgentSession: Sendable, Equatable {
     public var last: Int64
     /// 這一回合開始工作的時間（從不在跑的狀態進入工作中時記下；完成後用來算跑了多久）
     public var turnStart: Int64? = nil
+    /// AI 程序的 PID（最新的事件說了算；0 是不知道，不偵測背景工作）
+    public var pid: Int32 = 0
+    /// 回合開始時 AI 程序底下已經有的子孫程序（常駐的 MCP、語言伺服器）；nil 是還沒拍
+    public var baseline: Set<AgentProcess>? = nil
+    /// App 要替這個工作階段拍基準（回合開始、或沒有基準就收到 Stop）
+    public var wantsBaseline = false
+    /// 下一次看背景工作的時間；nil 是不看
+    public var checkAt: Int64? = nil
+    /// 拍基準與看背景工作的排程序號：事件重排或取消時加一，非同步回來的舊結果序號不同就不套用（Codex C-01）
+    public var probe: Int64 = 0
+    /// 上一次看到、不在基準裡的子孫程序（候選）。新回合開始時不併進基準（Fable F-06）
+    public var pending: Set<AgentProcess> = []
+    /// 候選第一次出現的時間；30 分鐘上限從這裡起算
+    public var pendingSince: Int64? = nil
+    /// 回合結束後連續兩次都看到同一個候選（背景執行中；只看一次的多半是其他 App 跑得久的 Stop hook，Fable F-09）
+    public var background = false
+    /// 睡覺倒數另外的起點：背景工作結束的時間（不動 `since`，通知與跨裝置的時間照舊，Fable F-11）
+    public var awakeSince: Int64? = nil
+
+    /// 醒著倒數的起點
+    public var idleFrom: Int64 { max(since, awakeSince ?? since) }
 
     public func state(at now: Int64, idleAfter: Int64) -> AgentState {
-        stored == .waiting && now - since >= idleAfter ? .idle : stored
+        if background, stored == .done || stored == .waiting { return .background }
+        return stored == .waiting && now - idleFrom >= idleAfter ? .idle : stored
     }
 }
 
@@ -256,6 +303,14 @@ public struct AgentSessions: Sendable, Equatable {
     public static let forgetAfter: Int64 = 12 * 3_600_000
     /// 同時最多記幾個工作階段（假事件塞爆時丟掉最久沒事件的）
     public static let maxSessions = 32
+    /// 主回合 Stop 後多久第一次看背景工作（hook 自己與其他 App 的 Stop hook 大多已經結束）
+    public static let backgroundFirstCheck: Int64 = 3_000
+    /// 背景執行中（與確認候選）每隔多久再看一次
+    public static let backgroundEvery: Int64 = 20_000
+    /// 背景執行中最多多久：之後剩下的程序當成常駐的（併進基準），角色才不會永遠不睡
+    public static let backgroundMax: Int64 = 30 * 60_000
+    /// 基準最多記幾個程序
+    public static let maxProcesses = 256
 
     public private(set) var sessions: [AgentSession] = []
     /// 每個工作階段（含已結束的）最後一個事件在 hook 端的時間：連線是並行讀的，較早的事件可能較晚讀完；
@@ -288,15 +343,24 @@ public struct AgentSessions: Sendable, Equatable {
             ?? AgentSession(ai: message.ai, id: message.session, folder: message.folder, stored: .waiting, need: nil,
                             since: now, last: now)
         if !message.folder.isEmpty { session.folder = message.folder }
+        if message.pid > 0 && !message.sub && message.pid != session.pid {
+            // 換了程序（例如 resume 到另一個終端機）：舊的基準不適用
+            session.pid = message.pid
+            session.baseline = nil
+            session.pending = []
+            session.pendingSince = nil
+        }
         session.last = now
         let next = Self.transition(from: session.stored, event: message.event, need: message.need, sub: message.sub)
-        if let next, next.state != session.stored || next.need != session.need {
+        let changed = next.map { $0.state != session.stored || $0.need != session.need } ?? false
+        if let next, changed {
             let wasRunning = session.stored == .working || session.stored == .needsYou
             if next.state == .working && !wasRunning { session.turnStart = now }
             session.stored = next.state
             session.need = next.need
             session.since = now
         }
+        Self.trackBackground(&session, event: message.event, sub: message.sub, changed: changed, at: now)
         if let index {
             sessions[index] = session
         } else {
@@ -307,6 +371,31 @@ public struct AgentSessions: Sendable, Equatable {
             }
         }
         return true
+    }
+
+    /// 背景工作的記錄（ADR-0017 第 7 節）：回合開始拍基準（候選不併進去）；每一次主回合 Stop 後 3 秒看一次（Stop→Stop 也重排，Fable F-07）；
+    /// 其他改變狀態的事件（工作中、需要你、出錯、中斷、新開始）都不看、不顯示背景（Fable F-13）。候選與它的起始時間跨回合保留
+    static func trackBackground(_ session: inout AgentSession, event: AgentHookEvent, sub: Bool, changed: Bool, at now: Int64) {
+        // 重排或取消了（新回合一律重拍基準）：還在路上的舊結果作廢
+        let scheduled = (session.wantsBaseline, session.checkAt)
+        defer { if event == .userPromptSubmit || (session.wantsBaseline, session.checkAt) != scheduled { session.probe += 1 } }
+        if event == .userPromptSubmit {
+            session.baseline = nil
+            session.wantsBaseline = session.pid > 0
+        }
+        if event == .stop && !sub && session.stored == .done {
+            guard session.pid > 0 else { session.checkAt = nil; return }
+            if session.baseline == nil {
+                // App 在回合中途才啟動、或沒收到回合開始：現在才拍基準，這一回合不判斷（寧可漏報）
+                session.wantsBaseline = true
+                session.checkAt = nil
+            } else {
+                session.checkAt = now + AgentSessions.backgroundFirstCheck
+            }
+        } else if changed {
+            session.background = false
+            session.checkAt = nil
+        }
     }
 
     /// 狀態轉換；nil 表示不變
@@ -356,6 +445,83 @@ public struct AgentSessions: Sendable, Equatable {
             sessions[i].need = nil
             sessions[i].since = now
         }
+    }
+
+    /// 切回 AI 的程式（ADR-0017 第 8 節）：前景是代表 `ais` 的宿主程式、從 `foregroundSince` 開始在前景。
+    /// 這些 AI 的「完成未看」在完成之後才切過來的、或完成後在前景停留滿 `dwell` 的，變成等你；需要你與出錯不動。回傳是否有改變
+    @discardableResult
+    public mutating func markSeenByHost(_ ais: Set<AgentKind>, foregroundSince: Int64, at now: Int64, dwell: Int64 = AgentHosts.dwellMs) -> Bool {
+        var changed = false
+        for i in sessions.indices where sessions[i].stored == .done && ais.contains(sessions[i].ai) {
+            guard sessions[i].since < foregroundSince || now - sessions[i].since >= dwell else { continue }
+            sessions[i].stored = .waiting
+            sessions[i].need = nil
+            sessions[i].since = now
+            changed = true
+        }
+        return changed
+    }
+
+    /// 宿主程式一直在前景時，下一次要看「完成後停留滿 3 秒」的時間；沒有就是 nil
+    public func nextHostCheck(_ ais: Set<AgentKind>, foregroundSince: Int64, after now: Int64, dwell: Int64 = AgentHosts.dwellMs) -> Int64? {
+        sessions.filter { $0.stored == .done && ais.contains($0.ai) && $0.since >= foregroundSince && $0.since + dwell > now }
+            .map { $0.since + dwell }
+            .min()
+    }
+
+    // MARK: 背景工作（ADR-0017 第 7 節）
+
+    /// 要拍基準的工作階段（AI、ID、AI 程序的 PID）
+    public var baselineRequests: [(ai: AgentKind, id: String, pid: Int32, probe: Int64)] {
+        sessions.filter { $0.wantsBaseline && $0.pid > 0 }.map { ($0.ai, $0.id, $0.pid, $0.probe) }
+    }
+
+    /// 拍好的基準（`processes` 是 AI 程序底下所有子孫程序；nil 是 AI 程序已經不在）
+    public mutating func setBaseline(ai: AgentKind, id: String, pid: Int32, probe: Int64, processes: Set<AgentProcess>?) {
+        guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }), sessions[i].wantsBaseline,
+              sessions[i].probe == probe else { return }
+        sessions[i].wantsBaseline = false
+        // 上一回合留下、還在跑的候選不算常駐（Fable F-06）
+        sessions[i].baseline = Set((processes ?? []).subtracting(sessions[i].pending).sorted().prefix(Self.maxProcesses))
+    }
+
+    /// 到時間要看背景工作的工作階段
+    public func backgroundChecks(at now: Int64) -> [(ai: AgentKind, id: String, pid: Int32, probe: Int64)] {
+        sessions.filter { s in s.pid > 0 && s.checkAt.map { $0 <= now } ?? false }.map { ($0.ai, $0.id, $0.pid, $0.probe) }
+    }
+
+    /// 下一次要看背景工作的時間（所有工作階段中最早的）；沒有就是 nil，App 不排計時器
+    public var nextBackgroundCheck: Int64? {
+        sessions.compactMap { $0.pid > 0 ? $0.checkAt : nil }.min()
+    }
+
+    /// 看了 AI 程序底下的子孫程序（nil 是 AI 程序已經不在）。扣掉基準還有剩的是候選：和上一次的候選有重疊就是背景執行中，
+    /// 第一次看到的 20 秒後再確認。沒有候選了就離開，睡覺倒數從這一刻重新起算。候選出現超過 30 分鐘把剩下的併進基準。回傳是否有改變
+    @discardableResult
+    public mutating func observe(ai: AgentKind, id: String, pid: Int32, probe: Int64, processes: Set<AgentProcess>?, at now: Int64) -> Bool {
+        guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }),
+              sessions[i].checkAt != nil, sessions[i].probe == probe else { return false }
+        let before = sessions[i]
+        var s = sessions[i]
+        let fresh = processes.map { $0.subtracting(s.baseline ?? []) } ?? []
+        if processes == nil || fresh.isEmpty || s.pendingSince.map({ now - $0 >= Self.backgroundMax }) == true {
+            if processes != nil, !fresh.isEmpty {
+                s.baseline = Set((s.baseline ?? []).union(fresh).sorted().prefix(Self.maxProcesses))
+            }
+            if s.background { s.awakeSince = now }
+            s.background = false
+            s.pending = []
+            s.pendingSince = nil
+            s.checkAt = nil
+        } else {
+            let confirmed = !fresh.isDisjoint(with: s.pending)
+            s.pendingSince = s.pendingSince ?? now
+            s.pending = Set(fresh.sorted().prefix(Self.maxProcesses))
+            s.background = confirmed
+            s.checkAt = now + Self.backgroundEvery
+        }
+        sessions[i] = s
+        return s != before
     }
 
     /// 時間經過：工作中或需要你太久沒事件變等你、太久沒事件的移除。回傳是否有改變
@@ -410,7 +576,7 @@ public struct AgentSessions: Sendable, Equatable {
 
     /// 角色的工作中與睡覺（ADR-0016 第 5 節）：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間
     /// （`fallback`：沒接 hook 的 AI 是否工作中、最近是否有動）。只有「工作中」算工作；所有 AI 都閒置才睡覺。
-    /// 需要你算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡（未看的標記保留，只是不撐著不睡；Fable F-06）。
+    /// 需要你、背景執行中算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡（未看的標記保留，只是不撐著不睡；Fable F-06）。
     public func activity(at now: Int64, fallback: [AgentKind: (working: Bool, active: Bool)]) -> (working: Bool, idle: Bool) {
         var working = false, active = false
         for ai in AgentKind.allCases {
@@ -418,8 +584,8 @@ public struct AgentSessions: Sendable, Equatable {
             if !mine.isEmpty {
                 for session in mine {
                     working = working || session.stored == .working
-                    active = active || session.stored == .working || session.stored == .needsYou
-                        || now - session.since < idleAfter
+                    active = active || session.stored == .working || session.stored == .needsYou || session.background
+                        || now - session.idleFrom < idleAfter
                 }
             } else if let probe = fallback[ai] {
                 working = working || probe.working

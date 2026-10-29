@@ -22,6 +22,19 @@ final class AgentMonitor {
     @ObservationIgnored private var terminateSource: DispatchSourceSignal?
     /// 每秒上限只套用在「還在跑」的事件；決定狀態的事件一定處理（見 AgentRateLimiter）
     @ObservationIgnored private var limiter = AgentRateLimiter()
+    /// 下一次看背景工作（ADR-0017 第 7 節）；沒有工作階段要看時不排
+    @ObservationIgnored private var backgroundTimer: Timer?
+    /// AI 程序的開始時間（拍基準時記下）：之後 PID 被重用就當成 AI 已結束。只在記憶體
+    @ObservationIgnored private var aiStarts: [Int32: Int64] = [:]
+    /// 列程序中（同時只跑一次）
+    @ObservationIgnored private var probingProcesses = false
+    /// 前景的宿主程式代表哪些 AI、從什麼時候開始在前景（ADR-0017 第 8 節）；只記這兩個，不記程式名稱
+    @ObservationIgnored private var foregroundAIs: Set<AgentKind> = []
+    @ObservationIgnored private var foregroundSince: Int64 = 0
+    @ObservationIgnored private var hostTimer: Timer?
+    @ObservationIgnored private var activationObserver: NSObjectProtocol?
+    @ObservationIgnored private lazy var hosts = AgentHosts.decode(
+        Bundle.main.url(forResource: "agent-hosts", withExtension: "json").flatMap { try? Data(contentsOf: $0) } ?? Data())
 
     private static var idleAfterMs: Int64 { Int64(PanelSettings.shared.mascotSleepMinutes) * 60_000 }
 
@@ -56,6 +69,43 @@ final class AgentMonitor {
         // 跨裝置的 AI 狀態（ADR-0019 第 2 節）：先寫一次現在的（全部閒置），之後改變時寫
         AgentStateFile.shared.start()
         AgentStateFile.shared.update(sessions, at: now)
+        watchForeground()
+    }
+
+    /// 前景 App 換了（ADR-0017 第 8 節）：只取 bundle ID 比對宿主清單，比對完就丟
+    private func watchForeground() {
+        guard activationObserver == nil else { return }
+        setForeground(NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
+        ) { note in
+            let id = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+            MainActor.assumeIsolated { AgentMonitor.shared.setForeground(id) }
+        }
+    }
+
+    private func setForeground(_ bundleID: String?) {
+        // 點瀏海、開設定時本 App 會短暫在前景：不算切走，切回原本的程式也不算「完成之後才切過來」（Fable F-18）
+        if let bundleID, bundleID == Bundle.main.bundleIdentifier { return }
+        foregroundAIs = hosts.ais(bundleID: bundleID)
+        foregroundSince = now
+        checkHost()
+    }
+
+    /// 宿主程式在前景：完成之後才切過來的、或完成後停留滿 3 秒的「完成未看」標成已看；需要你與出錯不動
+    private func checkHost() {
+        hostTimer?.invalidate()
+        hostTimer = nil
+        guard !foregroundAIs.isEmpty else { return }
+        let at = now
+        if sessions.markSeenByHost(foregroundAIs, foregroundSince: foregroundSince, at: at) { changed() }
+        guard let next = sessions.nextHostCheck(foregroundAIs, foregroundSince: foregroundSince, after: at) else { return }
+        let timer = Timer(timeInterval: max(Double(next - at) / 1000, 0.05), repeats: false) { _ in
+            MainActor.assumeIsolated { AgentMonitor.shared.checkHost() }
+        }
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        hostTimer = timer
     }
 
     /// 不在主執行緒上的處理器（nonisolated）：從 @MainActor 方法裡建立的閉包會被當成主執行緒專用，在背景佇列執行會當掉
@@ -82,6 +132,12 @@ final class AgentMonitor {
         source = nil
         if listener >= 0 { close(listener) }
         listener = -1
+        backgroundTimer?.invalidate()
+        backgroundTimer = nil
+        hostTimer?.invalidate()
+        hostTimer = nil
+        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        activationObserver = nil
         if let socketURL { unlink(socketURL.path) }
         socketURL = nil
         AgentStateFile.shared.stop()
@@ -106,8 +162,11 @@ final class AgentMonitor {
         received += 1
         let after = sessions.sessions.first { $0.ai == message.ai && $0.id == message.session }?.stored
         changed()
-        // 一個回合剛完成：角色揮手（收著時瀏海鼓一下）
-        if after == .done, before != .done { MascotController.shared.agentFinished() }
+        // 一個回合剛完成：角色揮手（收著時瀏海鼓一下）；宿主程式在前景的話 3 秒後算看過
+        if after == .done, before != .done {
+            MascotController.shared.agentFinished()
+            checkHost()
+        }
     }
 
     #if DEBUG
@@ -129,6 +188,7 @@ final class AgentMonitor {
 
     private func changed() {
         scheduleExpire()
+        scheduleBackground()
         AgentStateFile.shared.update(sessions, at: now)
         MascotController.shared.agentStateChanged()
         evaluateNotices()
@@ -152,6 +212,57 @@ final class AgentMonitor {
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         noticeTimer = timer
+    }
+
+    /// 背景工作（ADR-0017 第 7 節）：要拍基準的馬上拍；有工作階段要看時照最早的時間排一次計時器，沒有就不排（不輪詢）
+    private func scheduleBackground() {
+        if !sessions.baselineRequests.isEmpty || !sessions.backgroundChecks(at: now).isEmpty {
+            probeProcesses()
+            return
+        }
+        backgroundTimer?.invalidate()
+        backgroundTimer = nil
+        guard let next = sessions.nextBackgroundCheck else { return }
+        let timer = Timer(timeInterval: max(Double(next - now) / 1000, 0.05), repeats: false) { _ in
+            MainActor.assumeIsolated { AgentMonitor.shared.probeProcesses() }
+        }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        backgroundTimer = timer
+    }
+
+    /// 在背景佇列列 AI 程序的子孫程序（只有 PID、父 PID、開始時間），回到主執行緒套用
+    private func probeProcesses() {
+        guard !probingProcesses else { return }
+        let at = now
+        let baselines = sessions.baselineRequests
+        let checks = sessions.backgroundChecks(at: at)
+        guard !baselines.isEmpty || !checks.isEmpty else {
+            scheduleBackground()
+            return
+        }
+        probingProcesses = true
+        let starts = aiStarts
+        Task.detached(priority: .utility) {
+            let taken = baselines.map { r in (r, AgentProcessTree.start(r.pid), AgentProcessTree.descendants(of: r.pid)) }
+            let seen = checks.map { c in (c, AgentProcessTree.descendants(of: c.pid, start: starts[c.pid])) }
+            await MainActor.run {
+                let monitor = AgentMonitor.shared
+                monitor.probingProcesses = false
+                for (r, start, processes) in taken {
+                    if let start { monitor.aiStarts[r.pid] = start }
+                    monitor.sessions.setBaseline(ai: r.ai, id: r.id, pid: r.pid, probe: r.probe, processes: processes)
+                }
+                var different = false
+                for (c, processes) in seen {
+                    different = monitor.sessions.observe(ai: c.ai, id: c.id, pid: c.pid, probe: c.probe, processes: processes, at: monitor.now) || different
+                }
+                // 已經沒有工作階段用的 AI 程序不必再記
+                let live = Set(monitor.sessions.sessions.map(\.pid))
+                monitor.aiStarts = monitor.aiStarts.filter { live.contains($0.key) }
+                if different { monitor.changed() } else { monitor.scheduleBackground() }
+            }
+        }
     }
 
     /// 有工作階段時每分鐘看一次：工作中太久沒事件變等你、等你變閒置、太久沒事件的移除

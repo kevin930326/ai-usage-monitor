@@ -4,7 +4,7 @@ namespace AIUsageMonitor.Core;
 
 /// <summary>
 /// Windows 圓環上的 AI 狀態（ADR-0019 第 1 節）：只顯示要你注意的三種——需要你（琥珀色外框）、完成未看、出錯。
-/// 工作中、等你、閒置不顯示。文字只有 AI 與種類（Windows 上不顯示資料夾名稱）。
+/// 工作中、背景執行中、等你、閒置不顯示。文字只有 AI 與種類（Windows 上不顯示資料夾名稱）。
 /// 這台沒有要注意的時，其他電腦「需要你」也顯示（第 2 節；<see cref="Device"/> 是那台的名稱）。
 /// 其他電腦的完成與出錯不上圓環：這裡看過也消不掉，只能回那台處理。
 /// </summary>
@@ -12,7 +12,9 @@ public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, 
 {
     public static RingAgent? From(AgentSessions sessions, long now, IReadOnlyList<RemoteAgent>? remote = null)
     {
-        if (sessions.Top(now) is { } top && top.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error)
+        // 背景執行中排在完成未看前面但不上圓環：跳過它，別的工作階段的完成未看照樣顯示（ADR-0017 第 7 節）
+        if (sessions.Ordered(now).FirstOrDefault(s => s.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error)
+            is { } top)
         {
             return new RingAgent(top.Ai, top.State(now, sessions.IdleAfter), top.Stored == AgentState.NeedsYou ? top.Need : null);
         }

@@ -66,6 +66,7 @@ public sealed class MascotDirector
     public void SetAgentIdle(bool idle, long time) => Apply(m => m.SetAgentIdle(idle, time));
     public void Silence(long time) => Apply(m => m.Silence(time));
     public void SetNeedsYou(bool needsYou, long time) => Apply(m => m.SetNeedsYou(needsYou, time));
+    public void SetBackground(bool background, long time) => Apply(m => m.SetBackground(background, time));
     /// <summary>AI 完成一個回合（靜音、勿擾時 react 為 false，不揮手也不鼓）</summary>
     public void Cheer(long time, bool react = true) => Apply(m => m.Cheer(time, react));
 

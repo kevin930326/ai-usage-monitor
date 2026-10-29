@@ -278,6 +278,14 @@ enum MascotEffectLoop {
                 AnyView(canvas.effectFrame(effectTime: frozen, pose: pose, time: t,
                                            dozeRise: Double(t).truncatingRemainder(dividingBy: breathMs) / breathMs))
             }
+        case .think:
+            // 背景執行中（ADR-0017 第 7 節）：平常的姿勢慢慢呼吸，思考泡泡以一半的速度亮；特效停在那一格。每秒 8 格
+            let pose = base.with([.breathe: 1])
+            let frozen = effectTime(now)
+            return Plan(length: breathMs, fps: 8, clock: now, box: canvas.effectBox) { t in
+                AnyView(canvas.effectFrame(effectTime: frozen, pose: pose, time: t,
+                                           thinkingDots: MascotThinking.dots(at: t, loop: breathMs, target: MascotThinking.slowStepMs)))
+            }
         default:
             return nil
         }
@@ -363,6 +371,7 @@ struct NotchCanvas: View {
         case .raise: "舉手，有 AI 需要你"
         case .work: "工作中"
         case .sleep: "睡著了"
+        case .think: "AI 在背景執行"
         case .none: "待命"
         }
         let status = switch director.mood {
@@ -772,6 +781,7 @@ struct NotchContent: View {
             }
         case .error: "出錯了"
         case .working: "工作中"
+        case .background: "背景執行中"
         case .done: "完成（未看）"
         case .waiting: "等你下指令"
         case .idle: "閒置"
@@ -792,7 +802,8 @@ struct NotchContent: View {
         case .needsYou: notchAmber
         case .error: Color(red: 240 / 255, green: 80 / 255, blue: 80 / 255)
         case .done: Color(red: 63 / 255, green: 208 / 255, blue: 122 / 255)
-        case .working: Color(red: 0xe6 / 255, green: 0xe6 / 255, blue: 0xee / 255)
+        // 背景執行中和工作中同色：都是 AI 還在跑（ADR-0017 第 7 節）
+        case .working, .background: Color(red: 0xe6 / 255, green: 0xe6 / 255, blue: 0xee / 255)
         case .waiting, .idle: secondary
         }
     }

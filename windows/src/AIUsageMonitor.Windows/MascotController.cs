@@ -460,13 +460,16 @@ internal sealed class MascotController : IDisposable
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var (working, idle) = agents.Sessions.Activity(now, fallbackActivity);
         var needsYou = agents.Sessions.Count(AgentState.NeedsYou, now) > 0;
+        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
+        var background = agents.Sessions.Count(AgentState.Background, now) > 0;
         var m = director.Machine;
-        if (m.IsWorking == working && m.IsAgentIdle == idle && m.IsNeedsYou == needsYou) return;
+        if (m.IsWorking == working && m.IsAgentIdle == idle && m.IsNeedsYou == needsYou && m.IsBackground == background) return;
         Mutate(d =>
         {
             d.SetWorking(working, Time());
             d.SetAgentIdle(idle, Time());
             d.SetNeedsYou(needsYou, Time());
+            d.SetBackground(background, Time());
         });
     }
 
@@ -692,17 +695,17 @@ internal sealed class MascotController : IDisposable
             : breathing ? MascotRenderRate.Breathing
             : gazeOnly ? MascotRenderRate.Gaze : MascotRenderRate.Idle;
         var collapsedMotion = motion.AnimatesEffects() && !director.Machine.IsOpen && !animating && !director.IsStill
-            && director.Mode is MascotMode.Work or MascotMode.Sleep;
+            && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think;
         if ((effects || collapsedMotion) && rate == MascotRenderRate.Stopped) rate = MascotRenderRate.Effect;
         if (rate != Rate && rate != MascotRenderRate.Animating) StoppedAt = now;
-        // 收合時的一輪：AI 工作中、睡著或特效外觀在動
+        // 收合時的一輪：AI 工作中、睡著、背景執行中或特效外觀在動
         MascotCollapsedMotion? loop = null;
         object? key = null;
         if (rate == MascotRenderRate.Effect && !director.Machine.IsOpen)
         {
             key = (director.Mode, director.Mood, director.Machine.StatusLevel, Character, Look?.Id, motion);
             loop = key.Equals(LoopKey) ? Loop
-                : MascotCollapsedMotion.Plan(director, StoppedAt, Character, Look, director.Mode == MascotMode.Sleep ? EffectTime(now) : null);
+                : MascotCollapsedMotion.Plan(director, StoppedAt, Character, Look, director.Mode is MascotMode.Sleep or MascotMode.Think ? EffectTime(now) : null);
         }
         // 脈動的那 1.6 秒照每秒 30 次重畫
         var pulsing = PulseAt is { } p && now - p < PulseMs;

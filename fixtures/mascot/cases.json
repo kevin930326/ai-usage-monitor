@@ -1430,6 +1430,86 @@
           "e": "advance"
         }
       ]
+    },
+    {
+      "name": "think-collapsed-does-not-follow",
+      "note": "收合時背景執行中：思考、不看游標（ADR-0017 第 7 節）",
+      "events": [
+        {
+          "t": 0,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "think-priority",
+      "note": "背景執行中優先於睡覺；工作中、需要你優先於背景執行中；背景結束後仍閒置就睡",
+      "events": [
+        {
+          "t": 0,
+          "e": "idle",
+          "on": true
+        },
+        {
+          "t": 100,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 200,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 300,
+          "e": "working",
+          "on": false
+        },
+        {
+          "t": 400,
+          "e": "needs",
+          "on": true
+        },
+        {
+          "t": 500,
+          "e": "needs",
+          "on": false
+        },
+        {
+          "t": 600,
+          "e": "background",
+          "on": false
+        },
+        {
+          "t": 5000,
+          "e": "advance"
+        }
+      ]
+    },
+    {
+      "name": "think-open-follows",
+      "note": "展開時背景執行中照常眨眼、看滑鼠",
+      "events": [
+        {
+          "t": 0,
+          "e": "open",
+          "intro": false
+        },
+        {
+          "t": 100,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "advance"
+        }
+      ]
     }
   ]
 }

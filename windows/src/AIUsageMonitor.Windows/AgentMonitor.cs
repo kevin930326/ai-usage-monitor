@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 using AIUsageMonitor.Core;
 
@@ -15,12 +16,24 @@ namespace AIUsageMonitor.Windows;
 /// 結束時清空。
 /// 跨裝置（第 2 節）：彙總寫到 agent-state.json（內容改變時寫並觸發 AgentSync 排程、每 5 分鐘重寫、結束時寫全部閒置），
 /// 其他電腦的狀態每分鐘讀 agent-remote.json（收集器寫的）。
+/// 背景工作（第 7 節）：主回合 Stop 後在背景執行緒列 AI 程序的子孫程序（只有 PID、父 PID、建立時間），只在有要看的工作階段時排計時器。
+/// 切回宿主程式（第 8 節）：前景改變時比對執行檔名稱，完成之後才切過來、或完成後停留滿 3 秒的「完成未看」算看過。
 /// </summary>
 internal sealed class AgentMonitor : IDisposable
 {
     private readonly string home;
     private readonly AppSettings settings;
     private readonly DispatcherTimer next;
+    private readonly DispatcherTimer background;
+    private readonly DispatcherTimer host;
+    private readonly Dispatcher dispatcher;
+    private readonly AgentHosts hosts = LoadHosts();
+    private AgentForeground? foreground;
+    private IReadOnlySet<AgentKind> foregroundAis = new HashSet<AgentKind>();
+    private long foregroundSince;
+    private bool probing;
+    /// <summary>AI 程序的建立時間（PID 被重用時不會把別的程序當成 AI）</summary>
+    private Dictionary<int, long> aiStarts = [];
     private readonly HashSet<string> seen = [];
     private readonly AgentNoticeLog log = new();
     private bool started;
@@ -28,7 +41,7 @@ internal sealed class AgentMonitor : IDisposable
     private long lastStateWrite;
     private const long StateRewriteMs = 5 * 60_000;
 
-    public AgentSessions Sessions { get; } = new(10 * 60_000);
+    public AgentSessions Sessions { get; } = new(AppSettings.DefaultSleepMinutes * 60_000L);
     /// <summary>其他電腦要顯示的狀態（30 分鐘內），依狀態排序</summary>
     public IReadOnlyList<RemoteAgent> Remote { get; private set; } = [];
     /// <summary>狀態變了（圓環與系統匣重畫）</summary>
@@ -48,6 +61,25 @@ internal sealed class AgentMonitor : IDisposable
             next.Stop();
             Tick();
         };
+        this.dispatcher = dispatcher;
+        background = new DispatcherTimer(DispatcherPriority.Background, dispatcher);
+        background.Tick += (_, _) =>
+        {
+            background.Stop();
+            Probe();
+        };
+        host = new DispatcherTimer(DispatcherPriority.Background, dispatcher);
+        host.Tick += (_, _) =>
+        {
+            host.Stop();
+            CheckHost();
+        };
+    }
+
+    private static AgentHosts LoadHosts()
+    {
+        using var stream = typeof(AgentMonitor).Assembly.GetManifestResourceStream("agent-hosts.json");
+        return stream is null ? AgentHosts.None : AgentHosts.Decode(new StreamReader(stream).ReadToEnd());
     }
 
     private static long Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -69,16 +101,103 @@ internal sealed class AgentMonitor : IDisposable
         // App 沒在跑的時候 hook 不寫；留下的是上次沒處理完的（當機）：照事件時間套用，太舊的由 Expire 淘汰
         Tick();
         WriteState(Now);
+        foreground = new AgentForeground(SetForeground);
+        SetForeground(AgentForeground.Current());
+    }
+
+    private void SetForeground(string exe)
+    {
+        foregroundAis = hosts.Ais(exe.Length == 0 ? null : exe);
+        foregroundSince = Now;
+        CheckHost();
+    }
+
+    /// <summary>宿主程式在前景：完成之後才切過來的、或完成後停留滿 3 秒的「完成未看」標成已看；需要你與出錯不動</summary>
+    private void CheckHost()
+    {
+        host.Stop();
+        if (foregroundAis.Count == 0) return;
+        var now = Now;
+        if (Sessions.MarkSeenByHost(foregroundAis, foregroundSince, now))
+        {
+            WriteState(now);
+            Changed?.Invoke();
+        }
+        if (Sessions.NextHostCheck(foregroundAis, foregroundSince, now) is not { } at) return;
+        host.Interval = TimeSpan.FromMilliseconds(Math.Max(at - now, 50));
+        host.Start();
+    }
+
+    /// <summary>有要拍基準或到時間要看的工作階段就去列程序；否則排到下一次要看的時間（沒有就不排）</summary>
+    private void ScheduleBackground()
+    {
+        var now = Now;
+        if (Sessions.BaselineRequests().Count > 0 || Sessions.BackgroundChecks(now).Count > 0)
+        {
+            Probe();
+            return;
+        }
+        background.Stop();
+        if (Sessions.NextBackgroundCheck is not { } at) return;
+        background.Interval = TimeSpan.FromMilliseconds(Math.Clamp(at - now, 50, 3_600_000));
+        background.Start();
+    }
+
+    /// <summary>在背景執行緒列 AI 程序的子孫程序，回到 UI 執行緒套用</summary>
+    private void Probe()
+    {
+        if (probing) return;
+        var baselines = Sessions.BaselineRequests();
+        var checks = Sessions.BackgroundChecks(Now);
+        if (baselines.Count == 0 && checks.Count == 0)
+        {
+            ScheduleBackground();
+            return;
+        }
+        probing = true;
+        var starts = new Dictionary<int, long>(aiStarts);
+        Task.Run(() =>
+        {
+            var taken = baselines.Select(r => (r, AgentProcessTree.Start(r.Pid), AgentProcessTree.Descendants(r.Pid))).ToList();
+            var seen = checks.Select(c => (c, AgentProcessTree.Descendants(c.Pid, starts.TryGetValue(c.Pid, out var s) ? s : null))).ToList();
+            dispatcher.InvokeAsync(() =>
+            {
+                probing = false;
+                foreach (var (r, start, processes) in taken)
+                {
+                    if (start is { } t) aiStarts[r.Pid] = t;
+                    Sessions.SetBaseline(r.Ai, r.Id, r.Pid, r.Probe, processes);
+                }
+                var now = Now;
+                var different = false;
+                foreach (var (c, processes) in seen) different |= Sessions.Observe(c.Ai, c.Id, c.Pid, c.Probe, processes, now);
+                // 已經沒有工作階段用的 AI 程序不必再記
+                var live = Sessions.Ordered(now).Select(s => s.Pid).ToHashSet();
+                aiStarts = aiStarts.Where(kv => live.Contains(kv.Key)).ToDictionary();
+                if (different) Evaluate(true, now);
+                else ScheduleBackground();
+            });
+        });
     }
 
     /// <summary>hook 叫醒（具名事件）時</summary>
     public void Pump()
     {
         if (!started) return;
-        var now = Now;
+        Drain(Now, false);
+    }
+
+    /// <summary>
+    /// 讀 inbox 並套用（Pump 與 Tick 共用：讀不到的事件留到下一次，可能由 Tick 補讀）。剛完成一個回合時發完成的事件，
+    /// 宿主程式在前景就開始算停留（Codex C-02）
+    /// </summary>
+    private void Drain(long now, bool otherChanged)
+    {
         var done = Done(now);
-        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now), now);
-        if (Done(now).Except(done).Any()) Finished?.Invoke();
+        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || otherChanged, now);
+        if (!Done(now).Except(done).Any()) return;
+        Finished?.Invoke();
+        CheckHost();
     }
 
     /// <summary>目前「完成」的工作階段（剛變成完成的就是剛完成一個回合）</summary>
@@ -90,10 +209,7 @@ internal sealed class AgentMonitor : IDisposable
     {
         if (!started) return;
         var now = Now;
-        var remoteChanged = LoadRemote(now);
-        var done = Done(now);
-        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || remoteChanged, now);
-        if (Done(now).Except(done).Any()) Finished?.Invoke();
+        Drain(now, LoadRemote(now));
         if (now - lastStateWrite >= StateRewriteMs) WriteState(now, rewrite: true);
     }
 
@@ -144,16 +260,15 @@ internal sealed class AgentMonitor : IDisposable
         }
     }
 
-    /// <summary>使用者看過了（打開面板、點圓環）：完成未看與出錯變成等你</summary>
+    /// <summary>
+    /// 使用者看過了（打開面板、點圓環）：完成未看與出錯變成等你。只要有任何工作階段改變就寫 agent-state.json 並重畫：
+    /// 之前只在彙總是完成或出錯時才寫，同時有別的工作階段在工作中或需要你時，看過的不會同步出去（ADR-0017 第 9 節）
+    /// </summary>
     public void MarkSeen()
     {
-        var before = RingAgent.From(Sessions, Now);
-        Sessions.MarkSeen(Now);
-        if (before is { State: AgentState.Done or AgentState.Error })
-        {
-            WriteState(Now);
-            Changed?.Invoke();
-        }
+        if (!Sessions.MarkSeen(Now)) return;
+        WriteState(Now);
+        Changed?.Invoke();
     }
 
     /// <summary>通知設定改了：重新排下一次檢查</summary>
@@ -179,11 +294,15 @@ internal sealed class AgentMonitor : IDisposable
             WriteState(now);
             Changed?.Invoke();
         }
+        ScheduleBackground();
     }
 
     public void Dispose()
     {
         next.Stop();
+        background.Stop();
+        host.Stop();
+        foreground?.Dispose();
         if (!started) return;
         AgentInbox.Clear(home);
         // 其他電腦馬上看到這台沒事，而不是等 30 分鐘過期。

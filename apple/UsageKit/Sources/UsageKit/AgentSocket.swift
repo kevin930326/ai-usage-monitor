@@ -182,8 +182,18 @@ public enum AgentHookRunner {
         guard let event = AgentHookInput.extract(input), let salt = AgentSocket.readSalt(in: directory) else { return false }
         let message = AgentHookMessage(ai: ai, event: event.event, need: event.need,
                                        session: AgentSocket.sessionHash(event.sessionID, salt: salt),
-                                       time: Int64(now.timeIntervalSince1970 * 1000), folder: event.folder, sub: event.sub)
+                                       time: Int64(now.timeIntervalSince1970 * 1000), folder: event.folder, sub: event.sub,
+                                       pid: aiProcess())
         return AgentSocket.send(message, to: AgentSocket.socketURL(in: directory))
+    }
+
+    /// AI 程序的 PID（偵測背景工作用，ADR-0017 第 7 節）：hook 的父程序，是 shell 時再往上一層
+    static func aiProcess() -> Int32 {
+        #if os(macOS)
+        AgentProcessTree.aiProcess()
+        #else
+        0
+        #endif
     }
 
     /// 從標準輸入讀事件：最多 1 MB 多一個位元組（超過就整個丟掉），標準輸入是終端機時不等

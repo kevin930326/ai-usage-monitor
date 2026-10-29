@@ -126,11 +126,13 @@ public static class MascotThinking
 {
     /// <summary>每多亮一顆的目標間隔（參考頁 260 毫秒）</summary>
     public const double TargetStepMs = 260;
+    /// <summary>背景執行中（ADR-0017 第 7 節）：一半的速度</summary>
+    public const double SlowStepMs = 520;
 
     /// <summary>一輪 loop 毫秒裡每一步的長度：一輪走整數次「0 → 1 → 2 → 3 顆」，最接近目標間隔</summary>
-    public static double StepMs(double loop) =>
-        loop / (Math.Max(1, Math.Round(loop / (TargetStepMs * 4), MidpointRounding.AwayFromZero)) * 4);
+    public static double StepMs(double loop, double target = TargetStepMs) =>
+        loop / (Math.Max(1, Math.Round(loop / (target * 4), MidpointRounding.AwayFromZero)) * 4);
 
     /// <summary>第 t 毫秒亮了幾顆（0…3）</summary>
-    public static int Dots(long t, double loop) => (int)Math.Floor(t % loop / StepMs(loop)) % 4;
+    public static int Dots(long t, double loop, double target = TargetStepMs) => (int)Math.Floor(t % loop / StepMs(loop, target)) % 4;
 }

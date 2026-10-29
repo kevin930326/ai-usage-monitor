@@ -21,6 +21,7 @@ try:
     ch, wp = marks["agent-cheer"], marks["waiting-pulse"]
     ra, lo, rao, loo = marks["agent-raise"], marks["agent-lower"], marks["agent-raise-open"], marks["agent-lower-open"]
     extra = {name: marks[f"notch-{name}"] for name in NEW_ANIMATIONS}
+    th = marks["collapsed-think"]
 except KeyError as missing:
     print(f"缺少標記 {missing}")
     sys.exit(1)
@@ -48,6 +49,8 @@ rows = [
     ("播放中：展開時舉手（0～2 秒）", window(rao, rao + 2), "peak"),
     ("展開、舉著手", window(rao + 3, rao + 14), "avg"),
     ("播放中：展開時放下（0～2 秒）", window(loo, loo + 2), "peak"),
+    # 背景執行中（ADR-0017 第 7 節）：收著時的循環交給 Core Animation，和收合靜止同一個門檻
+    ("收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）", without_ticks(window(th + 3, th + 19)), "avg"),
 ]
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
 print("|---|---|---|---|")
@@ -73,6 +76,8 @@ checks = [
     ("收合、等你下指令的脈動 ≤ 0.3%", bool(pulsing) and avg(pulsing, 1) <= 0.3),
     ("收合、舉著手 ≤ 0.3%；展開、舉著手 ≤ 4%", bool(raised) and bool(raised_open) and avg(raised, 1) <= 0.3
      and avg(raised_open, 1) <= 4),
+    ("收合、背景執行中 ≤ 0.3%", bool(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"])
+     and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]
 print()

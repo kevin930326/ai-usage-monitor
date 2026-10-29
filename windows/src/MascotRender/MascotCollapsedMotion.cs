@@ -7,6 +7,7 @@ namespace AIUsageMonitor.Mascot;
 // - AI 工作中：會動的特效照特效動；其他外觀是敲鍵盤（小手上下、身體輕晃、淺灰鍵盤的按鍵輪流亮）。所有外觀的右上方都有
 //   思考泡泡（三個小點依序亮起）。每秒 12 格；收合工作中不看滑鼠
 // - 睡著：慢慢的呼吸（約 4.4 秒一次）加一個飄起的小 z；特效停在那一格。每秒 4 格
+// - 背景執行中：同樣的呼吸，思考泡泡以一半的速度亮；特效停在那一格。每秒 8 格
 public sealed record MascotCollapsedMotion(double Length, double Fps, Func<long, MascotFrame> Frame)
 {
     /// <summary>敲鍵盤：手 sin(t/62)、身體晃 sin(t/310)，一輪 2π·310 毫秒剛好是敲 5 下</summary>
@@ -20,7 +21,7 @@ public sealed record MascotCollapsedMotion(double Length, double Fps, Func<long,
     /// <summary>第 k 格的時間（一輪內的毫秒）</summary>
     public long TimeOf(int k) => (long)Math.Round(k * Length / Count, MidpointRounding.AwayFromZero);
 
-    /// <summary>角色停在 stoppedAt；frozenEffect 是睡著時特效停住的那一格（null 是靜態）。不是工作中或睡著時沒有動態（null）</summary>
+    /// <summary>角色停在 stoppedAt；frozenEffect 是睡著、背景執行中特效停住的那一格（null 是靜態）。不是工作中、睡著或背景執行中時沒有動態（null）</summary>
     public static MascotCollapsedMotion? Plan(MascotDirector director, long stoppedAt, MascotCharacter character, MascotLook? look,
         long? frozenEffect = null)
     {
@@ -48,6 +49,13 @@ public sealed record MascotCollapsedMotion(double Length, double Fps, Func<long,
                 var breathing = basePose.With(MascotProp.Breathe, 1);
                 return new MascotCollapsedMotion(BreathMs, 4,
                     t => baseFrame with { Pose = breathing, Time = t, EffectTime = frozenEffect, DozeRise = t % BreathMs / BreathMs });
+            case MascotMode.Think:
+                // 背景執行中（ADR-0017 第 7 節）：平常的姿勢慢慢呼吸，思考泡泡以一半的速度亮；特效停在那一格。每秒 8 格
+                var thinking = basePose.With(MascotProp.Breathe, 1);
+                return new MascotCollapsedMotion(BreathMs, 8, t => baseFrame with
+                {
+                    Pose = thinking, Time = t, EffectTime = frozenEffect, ThinkingDots = MascotThinking.Dots(t, BreathMs, MascotThinking.SlowStepMs),
+                });
             default:
                 return null;
         }
