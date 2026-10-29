@@ -51,6 +51,9 @@ enum DebugTools {
             // 面板關著時不讀資料庫；截圖時沒有「打開面板」，所以先讀一次
             HistoryStore.shared.open()
             let name = env["AUM_RENDER_NAME"].flatMap { $0.isEmpty ? nil : $0 } ?? "panel"
+            // 看滑鼠時的角色圖層和瀏海畫布畫出來一樣（icons 第 4 部分）
+            if name == "panel" || name == "hero-parity" { DebugHeroParity.run(to: url) }
+            if name == "hero-parity" { exit(0) }
             renderPanel(to: url, name: name)
             if name == "panel" {
                 renderMenuBarIcons(to: url)

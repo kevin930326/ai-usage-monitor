@@ -71,6 +71,13 @@ render_mac() {
   env AI_USAGE_MONITOR_HOME="$WORK/home" AUM_TESTING=1 AUM_DEMO_PANEL=1 AUM_RENDER_DIR="$all" AUM_RENDER_EXIT=1 \
     AUM_RENDER_NOW=$RENDER_NOW perl -e 'alarm 600; exec @ARGV' "$app/Contents/MacOS/AIUsageMenuBar" "${LANG_ARGS[@]}" \
     >"$OUT/render-mac.log" 2>&1 || { echo "Mac 截圖失敗（$OUT/render-mac.log）"; exit 2; }
+  # 看滑鼠時的角色圖層（CoreGraphics）和瀏海畫布（SwiftUI）畫出來要一樣（同一個環境裡比，和基準無關；icons 第 4 部分）
+  mkdir -p "$OUT/hero-parity"
+  cp "$all"/hero-parity* "$OUT/hero-parity/" 2>/dev/null || true
+  if ! awk 'END { split($2, n, "/"); exit !(NR > 0 && $1 == "#" && n[1] == n[2] && $3 == "ok") }' "$all/hero-parity.tsv" 2>/dev/null; then
+    echo "❌ 角色圖層和瀏海畫布畫得不一樣（$OUT/hero-parity/hero-parity.tsv）"
+    exit 1
+  fi
   collect mac "$all" "${MAC_SET[@]}"
 }
 
