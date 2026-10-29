@@ -12,7 +12,8 @@ using AIUsageMonitor.Mascot;
 namespace AIUsageMonitor.Windows;
 
 /// <summary>重畫的頻率（同 Mac 的 MascotRenderRate，ADR-0015 第 7 節「角色」）</summary>
-internal enum MascotRenderRate { Stopped, Effect, Breathing, Gaze, Idle, Animating }
+/// <summary>Gaze：只有視線在轉、收合（每秒 15 次）；GazeOpen：展開（每秒 30 次）。游標每一格讀一次（ADR-0016 第 6 節）</summary>
+internal enum MascotRenderRate { Stopped, Effect, Breathing, Gaze, GazeOpen, Idle, Animating }
 
 internal static class MascotRenderRates
 {
@@ -20,10 +21,15 @@ internal static class MascotRenderRates
     {
         MascotRenderRate.Breathing => 1000.0 / 10,
         MascotRenderRate.Gaze => 1000.0 / 15,
+        MascotRenderRate.GazeOpen => 1000.0 / 30,
         MascotRenderRate.Effect => 1000.0 / 12,
         MascotRenderRate.Animating => 1000.0 / 60,
         _ => 1000.0 / 30,
     };
+
+    /// <summary>視線在轉時會照這個頻率重畫（不必再 Refresh）</summary>
+    public static bool FollowsGaze(this MascotRenderRate rate) =>
+        rate is MascotRenderRate.Gaze or MascotRenderRate.GazeOpen or MascotRenderRate.Idle or MascotRenderRate.Animating;
 }
 
 /// <summary>
@@ -47,6 +53,10 @@ internal sealed class MascotController : IDisposable
     private readonly DispatcherTimer deadlineTimer;
     private readonly DispatcherTimer rateTimer;
     private readonly DispatcherTimer gazeTimer;
+    /// <summary>游標在動時每一格讀一次游標（Render 優先權；展開每秒 30 次、收合 15 次，同 Mac）；停下約 1 秒、視線也轉到位後停掉
+    /// （check-no-network 禁止 CompositionTarget.Rendering，Fable F-24）</summary>
+    private readonly DispatcherTimer trackTimer;
+    private long lastPointerMove;
     private readonly DispatcherTimer workTimer;
     private readonly DispatcherTimer hoverTimer;
     private readonly DispatcherTimer pulseTimer;
@@ -81,6 +91,7 @@ internal sealed class MascotController : IDisposable
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
         rateTimer = OneShot(dispatcher, Refresh);
         gazeTimer = Timer(dispatcher, DispatcherPriority.Background, PollPointer);
+        trackTimer = Timer(dispatcher, DispatcherPriority.Render, PollPointer);
         workTimer = Timer(dispatcher, DispatcherPriority.Background, CheckWorking);
         hoverTimer = OneShot(dispatcher, HoverDue);
         pulseTimer = Timer(dispatcher, DispatcherPriority.Background, Pulse);
@@ -596,10 +607,15 @@ internal sealed class MascotController : IDisposable
 
     // ---------- 看滑鼠（整個螢幕） ----------
 
-    /// <summary>游標有動時每秒約 12 次、停住 1 秒後 4 次；收合時工作中或睡著每秒 1 次（只看是否又該追游標）</summary>
+    /// <summary>
+    /// 游標沒在動時低頻輪詢：每秒約 12 次、停住 1 秒後 4 次；收合時工作中或睡著每秒 1 次（只看是否又該追游標）。
+    /// 看到游標移動就改成每一格讀一次（展開每秒 30 次、收合 15 次），停下約 1 秒、視線也轉到位後回到低頻輪詢
+    /// （ADR-0016 第 6 節，ADR-0010 規則 1、4 的例外）
+    /// </summary>
     private void RestartGaze()
     {
         gazeTimer.Stop();
+        trackTimer.Stop();
         lastPointer = null;
         pointerStillTicks = 0;
         gazeDozing = false;
@@ -617,14 +633,48 @@ internal sealed class MascotController : IDisposable
         gazeTimer.Start();
     }
 
-    /// <summary>視線的門檻（弧度）：游標小小移動不重畫</summary>
+    /// <summary>視線的門檻（弧度）：低頻輪詢時游標小小移動不重畫；高幀率期間每一格都更新目標（平滑由 MascotDirector.Gaze 做）</summary>
     private const double GazeThreshold = 0.02;
+    private const double TrackingThreshold = 0.0005;
+    /// <summary>游標停下多久、視線也轉到位後才停掉高幀率（Fable F-25）</summary>
+    private const long TrackingLinger = 1000;
+
+    private bool Tracking => trackTimer.IsEnabled;
+
+    private void StartTracking()
+    {
+        gazeTimer.Stop();
+        UpdateTrackingRate();
+        trackTimer.Start();
+    }
+
+    private void UpdateTrackingRate()
+    {
+        var ms = (Director?.Machine.IsOpen == true ? MascotRenderRate.GazeOpen : MascotRenderRate.Gaze).IntervalMs();
+        if (trackTimer.Interval.TotalMilliseconds != ms) trackTimer.Interval = TimeSpan.FromMilliseconds(ms);
+    }
+
+    /// <summary>高幀率停掉、回到低頻輪詢（每秒 4 次）</summary>
+    private void EndTracking()
+    {
+        if (!Tracking) return;
+        trackTimer.Stop();
+        pointerStillTicks = 12;
+        ScheduleGaze(250);
+        // 重畫頻率照視線是否還在轉重新決定
+        Refresh();
+    }
 
     private void PollPointer()
     {
         if (Director is not { } director) return;
         if (!director.Machine.FollowsPointer)
         {
+            if (Tracking)
+            {
+                trackTimer.Stop();
+                Refresh();
+            }
             // 直接轉到正前方，敲鍵盤與呼吸的循環才不會被打斷
             if (director.Look(Time(), 0, 0, threshold: 0.001, snap: true))
             {
@@ -644,11 +694,18 @@ internal sealed class MascotController : IDisposable
             pointerStillTicks = 0;
             ScheduleGaze(1000.0 / 12);
         }
-        if (HeroOnScreen?.Invoke() is not { } hero || !NativeMethods.GetCursorPos(out var cursor)) return;
+        // 讀不到角色的位置或游標（同 Mac，Codex C-01）：高幀率也要停，回到低頻輪詢；恢復後重新對準
+        if (HeroOnScreen?.Invoke() is not { } hero || !NativeMethods.GetCursorPos(out var cursor))
+        {
+            lastPointer = null;
+            EndTracking();
+            return;
+        }
         var t = Time();
         if (director.Pose(t)[MascotProp.Follow] <= 0.01)
         {
             lastPointer = null;
+            EndTracking();
             return;
         }
         // 游標相對圖示的位置（DIP）：游標沒動但圖示移動（拖動、展開）時也會重新對準
@@ -656,14 +713,25 @@ internal sealed class MascotController : IDisposable
         var dy = (cursor.Y - hero.Y) / hero.Scale;
         if (lastPointer is { } last && Math.Abs(last.X - dx) < 0.01 && Math.Abs(last.Y - dy) < 0.01)
         {
+            if (Tracking)
+            {
+                // 停下約 1 秒、視線也轉到位：停掉高幀率
+                if (t - lastPointerMove >= TrackingLinger && !director.IsGazeMoving(t)) EndTracking();
+                return;
+            }
             pointerStillTicks++;
             if (pointerStillTicks == 12) ScheduleGaze(250);
             return;
         }
-        if (pointerStillTicks >= 12) ScheduleGaze(1000.0 / 12);
+        var first = lastPointer is null;
         pointerStillTicks = 0;
         lastPointer = (dx, dy);
-        if (director.Look(t, dx, dy, GazeThreshold)) Refresh();
+        lastPointerMove = t;
+        // 剛開始看（展開、恢復）時只對準一次；之後游標再動就改成每一格讀
+        if (!Tracking && !first) StartTracking();
+        UpdateTrackingRate();
+        // 重畫的計時器已經照看滑鼠的頻率在跑時不必 Refresh：下一格就畫新的視線
+        if (director.Look(t, dx, dy, Tracking ? TrackingThreshold : GazeThreshold) && !Rate.FollowsGaze()) Refresh();
     }
 
     // ---------- 到期與重畫頻率 ----------
@@ -707,7 +775,8 @@ internal sealed class MascotController : IDisposable
         var animating = director.IsAnimating(now);
         var motion = Motion;
         var live = director.IsLive && motion.MovesEyes();
-        var idleMoving = motion.MovesEyes() && director.IsIdleMoving(now);
+        // 看滑鼠的高幀率期間一直算視線在轉：每一格都更新目標、和目標的差常常小於收斂門檻，不能因此停了又開（同 Mac，Codex C-01）
+        var idleMoving = motion.MovesEyes() && (director.IsIdleMoving(now) || Tracking);
         var breathing = live && director.Mode == MascotMode.Sleep && !director.IsStill && director.Blink(now) == 0;
         var gazeOnly = idleMoving && !breathing && director.Blink(now) == 0
             && !(live && !director.IsStill && director.Mode == MascotMode.Work);
@@ -722,7 +791,7 @@ internal sealed class MascotController : IDisposable
         var rate = animating ? MascotRenderRate.Animating
             : !idleMoving ? MascotRenderRate.Stopped
             : breathing ? MascotRenderRate.Breathing
-            : gazeOnly ? MascotRenderRate.Gaze : MascotRenderRate.Idle;
+            : gazeOnly ? (director.Machine.IsOpen ? MascotRenderRate.GazeOpen : MascotRenderRate.Gaze) : MascotRenderRate.Idle;
         var collapsedMotion = motion.AnimatesEffects() && !director.Machine.IsOpen && !animating && !director.IsStill
             && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think;
         if ((effects || collapsedMotion) && rate == MascotRenderRate.Stopped) rate = MascotRenderRate.Effect;
@@ -791,7 +860,7 @@ internal sealed class MascotController : IDisposable
     {
         if (disposed) return;
         disposed = true;
-        foreach (var t in new[] { frameTimer, deadlineTimer, rateTimer, gazeTimer, workTimer, hoverTimer, pulseTimer }) t.Stop();
+        foreach (var t in new[] { frameTimer, deadlineTimer, rateTimer, gazeTimer, trackTimer, workTimer, hoverTimer, pulseTimer }) t.Stop();
         probeGeneration++;
     }
 }

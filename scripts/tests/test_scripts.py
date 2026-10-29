@@ -850,7 +850,7 @@ class NotchPerfSummaryTests(unittest.TestCase):
              "notch-look": 44, "notch-pinch": 47, "notch-face": 50, "notch-close": 55, "gaze-move-asleep": 60,
              "gaze-move": 73, "gaze-still": 88, "notch-close-2": 155, "agent-cheer": 158, "waiting-pulse": 161,
              "agent-raise": 185, "agent-lower": 205, "agent-raise-open": 215, "agent-lower-open": 230,
-             "collapsed-think": 235}
+             "collapsed-think": 235, "gaze-move-open": 260, "gaze-still-open": 275}
 
     def run_summary(self, samples, marks=None, ticks=()):
         with tempfile.TemporaryDirectory() as tmp:
@@ -863,11 +863,25 @@ class NotchPerfSummaryTests(unittest.TestCase):
 
     @staticmethod
     def full(skip=()):
-        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 257) if not any(a <= t < b for a, b in skip)]
+        return [(t, 1.0 if 15 <= t < 30 else 0.0, 100_000) for t in range(0, 287) if not any(a <= t < b for a, b in skip)]
 
     def test_complete_samples_pass(self):
         result = self.run_summary(self.full())
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_gaze_open_over_gate_fails(self):
+        # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 8% 就失敗
+        busy = [(t, 9.0 if 262 <= t < 275 else cpu, rss) for t, cpu, rss in self.full()]
+        result = self.run_summary(busy)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 展開、游標一直移動", result.stdout)
+
+    def test_gaze_open_tracking_that_never_stops_fails(self):
+        # 停下後高幀率沒停（一直約 5%）就失敗（Codex C-02）
+        busy = [(t, 5.0 if 277 <= t < 286 else cpu, rss) for t, cpu, rss in self.full()]
+        result = self.run_summary(busy)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 展開、游標一直移動", result.stdout)
 
     def test_busy_background_loop_fails(self):
         # 背景執行中（ADR-0017 第 7 節）：收著時的呼吸與慢速泡泡交給 Core Animation，超過 0.3% 就失敗
@@ -888,29 +902,29 @@ class NotchPerfSummaryTests(unittest.TestCase):
         self.assertEqual(self.run_summary(self.full(), marks).returncode, 1)
 
     def test_busy_idle_fails(self):
-        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 257)]
+        samples = [(t, 6.0 if 24 <= t < 32 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_redraw_while_collapsed_asleep_fails(self):
         # 收合、睡著時游標移動不能重畫（第二輪：睡著時降到每秒讀 1 次游標）
-        samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 257)]
+        samples = [(t, 1.0 if 62 <= t < 70 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_busy_waiting_pulse_fails(self):
         # 等你下指令的脈動和收合靜止同一個門檻（每 7 秒亮 1.6 秒，平均不能超過 0.3%）
-        samples = [(t, 1.0 if 163 <= t < 184 else 0.0, 100_000) for t in range(0, 257)]
+        samples = [(t, 1.0 if 163 <= t < 184 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_busy_while_raised_fails(self):
         # 舉著手靜止：收著時和收合靜止同一個門檻（Codex C-05）
-        samples = [(t, 1.0 if 188 <= t < 204 else 0.0, 100_000) for t in range(0, 257)]
+        samples = [(t, 1.0 if 188 <= t < 204 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(samples).returncode, 1)
 
     def test_minute_tick_is_excluded_only_from_gaze_rows(self):
         # 每分鐘的時鐘更新落在「睡著、游標移動」裡：扣掉那一秒後照樣通過
-        spike = [(t, 5.0 if t == 65 else 0.0, 100_000) for t in range(0, 257)]
+        spike = [(t, 5.0 if t == 65 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(spike).returncode, 1)
         self.assertEqual(self.run_summary(spike, ticks=[64.5]).returncode, 0)
         # 沒落在看滑鼠的階段時不扣：收合後 60～90 秒照樣算進去
-        busy = [(t, 9.5 if t == 130 else 0.0, 100_000) for t in range(0, 257)]
+        busy = [(t, 9.5 if t == 130 else 0.0, 100_000) for t in range(0, 287)]
         self.assertEqual(self.run_summary(busy, ticks=[129.5]).returncode, 1)

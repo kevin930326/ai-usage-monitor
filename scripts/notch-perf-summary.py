@@ -22,6 +22,7 @@ try:
     ra, lo, rao, loo = marks["agent-raise"], marks["agent-lower"], marks["agent-raise-open"], marks["agent-lower-open"]
     extra = {name: marks[f"notch-{name}"] for name in NEW_ANIMATIONS}
     th = marks["collapsed-think"]
+    go, gso = marks["gaze-move-open"], marks["gaze-still-open"]
 except KeyError as missing:
     print(f"缺少標記 {missing}")
     sys.exit(1)
@@ -51,6 +52,9 @@ rows = [
     ("播放中：展開時放下（0～2 秒）", window(loo, loo + 2), "peak"),
     # 背景執行中（ADR-0017 第 7 節）：收著時的循環交給 Core Animation，和收合靜止同一個門檻
     ("收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）", without_ticks(window(th + 3, th + 19)), "avg"),
+    # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動、停下後（停掉 display link、只剩眨眼）
+    ("展開、游標一直移動（看滑鼠，每秒 30 格）", window(go + 2, go + 15), "avg"),
+    ("展開、游標停下後（2～10 秒）", window(gso + 2, gso + 10), "avg"),
 ]
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
 print("|---|---|---|---|")
@@ -64,6 +68,7 @@ pulsing = by_name["收合、等你下指令（每 7 秒脈動，扣掉每分鐘�
 raised, raised_open = by_name["收合、舉著手（扣掉每分鐘更新）"], by_name["展開、舉著手"]
 gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分鐘更新）"]
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
+gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，每秒 30 格）"], by_name["展開、游標停下後（2～10 秒）"]
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
@@ -78,6 +83,10 @@ checks = [
      and avg(raised_open, 1) <= 4),
     ("收合、背景執行中 ≤ 0.3%", bool(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"])
      and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
+    # 看滑鼠的高幀率（icons 第 4 部分）：展開時每秒 30 格約 5%（SwiftUI 每一格約 0.25%）。停下約 1 秒後高幀率要停：
+    # 停了約 0.1%，沒停就和移動時一樣約 5%，所以門檻 1%（Codex C-02）
+    ("展開、游標一直移動 ≤ 8%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 8
+     and avg(gaze_open_still, 1) <= 1),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]
 print()

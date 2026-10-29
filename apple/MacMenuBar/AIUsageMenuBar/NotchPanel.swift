@@ -26,6 +26,11 @@ final class NotchPanelController {
         return CGPoint(x: screen.frame.midX - NotchLayout.canvasWidth / 2, y: screen.frame.maxY)
     }
 
+    /// 跟著面板所在螢幕更新率的 display link（看滑鼠的高幀率用，ADR-0016 第 6 節）；面板沒顯示時 nil
+    func displayLink(target: Any, selector: Selector) -> CADisplayLink? {
+        panel?.contentView?.displayLink(target: target, selector: selector)
+    }
+
     /// 游標是否在面板視窗裡
     func containsPointer() -> Bool {
         panel.map { $0.frame.contains(NSEvent.mouseLocation) } ?? false

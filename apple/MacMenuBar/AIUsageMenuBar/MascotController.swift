@@ -55,22 +55,28 @@ enum MascotMotionLevel: String, CaseIterable, Identifiable {
     var animatesEffects: Bool { self == .full }
 }
 
-/// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、看滑鼠、工作）每秒 30 次、睡著 12 次；動畫中每秒 60 次
+/// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、工作）每秒 30 次、睡著 10 次；動畫中每秒 60 次；
+/// 只有視線在轉：收合每秒 15 次、展開 30 次
 enum MascotRenderRate: Equatable {
-    case stopped, effect, breathing, gaze, idle, animating
+    case stopped, effect, breathing, gaze, gazeOpen, idle, animating
 
     var interval: Double {
         switch self {
         // 睡著只有慢慢的呼吸（一次約 4 秒）與飄起來的 z：每秒 10 次就夠
         case .breathing: 1.0 / 10
-        // 只有視線在追游標（展開或收合）：每秒 15 次（游標位置本身每秒只讀約 12 次）
+        // 只有視線在追游標（游標每一格讀一次）：收合每秒 15 次、展開 30 次。SwiftUI 每一格的排版與送出約 0.25% CPU，
+        // 跟著螢幕更新率（60～120）要 8～9%，所以停在這裡（icons 第 4 部分實測，ADR-0016 第 6 節）
         case .gaze: 1.0 / 15
+        case .gazeOpen: 1.0 / 30
         // 只有外觀的特效在動（收合時 AI 工作中、展開待著）：每秒 12 次（ADR-0021）
         case .effect: 1.0 / 12
         case .stopped, .idle: 1.0 / 30
         case .animating: 1.0 / 60
         }
     }
+
+    /// 視線在轉時會照這個頻率重畫（不必再 refresh）
+    var followsGaze: Bool { self == .gaze || self == .gazeOpen || self == .idle || self == .animating }
 }
 
 /// 瀏海面板的版面：依實際瀏海寬度決定收合時的寬度、迷你角色與迷你圓環的位置（畫布座標，寬 580）
@@ -120,7 +126,14 @@ final class MascotController {
     private var effectLoopKey: EffectLoopKey?
     private var effectStart = 0
     private(set) var layout = NotchLayout.fake
-    private(set) var director: MascotDirector?
+    /// 狀態機與動畫：改了就讓畫面重新排版。看滑鼠的高幀率期間只改視線（`setGazeQuietly`），不觸發 SwiftUI 的重新排版，
+    /// 角色的 Canvas 照自己的頻率讀 `liveGaze`（ADR-0016 第 6 節）
+    var director: MascotDirector? {
+        get { _ = directorVersion; return directorValue }
+        set { directorValue = newValue; directorVersion &+= 1 }
+    }
+    private var directorVersion = 0
+    @ObservationIgnored private var directorValue: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
     /// 不在動畫中時，面板形狀與額度卡固定畫的那一刻（毫秒）；完全停止時角色也畫這一刻，不會停在眨眼一半
     private(set) var stoppedAt = 0
@@ -144,6 +157,13 @@ final class MascotController {
     @ObservationIgnored private var closeTimer: Timer?
     @ObservationIgnored private var workTimer: Timer?
     @ObservationIgnored private var gazeTimer: Timer?
+    /// 游標在動時每一格讀一次游標（展開每秒 30 格、收合 15 格）；停下約 1 秒、視線也轉到位後停掉
+    @ObservationIgnored private var gazeLink: CADisplayLink?
+    @ObservationIgnored private var gazeLinkTarget: GazeLinkTarget?
+    /// 高幀率期間游標最後一次相對角色移動的時間（毫秒）
+    @ObservationIgnored private var lastPointerMove = 0
+    /// display link 上一次真的讀游標的時間：`preferredFrameRateRange` 只是建議，macOS 照樣可能每秒叫 60 次，自己跳過多的
+    @ObservationIgnored private var lastLinkPoll = 0
     /// 上一次游標相對角色的位置與連續沒變的次數（沒變一陣子就降低讀取頻率）
     @ObservationIgnored private var lastPointer: CGPoint?
     @ObservationIgnored private var pointerStillTicks = 0
@@ -647,9 +667,11 @@ final class MascotController {
 
     // MARK: - 看滑鼠（整個螢幕）
 
-    /// 用 `NSEvent.mouseLocation` 讀游標位置（不裝事件監聽、不需要權限）：游標有動時每秒約 12 次，
-    /// 沒動 1 秒後降到每秒 4 次；視線變化小於門檻不重畫，畫面的重畫在視線轉到位後停止（ADR-0016 第 6 節）
+    /// 用 `NSEvent.mouseLocation` 讀游標位置（不裝事件監聽、不需要權限）。游標沒在動時低頻輪詢：每秒約 12 次，
+    /// 沒動 1 秒後降到每秒 4 次；看到游標移動就改成每一格讀一次（display link，展開每秒 30 格、收合 15 格），
+    /// 游標停下約 1 秒、視線也轉到位後停掉、回到低頻輪詢（ADR-0016 第 6 節，ADR-0010 規則 1、4 的例外）
     private func restartGaze() {
+        stopGazeLink()
         gazeTimer?.invalidate()
         gazeTimer = nil
         lastPointer = nil
@@ -676,12 +698,53 @@ final class MascotController {
         gazeTimer = timer
     }
 
+    /// 游標開始移動：改成每一格讀一次
+    private func startGazeLink() {
+        guard gazeLink == nil else { return }
+        let target = GazeLinkTarget()
+        guard let link = NotchPanelController.shared.displayLink(target: target, selector: #selector(GazeLinkTarget.tick(_:))) else { return }
+        gazeTimer?.invalidate()
+        gazeTimer = nil
+        gazeLinkTarget = target
+        gazeLink = link
+        updateGazeLinkRate()
+        link.add(to: .main, forMode: .common)
+    }
+
+    private func stopGazeLink() {
+        guard let gazeLink else { return }
+        gazeLink.invalidate()
+        self.gazeLink = nil
+        gazeLinkTarget = nil
+        // 重畫頻率照視線是否還在轉重新決定
+        refresh()
+    }
+
+    /// 展開每秒 30 次、收合 15 次（和重畫同一個頻率，`linkTick` 再跳過多的）
+    private func updateGazeLinkRate() {
+        guard let gazeLink else { return }
+        let fps = Float((1 / (director?.machine.isOpen == true ? MascotRenderRate.gazeOpen : .gaze).interval).rounded())
+        let wanted = CAFrameRateRange(minimum: fps / 2, maximum: fps, preferred: fps)
+        if gazeLink.preferredFrameRateRange != wanted { gazeLink.preferredFrameRateRange = wanted }
+    }
+
+    /// 高幀率停掉、回到低頻輪詢（每秒 4 次）
+    private func endGazeLink() {
+        guard gazeLink != nil else { return }
+        stopGazeLink()
+        pointerStillTicks = 12
+        scheduleGaze(interval: 0.25)
+    }
+
     func followPointerChanged() {
         restartGaze()
     }
 
-    /// 視線的門檻（弧度）：游標小小移動不重畫
+    /// 視線的門檻（弧度）：低頻輪詢時游標小小移動不重畫；高幀率期間每一格都更新目標（平滑由 `MascotDirector.gaze` 做）
     static let gazeThreshold = 0.02
+    static let trackingThreshold = 0.0005
+    /// 游標停下多久、視線也轉到位後才停掉高幀率（Fable F-25：停下 0.3 秒就降會一頓一頓的）
+    static let trackingLinger = 1000
 
     #if DEBUG
     /// 量測用：以假的游標位置驅動同一段程式（不移動真的游標）
@@ -690,12 +753,27 @@ final class MascotController {
     @ObservationIgnored var debugSkipsActivity = false
     #endif
 
-    private func pollPointer() {
+    /// display link 叫醒：照看滑鼠的重畫頻率讀游標（多的跳過；留 3 毫秒的誤差，不會剛好差一點就跳過一格）
+    fileprivate func linkTick() {
+        let t = time()
+        let interval = Int(((director?.machine.isOpen == true ? MascotRenderRate.gazeOpen : .gaze).interval * 1000).rounded())
+        guard t - lastLinkPoll >= interval - 3 else { return }
+        lastLinkPoll = t
+        pollPointer()
+    }
+
+    /// 角色的 Canvas 每一格讀的視線：高幀率期間的更新不經過 SwiftUI（`director` 的快照會是舊的）
+    func liveGaze(at time: Int) -> (yaw: Double, pitch: Double)? {
+        directorValue?.gaze(at: time)
+    }
+
+    fileprivate func pollPointer() {
         // 不追游標時不必看：降到每秒 1 次，恢復後回到每秒 12 次。
         // - 收合時睡著（臉不跟著轉）
         // - 收合時 AI 工作中（`followsPointer`，2026-10-29 使用者決定）：視線轉回正前方就停住，敲鍵盤的循環才不會被打斷
         //   （視線在動時改由 SwiftUI 重畫，Core Animation 的那一輪會停）
         if var director, !director.machine.followsPointer {
+            stopGazeLink()
             // 直接轉到正前方：平滑轉回的那一小段會讓循環晚一點才建（Fable F-04）
             if director.look(at: time(), dx: 0, dy: 0, threshold: 0.001, snap: true) {
                 self.director = director
@@ -717,13 +795,18 @@ final class MascotController {
         #if DEBUG
         if let debugPointer { pointer = debugPointer() }
         #endif
-        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else { return }
+        // 讀不到角色的位置（瀏海正在換螢幕、隱藏）：高幀率也要停，不然 display link 會一直跑到下次展開
+        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else {
+            endGazeLink()
+            return
+        }
         let t = time()
         let pose = director.pose(at: t)
         // 姿勢暫時不看（反應、轉場中 `.follow` 為 0）：照樣每秒 12 次，轉回來就接著看
         // （Codex C-02：以前這裡也降到每秒 1 次，工作結束後要等下一次才恢復）
         guard pose[.follow] > 0.01 else {
             lastPointer = nil
+            endGazeLink()
             return
         }
         // 畫布座標：左上為原點、y 往下；螢幕座標：左下為原點、y 往上。
@@ -731,19 +814,29 @@ final class MascotController {
         let dx = pointer.x - (origin.x + pose[.x])
         let dy = (origin.y - pointer.y) - pose[.y]
         let relative = CGPoint(x: dx, y: dy)
+        let tracking = gazeLink != nil
         guard relative != lastPointer else {
+            if tracking {
+                // 停下約 1 秒、視線也轉到位：停掉高幀率
+                if t - lastPointerMove >= Self.trackingLinger, !director.isGazeMoving(at: t) { endGazeLink() }
+                return
+            }
             pointerStillTicks += 1
             // 游標與角色都停住 1 秒：降到每秒 4 次
             if pointerStillTicks == 12 { scheduleGaze(interval: 0.25) }
             return
         }
-        if pointerStillTicks >= 12 { scheduleGaze(interval: 1.0 / 12) }
-        pointerStillTicks = 0
+        let first = lastPointer == nil
         lastPointer = relative
-        if director.look(at: t, dx: dx, dy: dy, threshold: Self.gazeThreshold) {
-            self.director = director
-            refresh()
-        }
+        lastPointerMove = t
+        pointerStillTicks = 0
+        // 剛開始看（展開、恢復）時只對準一次；之後游標再動就改成每一格讀
+        if !tracking, !first, motion.movesEyes { startGazeLink() }
+        updateGazeLinkRate()
+        guard director.look(at: t, dx: dx, dy: dy, threshold: gazeLink != nil ? Self.trackingThreshold : Self.gazeThreshold) else { return }
+        // 只改視線：不觸發 SwiftUI 的重新排版；重畫頻率還不是看滑鼠的頻率時才 refresh 一次
+        directorValue = director
+        if !renderRate.followsGaze { refresh() }
     }
 
     private var shouldPlayIntro: Bool {
@@ -786,7 +879,9 @@ final class MascotController {
         // 展開待著：眨眼、視線追滑鼠、工作中以每秒 30 次、睡著以 10 次重畫；畫面靜止時停止，到下一次眨眼再開始。
         // 動畫關閉時展開待著也不重畫（沒有眨眼、看滑鼠）
         let live = director.isLive && motion.movesEyes
-        let idleMoving = motion.movesEyes && director.isIdleMoving(at: now)
+        // 看滑鼠的高幀率期間一直算視線在轉：每一格都更新目標，和目標的差常常小於收斂門檻，不能因此停了又開
+        // （每次切換都會重排 SwiftUI）
+        let idleMoving = motion.movesEyes && (director.isIdleMoving(at: now) || gazeLink != nil)
         let breathing = live && director.mode == .sleep && !director.isStill && director.blink(at: now) == 0
         // 只有視線在轉（沒在眨眼、工作、睡覺）：低頻率
         let gazeOnly = idleMoving && !breathing && director.blink(at: now) == 0
@@ -801,7 +896,7 @@ final class MascotController {
             effectsLive = effects
         }
         var rate: MascotRenderRate = animating ? .animating
-            : !idleMoving ? .stopped : breathing ? .breathing : gazeOnly ? .gaze : .idle
+            : !idleMoving ? .stopped : breathing ? .breathing : gazeOnly ? (director.machine.isOpen ? .gazeOpen : .gaze) : .idle
         // 只取代「完全停止」：睡著的呼吸、看滑鼠照原本的頻率，特效跟著那個頻率動（Fable F-01）。
         // 收合時 AI 工作中或睡著：所有外觀都有動態（敲鍵盤、呼吸），由 Core Animation 循環播放（ADR-0021 收合時的動態）
         let collapsedMotion = motion.animatesEffects && !director.machine.isOpen && !animating && !director.isStill
@@ -868,5 +963,12 @@ final class MascotController {
         timer.tolerance = 0.01
         RunLoop.main.add(timer, forMode: .common)
         return timer
+    }
+}
+
+/// display link 的 target（CADisplayLink 要 NSObject 與 selector）
+private final class GazeLinkTarget: NSObject {
+    @MainActor @objc func tick(_ link: CADisplayLink) {
+        MascotController.shared.linkTick()
     }
 }
