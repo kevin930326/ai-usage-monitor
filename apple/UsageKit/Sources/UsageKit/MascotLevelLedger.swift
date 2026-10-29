@@ -78,11 +78,16 @@ public enum MascotLevelLedger {
             } else {
                 let corrupt = file.deletingLastPathComponent().appendingPathComponent(corruptName)
                 guard rename(file.path, corrupt.path) == 0 else { return Outcome(days: merge(days, [:]), saved: false) }
+                chmod(corrupt.path, 0o600)
                 exists = false
             }
         }
         let merged = merge(stored, days)
-        if exists && merged == stored { return Outcome(days: merged, saved: true) }
+        if exists && merged == stored {
+            // 搬移或其他工具讓權限變寬時收回 0600（Codex C-03）
+            chmod(file.path, 0o600)
+            return Outcome(days: merged, saved: true)
+        }
         let temp = file.deletingLastPathComponent().appendingPathComponent(".\(fileName).tmp")
         try? fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard fm.createFile(atPath: temp.path, contents: encode(merged, today: today), attributes: [.posixPermissions: 0o600]),

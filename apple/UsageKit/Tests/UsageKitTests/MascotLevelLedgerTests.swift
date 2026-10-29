@@ -43,6 +43,19 @@ import Testing
         #expect(MascotLevelLedger.decode(try Data(contentsOf: file)) == days)
     }
 
+    /// 權限變寬的既有檔與保留的壞檔都收回 0600（Codex C-03）
+    @Test func tightensPermissions() throws {
+        _ = MascotLevelLedger.update(file: file, adding: days, today: today)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
+        #expect(MascotLevelLedger.update(file: file, adding: [:], today: today).saved)
+        #expect(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int == 0o600)
+        try Data("{".utf8).write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: file.path)
+        _ = MascotLevelLedger.update(file: file, adding: days, today: today)
+        let corrupt = folder.appendingPathComponent(MascotLevelLedger.corruptName).path
+        #expect(try FileManager.default.attributesOfItem(atPath: corrupt)[.posixPermissions] as? Int == 0o600)
+    }
+
     @Test func smallerHistoryDoesNotRewrite() throws {
         _ = MascotLevelLedger.update(file: file, adding: days, today: today)
         let before = try FileManager.default.attributesOfItem(atPath: file.path)[.systemFileNumber] as? Int
