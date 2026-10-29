@@ -78,7 +78,8 @@ public sealed record RingContent(string Provider, int RemainingPct, int? TimeRem
     {
         Agent = agent,
         Tooltip = $"{agent.Title}：{agent.Detail}\n{Tooltip}",
-        AccessibilityText = $"{agent.Title}，{agent.Detail}。{AccessibilityText}",
+        // 這台的工作階段：展開後點那一列切過去（ADR-0017 第 10 節）
+        AccessibilityText = $"{agent.Title}，{agent.Detail}{(agent.Session is null ? "" : "，展開後點這一列切到這個工作階段")}。{AccessibilityText}",
     };
 
     public static RingContent From(UsageSnapshot? snapshot, WindowChoice choice, DateTimeOffset now)

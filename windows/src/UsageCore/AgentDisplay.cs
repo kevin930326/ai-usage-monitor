@@ -10,6 +10,11 @@ namespace AIUsageMonitor.Core;
 /// </summary>
 public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, string? Device = null)
 {
+    /// <summary>這台的工作階段（鹽雜湊）：點膠囊那一列跳回去用（ADR-0017 第 10 節）；其他電腦的是 null</summary>
+    public string? Session { get; init; }
+    /// <summary>點了跳不過去時暫時取代第二行的文字（「找不到這個工作階段的視窗」「在桌機上」，2 秒）</summary>
+    public string? Hint { get; init; }
+
     /// <summary>
     /// merged（角色樣式，ADR-0019「角色合併所有電腦」，Fable G-13）：膠囊第二行和角色講同一件事：任何一台需要你 > 出錯（其他電腦的出錯
     /// 在這台看過就不算，seenErrors）> 這台的完成。圓環樣式（C2）維持原本：這台沒有要注意的時才顯示其他電腦的需要你
@@ -33,7 +38,7 @@ public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, 
         }
         if (local is { } top)
         {
-            return new RingAgent(top.Ai, localState!.Value, top.Stored == AgentState.NeedsYou ? top.Need : null);
+            return new RingAgent(top.Ai, localState!.Value, top.Stored == AgentState.NeedsYou ? top.Need : null) { Session = top.Id };
         }
         return remote?.FirstOrDefault(Needs) is { } other
             ? new RingAgent(other.Ai, AgentState.NeedsYou, null, other.Device)
@@ -50,12 +55,12 @@ public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, 
         _ => $"{Name} 出錯了",
     };
 
-    public string Detail => Device is not null ? "在另一台電腦" : State switch
+    public string Detail => Hint ?? (Device is not null ? "在另一台電腦" : State switch
     {
         AgentState.NeedsYou => AgentText.NeedDetail(Need),
         AgentState.Done => "回去看看結果",
         _ => "回去看看發生了什麼",
-    };
+    });
 }
 
 public static class AgentText

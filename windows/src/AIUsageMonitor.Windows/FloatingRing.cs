@@ -82,6 +82,22 @@ internal static class FloatingRingRenderer
         DrawRows(dc, s, shape, center, Math.Clamp((e - 0.35) / 0.65, 0, 1), p);
     }
 
+    /// <summary>
+    /// 完整展開時 AI 那一列的位置（視窗座標，DIP；同 <see cref="DrawRows"/>）：點了跳回那個工作階段（ADR-0017 第 10 節）。
+    /// 沒有 AI 的狀態、還沒完整展開時 null
+    /// </summary>
+    public static Rect? AgentRow(FloatingScene s)
+    {
+        if (s.Content.Agent is null || s.Expand < 1) return null;
+        var reveal = Ease(s.Reveal);
+        var center = new Point(s.TabCenter.X + (s.RingCenter.X - s.TabCenter.X) * reveal, s.TabCenter.Y + (s.RingCenter.Y - s.TabCenter.Y) * reveal) + s.Shift;
+        var info = s.Face is MascotFace ? RingShape.MascotInfo(s.Direction, s.RingDip) : RingShape.Info(s.Direction, s.Dock, s.RingDip);
+        var rowHeight = RingShape.RowsHeight / 2;
+        // 有兩行額度時 AI 在第二行；少於兩行時接在額度後面
+        var index = Math.Min(s.Details.Rows.Count, 1);
+        return new Rect(center.X + info.Left, center.Y + info.Top + index * rowHeight, info.Width, rowHeight);
+    }
+
     /// <summary>展開到 e 時的形狀：左右展開是膠囊，上下展開是外框</summary>
     private static (Geometry Shape, Rect Rect) Expanded(FloatingScene s, Point center, double r, double e)
     {

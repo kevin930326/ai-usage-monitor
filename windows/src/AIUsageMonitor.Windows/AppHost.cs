@@ -60,8 +60,44 @@ internal sealed class AppHost : IDisposable
     private Palette TrayPalette => new(SystemLook.TaskbarIsDark);
 
     private RingContent Content => RingContent.From(store.Snapshot, settings.RingWindow, now)
-        .WithAgent(RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), agents.Remote,
-                                  merged: settings.RingStyle != RingStyle.Ring, seenErrors: agents.SeenRemoteErrors));
+        .WithAgent(Hinted(RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), agents.Remote,
+                                  merged: settings.RingStyle != RingStyle.Ring, seenErrors: agents.SeenRemoteErrors)));
+
+    /// <summary>點了跳不過去的那一列（ADR-0017 第 10 節）：2 秒內第二行換成提示</summary>
+    private (RingAgent Agent, string Text)? jumpHint;
+    private DispatcherTimer? jumpHintTimer;
+
+    private RingAgent? Hinted(RingAgent? agent) =>
+        agent is not null && jumpHint is { } hint && hint.Agent.Session == agent.Session && hint.Agent.Device == agent.Device
+            ? agent with { Hint = hint.Text }
+            : agent;
+
+    /// <summary>點了膠囊上 AI 那一列：這台的跳回那個工作階段；其他電腦的只提示在哪台</summary>
+    private void JumpTo(RingAgent agent)
+    {
+        if (agent.Session is not { } session)
+        {
+            ShowJumpHint(agent, $"在{agent.Device}上");
+            return;
+        }
+        AgentJumper.Jump(agents, agent.Ai, session, dispatcher, ok =>
+        {
+            if (!ok) ShowJumpHint(agent, "找不到這個工作階段的視窗");
+        });
+    }
+
+    private void ShowJumpHint(RingAgent agent, string text)
+    {
+        jumpHint = (agent, text);
+        Refresh();
+        jumpHintTimer?.Stop();
+        jumpHintTimer = new DispatcherTimer(TimeSpan.FromSeconds(2), DispatcherPriority.Background, (_, _) =>
+        {
+            jumpHintTimer?.Stop();
+            jumpHint = null;
+            Refresh();
+        }, dispatcher);
+    }
     private RingDetails Details => RingDetails.From(store.Snapshot, settings.RingWindow, now);
 
     public void Start()
@@ -79,6 +115,10 @@ internal sealed class AppHost : IDisposable
         // Windows 的「顯示動畫」改了：角色的動畫程度跟著換（關閉時用「簡單」）
         SystemParameters.StaticPropertyChanged += OnSystemParameter;
         tray.DoubleClicked += () => TogglePanel(fromTray: true);
+        tray.BalloonClicked += () =>
+        {
+            if (agents.LastNotice is { } notice) AgentJumper.Jump(agents, notice.Ai, notice.Session, dispatcher, _ => { });
+        };
         tray.ContextMenuRequested += (_, _) => ShowMenu(fromTray: true);
         tray.SettingsChanged += () =>
         {
@@ -204,6 +244,7 @@ internal sealed class AppHost : IDisposable
             var size = AppSettings.RingDip(settings.RingSize);
             ring = new RingWindow(size, settings.Opacity);
             ring.Clicked += () => TogglePanel(fromTray: false);
+            ring.AgentClicked += JumpTo;
             ring.DragEnded += OnDragEnded;
             ring.MouseRightButtonUp += (_, e) =>
             {

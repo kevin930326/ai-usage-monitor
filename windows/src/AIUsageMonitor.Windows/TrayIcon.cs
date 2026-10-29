@@ -27,6 +27,10 @@ internal sealed class TrayIcon : IDisposable
     private string tip = "AI Usage Monitor";
 
     public event Action? DoubleClicked;
+
+    /// <summary>點了通知（AI 的需要你、完成）</summary>
+
+    public event Action? BalloonClicked;
     /// <summary>右鍵或鍵盤的選單鍵：參數是螢幕座標（實體像素）</summary>
     public event Action<int, int>? ContextMenuRequested;
     public event Action? SettingsChanged;
@@ -158,6 +162,10 @@ internal sealed class TrayIcon : IDisposable
                     break;
                 case NativeMethods.WM_CONTEXTMENU:
                     ContextMenuRequested?.Invoke(x, y);
+                    break;
+                case NativeMethods.NIN_BALLOONUSERCLICK:
+                    // 點了通知（ADR-0017 第 10 節）：氣球沒有參數，跳到最後一則的工作階段
+                    BalloonClicked?.Invoke();
                     break;
             }
             handled = true;
