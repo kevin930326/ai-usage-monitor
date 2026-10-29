@@ -112,6 +112,10 @@ final class NotchPanelController {
         panel?.container.updateEffectLoop()
     }
 
+    func heroLayerChanged() {
+        panel?.container.updateHeroLayer()
+    }
+
     func setExpanded(_ expanded: Bool) {
         guard let panel, let screen = panel.targetScreen ?? Self.targetScreen() else { return }
         panel.place(on: screen, layout: MascotController.shared.layout, expanded: expanded)
@@ -182,6 +186,8 @@ final class NotchContainerView: NSView {
     /// 收合時 AI 工作中的特效：Core Animation 循環播放預先畫好的一輪（`MascotEffectLoop`）
     private let effectLoopView = PassThroughView()
     private var effectLoopBox = CGRect.zero
+    /// 看滑鼠時的角色（CoreGraphics，每一格不經過 SwiftUI）
+    private let heroLayerView = MascotHeroLayerView()
     private var tracking: NSTrackingArea?
 
     /// 收合、只有特效在動時播一輪；其他時候停掉並釋放圖片
@@ -208,6 +214,16 @@ final class NotchContainerView: NSView {
         if !controller.effectLoopPlaying { controller.effectLoopPlaying = true }
     }
 
+    /// 只有視線在轉時由 `MascotHeroLayerView` 畫角色；其他時候停掉它的 display link
+    func updateHeroLayer() {
+        if MascotController.shared.heroOnLayer {
+            heroLayerView.start()
+            layoutCanvas()
+        } else {
+            heroLayerView.stop()
+        }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
@@ -216,6 +232,7 @@ final class NotchContainerView: NSView {
         addSubview(effectHosting)
         effectLoopView.wantsLayer = true
         addSubview(effectLoopView)
+        addSubview(heroLayerView)
         layoutCanvas()
     }
 
@@ -229,6 +246,7 @@ final class NotchContainerView: NSView {
                                width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
         effectHosting.frame = hosting.frame
         effectLoopView.frame = effectLoopBox.offsetBy(dx: hosting.frame.minX, dy: hosting.frame.minY)
+        heroLayerView.frame = heroLayerView.box.offsetBy(dx: hosting.frame.minX, dy: hosting.frame.minY)
     }
 
     override func layout() {

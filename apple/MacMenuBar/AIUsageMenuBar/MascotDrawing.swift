@@ -66,20 +66,51 @@ struct MascotPainter {
         drawEffects(frame, placed: placed, in: &context)
     }
 
-    /// 看滑鼠時的角色圖層（`MascotHeroLayerView`）：角色與特效，不含光暈與漣漪（光暈留在瀏海畫布上、不必每格重畫）
-    func drawCharacter(_ frame: MascotFrame, in cg: CGContext) {
-        var surface = MascotCGSurface(cg)
-        drawCharacter(frame, in: &surface)
+    /// 角色分成三部分畫（看滑鼠時的角色圖層 `MascotHeroLayerView`）：光暈留在瀏海畫布上；身體（含手、鍵盤、冷汗與特效）
+    /// 畫成一張固定的圖；只有臉（眼睛、眉毛、腮紅）每一格重畫
+    struct Parts: OptionSet {
+        let rawValue: Int
+        static let glow = Parts(rawValue: 1)
+        static let body = Parts(rawValue: 2)
+        static let face = Parts(rawValue: 4)
+        static let all: Parts = [.glow, .body, .face]
     }
 
-    func drawCharacter<S: MascotSurface>(_ frame: MascotFrame, in surface: inout S) {
-        let placed = drawHero(frame, in: &surface, glow: false)
-        drawEffects(frame, placed: placed, in: &surface)
+    /// 看滑鼠時的角色圖層：角色與特效，不含光暈與漣漪（光暈留在瀏海畫布上、不必每格重畫）
+    func drawCharacter(_ frame: MascotFrame, parts: Parts = [.body, .face], in cg: CGContext) {
+        var surface = MascotCGSurface(cg)
+        drawCharacter(frame, parts: parts, in: &surface)
+    }
+
+    func drawCharacter<S: MascotSurface>(_ frame: MascotFrame, parts: Parts = [.body, .face], in surface: inout S) {
+        let placed = drawHero(frame, in: &surface, parts: parts.subtracting(.glow))
+        if parts.contains(.body) { drawEffects(frame, placed: placed, in: &surface) }
     }
 
     /// 只畫光暈（角色交給 `MascotHeroLayerView` 時，瀏海畫布上留下的部分）
     func drawGlow(_ frame: MascotFrame, in context: inout GraphicsContext) {
-        drawHero(frame, in: &context, glowOnly: true)
+        drawHero(frame, in: &context, parts: .glow)
+    }
+
+    /// 身體只會平移（沒有晃動、發抖、敲鍵盤、揮手、呼吸、手），身體也不跟著視線變（格子、線框的身體會）：
+    /// 可以把身體畫成固定的圖、只重畫臉
+    static func bodyIsRigid(_ frame: MascotFrame) -> Bool {
+        let h = frame.pose
+        let still = [MascotProp.sway, .shiver, .type, .wave, .breathe, .hands].allSatisfy { abs(h[$0]) < 0.0001 }
+        let faceless = frame.look.map { !$0.style.isGrid && $0.style != .wire } ?? true
+        // 特效外觀在動（霓虹的呼吸）時身體每格都不一樣
+        let frozen = frame.effectTime == nil || frame.look?.style.animates != true
+        return still && faceless && frozen && frame.effects.isEmpty
+    }
+
+    /// 角色這一格畫在哪裡（同 `drawHero` 的位置）
+    func heroCenter(_ frame: MascotFrame) -> CGPoint {
+        let h = frame.pose, now = Double(frame.time)
+        let R = h[.r] * h[.sc], u = h[.r] / 40
+        let swv = sin(now / 310) * h[.sway], br = sin(now / 700) * h[.breathe]
+        let sy = h[.sy] * (1 + 0.035 * br)
+        return CGPoint(x: h[.x] + swv * 7 * u + sin(now / 17) * h[.shiver] * 1.8 * u,
+                       y: h[.y] + sin(now / 480) * 1.4 * u + h[.jump] * R + R * (1 - sy))
     }
 
     // MARK: - 顏色
@@ -185,8 +216,7 @@ struct MascotPainter {
 
     /// 畫角色；回傳實際畫的位置與半徑（特效依它放）
     @discardableResult
-    func drawHero<S: MascotSurface>(_ frame: MascotFrame, in context: inout S, glow: Bool = true,
-                                    glowOnly: Bool = false) -> (x: Double, y: Double, r: Double) {
+    func drawHero<S: MascotSurface>(_ frame: MascotFrame, in context: inout S, parts: Parts = .all) -> (x: Double, y: Double, r: Double) {
         let h = frame.pose, now = Double(frame.time)
         let R = h[.r] * h[.sc]
         guard R >= 0.5 else { return (h[.x], h[.y], 0) }
@@ -201,7 +231,7 @@ struct MascotPainter {
         let look = frame.look
         let target = bodyTint(frame)
 
-        if glow, h[.glow] > 0 {
+        if parts.contains(.glow), h[.glow] > 0 {
             let gc = glowColor(frame)
             let alpha = min(0.6, hero.glow.alpha * h[.glow] * (look?.glowScale ?? 1))
             let g = Gradient(stops: [.init(color: color(gc, alpha), location: 0),
@@ -210,7 +240,7 @@ struct MascotPainter {
             context.fillRadial(Path(rect), gradient: g, center: CGPoint(x: x, y: y),
                                startRadius: R * hero.glow.inner, endRadius: R * hero.glow.outer)
         }
-        if glowOnly { return (x, y, R) }
+        let body = parts.contains(.body), face = parts.contains(.face)
 
         func sphere(_ cx: Double, _ cy: Double, _ r: Double, alpha: Double = 1, in g: inout S) {
             guard r > 0.05 else { return }
@@ -273,7 +303,7 @@ struct MascotPainter {
             }
             if !drawn { sphere(cx, cy, r, alpha: alpha, in: &g) }
         }
-        for p in hands where p.z < 0 { drawHand(p, in: &context) }
+        for p in hands where p.z < 0 && body { drawHand(p, in: &context) }
 
         // 身體（以底部為支點的壓扁已算在 y 裡）
         // 表情：動畫沒有指定眼睛（膠囊）、也沒在睡覺或閉眼時，眼睛與眉毛照平常的表情（額度：擔心的小圓點、用完的 ×、過期閉眼）
@@ -288,17 +318,17 @@ struct MascotPainter {
                                                                     max(h[.tint], 0)), glow: false)
         let ink = color(lookEyes?.color ?? MascotLookRenderer.ink)
 
-        var body = context
-        body.translateBy(x: x, y: y)
-        body.scaleBy(x: sx, y: sy)
+        var bodyContext = context
+        bodyContext.translateBy(x: x, y: y)
+        bodyContext.scaleBy(x: sx, y: sy)
         // 格子特效只畫格子（格子之間要看得到瀏海的黑色），過場中先畫漸變的球
-        if look == nil || look?.style == .solid || h[.tint] < 0.99 { sphere(0, 0, R, in: &body) }
-        if let look, look.style != .solid, h[.tint] > 0.01 {
+        if body, look == nil || look?.style == .solid || h[.tint] < 0.99 { sphere(0, 0, R, in: &bodyContext) }
+        if body, let look, look.style != .solid, h[.tint] > 0.01 {
             // 外觀的身體；過場時從白色漸變過去
             let face = MascotLookRenderer.Face(yaw: yaw, pitch: pitch, eye: hero.eye,
                                                pillOpen: eyes == .pill ? h[.open] * (1 - dash) : nil)
-            let t = h[.tint], glowScale = body.glowScale
-            body.withCGContext { cg in
+            let t = h[.tint], glowScale = bodyContext.glowScale
+            bodyContext.withCGContext { cg in
                 if t < 0.99 {
                     cg.setAlpha(t)
                     cg.beginTransparencyLayer(auxiliaryInfo: nil)
@@ -318,7 +348,7 @@ struct MascotPainter {
                     max(0.2, abs(cos(ye))), max(0.2, cos(pe)))
         }
         let blush = max(h[.blush], look?.blush == true ? 0.9 * h[.tint] : 0)
-        if blush > 0.01 {
+        if face, blush > 0.01 {
             for s in [-1.0, 1.0] {
                 guard let p = project(yaw + s * 0.52, pitch - 0.32) else { continue }
                 var g = context
@@ -330,7 +360,7 @@ struct MascotPainter {
                        color: Color(red: 1, green: 0.47, blue: 0.59))
             }
         }
-        if showsMood, frame.mood.brow != .none {
+        if face, showsMood, frame.mood.brow != .none {
             let b = hero.brow
             let tilt = switch frame.mood.brow {
             case .worried: b.worriedTilt
@@ -351,7 +381,7 @@ struct MascotPainter {
                 g.stroke(path, color: ink, style: StrokeStyle(lineWidth: R * b.thickness, lineCap: .round))
             }
         }
-        for s in [-1.0, 1.0] where lookEyes != nil {
+        for s in [-1.0, 1.0] where face && lookEyes != nil {
             guard let p = project(yaw + s * hero.eye.yaw, pitch + hero.eye.pitch) else { continue }
             var g = context
             g.opacity = p.a
@@ -413,7 +443,7 @@ struct MascotPainter {
         }
 
         // 工作中的鍵盤：中灰底、上緣淡白亮線、一排深灰按鍵輪流亮成光暈色（shared/mascot-anim.json `hero.keyboard`）
-        if h[.kb] > 0.01 {
+        if body, h[.kb] > 0.01 {
             let k = config.hero.keyboard
             let kx = x, ky = y + R * k.y * sy, kw = R * k.width, kh = R * k.height
             var g = context
@@ -432,10 +462,10 @@ struct MascotPainter {
             }
         }
 
-        for p in hands where p.z >= 0 { drawHand(p, in: &context) }
+        for p in hands where p.z >= 0 && body { drawHand(p, in: &context) }
 
         // 生病：頭的右上方冒一滴冷汗（形狀，不只靠顏色）
-        if showsMood, frame.mood.sweat, R > 4 {
+        if body, showsMood, frame.mood.sweat, R > 4 {
             let cx = x + R * 0.8 * sx, cy = y - R * 0.42 * sy, s = R * 0.13
             var drop = Path()
             drop.move(to: CGPoint(x: cx, y: cy - s * 1.6))

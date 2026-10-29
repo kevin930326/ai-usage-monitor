@@ -56,7 +56,7 @@ enum MascotMotionLevel: String, CaseIterable, Identifiable {
 }
 
 /// 重畫的頻率（ADR-0016 第 6 節）：收合或畫面靜止時完全停止；展開待著（眨眼、工作）每秒 30 次、睡著 10 次；動畫中每秒 60 次；
-/// 只有視線在轉：收合每秒 15 次、展開 30 次
+/// 只有視線在轉：收合每秒 30 次、展開跟著螢幕更新率（角色改用 CoreGraphics 畫）
 enum MascotRenderRate: Equatable {
     case stopped, effect, breathing, gaze, gazeOpen, idle, animating
 
@@ -64,10 +64,10 @@ enum MascotRenderRate: Equatable {
         switch self {
         // 睡著只有慢慢的呼吸（一次約 4 秒）與飄起來的 z：每秒 10 次就夠
         case .breathing: 1.0 / 10
-        // 只有視線在追游標（游標每一格讀一次）：收合每秒 15 次、展開 30 次。SwiftUI 每一格的排版與送出約 0.25% CPU，
-        // 跟著螢幕更新率（60～120）要 8～9%，所以停在這裡（icons 第 4 部分實測，ADR-0016 第 6 節）
-        case .gaze: 1.0 / 15
-        case .gazeOpen: 1.0 / 30
+        // 只有視線在追游標（游標每一格讀一次）：收合每秒 30 次、展開跟著螢幕更新率（最多 120）。
+        // 角色這段期間由 `MascotHeroLayerView` 用 CoreGraphics 畫，不經過 SwiftUI（icons 第 4 部分，ADR-0016 第 6 節）
+        case .gaze: 1.0 / 30
+        case .gazeOpen: 1.0 / 120
         // 只有外觀的特效在動（收合時 AI 工作中、展開待著）：每秒 12 次（ADR-0021）
         case .effect: 1.0 / 12
         case .stopped, .idle: 1.0 / 30
@@ -135,6 +135,11 @@ final class MascotController {
     private var directorVersion = 0
     @ObservationIgnored private var directorValue: MascotDirector?
     private(set) var renderRate = MascotRenderRate.stopped
+    /// 只有視線在轉：角色由 `MascotHeroLayerView` 用 CoreGraphics 畫，瀏海的 SwiftUI 畫布只留光暈、不必每格重排
+    private(set) var heroOnLayer = false
+    /// 只有視線在轉時角色的姿勢不會變（在動的話是 `.animating`）：每次 refresh 算一次，看滑鼠的每一格不必再算
+    /// （`MascotScript.pose` 是每一格最花時間的一段）
+    @ObservationIgnored private(set) var heldPose: MascotPose?
     /// 不在動畫中時，面板形狀與額度卡固定畫的那一刻（毫秒）；完全停止時角色也畫這一刻，不會停在眨眼一半
     private(set) var stoppedAt = 0
     /// 這次啟動後是否已經播過過場（「只有第一次」）
@@ -157,7 +162,7 @@ final class MascotController {
     @ObservationIgnored private var closeTimer: Timer?
     @ObservationIgnored private var workTimer: Timer?
     @ObservationIgnored private var gazeTimer: Timer?
-    /// 游標在動時每一格讀一次游標（展開每秒 30 格、收合 15 格）；停下約 1 秒、視線也轉到位後停掉
+    /// 游標在動時每一格讀一次游標（展開跟著螢幕更新率、收合每秒 30 格）；停下約 1 秒、視線也轉到位後停掉
     @ObservationIgnored private var gazeLink: CADisplayLink?
     @ObservationIgnored private var gazeLinkTarget: GazeLinkTarget?
     /// 高幀率期間游標最後一次相對角色移動的時間（毫秒）
@@ -668,7 +673,7 @@ final class MascotController {
     // MARK: - 看滑鼠（整個螢幕）
 
     /// 用 `NSEvent.mouseLocation` 讀游標位置（不裝事件監聽、不需要權限）。游標沒在動時低頻輪詢：每秒約 12 次，
-    /// 沒動 1 秒後降到每秒 4 次；看到游標移動就改成每一格讀一次（display link，展開每秒 30 格、收合 15 格），
+    /// 沒動 1 秒後降到每秒 4 次；看到游標移動就改成每一格讀一次（display link，展開跟著螢幕更新率、收合每秒 30 格），
     /// 游標停下約 1 秒、視線也轉到位後停掉、回到低頻輪詢（ADR-0016 第 6 節，ADR-0010 規則 1、4 的例外）
     private func restartGaze() {
         stopGazeLink()
@@ -720,7 +725,7 @@ final class MascotController {
         refresh()
     }
 
-    /// 展開每秒 30 次、收合 15 次（和重畫同一個頻率，`linkTick` 再跳過多的）
+    /// 展開跟著螢幕更新率、收合每秒 30 次（和重畫同一個頻率，`linkTick` 再跳過多的）
     private func updateGazeLinkRate() {
         guard let gazeLink else { return }
         let fps = Float((1 / (director?.machine.isOpen == true ? MascotRenderRate.gazeOpen : .gaze).interval).rounded())
@@ -803,7 +808,7 @@ final class MascotController {
             return
         }
         let t = time()
-        let pose = director.pose(at: t)
+        let pose = heldPose ?? director.pose(at: t)
         // 姿勢暫時不看（反應、轉場中 `.follow` 為 0）：照樣每秒 12 次，轉回來就接著看
         // （Codex C-02：以前這裡也降到每秒 1 次，工作結束後要等下一次才恢復）
         guard pose[.follow] > 0.01 else {
@@ -909,6 +914,12 @@ final class MascotController {
         if rate != renderRate {
             if rate != .animating { stoppedAt = now }
             renderRate = rate
+        }
+        let onLayer = rate == .gaze || rate == .gazeOpen
+        heldPose = onLayer ? director.pose(at: now) : nil
+        if onLayer != heroOnLayer {
+            heroOnLayer = onLayer
+            NotchPanelController.shared.heroLayerChanged()
         }
         updateEffectLoop()
         // 收合動畫播完才把視窗縮回瀏海大小（展開時是整張畫布）

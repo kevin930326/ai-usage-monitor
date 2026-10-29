@@ -283,6 +283,12 @@ enum DebugTools {
         UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(perfStart), name))
     }
 
+    /// 量測中才記：看滑鼠時角色圖層這一秒實際畫了幾格（螢幕關閉、鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
+    static func perfFrames(_ count: Int, open: Bool) {
+        guard let perfStart else { return }
+        UsageStore.log(String(format: "perf-fps %.1f %d %@", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed"))
+    }
+
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {
         perfStart = Date.now
         for (offset, name, action) in steps {

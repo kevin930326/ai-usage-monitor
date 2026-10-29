@@ -84,16 +84,25 @@ enum DebugHeroParity {
         UsageStore.log("hero parity: \(cases.count - failed)/\(cases.count) ok")
     }
 
-    /// 和 `MascotHeroLayerView.draw` 一樣：畫布座標（y 往下）平移到範圍的左上角
+    /// 和 `MascotHeroLayerView` 同一份畫法：身體只會平移時先畫身體、再畫臉（同兩層疊起來），否則整個一起畫
     static func coreGraphics(_ frame: MascotFrame, painter: MascotPainter, box: CGRect, scale: Double) -> CGImage? {
-        let w = Int(box.width * scale), h = Int(box.height * scale)
+        let w = Int((box.width * scale).rounded(.up)), h = Int((box.height * scale).rounded(.up))
         guard let cg = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         cg.translateBy(x: 0, y: CGFloat(h))
         cg.scaleBy(x: scale, y: -scale)
-        cg.translateBy(x: -box.minX, y: -box.minY)
-        painter.drawCharacter(frame, in: cg)
+        if MascotPainter.bodyIsRigid(frame), let body = MascotHeroLayerView.image(frame, parts: .body, painter: painter, box: box,
+                                                                                  clip: nil, scale: scale) {
+            cg.saveGState()
+            cg.translateBy(x: 0, y: box.height)
+            cg.scaleBy(x: 1, y: -1)
+            cg.draw(body, in: CGRect(origin: .zero, size: box.size))
+            cg.restoreGState()
+            MascotHeroLayerView.paint(frame, parts: .face, painter: painter, box: box, clip: nil, in: cg)
+        } else {
+            MascotHeroLayerView.paint(frame, parts: [.body, .face], painter: painter, box: box, clip: nil, in: cg)
+        }
         return cg.makeImage()
     }
 
