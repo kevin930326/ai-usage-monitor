@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- 角色繪製的測試與截圖（Mac、Linux、Windows 都能跑）：輸出到 build/win-mascot/ -->
+  <!-- 角色繪製的測試與截圖（Mac、Windows 能跑；SkiaSharp 沒有 Linux 的原生檔）：輸出到 build/win-mascot/ -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
