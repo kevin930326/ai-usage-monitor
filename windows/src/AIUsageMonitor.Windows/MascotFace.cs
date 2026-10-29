@@ -106,7 +106,13 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         if (controller.Director is not { } director) return;
         var cfg = controller.Config.Hero;
         var p = Math.Clamp(progress, 0, 1);
-        double ax = Lerp(cfg.Mini.X, cfg.Card.X, p), ay = Lerp(cfg.Mini.Y, cfg.Card.Y, p), ar = Lerp(cfg.Mini.Radius, cfg.Card.Radius, p);
+        var t = still ? controller.StoppedAt : FrameTime();
+        // 錨點跟著角色自己的姿勢從迷你移到卡片（腳本 620 ms ExpoOut），不是面板的彈簧進度：兩者不同步時（展開剛開始，
+        // 彈簧 0.12、姿勢已經 0.36）角色會偏到膠囊左下被裁掉。完整展開與收合時照舊
+        var q = p is > 0 and < 1 && cfg.Card.Radius != cfg.Mini.Radius
+            ? Math.Clamp((director.Pose(t)[MascotProp.R] - cfg.Mini.Radius) / (cfg.Card.Radius - cfg.Mini.Radius), 0, 1)
+            : p;
+        double ax = Lerp(cfg.Mini.X, cfg.Card.X, q), ay = Lerp(cfg.Mini.Y, cfg.Card.Y, q), ar = Lerp(cfg.Mini.Radius, cfg.Card.Radius, q);
         var busy = !still && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think ? 1 - p : 0;
         var heroCenter = center + new Vector(slot * p, 0) + BusyShift * (r * busy);
         var k = Lerp(HeroFill, BusyFill, busy) * r / ar;
@@ -122,7 +128,6 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
             dc.DrawImage(frames[index], area);
             return;
         }
-        var t = still ? controller.StoppedAt : FrameTime();
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null, staticRemote: controller.StaticRemote);
         dc.DrawImage(hero.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
