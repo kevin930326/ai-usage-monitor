@@ -200,6 +200,7 @@ public class MascotSheetTests
         using (var sheet = Sheet(config, [
                    .. new[] { 0.0, 0.2, 0.4, 0.6 }.Select(p => new Shot($"collapsed-typing-{(int)(p * 100)}", d => d.SetWorking(true, 0), 2000, LoopPhase: p)),
                    .. new[] { 0.1, 0.35, 0.6, 0.85 }.Select(p => new Shot($"collapsed-doze-{(int)(p * 100)}", d => d.SetAgentIdle(true, 0), 2000, LoopPhase: p)),
+                   .. new[] { 0.1, 0.35, 0.6, 0.85 }.Select(p => new Shot($"collapsed-think-{(int)(p * 100)}", d => d.SetBackground(true, 0), 2000, LoopPhase: p)),
                ], 40))
             SaveComparison(sheet, "notch-collapsed-motion.png");
 

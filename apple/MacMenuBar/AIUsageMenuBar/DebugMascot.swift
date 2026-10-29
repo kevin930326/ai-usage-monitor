@@ -215,6 +215,10 @@ enum DebugMascot {
                  extras: NotchExtras(page: .agents, agents: [row(.claude, "ai-usage-monitor", .working, minutes: 6)],
                                      remote: [RemoteAgent(device: "工作 PC", ai: .codex, state: .needsYou, sessions: 1),
                                               RemoteAgent(device: "桌機", ai: .claude, state: .working, sessions: 2)])),
+            // 背景執行中（ADR-0017 第 7 節）：回合結束、AI 底下還有程序在跑
+            Shot(name: "expanded-agents-background", setup: { $0.setBackground(true, at: 0); $0.open(at: 0, intro: false) }, time: 1500,
+                 extras: NotchExtras(page: .agents, agents: [row(.claude, "ai-usage-monitor", .background, minutes: 4),
+                                                             row(.codex, "web-app", .done, minutes: 1)])),
         ]
         // 有瀏海的 Mac（實體瀏海 185 寬）與沒有瀏海時的假瀏海
         let notch = NotchLayout(notchWidth: 185, notchHeight: 32, hasNotch: true)
@@ -291,6 +295,9 @@ enum DebugMascot {
                 Shot(name: "collapsed-typing-\(Int(phase * 100))", setup: { $0.setWorking(true, at: 0) }, time: 2000, loopPhase: phase)
             } + [0.1, 0.35, 0.6, 0.85].map { phase in
                 Shot(name: "collapsed-doze-\(Int(phase * 100))", setup: { $0.setAgentIdle(true, at: 0) }, time: 2000, loopPhase: phase)
+            } + [0.1, 0.35, 0.6, 0.85].map { phase in
+                // 背景執行中（ADR-0017 第 7 節）：呼吸加慢速思考泡泡，不敲鍵盤
+                Shot(name: "collapsed-think-\(Int(phase * 100))", setup: { $0.setBackground(true, at: 0) }, time: 2000, loopPhase: phase)
             }, height: 40), dir.appendingPathComponent("notch-collapsed-motion.png"))
         }
         for scheme in [ColorScheme.light, .dark] {
