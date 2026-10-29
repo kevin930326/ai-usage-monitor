@@ -20,9 +20,11 @@ public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, 
         // 背景執行中排在完成未看前面但不上圓環：跳過它，別的工作階段的完成未看照樣顯示（ADR-0017 第 7 節）
         var local = sessions.Ordered(now).FirstOrDefault(s => s.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error);
         var localState = local?.State(now, sessions.IdleAfter);
+        // 角色樣式：其他電腦的需要你和角色一樣只在中繼收到後 20 分鐘內算（AgentActivity.RemoteEffect，Codex C-02）
+        bool Needs(RemoteAgent r) => r.State == AgentState.NeedsYou && (!merged || now - r.Updated <= AgentActivity.RemoteEffect);
         if (merged && localState != AgentState.NeedsYou)
         {
-            if (remote?.FirstOrDefault(r => r.State == AgentState.NeedsYou) is { } needs) return new RingAgent(needs.Ai, AgentState.NeedsYou, null, needs.Device);
+            if (remote?.FirstOrDefault(Needs) is { } needs) return new RingAgent(needs.Ai, AgentState.NeedsYou, null, needs.Device);
             if (localState != AgentState.Error
                 && remote?.FirstOrDefault(r => r.State == AgentState.Error && seenErrors?.Contains(AgentActivity.ErrorKey(r)) != true) is { } error)
             {
@@ -33,7 +35,7 @@ public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, 
         {
             return new RingAgent(top.Ai, localState!.Value, top.Stored == AgentState.NeedsYou ? top.Need : null);
         }
-        return remote?.FirstOrDefault(r => r.State == AgentState.NeedsYou) is { } other
+        return remote?.FirstOrDefault(Needs) is { } other
             ? new RingAgent(other.Ai, AgentState.NeedsYou, null, other.Device)
             : null;
     }

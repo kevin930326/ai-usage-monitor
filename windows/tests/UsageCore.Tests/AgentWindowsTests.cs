@@ -414,7 +414,7 @@ public sealed class AgentWindowsTests : IDisposable
         var sessions = new AgentSessions(600_000);
         sessions.Apply(Event(AgentHookEvent.Stop, 1), 1_000);
         var needs = new RemoteAgent("工作 PC", AgentKind.Codex, AgentState.NeedsYou, 1);
-        var error = new RemoteAgent("桌機", AgentKind.Claude, AgentState.Error, 1) { Since = 500 };
+        var error = new RemoteAgent("桌機", AgentKind.Claude, AgentState.Error, 1) { Since = 500, RelaySince = 500 };
         // 這台完成未看、其他電腦需要你：需要你優先（圓環樣式維持這台的完成）
         Assert.Equal("工作 PC", RingAgent.From(sessions, 2_000, [needs], merged: true)!.Device);
         Assert.Null(RingAgent.From(sessions, 2_000, [needs])!.Device);
@@ -423,6 +423,13 @@ public sealed class AgentWindowsTests : IDisposable
         var seen = new HashSet<string> { AgentActivity.ErrorKey(error) };
         Assert.Equal(AgentState.Done, RingAgent.From(sessions, 2_000, [error], merged: true, seenErrors: seen)!.State);
         Assert.Null(RingAgent.From(sessions, 2_000, [error], merged: true, seenErrors: seen)!.Device);
+        // 其他電腦的需要你超過 20 分鐘（角色已經放下手）：膠囊也不顯示，這台的完成、出錯照常；圓環樣式維持原本
+        var late = 2_000 + AgentActivity.RemoteEffect + 1;
+        Assert.Equal(AgentState.Done, RingAgent.From(sessions, late, [needs], merged: true)!.State);
+        Assert.Null(RingAgent.From(sessions, late, [needs], merged: true)!.Device);
+        Assert.Null(RingAgent.From(new AgentSessions(600_000), late, [needs], merged: true));
+        Assert.Equal("工作 PC", RingAgent.From(new AgentSessions(600_000), late, [needs])!.Device);
+        Assert.Equal("工作 PC", RingAgent.From(new AgentSessions(600_000), 2_000, [needs], merged: true)!.Device);
     }
 
     [Fact]
