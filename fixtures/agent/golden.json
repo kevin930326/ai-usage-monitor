@@ -1,4 +1,96 @@
 {
+  "activity" : [
+    {
+      "name" : "local-idle-remote-working-thinks",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=1 remoteError=0 idle=0 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-needs-you-raises",
+      "result" : [
+        "working=0 background=0 needsYou=1 remoteWorking=0 remoteError=0 idle=0 mood=needsYou"
+      ]
+    },
+    {
+      "name" : "remote-stale-after-30-minutes-ignored",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-working-over-20-minutes-has-no-effect",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-done-fades-after-30-minutes",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-done-recent-keeps-awake-not-happy",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=0 mood=waiting"
+      ]
+    },
+    {
+      "name" : "remote-waiting-past-sleep-minutes-sleeps",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-waiting-recent-keeps-awake",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=0 mood=none"
+      ]
+    },
+    {
+      "name" : "local-background-and-remote-working",
+      "result" : [
+        "working=0 background=1 needsYou=0 remoteWorking=1 remoteError=0 idle=0 mood=none"
+      ]
+    },
+    {
+      "name" : "local-working-and-remote-needs-you",
+      "result" : [
+        "working=1 background=0 needsYou=1 remoteWorking=0 remoteError=0 idle=0 mood=needsYou"
+      ]
+    },
+    {
+      "name" : "remote-error-is-sad",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=1 idle=0 mood=error"
+      ]
+    },
+    {
+      "name" : "no-remote-file-same-as-local",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-idle-only-sleeps",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=1 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-error-seen-here-is-hidden",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=0 mood=none"
+      ]
+    },
+    {
+      "name" : "remote-error-again-later-shows",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=1 idle=0 mood=error"
+      ]
+    }
+  ],
   "inputs" : [
     {
       "name" : "session-start",

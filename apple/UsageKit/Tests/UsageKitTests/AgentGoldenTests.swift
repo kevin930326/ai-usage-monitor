@@ -16,6 +16,25 @@ import Testing
         var messages: [Raw]
         var sessions: [SessionCase]
         var remote: [RemoteCase]
+        var activity: [ActivityCase]
+    }
+
+    /// 角色合併所有電腦（ADR-0019）：本機的旗標＋其他電腦的原始資料。`seen_from`：這份資料裡的出錯先在這台看過
+    struct ActivityCase: Decodable {
+        var name: String
+        var local_now: Int64
+        var idle_after_ms: Int64
+        var local: Local
+        var raw: String
+        var seen_from: String?
+
+        struct Local: Decodable {
+            var working: Bool
+            var idle: Bool
+            var needs_you: Bool
+            var background: Bool
+            var top: String?
+        }
     }
 
     struct RemoteCase: Decodable {
@@ -60,6 +79,7 @@ import Testing
         var messages: [Named]
         var sessions: [Named]
         var remote: [Named]
+        var activity: [Named]
     }
 
     struct Named: Codable, Equatable {
@@ -169,10 +189,25 @@ import Testing
         return Named(name: testCase.name, result: list.map { "\($0.device)|\($0.ai.rawValue)|\($0.state.rawValue)|\($0.sessions)|\($0.text)" })
     }
 
+    static func activity(_ c: ActivityCase) -> Named {
+        let remote = RemoteAgents.parse(Data(c.raw.utf8), localNow: c.local_now, all: true)
+        let seen = Set(c.seen_from.map { RemoteAgents.parse(Data($0.utf8), localNow: c.local_now, all: true) }?
+            .filter { $0.state == .error }.map(AgentActivity.errorKey) ?? [])
+        let a = AgentActivity.combine(localWorking: c.local.working, localIdle: c.local.idle, localNeedsYou: c.local.needs_you,
+                                      localBackground: c.local.background, remote: remote, now: c.local_now, idleAfter: c.idle_after_ms,
+                                      seenErrors: seen)
+        let top = c.local.top.flatMap(AgentState.init(rawValue:))
+        func b(_ v: Bool) -> String { v ? "1" : "0" }
+        return Named(name: c.name, result: ["working=\(b(a.working)) background=\(b(a.background)) needsYou=\(b(a.needsYou)) "
+            + "remoteWorking=\(b(a.remoteWorking)) remoteError=\(b(a.remoteError)) idle=\(b(a.idle)) "
+            + "mood=\(a.moodState(localTop: top)?.rawValue ?? "none")"])
+    }
+
     @Test func matchesGolden() throws {
         let input = try JSONDecoder().decode(Input.self, from: Data(contentsOf: Self.folder.appendingPathComponent("cases.json")))
         let output = Output(inputs: input.inputs.map(Self.extract), messages: input.messages.map(Self.parse),
-                            sessions: input.sessions.map(Self.run), remote: input.remote.map(Self.remote))
+                            sessions: input.sessions.map(Self.run), remote: input.remote.map(Self.remote),
+                            activity: input.activity.map(Self.activity))
         let goldenURL = Self.folder.appendingPathComponent("golden.json")
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -180,12 +215,13 @@ import Testing
             try (encoder.encode(output) + Data("\n".utf8)).write(to: goldenURL)
         }
         let golden = try JSONDecoder().decode(Output.self, from: Data(contentsOf: goldenURL))
-        for (expected, actual) in zip(golden.inputs + golden.messages + golden.sessions + golden.remote,
-                                      output.inputs + output.messages + output.sessions + output.remote) {
+        for (expected, actual) in zip(golden.inputs + golden.messages + golden.sessions + golden.remote + golden.activity,
+                                      output.inputs + output.messages + output.sessions + output.remote + output.activity) {
             #expect(expected == actual, "\(actual.name)：\n預期 \(expected.result)\n實際 \(actual.result)")
         }
         #expect(golden.inputs.count == output.inputs.count && golden.messages.count == output.messages.count
-                && golden.sessions.count == output.sessions.count && golden.remote.count == output.remote.count, "golden.json 與 cases.json 的情境數不同")
+                && golden.sessions.count == output.sessions.count && golden.remote.count == output.remote.count
+                && golden.activity.count == output.activity.count, "golden.json 與 cases.json 的情境數不同")
     }
 
     /// 其他電腦的「完成了」：心跳讓中繼收到的時間一直是新的，從進入完成的時間算 30 分鐘就不顯示（畫面停著不重新下載時也會消失）
@@ -218,7 +254,9 @@ import Testing
         """
         let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now + 5_000)
         #expect(list == [RemoteAgent(device: "桌機", ai: .claude, state: .needsYou, sessions: 1, id: "0/claude",
-                                     expiresAt: now + 5_000 + RemoteAgents.maxAge - 60_000 + 1)])
+                                     expiresAt: now + 5_000 + RemoteAgents.maxAge - 60_000 + 1,
+                                     // 中繼的時間換成本機：中繼的 now 對到下載的那一刻（now + 5 秒）
+                                     since: 5_001, updated: now + 5_000 - 60_000)])
         // 畫面停著不重新下載：中繼收到後滿 30 分鐘就不顯示
         #expect(list[0].isShown(at: now + 5_000 + 29 * 60_000))
         #expect(!list[0].isShown(at: now + 5_000 + 29 * 60_000 + 1))

@@ -154,6 +154,27 @@ public class AgentGoldenTests
         [.. RemoteAgents.Parse(Encoding.UTF8.GetBytes(c["raw"]!.GetValue<string>()), c["local_now"]!.GetValue<long>())
             .Select(r => $"{r.Device}|{AgentNames.Name(r.Ai)}|{AgentNames.Name(r.State)}|{r.Sessions}|{r.Text}")]);
 
+    /// <summary>角色合併所有電腦（ADR-0019）：同 Swift 的 activity 組</summary>
+    [Fact]
+    public void ActivityMatchesGolden() => Compare("activity", c =>
+    {
+        var now = c["local_now"]!.GetValue<long>();
+        var remote = RemoteAgents.Parse(Encoding.UTF8.GetBytes(c["raw"]!.GetValue<string>()), now, all: true);
+        var seen = c["seen_from"] is { } from
+            ? RemoteAgents.Parse(Encoding.UTF8.GetBytes(from.GetValue<string>()), now, all: true)
+                .Where(r => r.State == AgentState.Error).Select(AgentActivity.ErrorKey).ToHashSet()
+            : [];
+        var local = c["local"]!;
+        bool Flag(string key) => local[key]!.GetValue<bool>();
+        var a = AgentActivity.Combine(Flag("working"), Flag("idle"), Flag("needs_you"), Flag("background"), remote, now,
+                                      c["idle_after_ms"]!.GetValue<long>(), seen);
+        AgentState? top = local["top"] is { } t ? Enum.GetValues<AgentState>().First(x => AgentNames.Name(x) == t.GetValue<string>()) : null;
+        static string B(bool v) => v ? "1" : "0";
+        var mood = a.MoodState(top) is { } m ? AgentNames.Name(m) : "none";
+        return [$"working={B(a.Working)} background={B(a.Background)} needsYou={B(a.NeedsYou)} remoteWorking={B(a.RemoteWorking)} " +
+                $"remoteError={B(a.RemoteError)} idle={B(a.Idle)} mood={mood}"];
+    });
+
     /// <summary>切回 AI 的程式（ADR-0017 第 8 節）：shared/agent-hosts.json 能讀、不分大小寫、終端機代表兩個 AI</summary>
     [Fact]
     public void HostsReadTheSharedList()
