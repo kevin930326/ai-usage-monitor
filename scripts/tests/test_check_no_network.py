@@ -135,6 +135,13 @@ class CheckNoNetworkTests(unittest.TestCase):
         ]
         for files in cases:
             self.assertEqual(self.run_on(files).returncode, 1, files)
+        # 同一個 csproj 裡的其他套件項目、放在別的資料夾的 MascotRender.csproj 都不行（Codex C-01）
+        for item in ('<PackageDownload Include="Other" Version="[1.0.0]" />', '<GlobalPackageReference Include="Other" Version="1.0.0" />',
+                     '<PackageVersion Include="Other" Version="1.0.0" />'):
+            files = {**ok, "MascotRender/MascotRender.csproj": csproj.replace("</ItemGroup>", item + "</ItemGroup>")}
+            self.assertEqual(self.run_on(files).returncode, 1, item)
+        self.assertEqual(self.run_on({"Other/MascotRender/MascotRender.csproj": csproj,
+                                      "Other/MascotRender/packages.lock.json": good}).returncode, 1)
         # 繪製的程式碼也不能連網
         self.assertEqual(self.run_on({**ok, "MascotRender/A.cs": "class A { HttpClient c; }"}).returncode, 1)
 

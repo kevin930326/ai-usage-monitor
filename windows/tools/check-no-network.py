@@ -84,9 +84,11 @@ def check_packages(root: Path = ROOT) -> list[str]:
             continue
         if path.suffix not in (".csproj", ".props", ".targets") and not path.name.startswith("Directory."):
             continue
-        if path.suffix == ".csproj" and path.parts[-2:] == SKIA_PROJECT:
-            continue
+        # 例外只有 src/MascotRender/MascotRender.csproj 的那一個 PackageReference（check_skia 檢查）；同檔的其他套件項目照樣不行（Codex C-01）
+        skia = rel_parts == ("src", *SKIA_PROJECT)
         for m in PACKAGE_ITEM.finditer(path.read_text(encoding="utf-8")):
+            if skia and m.group(1) == "PackageReference":
+                continue
             problems.append(f"{rel}: 不允許 {m.group(1)}（只有 MascotRender 能參考 SkiaSharp）")
     return problems
 
@@ -125,7 +127,7 @@ def check_sources(root: Path = ROOT) -> list[str]:
                         problems.append(f"{rel}: UseShellExecute 只能在 IncidentPage 裡、經過 IncidentLink.Link 檢查")
             if path.suffix == ".cs" and not system_services and PROCESS.search(code):
                 problems.append(f"{rel}: 只有 SystemServices.cs 可以啟動其他程式")
-            if path.suffix == ".csproj" and path.parts[-2:] == SKIA_PROJECT:
+            if path.suffix == ".csproj" and path.relative_to(root).parts == ("src", *SKIA_PROJECT):
                 problems += check_skia(path, code, rel)
     return problems
 
