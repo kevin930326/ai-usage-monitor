@@ -388,7 +388,7 @@ enum NotchMenu {
         }
         entries.append(.separator)
         // 選單列圖示可以關（ADR-0008 第 9 節）：完整面板、設定與結束都要能從這裡到達
-        entries.append(.item("打開完整面板", enabled: true, checked: false) { FullPanelController.shared.open() })
+        entries.append(.item(FullPanelController.openTitle, enabled: true, checked: false) { FullPanelController.shared.open() })
         entries.append(.item("設定…", enabled: true, checked: false) {
             AppActions.openSettings?()
             NSApplication.shared.activate()
@@ -416,6 +416,10 @@ enum NotchMenu {
                 item.isEnabled = enabled
                 item.state = checked ? .on : .off
                 if title == "保持展開" { item.toolTip = "滑鼠離開也不收合；再點一次或按 Esc 收起" }
+                if title == FullPanelController.openTitle {
+                    item.image = NSImage(systemSymbolName: FullPanelController.symbol, accessibilityDescription: nil)
+                    item.toolTip = FullPanelController.openHelp
+                }
                 menu.addItem(item)
             }
         }

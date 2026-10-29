@@ -549,7 +549,7 @@ struct NotchContent: View {
                         MascotController.shared.setPage(.agents)
                     }
                 }
-                NotchTab(symbol: "rectangle.portrait.and.arrow.forward", label: "完整面板") { FullPanelController.shared.open() }
+                NotchTab(symbol: FullPanelController.symbol, label: FullPanelController.openHelp) { FullPanelController.shared.open() }
                 NotchTab(symbol: "clock", label: "歷史") { AppActions.openStats?(); NSApplication.shared.activate() }
                 NotchTab(symbol: "gearshape", label: "設定") { AppActions.openSettings?(); NSApplication.shared.activate() }
             }
@@ -922,5 +922,6 @@ struct NotchTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+        .help(label)
     }
 }
