@@ -37,6 +37,8 @@ public sealed record MascotFrame
     public double? DozeRise { get; init; }
     /// <summary>收合時 AI 工作中的思考泡泡：三個小點中亮了幾顆（0…3）；null 時不畫</summary>
     public int? ThinkingDots { get; init; }
+    /// <summary>只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：泡泡旁的小電腦</summary>
+    public bool RemoteBadge { get; init; }
     public IReadOnlyList<MascotEffect> Effects { get; init; } = [];
     public MascotRipple? Ripple { get; init; }
     public MascotCharacter Character { get; init; } = MascotCharacter.Claude;

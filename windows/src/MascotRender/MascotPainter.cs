@@ -483,6 +483,7 @@ public sealed class MascotPainter(MascotConfig config)
                 paint.Color = i < litCount ? on : WithAlpha(SKColors.White, 0.22);
                 canvas.DrawOval(Oval(x + R * 0.95 + i * R * 0.367, y - R * 0.95, r, r), paint);
             }
+            if (frame.RemoteBadge) DrawComputer(canvas, x + R * 2.15, y - R * 0.98, R);
         }
         // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）
         if (frame.Dozing)
@@ -573,6 +574,22 @@ public sealed class MascotPainter(MascotConfig config)
         path.CubicTo((float)(cx + s * 0.9), (float)(cy - s * 1.1), (float)(cx + s * 1.4), (float)cy, (float)cx, (float)(cy + s * 0.9));
         using var paint = Fill(new SKColor(0xFF, 0x6B, 0x8A).WithAlpha((byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255)));
         canvas.DrawPath(path, paint);
+    }
+
+    /// <summary>小電腦（螢幕＋底座）：思考泡泡右邊，表示是別台電腦在跑（同 Mac 的 drawComputer）。R 是角色半徑</summary>
+    private static void DrawComputer(SKCanvas canvas, double cx, double cy, double R)
+    {
+        double w = R * 0.66, h = R * 0.46;
+        using var paint = new SKPaint
+        {
+            IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = (float)Math.Max(0.8, R * 0.09), StrokeCap = SKStrokeCap.Round,
+            Color = new SKColor(217, 217, 227),
+        };
+        canvas.DrawRoundRect(new SKRect((float)(cx - w / 2), (float)(cy - h / 2), (float)(cx + w / 2), (float)(cy + h / 2)),
+                             (float)(R * 0.07), (float)(R * 0.07), paint);
+        var bottom = cy + h / 2;
+        canvas.DrawLine((float)cx, (float)bottom, (float)cx, (float)(bottom + R * 0.12), paint);
+        canvas.DrawLine((float)(cx - w * 0.28), (float)(bottom + R * 0.14), (float)(cx + w * 0.28), (float)(bottom + R * 0.14), paint);
     }
 }
 

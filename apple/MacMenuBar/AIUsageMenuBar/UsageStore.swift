@@ -26,6 +26,8 @@ final class UsageStore {
     private(set) var serviceStatus: ServiceStatusFile?
     /// 其他電腦的 AI 狀態（ADR-0019 第 2 節；收集器寫的 `agent-remote.json`）：30 分鐘內、要顯示的狀態，依狀態排序
     private(set) var remoteAgents: [RemoteAgent] = []
+    /// 同上，含等你、閒置（角色合併所有電腦用，ADR-0019「角色合併所有電腦」）
+    private(set) var remoteAll: [RemoteAgent] = []
     /// 每分鐘更新，讓選單列在沒有新資料時也能轉灰或顯示已重置
     private(set) var now = RenderClock.now
 
@@ -63,7 +65,8 @@ final class UsageStore {
         }
         // 重置時間到了（快照沒變）也要判斷通知
         QuotaNotifier.shared.evaluate(snapshot: snapshot, now: now)
-        MascotController.shared.updateStatus()
+        // 時間經過也會改變其他電腦對角色的效力（20 分鐘、睡覺分鐘數）：表情與狀態一起重算
+        MascotController.shared.remoteChanged()
     }
 
     func reload() {
@@ -98,8 +101,13 @@ final class UsageStore {
     private func loadRemoteAgents() {
         let url = locator.directory.appendingPathComponent(RemoteAgents.fileName)
         let localNow = Int64(Date.now.timeIntervalSince1970 * 1000)
-        let loaded = (try? Data(contentsOf: url)).map { RemoteAgents.parse($0, localNow: localNow) } ?? []
-        if loaded != remoteAgents { remoteAgents = loaded }
+        let all = (try? Data(contentsOf: url)).map { RemoteAgents.parse($0, localNow: localNow, all: true) } ?? []
+        let listed = all.filter(\.isListed)
+        if listed != remoteAgents { remoteAgents = listed }
+        guard all != remoteAll else { return }
+        remoteAll = all
+        // 其他電腦的狀態變了：角色馬上重算（不等下一次本機的事件，Fable G-04）
+        MascotController.shared.remoteChanged()
     }
 
     private func watchDirectory() {

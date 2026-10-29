@@ -10,6 +10,8 @@ public static class MascotFrames
         long? effectTime = null, bool still = false, (double Yaw, double Pitch)? gaze = null)
     {
         var g = gaze ?? (still ? (0, 0) : director.Gaze(time));
+        // 只有其他電腦在工作而想：泡泡亮兩顆＋旁邊的小電腦（ADR-0019「角色合併所有電腦」，同 Mac NotchView 的 frame(at:)）
+        var remote = director.Machine.ThinksRemotely;
         return new MascotFrame
         {
             Time = time,
@@ -27,6 +29,8 @@ public static class MascotFrames
             Character = character,
             Look = look,
             EffectTime = effectTime,
+            ThinkingDots = remote ? 2 : null,
+            RemoteBadge = remote,
         };
     }
 }

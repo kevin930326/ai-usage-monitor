@@ -454,22 +454,34 @@ internal sealed class MascotController : IDisposable
         });
     }
 
+    /// <summary>本機＋其他電腦合併後的狀態（ADR-0019「角色合併所有電腦」）；表情與膠囊第二行也看它</summary>
+    public AgentActivity? Activity { get; private set; }
+
+    private AgentActivity? Merged(long now)
+    {
+        if (agents is null) return null;
+        var (working, idle) = agents.Sessions.Activity(now, fallbackActivity);
+        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
+        return AgentActivity.Combine(working, idle, agents.Sessions.Count(AgentState.NeedsYou, now) > 0,
+                                     agents.Sessions.Count(AgentState.Background, now) > 0, agents.RemoteAll, now,
+                                     agents.Sessions.IdleAfter, agents.SeenRemoteErrors);
+    }
+
     private void ApplyActivity()
     {
-        if (!Motion.AnimatesBody() || Director is not { } director || agents is null) return;
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var (working, idle) = agents.Sessions.Activity(now, fallbackActivity);
-        var needsYou = agents.Sessions.Count(AgentState.NeedsYou, now) > 0;
-        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
-        var background = agents.Sessions.Count(AgentState.Background, now) > 0;
+        var merged = Merged(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        Activity = merged;
+        if (!Motion.AnimatesBody() || Director is not { } director || merged is null) return;
         var m = director.Machine;
-        if (m.IsWorking == working && m.IsAgentIdle == idle && m.IsNeedsYou == needsYou && m.IsBackground == background) return;
+        if (m.IsWorking == merged.Working && m.IsAgentIdle == merged.Idle && m.IsNeedsYou == merged.NeedsYou
+            && m.IsBackground == merged.Background && m.IsRemoteWorking == merged.RemoteWorking) return;
         Mutate(d =>
         {
-            d.SetWorking(working, Time());
-            d.SetAgentIdle(idle, Time());
-            d.SetNeedsYou(needsYou, Time());
-            d.SetBackground(background, Time());
+            d.SetWorking(merged.Working, Time());
+            d.SetAgentIdle(merged.Idle, Time());
+            d.SetNeedsYou(merged.NeedsYou, Time());
+            d.SetBackground(merged.Background, Time());
+            d.SetRemoteWorking(merged.RemoteWorking, Time());
         });
     }
 
@@ -484,7 +496,9 @@ internal sealed class MascotController : IDisposable
         var quota = MascotMoods.Quota(level, MascotMoods.IsQuotaUnavailable(snapshot, provider, store.Error is not null, now),
             MascotMoods.HasIncident(snapshot, provider), MascotMoods.RunsOut(snapshot, provider, now));
         var ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var mood = MascotMoods.Agent(agents.Sessions.Top(ms)?.State(ms, agents.Sessions.IdleAfter), quota);
+        var top = agents.Sessions.Top(ms)?.State(ms, agents.Sessions.IdleAfter);
+        // 其他電腦需要你、出錯也算（遠端的完成不讓角色開心）
+        var mood = MascotMoods.Agent(Merged(ms) is { } merged ? merged.MoodState(top) : top, quota);
         if (director.Mood != mood) Mutate(d => d.SetMood(mood));
         if (director.Machine.StatusLevel != level)
         {
@@ -710,7 +724,7 @@ internal sealed class MascotController : IDisposable
         object? key = null;
         if (rate == MascotRenderRate.Effect && !director.Machine.IsOpen)
         {
-            key = (director.Mode, director.Mood, director.Machine.StatusLevel, Character, Look?.Id, motion);
+            key = (director.Mode, director.Mood, director.Machine.StatusLevel, Character, Look?.Id, motion, director.Machine.ThinksRemotely);
             loop = key.Equals(LoopKey) ? Loop
                 : MascotCollapsedMotion.Plan(director, StoppedAt, Character, Look, director.Mode is MascotMode.Sleep or MascotMode.Think ? EffectTime(now) : null);
         }

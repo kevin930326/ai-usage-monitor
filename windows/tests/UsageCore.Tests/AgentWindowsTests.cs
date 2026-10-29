@@ -407,6 +407,24 @@ public sealed class AgentWindowsTests : IDisposable
         Assert.Null(RingAgent.From(sessions, 3_000, remote)!.Device);
     }
 
+    /// <summary>角色樣式（ADR-0019「角色合併所有電腦」）：膠囊第二行和角色講同一件事</summary>
+    [Fact]
+    public void MascotRowFollowsTheMergedState()
+    {
+        var sessions = new AgentSessions(600_000);
+        sessions.Apply(Event(AgentHookEvent.Stop, 1), 1_000);
+        var needs = new RemoteAgent("工作 PC", AgentKind.Codex, AgentState.NeedsYou, 1);
+        var error = new RemoteAgent("桌機", AgentKind.Claude, AgentState.Error, 1) { Since = 500 };
+        // 這台完成未看、其他電腦需要你：需要你優先（圓環樣式維持這台的完成）
+        Assert.Equal("工作 PC", RingAgent.From(sessions, 2_000, [needs], merged: true)!.Device);
+        Assert.Null(RingAgent.From(sessions, 2_000, [needs])!.Device);
+        // 其他電腦出錯優先於這台的完成；在這台看過就不算
+        Assert.Equal(new RingAgent(AgentKind.Claude, AgentState.Error, null, "桌機"), RingAgent.From(sessions, 2_000, [error], merged: true));
+        var seen = new HashSet<string> { AgentActivity.ErrorKey(error) };
+        Assert.Equal(AgentState.Done, RingAgent.From(sessions, 2_000, [error], merged: true, seenErrors: seen)!.State);
+        Assert.Null(RingAgent.From(sessions, 2_000, [error], merged: true, seenErrors: seen)!.Device);
+    }
+
     [Fact]
     public void NoticeLogSendsOncePerState()
     {
