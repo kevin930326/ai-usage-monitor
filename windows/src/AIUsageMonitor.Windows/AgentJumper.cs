@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using AIUsageMonitor.Core;
@@ -44,6 +45,11 @@ internal static class AgentJumper
     {
         var names = AgentProcessTree.Names();
         var windows = TopWindows();
+        // 傳統主控台：視窗屬於 shell 的子程序 conhost 時算給 shell（Codex C-01）
+        foreach (var (shell, console) in AgentJump.ConsoleOwners(names, windows.Keys.ToHashSet(), AgentProcessTree.Start))
+        {
+            windows[shell] = windows[console];
+        }
         AgentJump.Process? Process(int id) =>
             names.TryGetValue(id, out var entry) && AgentProcessTree.Start(id) is { } begun
                 ? new AgentJump.Process(id, entry.Parent, begun, entry.Name, windows.ContainsKey(id))

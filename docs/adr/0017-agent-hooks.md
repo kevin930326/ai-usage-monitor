@@ -169,7 +169,7 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
    - 起點是 hook 送來的 AI 程序（第 7 節第 1 點）。App 第一次收到帶 PID 的事件時在記憶體記下（PID, 開始時間）；點的時候 PID 已結束或開始時間不同（PID 重用）當成找不到。
    - 沿父程序往上，最多 16 層；每一層要求「父的開始時間 ≤ 子的」，否則當成斷鏈（父 PID 已被重用）。
    - **Mac**：第一個 `NSRunningApplication(processIdentifier:)` 的 bundle ID 在 `shared/agent-hosts.json` 清單裡的就是宿主；有 bundle ID 但不在清單（例如 VS Code 的 helper）繼續往上；遇到程序名稱 `tmux`（伺服器 daemonize 後父程序是 launchd）改走第 2 點第 1 項。走到 PID 1 都沒找到算找不到。
-   - **Windows**：每一層看那個程序有沒有可見、沒有擁有者的頂層視窗（`EnumWindows`＋`GetWindowThreadProcessId`），第一個「執行檔名稱在清單裡、而且有視窗」的就是要帶到前面的（shell、`openconsole.exe` 沒有自己的視窗，會繼續往上到 `WindowsTerminal.exe`；傳統主控台的視窗由系統算在 shell 上，Fable H-04，實機確認）。
+   - **Windows**：每一層看那個程序有沒有可見、沒有擁有者的頂層視窗（`EnumWindows`＋`GetWindowThreadProcessId`），第一個「執行檔名稱在清單裡、而且有視窗」的就是要帶到前面的（shell、`openconsole.exe` 沒有自己的視窗，會繼續往上到 `WindowsTerminal.exe`；傳統主控台的視窗屬於 shell 的子程序 `conhost.exe` 時，以 `AgentJump.ConsoleOwners` 把有可見視窗的 conhost／openconsole 算給它的父程序（只看執行檔名稱、父 PID 與開始時間，Fable H-04、Codex C-01；實機確認）。
    - Mac 另外取 AI 程序的**控制終端機**（`proc_pidinfo(PROC_PIDTBSDINFO)` 的 `e_tdev` 換成 `/dev/ttysNNN`，格式必須是 `/dev/ttys` 加 3～4 位數字）；取不到就跳過 tmux 與 AppleScript，直接帶 App 到前面。
    - **只用 PID、父 PID、開始時間、bundle ID／執行檔名稱、程序名稱、tty 與視窗的 PID／可見性**；不讀命令列、環境變數、工作目錄、視窗標題或任何內容。共用邏輯是 `AgentJump`（UsageKit／UsageCore），程序圖由呼叫端注入。
 2. **Mac 的切換**（依序試，失敗就退到下一級）：

@@ -29,4 +29,22 @@ public static class AgentJump
         }
         return null;
     }
+
+    /// <summary>
+    /// 傳統主控台的視窗可能屬於 conhost.exe（shell 的子程序），不在 AI 的祖先鏈上（Codex C-01）：
+    /// 有可見視窗的 conhost／openconsole 把視窗算給它的父程序（只在父程序自己沒有視窗時）。回傳「父 PID → 擁有視窗的 PID」。
+    /// 只看執行檔名稱與父 PID；開始時間要求父 ≤ 子（父 PID 被重用時不算）
+    /// </summary>
+    public static Dictionary<int, int> ConsoleOwners(IReadOnlyDictionary<int, (int Parent, string Name)> names, ISet<int> withWindow, Func<int, long?> start)
+    {
+        var result = new Dictionary<int, int>();
+        foreach (var (pid, (parent, name)) in names)
+        {
+            if (!withWindow.Contains(pid) || parent <= 4 || withWindow.Contains(parent) || result.ContainsKey(parent)) continue;
+            if (!name.Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) && !name.Equals("openconsole.exe", StringComparison.OrdinalIgnoreCase)) continue;
+            if (start(parent) is not { } parentStart || start(pid) is not { } childStart || parentStart > childStart) continue;
+            result[parent] = pid;
+        }
+        return result;
+    }
 }
