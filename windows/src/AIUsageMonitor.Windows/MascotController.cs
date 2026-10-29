@@ -661,6 +661,8 @@ internal sealed class MascotController : IDisposable
         trackTimer.Stop();
         pointerStillTicks = 12;
         ScheduleGaze(250);
+        // 重畫頻率照視線是否還在轉重新決定
+        Refresh();
     }
 
     private void PollPointer()
@@ -668,7 +670,11 @@ internal sealed class MascotController : IDisposable
         if (Director is not { } director) return;
         if (!director.Machine.FollowsPointer)
         {
-            trackTimer.Stop();
+            if (Tracking)
+            {
+                trackTimer.Stop();
+                Refresh();
+            }
             // 直接轉到正前方，敲鍵盤與呼吸的循環才不會被打斷
             if (director.Look(Time(), 0, 0, threshold: 0.001, snap: true))
             {
@@ -763,7 +769,8 @@ internal sealed class MascotController : IDisposable
         var animating = director.IsAnimating(now);
         var motion = Motion;
         var live = director.IsLive && motion.MovesEyes();
-        var idleMoving = motion.MovesEyes() && director.IsIdleMoving(now);
+        // 看滑鼠的高幀率期間一直算視線在轉：每一格都更新目標、和目標的差常常小於收斂門檻，不能因此停了又開（同 Mac，Codex C-01）
+        var idleMoving = motion.MovesEyes() && (director.IsIdleMoving(now) || Tracking);
         var breathing = live && director.Mode == MascotMode.Sleep && !director.IsStill && director.Blink(now) == 0;
         var gazeOnly = idleMoving && !breathing && director.Blink(now) == 0
             && !(live && !director.IsStill && director.Mode == MascotMode.Work);
