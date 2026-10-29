@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -29,6 +30,12 @@ internal sealed class AppHost : IDisposable
     private SettingsWindow? settingsWindow;
     private RefreshOutcome? hint;
     private DateTimeOffset now = Clock.Now;
+    /// <summary>角色等級（面板打開時在背景讀，讀不到時沿用上次的值）與這次執行看過的每一天（level.json 讀不到時也不倒退）</summary>
+    private MascotLevel? level;
+    private Dictionary<string, long> levelDays = [];
+    private bool levelLoading;
+    /// <summary>面板是從系統匣打開的（等級卡片晚一點加進來、面板變高時，照同樣的方式重新放）</summary>
+    private bool panelFromTray;
     private bool disposed;
 
     public AppHost(Dispatcher dispatcher)
@@ -124,7 +131,42 @@ internal sealed class AppHost : IDisposable
         tray.Update(content, TrayPalette);
     }
 
-    private PanelModel Model => new(store.Snapshot, store.Error, now, hint);
+    private PanelModel Model => new(store.Snapshot, store.Error, now, hint, level);
+
+    /// <summary>
+    /// 面板打開時讀這台電腦的每日主數字（history.sqlite3 的 record_days，唯讀、讀完就關），併進 level.json 後算等級
+    /// （ADR-0020 第 1、4 節）。在背景執行緒做，讀完再更新面板；同時只有一個。
+    /// </summary>
+    private void LoadLevel()
+    {
+        if (levelLoading) return;
+        levelLoading = true;
+        var known = levelDays;
+        var today = LocalCalendar.Key(DateOnly.FromDateTime(Clock.Now.LocalDateTime));
+        Task.Run(() =>
+        {
+            var history = new HistoryReader(DataPaths.History).LocalLevelDays() ?? [];
+            return MascotLevelLedger.Update(DataPaths.Level, MascotLevelLedger.Merge(known, history), today);
+        }).ContinueWith(task => dispatcher.BeginInvoke(() =>
+        {
+            // 回到 UI 執行緒用 AppHost 自己的 dispatcher，不靠呼叫端的 SynchronizationContext（Fable F-06）
+            levelLoading = false;
+            if (!task.IsCompletedSuccessfully)
+            {
+                AppLog.Write($"level load failed: {task.Exception?.InnerException?.GetType().Name}");
+                return;
+            }
+            levelDays = task.Result.Days;
+            // level.json 讀不到或寫不進去：只有歷史，可能比真正的等級低；已經有值時沿用（Fable F-08）
+            if (!task.Result.Saved && level is not null) return;
+            var hadCard = level is not null;
+            level = MascotLevel.From(levelDays, today);
+            if (panel is null) return;
+            panel.SetModel(Model);
+            // 等級卡片晚一點才加進來，面板變高：重新放，不讓它往下長出螢幕或蓋住工作列（Fable F-05）
+            if (!hadCard && level is not null) PlacePanel(panel, panelFromTray);
+        }));
+    }
 
     /// <summary>外觀改變（設定或系統的深淺色）：圓環、系統匣、面板重畫；面板的材質在下次打開時套用</summary>
     private void ApplyLook()
@@ -240,6 +282,8 @@ internal sealed class AppHost : IDisposable
         // 打開面板＝看過了：完成未看與出錯的徽章拿掉
         agents.MarkSeen();
         now = Clock.Now;
+        panelFromTray = fromTray;
+        LoadLevel();
         var window = new PanelWindow(Model, AppPalette);
         window.RefreshRequested += () => _ = RefreshAsync();
         window.IncidentRequested += url =>
@@ -269,6 +313,16 @@ internal sealed class AppHost : IDisposable
         window.ShowActivated = true;
         window.Show();
         window.UpdateLayout();
+        var hwnd = PlacePanel(window, fromTray);
+        window.Activate();
+        NativeMethods.SetForegroundWindow(hwnd);
+        window.PlayAppear();
+    }
+
+    /// <summary>量出面板的大小，放到圓環旁邊或系統匣的角落；回傳視窗代碼</summary>
+    private IntPtr PlacePanel(PanelWindow window, bool fromTray)
+    {
+        window.UpdateLayout();
         var hwnd = new WindowInteropHelper(window).Handle;
         NativeMethods.GetCursorPos(out var cursor);
         var monitor = NativeMethods.Monitor(fromTray || ring is null
@@ -289,9 +343,7 @@ internal sealed class AppHost : IDisposable
                 if (NativeMethods.WindowRect(hwnd) == target) break;
             }
         }
-        window.Activate();
-        NativeMethods.SetForegroundWindow(hwnd);
-        window.PlayAppear();
+        return hwnd;
     }
 
     private async System.Threading.Tasks.Task RefreshAsync()

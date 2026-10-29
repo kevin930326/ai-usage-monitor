@@ -97,6 +97,44 @@ public sealed class HistoryReader(string path)
         }
     }
 
+    /// <summary>
+    /// 這台電腦每天的主數字（record_days 各服務相加），Windows 的角色等級用（ADR-0020 第 4 節，2026-10-29 修訂）。
+    /// 只算這台：Windows 不為了等級存讀取密鑰，即使用 set-tier2.ps1 -ReadKey 下載了其他電腦的資料，等級也只標「這台電腦」。
+    /// record_days 不套用保留期間；Codex 重算可能讓某天變小，由 level.json（MascotLevelLedger）擋住。讀不了時 null。
+    /// </summary>
+    public Dictionary<string, long>? LocalLevelDays()
+    {
+        if (!File.Exists(Path)) return null;
+        Sqlite.EnsureLoaded();
+        IntPtr db;
+        try
+        {
+            if (Sqlite.Open(Path, Sqlite.OpenReadWrite | Sqlite.OpenNoMutex, out db) != Sqlite.Ok)
+            {
+                Sqlite.Close(db);
+                return null;
+            }
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
+        try
+        {
+            Sqlite.DbConfig(db, Sqlite.ConfigNoCheckpointOnClose, 1);
+            Sqlite.BusyTimeout(db, BusyTimeoutMs);
+            if (Sqlite.Exec(db, "PRAGMA query_only = ON") != Sqlite.Ok) return null;
+            if (SchemaVersion(db) is not { } v || v < SupportedSchema || !TableExists(db, "record_days")) return null;
+            var rows = Rows(db, "SELECT day, SUM(tokens) FROM record_days GROUP BY day", [], s =>
+                Sqlite.ColumnText(s, 0) is { } day ? new RecordDayRow(day, "", Sqlite.ColumnInt64(s, 1)) : null);
+            return rows?.ToDictionary(r => r.Day, r => r.Tokens);
+        }
+        finally
+        {
+            Sqlite.Close(db);
+        }
+    }
+
     private static Result Failed(string stage) => new(Status.Failed, null, QuotaHistory.Empty, TokenStatsData.Empty, stage);
 
     /// <summary>

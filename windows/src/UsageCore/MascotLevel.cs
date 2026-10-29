@@ -95,4 +95,11 @@ public sealed record MascotLevel(long Xp, int Level, long ToNext, double Progres
 
     /// <summary>「Lv 7」</summary>
     public string Title => $"Lv {Level}";
+
+    /// <summary>「連續 5 天・最長 12 天」</summary>
+    public string StreakText => $"連續 {CurrentStreak} 天・最長 {LongestStreak} 天";
+
+    /// <summary>朗讀程式與滑鼠提示。Windows 只算這台電腦（ADR-0020 第 4 節，2026-10-29 修訂），Mac 的是「所有電腦合併」</summary>
+    public string ThisComputerText =>
+        $"第 {Level} 級，{(Level == MaxLevel ? "已經是最高級" : $"再 {ToNext} 點升級")}；這台電腦，連續 {CurrentStreak} 天，最長 {LongestStreak} 天";
 }

@@ -16,6 +16,9 @@ internal static class DataPaths
 
     public static string Usage => Path.Combine(Home, "usage.json");
     public static string Settings => Path.Combine(Home, "windows-app.json");
+    public static string History => Path.Combine(Home, "history.sqlite3");
+    /// <summary>角色等級的獨立檔案（ADR-0020 第 1 節）：清除歷史或資料庫重建時等級不變低</summary>
+    public static string Level => Path.Combine(Home, MascotLevelLedger.FileName);
     public static string Log => Path.Combine(Home, "logs", "windows-app.log");
 }
 

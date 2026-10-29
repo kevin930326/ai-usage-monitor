@@ -12,7 +12,7 @@ using AIUsageMonitor.Core;
 namespace AIUsageMonitor.Windows;
 
 /// <summary>面板內容需要的資料（截圖與實際面板共用）</summary>
-internal sealed record PanelModel(UsageSnapshot? Snapshot, string? Error, DateTimeOffset Now, RefreshOutcome? Hint);
+internal sealed record PanelModel(UsageSnapshot? Snapshot, string? Error, DateTimeOffset Now, RefreshOutcome? Hint, MascotLevel? Level = null);
 
 /// <summary>
 /// 面板的內容（Mac 面板的頁首、主圓環卡片、額度卡片，ADR-0008 第 2 節、設計 skill 第 9 節）：寬 360、卡片圓角 12、
@@ -164,12 +164,53 @@ internal sealed class PanelContent : Border
                 : model.Error, 12, model.Error is null ? p.Secondary : p.Notice, margin: new Thickness(0, 4, 0, 0), wrap: true));
             body.Children.Add(Text(DataPaths.Usage, 11, p.Tertiary, margin: new Thickness(0, 6, 0, 0), wrap: true));
             yield return Card(body);
+            // 只收集 Token（--tokens-only，ADR-0011）時沒有額度資料，但有歷史就有等級（Codex C-01）
+            if (model.Level is { } only) yield return LevelCard(only);
             yield break;
         }
         var now = model.Now;
         var stale = snapshot.IsStale(now);
         if (snapshot.TightestWindow(now) is { } item) yield return RingCard(item, stale, now);
         yield return QuotaCard(snapshot, stale, now);
+        if (model.Level is { } level) yield return LevelCard(level);
+    }
+
+    /// <summary>
+    /// 角色等級（ADR-0020 第 4 節，2026-10-29 修訂）：Windows 只算這台電腦（不為了等級存讀取密鑰），標題列右邊寫「這台電腦」。
+    /// 「Lv 7」、細的進度條、「連續 5 天・最長 12 天」；沒有任何活躍日時不顯示。
+    /// </summary>
+    private UIElement LevelCard(MascotLevel level)
+    {
+        var header = new DockPanel();
+        var scope = Text("這台電腦", 11, p.Tertiary);
+        DockPanel.SetDock(scope, Dock.Right);
+        header.Children.Add(scope);
+        header.Children.Add(Text("角色等級", 12, p.Secondary, FontWeights.SemiBold));
+
+        var body = new StackPanel();
+        var top = new DockPanel();
+        var streak = Text(level.StreakText, 12, p.Secondary);
+        streak.VerticalAlignment = VerticalAlignment.Bottom;
+        streak.FontFeatures();
+        DockPanel.SetDock(streak, Dock.Right);
+        top.Children.Add(streak);
+        var title = Text(level.Title, 17, p.Primary, FontWeights.SemiBold);
+        title.FontFeatures();
+        top.Children.Add(title);
+        body.Children.Add(top);
+        var track = new Grid { Height = 4, Margin = new Thickness(0, 6, 0, 0) };
+        track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Clamp(level.Progress, 0, 1), GridUnitType.Star) });
+        track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1 - Math.Clamp(level.Progress, 0, 1), GridUnitType.Star) });
+        var rail = new Border { Background = p.ControlFill, CornerRadius = new CornerRadius(2) };
+        Grid.SetColumnSpan(rail, 2);
+        track.Children.Add(rail);
+        track.Children.Add(new Border { Background = p.Secondary, CornerRadius = new CornerRadius(2) });
+        body.Children.Add(track);
+
+        var card = Card(body, header);
+        card.ToolTip = level.ThisComputerText;
+        System.Windows.Automation.AutomationProperties.SetName(card, level.ThisComputerText);
+        return card;
     }
 
     private Border Card(UIElement content, UIElement? header = null)

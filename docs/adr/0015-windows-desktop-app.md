@@ -64,10 +64,11 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
 ## 2. 架構：App 只讀本機檔案
 
 - **資料夾**：同收集器 `paths.py`：`AI_USAGE_MONITOR_HOME` 有值用它（截圖、測試、量測），否則 `%LOCALAPPDATA%\AIUsageMonitor`。
-- **讀**：`usage.json`（階段 1）；`history.sqlite3`（階段 2，唯讀）；`service-status.json`（階段 4）。階段 1 不讀 `config.json`。
+- **讀**：`usage.json`（階段 1）；`history.sqlite3`（階段 2，唯讀；面板打開時讀 `record_days` 算角色等級，[ADR-0020](0020-mascot-level.md) 第 4 節）；`service-status.json`（階段 4）。階段 1 不讀 `config.json`。
 - **寫**：只寫自己的設定 `windows-app.json`（同一資料夾）。例外（[ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節）：建立 `agent\salt` 與 `agent\inbox\`、刪 inbox 裡 `aum-hook.exe` 寫的事件檔；
   使用者在設定按「連接／修好／移除」時，改 Claude Code 的 `settings.json` 或 Codex 的 `hooks.json`（先備份、只動自己的項目）。
-  ADR-0019 第 2 節：寫 `agent-state.json`（這台的 AI 狀態彙總，沒有資料夾名稱或內容），讀收集器寫的 `agent-remote.json`。**永遠不寫 `history.sqlite3`**：Mac App 的例外（清除歷史、縮短保留期間）在 Windows 改由收集器的指令完成（階段 2）。
+  ADR-0019 第 2 節：寫 `agent-state.json`（這台的 AI 狀態彙總，沒有資料夾名稱或內容），讀收集器寫的 `agent-remote.json`。
+  ADR-0020 第 1 節：寫 `level.json`（角色等級：每天的 Token 主數字、經驗值與等級，只增不減；壞掉時改名為 `level.corrupt.json`）。**永遠不寫 `history.sqlite3`**：Mac App 的例外（清除歷史、縮短保留期間）在 Windows 改由收集器的指令完成（階段 2）。
 - **不連網、不讀認證管理員、不執行 `claude`／`codex`**。
 - **唯一的網址例外：事故頁連結**（2026-10-29 使用者決定，ADR-0018 第 4 節）：面板的事故那行可以點，用**預設瀏覽器**打開那個事故頁。App 自己仍不連網——網址交給 Windows 的 ShellExecute，由使用者的瀏覽器打開。只在使用者點了（或用鍵盤按下）那一行時；網址必須**剛好**是 `https://status.claude.com/incidents/<ID>` 或 `https://status.openai.com/incidents/<ID>`（收集器實際查的兩個狀態頁；ID 只有英數字、底線、連字號，1～64 字；大小寫、帳號、連接埠、查詢字串、片段、多一層路徑都不收），其他一律不開、只顯示文字。規則是 UsageCore `IncidentLink` 與 Swift `ServiceIncident.link` 的共用邏輯，`fixtures/incident-links.json` 兩邊比對；開啟前在 `SystemServices.cs` 的 `IncidentPage` 再檢查一次。除了這個由使用者點擊、交給 ShellExecute 打開的瀏覽器，啟動的程式只有 `schtasks.exe /Run`：「立即更新」的 `\AIUsageMonitor\Collector`，以及 AI 狀態改變時的 `\AIUsageMonitor\AgentSync`
   （ADR-0019 第 2 節；都是觸發使用者自己的排程，不連網、不需要系統管理員）。

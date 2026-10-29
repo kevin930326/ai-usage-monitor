@@ -54,6 +54,18 @@ public sealed class HistoryReaderTests : IDisposable
         Assert.False(File.Exists(DbPath));
     }
 
+    /// <summary>Windows 的角色等級只算這台：record_days 各服務相加，不含其他電腦的 daily_tokens（ADR-0020 第 4 節）</summary>
+    [Fact]
+    public void LocalLevelDaysOnlyCountThisComputer()
+    {
+        Assert.Null(new HistoryReader(DbPath).LocalLevelDays());
+        Assert.False(File.Exists(DbPath));
+        Make("full");
+        var hash = Hash(DbPath);
+        Assert.Equal(new Dictionary<string, long> { ["2026-10-25"] = 150 }, new HistoryReader(DbPath).LocalLevelDays());
+        Assert.Equal(hash, Hash(DbPath));
+    }
+
     [Fact]
     public void ReadsWhatTheCollectorWrote()
     {

@@ -432,12 +432,12 @@ private struct HistorySettingsSection: View {
         .confirmationDialog("清除額度歷史？", isPresented: $confirmClear) {
             Button("清除", role: .destructive) { clear(rescan: false) }
         } message: {
-            Text("刪除所有額度歷史與每週備份，面板的走勢與額度消耗會從頭開始收集；角色等級也會變低，之後只會依其他電腦還在中繼上的日子重新計入。無法復原。")
+            Text("刪除所有額度歷史與每週備份，面板的走勢與額度消耗會從頭開始收集。角色等級另外保存，不會變低。無法復原。")
         }
         .confirmationDialog("清除並重新掃描？", isPresented: $confirmRescan) {
             Button("清除並重新掃描", role: .destructive) { clear(rescan: true) }
         } message: {
-            Text("刪除所有歷史、每週備份與掃描進度。角色等級會變低，再依對話紀錄裡還在的日子與其他電腦的資料重新計入。無法復原。")
+            Text("刪除所有歷史、每週備份與掃描進度。角色等級另外保存，不會變低。無法復原。")
         }
     }
 
@@ -516,6 +516,8 @@ private struct HistorySettingsSection: View {
                 result = done
             } catch HistoryStore.WriteError.copiesRemain {
                 result = "已清除歷史，但每週備份或保留的舊檔刪不掉：請手動刪除 history.sqlite3 旁的 backups 資料夾與 history.corrupt-* 檔案"
+            } catch HistoryStore.WriteError.levelNotPreserved {
+                result = "角色等級存不進 level.json，沒有清除：請確認 App 資料夾可以寫入後再試"
             } catch HistoryStore.WriteError.unsupportedSchema {
                 result = "歷史資料的版本不符，沒有變更"
             } catch {

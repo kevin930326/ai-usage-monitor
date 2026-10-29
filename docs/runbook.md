@@ -4,7 +4,7 @@
 
 ## 1. 換電腦（D-2）
 
-移轉輔助程式、Time Machine 還原或手動複製會把三樣東西一起搬到新電腦：`history.sqlite3`（含本機的 `device_id` 與上傳進度）、Keychain 裡的寫入密鑰（`AIUsageMonitor-device-key`），以及 `config.json`。沒有第二層（只有一台 Mac）時不必做任何事；有第二層時先決定新電腦要**沿用舊電腦的身分**，還是**另立新身分**。
+移轉輔助程式、Time Machine 還原或手動複製會把三樣東西一起搬到新電腦：`history.sqlite3`（含本機的 `device_id` 與上傳進度）、Keychain 裡的寫入密鑰（`AIUsageMonitor-device-key`），以及 `config.json`。手動複製時連同同一個資料夾的 `level.json`（角色等級，ADR-0020 第 1 節）一起搬，等級才不會從新的歷史重算。沒有第二層（只有一台 Mac）時不必做任何事；有第二層時先決定新電腦要**沿用舊電腦的身分**，還是**另立新身分**。
 
 ### 1-1. 沿用同一個身分（一般的換機，建議）
 

@@ -129,6 +129,14 @@ internal static class DebugTools
             Save(Path.Combine(output, $"panel-hint-{theme}.png"),
                  Element(new PanelContent(new PanelModel(UsageDecoder.Decode(DemoJson("normal", now)), null, now, RefreshOutcome.NotInstalled), palette)
                  { Background = palette.Solid }), failures);
+            // 角色等級卡片（ADR-0020 第 4 節）：這台電腦 40 天、最近 12 天連續
+            var levelDays = new Dictionary<string, long>();
+            var today = DateOnly.FromDateTime(now.LocalDateTime);
+            for (var i = 0; i < 40; i++)
+                if (i < 12 || i % 3 != 0) levelDays[LocalCalendar.Key(today.AddDays(-i))] = 300_000;
+            Save(Path.Combine(output, $"panel-level-{theme}.png"),
+                 Element(new PanelContent(new PanelModel(UsageDecoder.Decode(DemoJson("normal", now)), null, now, null,
+                     MascotLevel.From(levelDays, LocalCalendar.Key(today))), palette) { Background = palette.Solid }), failures);
             Save(Path.Combine(output, $"settings-{theme}.png"), SettingsShot(dark, now), failures);
         }
         foreach (var f in failures) Console.Error.WriteLine(f);

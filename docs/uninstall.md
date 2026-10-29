@@ -90,11 +90,11 @@ Windows 桌面 App（`scripts\install-windows-app.ps1` 安裝的）：在 repo �
 
 | 位置 | 內容 | 誰會清 |
 |---|---|---|
-| `~/Library/Application Support/AIUsageMonitor` | usage.json、history.sqlite3（含 `backups/` 的每週備份與損毀時保留的 `history.corrupt-*`）、config.json、service-status.json | `install.sh --uninstall --purge`，或自行刪除 |
+| `~/Library/Application Support/AIUsageMonitor` | usage.json、history.sqlite3（含 `backups/` 的每週備份與損毀時保留的 `history.corrupt-*`）、config.json、service-status.json、Mac App 的 level.json（角色等級） | `install.sh --uninstall --purge`，或自行刪除 |
 | `~/Library/Logs/AIUsageMonitor` | 收集器、重新安裝的日誌；相同錯誤限頻的狀態（`collector.log*.repeats.json`） | 同上 |
 | `~/Library/Caches/AIUsageMonitor` | iPhone App 的建置產物 | 自行刪除 |
 | Keychain `AIUsageMonitor-relay-write`、`AIUsageMonitor-relay-read` | 中繼的寫入與讀取密鑰 | 見「中繼」 |
 | App 的設定（UserDefaults） | 面板卡片順序、外觀等 | `defaults delete io.github.kevin930326.AIUsageMenuBar` |
-| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3（含 `backups\`）、config.json、collector.log（與 `collector.log.repeats.json`）、Windows App 的 windows-app.json 與 `logs\windows-app.log` | 自行刪除 |
+| `%LOCALAPPDATA%\AIUsageMonitor`（PC） | history.sqlite3（含 `backups\`）、config.json、collector.log（與 `collector.log.repeats.json`）、Windows App 的 windows-app.json、level.json（角色等級）與 `logs\windows-app.log` | 自行刪除 |
 
 收集器從不修改 Claude Code、Codex CLI 的設定與登入資訊；移除本專案不影響它們。
