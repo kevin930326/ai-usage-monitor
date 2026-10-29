@@ -135,6 +135,8 @@ if ($FromRelease) {
         $inner = Join-Path $extract 'AIUsageMonitor'
         if (-not (Test-Path (Join-Path $inner 'AIUsageMonitor.exe'))) { throw "$zipName 裡沒有 AIUsageMonitor\AIUsageMonitor.exe，停止（沒有安裝）。" }
         Get-ChildItem $inner -Recurse -File | Unblock-File
+        # 第一次安裝、也沒裝過收集器的電腦還沒有資料夾
+        New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
         if (Test-Path $NewDir) { Remove-Item -Recurse -Force $NewDir }
         Move-Item $inner $NewDir
     } finally {

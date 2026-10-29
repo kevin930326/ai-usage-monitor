@@ -430,6 +430,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $app = Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\WindowsApp'
+          # 全新的電腦：連資料夾都沒有
+          Remove-Item -Recurse -Force (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor') -ErrorAction SilentlyContinue
           # 假的 Release：上面建好的 x64 Release 包成和 package-windows-app.py 一樣的 zip（裡面一個 AIUsageMonitor 資料夾）
           $rel = Join-Path $env:RUNNER_TEMP 'fake-release'
           $stage = Join-Path $env:RUNNER_TEMP 'fake-stage'
