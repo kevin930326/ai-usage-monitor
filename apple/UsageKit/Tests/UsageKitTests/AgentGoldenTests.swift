@@ -141,6 +141,24 @@ import Testing
                 && golden.sessions.count == output.sessions.count && golden.remote.count == output.remote.count, "golden.json 與 cases.json 的情境數不同")
     }
 
+    /// 其他電腦的「完成了」：心跳讓中繼收到的時間一直是新的，從進入完成的時間算 30 分鐘就不顯示（畫面停著不重新下載時也會消失）
+    @Test func remoteDoneFadesWhileHeartbeatsKeepItFresh() {
+        let now: Int64 = 1_800_000_000_000
+        let raw = """
+        {"now":\(now),"devices":[
+          {"device_id":"a","name":"桌機","updated_at":\(now - 60_000),"ais":[{"ai":"claude","state":"done","sessions":3,"since":\(now - 20 * 60_000)}]}
+        ]}
+        """
+        let list = RemoteAgents.parseRelay(Data(raw.utf8), localNow: now)
+        #expect(list.map(\.state) == [.done])
+        #expect(list[0].expiresAt == now + 10 * 60_000)
+        #expect(list[0].isShown(at: now + 10 * 60_000 - 1))
+        #expect(!list[0].isShown(at: now + 10 * 60_000))
+        // 需要你不淡出：照中繼收到的時間
+        let needs = RemoteAgents.parseRelay(Data(raw.replacingOccurrences(of: "\"done\"", with: "\"needsYou\"").utf8), localNow: now)
+        #expect(needs[0].expiresAt == now + RemoteAgents.maxAge - 60_000 + 1)
+    }
+
     /// iPhone 直接讀中繼的回應：剛下載（經過 0），所有電腦都列出，30 分鐘以前的不列
     @Test func relayResponseOnPhone() {
         let now: Int64 = 1_800_000_000_000

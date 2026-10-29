@@ -519,6 +519,14 @@
       "result" : [
 
       ]
+    },
+    {
+      "name" : "done-and-error-fade-after-30-minutes",
+      "result" : [
+        "筆電|claude|needsYou|1|筆電：Claude Code 需要你",
+        "桌機|codex|error|1|桌機：Codex 出錯了",
+        "筆電|codex|working|1|筆電：Codex 工作中"
+      ]
     }
   ],
   "sessions" : [

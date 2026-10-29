@@ -70,6 +70,11 @@ public enum RemoteAgents {
     public static let fileName = "agent-remote.json"
     /// 中繼收到的時間超過這麼久就不顯示（那台電腦關機或斷線）
     public static let maxAge: Int64 = 30 * 60_000
+    /// 「完成了」「出錯」進入那個狀態超過這麼久，當成「等你」不顯示（ADR-0017 第 9 節）：那台電腦每 10 分鐘重傳一次，
+    /// 中繼收到的時間一直是新的，在那台的終端機或 Claude App 裡看過也不會清掉
+    public static let fadeAfter: Int64 = 30 * 60_000
+    /// 會淡出的狀態（需要你、工作中不淡出）
+    static let fades: Set<AgentState> = [.done, .error]
     /// 顯示的狀態：等你與閒置不顯示
     static let shown: Set<AgentState> = [.needsYou, .error, .working, .done]
     static let maxDevices = 16
@@ -98,8 +103,15 @@ public enum RemoteAgents {
                       let state = (row["state"] as? String).flatMap(AgentState.init(rawValue:)),
                       let sessions = int(row["sessions"]), (0...32).contains(sessions) else { continue }
                 seen.insert(ai)
-                if shown.contains(state) { list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)",
-                                                           expiresAt: fetched + maxAge - (now - updated) + 1)) }
+                guard shown.contains(state) else { continue }
+                var expires = fetched + maxAge - (now - updated) + 1
+                // 完成、出錯：從進入的時間（中繼夾在 updated_at 之前 24 小時內）算 30 分鐘，用中繼的時鐘＋下載後經過的時間
+                if fades.contains(state), let since = int(row["since"]) {
+                    guard now - since + elapsed < fadeAfter else { continue }
+                    expires = min(expires, fetched + fadeAfter - (now - since))
+                }
+                list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)",
+                                        expiresAt: expires))
             }
         }
         return list.sorted { a, b in

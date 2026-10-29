@@ -50,7 +50,11 @@ public sealed class AppSettings
     /// <summary>眼睛跟著游標</summary>
     public bool MascotFollowPointer { get; set; } = true;
     /// <summary>Claude 與 Codex 都閒置幾分鐘後睡</summary>
-    public int MascotSleepMinutes { get; set; } = 5;
+    /// <summary>睡覺的分鐘數。預設 20（ADR-0017 第 4 節，2026-10-29 從 5 改成 20）；設定檔只有在使用者選過（<see cref="MascotSleepChosen"/>）時才照檔案的值</summary>
+    public int MascotSleepMinutes { get; set; } = DefaultSleepMinutes;
+    /// <summary>使用者在設定裡選過睡覺分鐘數。舊版不分選過與否都寫進設定檔：沒有這個標記時，5 分鐘當成當時的預設（改用新的預設），其他值當成選過</summary>
+    public bool MascotSleepChosen { get; set; }
+    public const int DefaultSleepMinutes = 20;
     /// <summary>等你下一個指令時，收著的角色每 7 秒輕輕脈動</summary>
     public bool MascotWaitingPulse { get; set; } = true;
     /// <summary>靜音或勿擾到這個時間（不播提醒、不鼓一下；只換表情）</summary>
@@ -62,7 +66,7 @@ public sealed class AppSettings
 
     public static readonly int[] NeedsYouSecondChoices = [0, 10, 20, 30, 60, 120];
     public static readonly int[] LongTaskMinuteChoices = [0, 1, 3, 5, 10, 20];
-    public static readonly int[] SleepMinuteChoices = [1, 3, 5, 10, 15, 30];
+    public static readonly int[] SleepMinuteChoices = [1, 3, 5, 10, 15, 20, 30];
 
     public bool IsMascotQuiet(DateTimeOffset now) => MascotQuietUntil is { } until && until > now;
 
@@ -109,7 +113,12 @@ public sealed class AppSettings
         settings.MascotIntro = Enum(root["mascot_intro"], MascotIntroChoice.FirstOnly);
         settings.MascotMotion = Enum(root["mascot_motion"], MascotMotionLevel.Full);
         settings.MascotFollowPointer = Bool(root["mascot_follow_pointer"]) ?? true;
-        settings.MascotSleepMinutes = Choice(Number(root["mascot_sleep_minutes"]), SleepMinuteChoices, 5);
+        // 舊版沒有標記、不分選過與否都寫：不是 5（舊的預設）就是使用者選的
+        var storedSleep = Number(root["mascot_sleep_minutes"]);
+        settings.MascotSleepChosen = Bool(root["mascot_sleep_chosen"]) ?? (storedSleep is { } m && m != 5);
+        settings.MascotSleepMinutes = settings.MascotSleepChosen
+            ? Choice(storedSleep, SleepMinuteChoices, DefaultSleepMinutes)
+            : DefaultSleepMinutes;
         settings.MascotWaitingPulse = Bool(root["mascot_waiting_pulse"]) ?? true;
         if (Number(root["mascot_quiet_until"]) is { } quiet && quiet is > 0 and < 1e11)
             settings.MascotQuietUntil = DateTimeOffset.FromUnixTimeSeconds((long)quiet);
@@ -161,6 +170,7 @@ public sealed class AppSettings
             ["mascot_motion"] = Name(MascotMotion),
             ["mascot_follow_pointer"] = MascotFollowPointer,
             ["mascot_sleep_minutes"] = MascotSleepMinutes,
+            ["mascot_sleep_chosen"] = MascotSleepChosen,
             ["mascot_waiting_pulse"] = MascotWaitingPulse,
             ["mascot_quiet_until"] = MascotQuietUntil is { } q ? JsonValue.Create(q.ToUnixTimeSeconds()) : null,
             ["positions"] = new JsonArray([.. Positions.Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["x"] = p.X, ["y"] = p.Y, ["used"] = p.Used })]),

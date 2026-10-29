@@ -14,7 +14,8 @@ public class MascotSettingsTests
         Assert.Equal(MascotIntroChoice.FirstOnly, s.MascotIntro);
         Assert.Equal(MascotMotionLevel.Full, s.MascotMotion);
         Assert.True(s.MascotFollowPointer);
-        Assert.Equal(5, s.MascotSleepMinutes);
+        Assert.Equal(20, s.MascotSleepMinutes);
+        Assert.False(s.MascotSleepChosen);
         Assert.True(s.MascotWaitingPulse);
         Assert.Null(s.MascotQuietUntil);
     }
@@ -24,7 +25,7 @@ public class MascotSettingsTests
     {
         var s = AppSettings.Parse("""
             {"ring_style": "mascotpercent", "mascot_provider": "codex", "mascot_look": "X8", "mascot_intro": "off",
-             "mascot_motion": "simple", "mascot_follow_pointer": false, "mascot_sleep_minutes": 15, "mascot_waiting_pulse": false,
+             "mascot_motion": "simple", "mascot_follow_pointer": false, "mascot_sleep_minutes": 15, "mascot_sleep_chosen": true, "mascot_waiting_pulse": false,
              "mascot_quiet_until": 1793007000}
             """);
         Assert.Equal(RingStyle.MascotPercent, s.RingStyle);
@@ -38,11 +39,22 @@ public class MascotSettingsTests
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1793007000), s.MascotQuietUntil);
         Assert.Equal(s.Serialize(), AppSettings.Parse(s.Serialize()).Serialize());
 
-        var bad = AppSettings.Parse("""{"mascot_provider": "gemini", "mascot_sleep_minutes": 7, "mascot_look": "", "ring_style": "1"}""");
+        var bad = AppSettings.Parse("""{"mascot_provider": "gemini", "mascot_sleep_minutes": 7, "mascot_sleep_chosen": true, "mascot_look": "", "ring_style": "1"}""");
         Assert.Equal("claude", bad.MascotProvider);
-        Assert.Equal(5, bad.MascotSleepMinutes);
+        Assert.Equal(20, bad.MascotSleepMinutes);
         Assert.Null(bad.MascotLook);
         Assert.Equal(RingStyle.Mascot, bad.RingStyle);
+    }
+
+    [Fact]
+    public void SleepDefaultMovesTo20UnlessTheUserChose()
+    {
+        // 舊版不分選過與否都寫（當時的預設是 5）：沒有標記時 5 改用新的預設，其他值是使用者選的
+        Assert.Equal(20, AppSettings.Parse("""{"mascot_sleep_minutes": 5}""").MascotSleepMinutes);
+        Assert.Equal(10, AppSettings.Parse("""{"mascot_sleep_minutes": 10}""").MascotSleepMinutes);
+        Assert.Equal(5, AppSettings.Parse("""{"mascot_sleep_minutes": 5, "mascot_sleep_chosen": true}""").MascotSleepMinutes);
+        var chosen = AppSettings.Parse("""{"mascot_sleep_minutes": 3, "mascot_sleep_chosen": true}""");
+        Assert.Equal(3, AppSettings.Parse(chosen.Serialize()).MascotSleepMinutes);
     }
 
     [Fact]

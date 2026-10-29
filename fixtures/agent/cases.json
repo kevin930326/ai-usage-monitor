@@ -2150,6 +2150,11 @@
    "name": "missing-fetched",
    "local_now": 1761700000000,
    "raw": "{\"v\": 1, \"now\": 1761700000000, \"devices\": []}"
+  },
+  {
+   "name": "done-and-error-fade-after-30-minutes",
+   "local_now": 1761700000000,
+   "raw": "{\"v\": 1, \"fetched_at\": 1761699700000, \"now\": 1761699700000, \"devices\": [{\"name\": \"桌機\", \"ais\": [{\"ai\": \"claude\", \"state\": \"done\", \"sessions\": 3, \"since\": 1761698140000}, {\"ai\": \"codex\", \"state\": \"error\", \"sessions\": 1, \"since\": 1761698260000}], \"updated_at\": 1761699640000}, {\"name\": \"筆電\", \"ais\": [{\"ai\": \"claude\", \"state\": \"needsYou\", \"sessions\": 1, \"since\": 1761692500000}, {\"ai\": \"codex\", \"state\": \"working\", \"sessions\": 1, \"since\": 1761692500000}], \"updated_at\": 1761699640000}]}"
   }
  ]
 }
