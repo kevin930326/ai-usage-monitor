@@ -853,7 +853,7 @@ class NotchPerfSummaryTests(unittest.TestCase):
              "collapsed-think": 235, "gaze-move-open": 260, "gaze-still-open": 275}
 
     # 看滑鼠時每秒畫的格數：收合 30、展開 60（螢幕關著時只有 1）
-    FRAMES = [(t, 30, "collapsed") for t in range(74, 88)] + [(t, 60, "open") for t in range(261, 275)]
+    FRAMES = [(t, 30, "collapsed") for t in range(74, 88)] + [(t, 60, "open") for t in range(261, 276)]
 
     def run_summary(self, samples, marks=None, ticks=(), frames=None):
         with tempfile.TemporaryDirectory() as tmp:
@@ -879,6 +879,18 @@ class NotchPerfSummaryTests(unittest.TestCase):
         result = self.run_summary(self.full(), frames=asleep)
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("❌ 看滑鼠時真的照頻率重畫", result.stdout)
+
+    def test_gaze_frames_with_gaps_or_wrong_side_fail(self):
+        # 只有一筆、中途停掉、側別不符都不算照頻率重畫（Codex C-02）
+        cases = {
+            "only-one": [(75, 30, "collapsed"), (262, 60, "open")],
+            "stops-midway": [f for f in self.FRAMES if not 80 <= f[0] < 88],
+            "wrong-side": [(t, n, "open") for t, n, _ in self.FRAMES],
+        }
+        for name, frames in cases.items():
+            result = self.run_summary(self.full(), frames=frames)
+            self.assertEqual(result.returncode, 1, (name, result.stdout))
+            self.assertIn("❌ 看滑鼠時真的照頻率重畫", result.stdout)
 
     def test_gaze_open_over_gate_fails(self):
         # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗

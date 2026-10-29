@@ -11,7 +11,7 @@ marks = {m.group(2): float(m.group(1)) for m in re.finditer(r"perf-mark ([\d.]+)
 # App 每分鐘一次的時鐘更新（UsageStore.tick）：成本算在「收合後 60～90 秒」；看滑鼠的兩項要量的是不重畫，扣掉更新後 2 秒內的取樣
 ticks = [float(t) for t in re.findall(r"perf-mark ([\d.]+) minute-tick", log)]
 # 看滑鼠時角色圖層每一秒實際畫了幾格（螢幕關閉或鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
-frames = [(float(m.group(1)), int(m.group(2))) for m in re.finditer(r"perf-fps ([\d.]+) (\d+) \w+", log)]
+frames = [(float(m.group(1)), int(m.group(2)), m.group(3)) for m in re.finditer(r"perf-fps ([\d.]+) (\d+) (\w+)", log)]
 def window(a, b): return [s for s in samples if a <= s[0] < b]
 def without_ticks(rows): return [s for s in rows if not any(t <= s[0] < t + 2 for t in ticks)]
 def avg(rows, i): return sum(r[i] for r in rows) / len(rows) if rows else float("nan")
@@ -71,13 +71,19 @@ raised, raised_open = by_name["收合、舉著手（扣掉每分鐘更新）"], 
 gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分鐘更新）"]
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
 gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，跟著螢幕更新率）"], by_name["展開、游標停下後（2～10 秒）"]
-# 看滑鼠時實際每秒畫了幾格（中位數）：收合每秒 30 格、展開跟著螢幕（至少 60）；不到八成就是螢幕關著或鎖著，CPU 不準
-def median_fps(a, b):
-    got = sorted(n for t, n in frames if a <= t < b)
-    return got[len(got) // 2] if got else 0
-fps_collapsed, fps_open = median_fps(g + 2, g + 15), median_fps(go + 2, go + 15)
+# 看滑鼠時實際每秒畫了幾格：收合每秒 30 格、展開跟著螢幕（至少 60）；不到八成就是螢幕關著或鎖著，CPU 不準。
+# 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數，取最少的那一筆
+# （只有一筆、中途停掉重畫都會被抓到，Codex C-02）
+def slowest_fps(a, b, side):
+    got = sorted((t, n) for t, n, s in frames if a - 1 <= t < b + 1 and s == side)
+    times = [a] + [t for t, _ in got] + [b]
+    inside = [n for t, n in got if a <= t < b]
+    if not inside or max(y - x for x, y in zip(times, times[1:])) > 1.6:
+        return 0
+    return min(inside)
+fps_collapsed, fps_open = slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
 print()
-print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}、展開 {fps_open}")
+print(f"看滑鼠時實際每秒畫的格數（最少的一秒）：收合 {fps_collapsed}、展開 {fps_open}")
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
