@@ -27,5 +27,12 @@
   {"url": "javascript:alert(1)", "link": null},
   {"url": "file:///C:/Windows/System32/calc.exe", "link": null},
   {"url": "", "link": null},
-  {"url": null, "link": null}
+  {"url": null, "link": null},
+  {"url": "https://status.claude.com./incidents/x", "link": null},
+  {"url": "https://status.claude.com//incidents/x", "link": null},
+  {"url": "https://Status.Claude.com/incidents/x", "link": null},
+  {"url": "https://xn--status-claude.com/incidents/x", "link": null},
+  {"url": "https://status.claude.com/incidents/x\u0000", "link": null},
+  {"url": "https://status.claude.com/incidents/x\n", "link": null},
+  {"url": "https://status.claude.com/incidents/x@evil.example", "link": null}
 ]}
