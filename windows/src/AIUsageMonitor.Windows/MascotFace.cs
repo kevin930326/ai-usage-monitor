@@ -37,6 +37,9 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
 
     public MascotController Controller => controller;
 
+    /// <summary>上一次畫角色時角色的中心（視窗座標，DIP；含展開的進度、往左展開的移動與推回工作區的距離）；還沒畫過時 null</summary>
+    public Point? HeroCenter => mapping?.Center;
+
     /// <summary>樣式「角色＋%」：收合時圓底下方另外寫剩餘 %</summary>
     public bool ShowsPercent { get; set; }
 
