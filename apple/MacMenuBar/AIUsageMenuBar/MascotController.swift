@@ -246,6 +246,8 @@ final class MascotController {
         if intro { playedIntro = true }
         director.open(at: time(), intro: intro)
         self.director = director
+        // 收合時工作中或睡著不看游標（每秒 1 次）：展開一律追，馬上恢復每秒 12 次
+        if gazeDozing { restartGaze() }
         if !PanelSettings.shared.notchHintShown { showsHint = true }
         let monitor = AgentMonitor.shared
         if monitor.sessions.count(.needsYou, at: monitor.now) > 0 { page = .agents }
@@ -632,8 +634,16 @@ final class MascotController {
     #endif
 
     private func pollPointer() {
-        // 睡著（臉不跟著轉）時不必看游標：降到每秒 1 次，醒來後恢復
-        if let director, director.pose(at: time())[.follow] <= 0.01 {
+        // 不追游標時不必看：降到每秒 1 次，恢復後回到每秒 12 次。
+        // - 睡著（臉不跟著轉）
+        // - 收合時 AI 工作中（`followsPointer`，2026-10-29 使用者決定）：視線轉回正前方就停住，敲鍵盤的循環才不會被打斷
+        //   （視線在動時改由 SwiftUI 重畫，Core Animation 的那一輪會停）
+        if var director, !director.machine.followsPointer || director.pose(at: time())[.follow] <= 0.01 {
+            if !director.machine.followsPointer, director.look(at: time(), dx: 0, dy: 0, threshold: 0.001) {
+                self.director = director
+                lastPointer = nil
+                refresh()
+            }
             if !gazeDozing {
                 gazeDozing = true
                 scheduleGaze(interval: 1)
