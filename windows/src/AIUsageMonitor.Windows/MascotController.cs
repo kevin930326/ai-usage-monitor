@@ -12,7 +12,7 @@ using AIUsageMonitor.Mascot;
 namespace AIUsageMonitor.Windows;
 
 /// <summary>重畫的頻率（同 Mac 的 MascotRenderRate，ADR-0015 第 7 節「角色」）</summary>
-/// <summary>Gaze：只有視線在轉、收合（每秒 15 次）；GazeOpen：展開（每秒 30 次）。游標每一格讀一次（ADR-0016 第 6 節）</summary>
+/// <summary>Gaze：只有視線在轉、收合（每秒 30 次）；GazeOpen：展開（每秒 60 次，WPF 最多跟著螢幕更新率畫）。游標每一格讀一次（ADR-0016 第 6 節）</summary>
 internal enum MascotRenderRate { Stopped, Effect, Breathing, Gaze, GazeOpen, Idle, Animating }
 
 internal static class MascotRenderRates
@@ -20,8 +20,8 @@ internal static class MascotRenderRates
     public static double IntervalMs(this MascotRenderRate rate) => rate switch
     {
         MascotRenderRate.Breathing => 1000.0 / 10,
-        MascotRenderRate.Gaze => 1000.0 / 15,
-        MascotRenderRate.GazeOpen => 1000.0 / 30,
+        MascotRenderRate.Gaze => 1000.0 / 30,
+        MascotRenderRate.GazeOpen => 1000.0 / 60,
         MascotRenderRate.Effect => 1000.0 / 12,
         MascotRenderRate.Animating => 1000.0 / 60,
         _ => 1000.0 / 30,
@@ -53,7 +53,7 @@ internal sealed class MascotController : IDisposable
     private readonly DispatcherTimer deadlineTimer;
     private readonly DispatcherTimer rateTimer;
     private readonly DispatcherTimer gazeTimer;
-    /// <summary>游標在動時每一格讀一次游標（Render 優先權；展開每秒 30 次、收合 15 次，同 Mac）；停下約 1 秒、視線也轉到位後停掉
+    /// <summary>游標在動時每一格讀一次游標（Render 優先權；展開每秒 60 次、收合 30 次）；停下約 1 秒、視線也轉到位後停掉
     /// （check-no-network 禁止 CompositionTarget.Rendering，Fable F-24）</summary>
     private readonly DispatcherTimer trackTimer;
     private long lastPointerMove;
@@ -609,7 +609,7 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>
     /// 游標沒在動時低頻輪詢：每秒約 12 次、停住 1 秒後 4 次；收合時工作中或睡著每秒 1 次（只看是否又該追游標）。
-    /// 看到游標移動就改成每一格讀一次（展開每秒 30 次、收合 15 次），停下約 1 秒、視線也轉到位後回到低頻輪詢
+    /// 看到游標移動就改成每一格讀一次（展開每秒 60 次、收合 30 次），停下約 1 秒、視線也轉到位後回到低頻輪詢
     /// （ADR-0016 第 6 節，ADR-0010 規則 1、4 的例外）
     /// </summary>
     private void RestartGaze()
