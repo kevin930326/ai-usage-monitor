@@ -220,8 +220,8 @@ enum MenuBarIcon {
     /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），額度用眼睛的形狀表示（同瀏海面板，沒有狀態點）：
     /// 正常膠囊、剩不到 20% 或預測會用完小圓點、用完 ×、事故半閉眼加冷汗、過期閉眼並轉灰，不只靠顏色；
     /// 表情和瀏海用同一個 `MascotMood`。用得太快右上角加提示色小點。
-    /// 選了外觀時用外觀的靜態畫面（ADR-0021）：三階的直接換色，格子類特效（LED、像素、ASCII）改用主色三階的實心球加正常眼睛
-    /// （18 pt 上格子看不出表情，2026-10-29 使用者決定，F-04 選 A；瀏海與完整面板維持特效），其他的照瀏海的畫法；資料過期時仍是灰白
+    /// 選了外觀時用外觀的靜態畫面（ADR-0021 第 5 節）：三階的直接換色，格子類特效（LED、像素、ASCII）改用主色三階的實心球加正常眼睛，
+    /// 其他的照瀏海的畫法；資料過期時仍是灰白
     private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter, look: MascotLook?) -> NSImage {
         let palette = MascotController.shared.baseConfig?.palette
         func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
