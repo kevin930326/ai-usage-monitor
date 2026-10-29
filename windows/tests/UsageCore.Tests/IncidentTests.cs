@@ -23,6 +23,22 @@ public class IncidentTests
         Assert.Null(Load("usage-sample.json").Providers["claude"].Incidents);
     }
 
+    /// <summary>Mac 與 Windows 共用的事故連結規則（fixtures/incident-links.json；Swift 的 FixtureTests 讀同一份）</summary>
+    [Fact]
+    public void LinksMatchSharedCases()
+    {
+        var cases = System.Text.Json.Nodes.JsonNode.Parse(
+            File.ReadAllText(Path.Combine(LogicGoldenTests.RepoRoot, "fixtures", "incident-links.json")))!["cases"]!.AsArray();
+        Assert.True(cases.Count > 20);
+        foreach (var c in cases)
+        {
+            var url = c!["url"]?.GetValue<string>();
+            Assert.True(IncidentLink.Link(url) == c["link"]?.GetValue<string>(), url ?? "null");
+        }
+        Assert.Equal("https://status.claude.com/incidents/abc123", Load("usage-forecast-incidents.json").Providers["claude"].Incidents![0].Link);
+        Assert.Null(new ServiceIncident("x", "minor", "https://evil.example/incidents/x").Link);
+    }
+
     [Theory]
     [InlineData("\"down\"")]
     [InlineData("[{\"name\":\"x\"}]")]

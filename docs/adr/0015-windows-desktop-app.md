@@ -1,6 +1,6 @@
 # ADR-0015：Windows 桌面 App（懸浮圓環＋面板）
 
-- 狀態：**提議中**（2026-10-26）
+- 狀態：**提議中**（2026-10-26）。2026-10-29 mascot3 修訂：第 2 節加「事故頁連結」的唯一例外（使用者決定）
 - 日期：2026-10-26
 - 相關需求：FR-48、FR-49、FR-61、FR-62（本 ADR 新增）、NFR-1、NFR-3、NFR-7、NFR-8、NFR-9、NFR-10
 - 相關：[ADR-0008](0008-mac-panel-layout.md)（面板、App 不連網）、[ADR-0009](0009-local-history-and-token-stats.md)（本機歷史）、[ADR-0010](0010-mac-animation-principles.md)（動畫）、[ADR-0011](0011-multi-device-usage.md)（Windows 收集器、第二層）、[ADR-0013](0013-download-and-install.md)（安裝與發布）、[ADR-0014](0014-long-term-operation.md)（長期使用）
@@ -68,10 +68,11 @@ BACKLOG 第 9 節記了「Windows 懸浮圖示」：桌面上可拖動的小圓�
 - **寫**：只寫自己的設定 `windows-app.json`（同一資料夾）。例外（[ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節）：建立 `agent\salt` 與 `agent\inbox\`、刪 inbox 裡 `aum-hook.exe` 寫的事件檔；
   使用者在設定按「連接／修好／移除」時，改 Claude Code 的 `settings.json` 或 Codex 的 `hooks.json`（先備份、只動自己的項目）。
   ADR-0019 第 2 節：寫 `agent-state.json`（這台的 AI 狀態彙總，沒有資料夾名稱或內容），讀收集器寫的 `agent-remote.json`。**永遠不寫 `history.sqlite3`**：Mac App 的例外（清除歷史、縮短保留期間）在 Windows 改由收集器的指令完成（階段 2）。
-- **不連網、不讀認證管理員、不執行 `claude`／`codex`**。唯一啟動的程式是 `schtasks.exe /Run`：「立即更新」的 `\AIUsageMonitor\Collector`，以及 AI 狀態改變時的 `\AIUsageMonitor\AgentSync`
+- **不連網、不讀認證管理員、不執行 `claude`／`codex`**。
+- **唯一的網址例外：事故頁連結**（2026-10-29 使用者決定，ADR-0018 第 4 節）：面板的事故那行可以點，用**預設瀏覽器**打開那個事故頁。App 自己仍不連網——網址交給 Windows 的 ShellExecute，由使用者的瀏覽器打開。只在使用者點了（或用鍵盤按下）那一行時；網址必須**剛好**是 `https://status.claude.com/incidents/<ID>` 或 `https://status.openai.com/incidents/<ID>`（收集器實際查的兩個狀態頁；ID 只有英數字、底線、連字號，1～64 字；大小寫、帳號、連接埠、查詢字串、片段、多一層路徑都不收），其他一律不開、只顯示文字。規則是 UsageCore `IncidentLink` 與 Swift `ServiceIncident.link` 的共用邏輯，`fixtures/incident-links.json` 兩邊比對；開啟前在 `SystemServices.cs` 的 `IncidentPage` 再檢查一次。唯一啟動的程式是 `schtasks.exe /Run`：「立即更新」的 `\AIUsageMonitor\Collector`，以及 AI 狀態改變時的 `\AIUsageMonitor\AgentSync`
   （ADR-0019 第 2 節；都是觸發使用者自己的排程，不連網、不需要系統管理員）。
 - **驗證**：
-  1. CI 靜態檢查 `windows/tools/check-no-network.py`：App 與 UsageCore 的原始碼不得出現網路（`System.Net`、`HttpClient`、`WebRequest`、`Socket`、`WinHttp`…）、認證（`CredRead`、`CredWrite`、`PasswordVault`…）的 API；`Process.Start` 只能在觸發收集器的那個檔案；不得有 `PackageReference`（App）；不得用 `CompositionTarget.Rendering`。
+  1. CI 靜態檢查 `windows/tools/check-no-network.py`：App 與 UsageCore 的原始碼不得出現網路（`System.Net`、`HttpClient`、`WebRequest`、`Socket`、`WinHttp`…）、認證（`CredRead`、`CredWrite`、`PasswordVault`…）的 API；`Process.Start` 只能在觸發收集器的那個檔案；不得有 `PackageReference`（App）；不得用 `CompositionTarget.Rendering`。例外清單只有事故頁連結這一個入口：網址只能出現在 `UsageCore/IncidentLink.cs` 而且只能是上面兩個前綴；`UseShellExecute = true` 只能在 `SystemServices.cs` 的 `IncidentPage` 出現一次、而且經過 `IncidentLink.Link`（`scripts/tests/test_check_no_network.py`）。
   2. 實機：防火牆封鎖 App 的輸出連線後一切正常；Process Monitor 看不到 TCP/UDP 與認證存取（實機確認清單）。
 - **檔案變更**：`FileSystemWatcher` 監看**資料夾**（收集器先寫暫存檔再改名，監看檔案本身會在改名後失效，同 Mac 的 `UsageStore`），`*.json`、300 ms 去抖動後重讀；內容與上一份相同時不通知畫面。watcher 出錯時由每分鐘的計時器重讀並重建。閒置時沒有輪詢。
 - **SQLite（階段 2）**：Windows 內建的 `winsqlite3.dll`（Windows 10 起，x64／ARM64 都有），開法照 Mac 的 `HistoryStore`：`SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX`（不加 CREATE）＋`PRAGMA query_only = ON`＋`busy_timeout`；不用 `mode=ro`（WAL 下 `-shm` 不存在時開不了）。不用 `Microsoft.Data.Sqlite`（多帶原生 DLL 與一個套件相依）。

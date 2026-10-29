@@ -9,6 +9,8 @@
 | `usage-no-providers.json` | `providers` 為空（沒有啟用任何服務，畫面顯示提示而不是錯誤） | 同上 |
 | `usage-forecast-incidents.json` | 選填欄位（ADR-0018）：額度的 `forecast`（有倍數與沒有倍數）、服務的 `incidents`（一筆事故與空陣列＝查過沒有事故） | 同上 |
 
+另外 `incident-links.json` 是事故頁連結的規則（ADR-0015 第 2 節、ADR-0018 第 4 節）：每一項的 `url` 與應得的 `link`（不接受時 null），Swift `FixtureTests.incidentLinksMatchSharedCases` 與 C# `IncidentTests.LinksMatchSharedCases` 比對同一份。
+
 改格式時三邊的測試會一起失敗；`schema_version` 的變更規則見 FR-13。
 
 ## logic、mascot、forecast、level

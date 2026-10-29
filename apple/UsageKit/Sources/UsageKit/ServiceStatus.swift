@@ -111,15 +111,26 @@ public struct ServiceIncident: Codable, Hashable, Sendable {
 
     public var isDisruption: Bool { Self.disruptionImpacts.contains(impact) }
 
-    /// 只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結
+    /// 只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結（收集器實際查的兩個狀態頁，`service_status.PAGES`）
     public static let allowedHosts: Set<String> = ["status.claude.com", "status.openai.com"]
 
     public var link: URL? { Self.link(url) }
 
+    /// 整個字串必須剛好是 `https://<白名單網域>/incidents/<ID>`，ID 只有英數字、底線、連字號（1～64 字）；
+    /// 大小寫、空白、帳號、連接埠、查詢字串、片段、多一層路徑都不收。和 C# 的 `IncidentLink.Link` 同一份規則，
+    /// `fixtures/incident-links.json` 兩邊比對（ADR-0018 第 4 節、ADR-0015 第 2 節）。
     public static func link(_ text: String?) -> URL? {
-        guard let text, let url = URL(string: text), url.scheme == "https", let host = url.host,
-              allowedHosts.contains(host), url.path.hasPrefix("/incidents/"), url.user == nil, url.port == nil else { return nil }
-        return url
+        guard let text else { return nil }
+        for host in allowedHosts.sorted() {
+            let prefix = "https://\(host)/incidents/"
+            guard text.hasPrefix(prefix) else { continue }
+            let id = text.dropFirst(prefix.count)
+            guard (1...64).contains(id.utf8.count),
+                  id.utf8.allSatisfy({ ($0 >= 48 && $0 <= 57) || ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || $0 == 45 || $0 == 95 })
+            else { return nil }
+            return URL(string: text)
+        }
+        return nil
     }
 }
 

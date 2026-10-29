@@ -32,6 +32,8 @@ internal sealed class PanelContent : Border
     public event Action? RefreshRequested;
     public event Action? SettingsRequested;
     public event Action? QuitRequested;
+    /// <summary>點了事故那行（參數是 IncidentLink 檢查過的事故頁）</summary>
+    public event Action<string>? IncidentRequested;
 
     public PanelContent(PanelModel model, Palette palette)
     {
@@ -250,12 +252,38 @@ internal sealed class PanelContent : Border
     /// 服務狀態頁的事故（ADR-0018 第 4 節）：只顯示名稱。Windows App 不放網址與超連結（ADR-0015 第 2 節），
     /// 要看詳情到官方狀態頁
     /// </summary>
+    /// <summary>
+    /// 事故那行（ADR-0018 第 4 節）。有合法的事故頁（<see cref="IncidentLink"/>）時整行是按鈕：點了或按 Enter／空白鍵用預設瀏覽器打開
+    /// （ADR-0015 第 2 節的例外）；文字後面加「↗」，滑鼠提示與朗讀寫「在瀏覽器打開事故頁」。沒有連結時只顯示文字。
+    /// </summary>
     private UIElement IncidentLine(ServiceIncident incident)
     {
-        var line = Text("服務異常：" + incident.Name, 12, p.Notice, FontWeights.Medium, new Thickness(0, 6, 0, 0), wrap: true);
+        var name = "服務異常：" + incident.Name;
+        if (incident.Link is not { } link)
+        {
+            var plain = Text(name, 12, p.Notice, FontWeights.Medium, new Thickness(0, 6, 0, 0), wrap: true);
+            plain.MaxHeight = 36;
+            System.Windows.Automation.AutomationProperties.SetName(plain, name);
+            return plain;
+        }
+        var line = Text(name + " ↗", 12, p.Notice, FontWeights.Medium, wrap: true);
         line.MaxHeight = 36;
-        System.Windows.Automation.AutomationProperties.SetName(line, "服務異常：" + incident.Name);
-        return line;
+        var button = new Button
+        {
+            Content = line,
+            Template = PlainButton(Brushes.Transparent, p.ControlFill, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(0),
+            Margin = new Thickness(-4, 4, 0, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = "在瀏覽器打開事故頁",
+        };
+        // PlainButton 的內容置中：外層留一點內距讓按下時的底色不貼字
+        line.Margin = new Thickness(4, 2, 4, 2);
+        System.Windows.Automation.AutomationProperties.SetName(button, name + "，按下在瀏覽器打開事故頁");
+        button.Click += (_, _) => IncidentRequested?.Invoke(link);
+        return button;
     }
 
     /// <summary>額度卡片：每個服務的名稱、方案、事故、各額度的進度條（含預期進度標記）、重置倒數與預測</summary>
