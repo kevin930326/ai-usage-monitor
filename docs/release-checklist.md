@@ -74,6 +74,7 @@
 
 - [ ] 在 GitHub 草稿上按「Publish release」。
 - [ ] README 的 `vX.Y.Z` 範例網址可以實際下載（`releases/download/vX.Y.Z/install.sh`、`install.ps1`）。
+- [ ] PC 的 PowerShell 在 repo 資料夾執行 `powershell -ExecutionPolicy Bypass -File scripts\install-windows-app.ps1 -FromRelease -Version X.Y.Z`：印出「SHA-256 一致」並安裝（草稿的檔案不公開，要發布後才下載得到）。
 
 ## 7. 發布之後
 

@@ -70,8 +70,19 @@ windows/
 
 從 repo 建置的檔案沒有 Mark of the Web，不會出現 SmartScreen 的「Windows 已保護您的電腦」。
 
-**從 Release 的 zip 安裝**（發布後；不需要 .NET）：下載符合架構的 `AIUsageMonitor-windows-<x64|arm64>-<版本>.zip`，以 `SHA256SUMS-windows`
-比對（`Get-FileHash <zip> -Algorithm SHA256`），解壓到固定的位置（例如 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`）後打開
+**從 Release 安裝**（發布後；不需要 .NET、不建置）：
+
+```powershell
+cd <repo>
+powershell -ExecutionPolicy Bypass -File scripts\install-windows-app.ps1 -FromRelease
+```
+
+下載最新版本中符合這台電腦架構的 `AIUsageMonitor-windows-<x64|arm64>-<版本>.zip` 與 `SHA256SUMS-windows`，SHA-256 一致才解除封鎖
+（拿掉「從網路下載」的標記，所以不會出現 SmartScreen）、解壓並照上面的方式安裝與更新；不一致或清單裡沒有這個檔案就停，目前安裝的版本不動。
+指定版本加 `-Version 1.0.0`；離線時把 zip 與 `SHA256SUMS-windows` 放在同一個資料夾，加 `-ReleaseDir <資料夾> -Version <版本>`。
+只有這個模式的腳本會連網（GitHub），App 本身仍不連網。
+
+手動安裝也可以：下載 zip，以 `Get-FileHash <zip> -Algorithm SHA256` 和 `SHA256SUMS-windows` 比對，解壓到固定的位置後打開
 `AIUsageMonitor.exe`。zip 是自含式（內含 .NET 執行環境）、沒有程式碼簽章，第一次打開會出現 SmartScreen，按「其他資訊」→「仍要執行」。
 開機自動啟動在 App 的設定裡打開。發布流程見 [docs/release-checklist.md](../docs/release-checklist.md)。
 

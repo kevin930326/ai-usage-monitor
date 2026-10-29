@@ -29,6 +29,7 @@
 - 文件：README 改為英文，原本的繁體中文版移到 `README.zh-TW.md`，兩者開頭互相連結；`scripts/check-readme-images.py` 也檢查 `README.zh-TW.md` 引用的圖片
 
 ### Added
+- `scripts/install-windows-app.ps1 -FromRelease`：不用 .NET SDK，從 GitHub Release 下載這台電腦架構的 zip 與 `SHA256SUMS-windows`，SHA-256 一致才解除封鎖並安裝，不一致或清單裡沒有就停、不動目前的版本；`-Version` 指定版本、`-ReleaseDir` 離線安裝
 - 角色的互動（ADR-0016）：瀏海面板展開時點角色會跳一下或揮手、連點 5 下轉暈、按住捏扁，滑鼠繞角色兩圈轉暈、快速左右甩動嚇到、停在角色上害羞；只處理瀏海面板自己視窗的滑鼠事件，不裝全域監聽。Claude 或 Codex 正在跑時角色低頭敲鍵盤：展開時每 5 秒看一次紀錄檔（`~/.claude/projects`、`~/.codex/sessions`）的修改時間，不開啟也不讀內容。設定新增「角色動畫」（完整／簡單／關閉；「減少動態效果」時完整當成簡單），選單列圖示新增「角色」與「角色＋%」
 - Mac 瀏海面板與角色（ADR-0016）：滑鼠移到螢幕上方的瀏海會展開成 580×180 的面板，左邊是角色（Claude 或 Codex），右邊是兩個服務的額度，上方三個分頁（總覽、歷史開完整統計、設定開設定）；收合時瀏海兩旁顯示迷你角色與剩最少額度的迷你圓環。沒有瀏海的螢幕在選單列中間畫一個。第一次展開播約 4.7 秒的出場過場（可設為每次或關閉，「減少動態效果」時不播）。選單列圖示與原本的面板不變；設定可以關掉瀏海面板（預設開）
 - 發布（ADR-0015）：推 `v*` tag 時另建置 Windows App 的自含式 zip（x64、ARM64，不需要安裝 .NET）與 `SHA256SUMS-windows`，放進草稿 Release；`scripts/package-windows-app.py` 檢查不含 .pdb、測試組件與 Debug 專用字串、組件版本等於 tag。新增 `docs/release-checklist.md`（第一次發布的檢查清單）
