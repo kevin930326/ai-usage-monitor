@@ -203,6 +203,7 @@ jobs:
           name: dry-run
           path: dry-run/
           retention-days: 1
+          overwrite: true  # 重跑失敗的 job 時，上一次留下的同名 artifact 不擋上傳
       - name: 刪除並確認沒有剩下
         env:
           GH_TOKEN: ${{ github.token }}
