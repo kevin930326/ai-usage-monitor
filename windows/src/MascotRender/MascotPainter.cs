@@ -91,7 +91,8 @@ public sealed class MascotPainter(MascotConfig config)
 
     private static readonly double[][] ConfettiColors = [[255, 120, 150], [255, 170, 80], [90, 210, 190], [150, 120, 255], [255, 220, 120]];
 
-    private void DrawRipple(MascotRipple ripple, MascotFrame frame, SKCanvas canvas)
+    /// <summary>漣漪、碎片與邊緣弧光（畫布座標）。every：每幾顆粒子畫一顆（Windows 的膠囊比瀏海小，畫一半）</summary>
+    public void DrawRipple(MascotRipple ripple, MascotFrame frame, SKCanvas canvas, int every = 1)
     {
         var now = frame.Time;
         double cx = Center.X, cy = Center.Y;
@@ -102,8 +103,9 @@ public sealed class MascotPainter(MascotConfig config)
         foreach (var ring in ripple.Rings)
         {
             if (ripple.RingState(ring, now) is not { } state) continue;
-            foreach (var p in ring.Particles)
+            for (var i = 0; i < ring.Particles.Count; i += Math.Max(every, 1))
             {
+                var p = ring.Particles[i];
                 var rr = state.Radius + p.Jitter + Math.Sin(p.Angle * cfg.EdgeWobbleLobes + ring.Seed) * cfg.EdgeWobblePx;
                 double px = cx + rr * Math.Cos(p.Angle), py = cy + rr * Math.Sin(p.Angle) * cfg.VerticalSquash;
                 if (py < 4 || py > PanelHeight - 4) continue;
@@ -457,7 +459,7 @@ public sealed class MascotPainter(MascotConfig config)
     private static readonly SKColor Yellow = new(0xFF, 0xD2, 0x5E);
     private static readonly SKColor ZColor = Rgba(0.85, 0.85, 0.89);
 
-    private void DrawEffects(MascotFrame frame, (double X, double Y, double R) placed, SKCanvas canvas)
+    public void DrawEffects(MascotFrame frame, (double X, double Y, double R) placed, SKCanvas canvas)
     {
         var (x, y, R) = placed;
         if (R < 2) return;

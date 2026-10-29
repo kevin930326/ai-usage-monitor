@@ -51,12 +51,13 @@ public sealed class MascotActivityProbe(IReadOnlyList<MascotActivityProbe.Root> 
 
     /// <summary>某個 AI 的紀錄位置（設定資料夾的規則同收集器與 hook 的安裝：config.json → 環境變數 → 使用者資料夾）</summary>
     public static Root DefaultRoot(AgentKind ai, byte[]? collectorConfig, Func<string, string?> environment, string userHome)
-    {
-        var dir = AgentHookFiles.ConfigDirectory(ai, collectorConfig, environment, userHome);
-        return ai == AgentKind.Claude
+        => RootIn(ai, AgentHookFiles.ConfigDirectory(ai, collectorConfig, environment, userHome));
+
+    /// <summary>某個 AI 的設定資料夾裡要看的紀錄：Claude 的 projects（兩層）、Codex 的 sessions（四層，年／月／日只看最新兩個）</summary>
+    public static Root RootIn(AgentKind ai, string dir) =>
+        ai == AgentKind.Claude
             ? new Root(System.IO.Path.Combine(dir, "projects"), 2)
             : new Root(System.IO.Path.Combine(dir, "sessions"), 4, 2);
-    }
 
     public bool IsWorking(DateTimeOffset now) => IsActive(ActiveWindowSeconds, now);
 
