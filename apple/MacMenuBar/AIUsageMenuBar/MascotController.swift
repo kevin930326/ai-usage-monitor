@@ -745,6 +745,8 @@ final class MascotController {
     static let trackingThreshold = 0.0005
     /// 游標停下多久、視線也轉到位後才停掉高幀率（Fable F-25：停下 0.3 秒就降會一頓一頓的）
     static let trackingLinger = 1000
+    /// 游標相對角色移動不到這個距離（點）算沒動
+    static let stillDistance = 0.5
 
     #if DEBUG
     /// 量測用：以假的游標位置驅動同一段程式（不移動真的游標）
@@ -815,7 +817,9 @@ final class MascotController {
         let dy = (origin.y - pointer.y) - pose[.y]
         let relative = CGPoint(x: dx, y: dy)
         let tracking = gazeLink != nil
-        guard relative != lastPointer else {
+        // 不到半點算沒動：展開、收合的彈簧收尾時角色的位置還在一點一點地變，用「完全相等」比的話高幀率會一直停不下來
+        // （偶發的「停下後還是 3～5%」，icons 第 4 部分）
+        guard lastPointer.map({ hypot(relative.x - $0.x, relative.y - $0.y) >= Self.stillDistance }) ?? true else {
             if tracking {
                 // 停下約 1 秒、視線也轉到位：停掉高幀率
                 if t - lastPointerMove >= Self.trackingLinger, !director.isGazeMoving(at: t) { endGazeLink() }

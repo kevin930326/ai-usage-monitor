@@ -638,6 +638,8 @@ internal sealed class MascotController : IDisposable
     private const double TrackingThreshold = 0.0005;
     /// <summary>游標停下多久、視線也轉到位後才停掉高幀率（Fable F-25）</summary>
     private const long TrackingLinger = 1000;
+    /// <summary>游標相對圖示移動不到這個距離（DIP）算沒動</summary>
+    private const double StillDistance = 0.5;
 
     private bool Tracking => trackTimer.IsEnabled;
 
@@ -711,7 +713,8 @@ internal sealed class MascotController : IDisposable
         // 游標相對圖示的位置（DIP）：游標沒動但圖示移動（拖動、展開）時也會重新對準
         var dx = (cursor.X - hero.X) / hero.Scale;
         var dy = (cursor.Y - hero.Y) / hero.Scale;
-        if (lastPointer is { } last && Math.Abs(last.X - dx) < 0.01 && Math.Abs(last.Y - dy) < 0.01)
+        // 不到半個 DIP 算沒動：圖示的位置在動畫收尾時還在一點一點地變，太嚴的話高幀率會停不下來（同 Mac，icons 第 4 部分）
+        if (lastPointer is { } last && Math.Abs(last.X - dx) < StillDistance && Math.Abs(last.Y - dy) < StillDistance)
         {
             if (Tracking)
             {
