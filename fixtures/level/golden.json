@@ -334,5 +334,17 @@
       "xp" : 10
     },
     "stored_ok" : false
+  },
+  {
+    "name" : "ledger-duplicate-day-first-invalid",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : true
   }
 ]

@@ -42,10 +42,12 @@ public static class MascotLevelLedger
             if (doc.RootElement.ValueKind != JsonValueKind.Object || First(doc.RootElement, "days") is not { ValueKind: JsonValueKind.Object } days)
                 return null;
             var result = new Dictionary<string, long>();
+            var seen = new HashSet<string>();
             foreach (var entry in days.EnumerateObject())
             {
-                // 重複的日期取第一個（和 Swift 的 JSONDecoder 一樣；Fable F-02）。不是整數（字串、布林值、小數、超出範圍、null）時只略過這一天
-                if (result.ContainsKey(entry.Name) || MascotLevel.DayNumber(entry.Name) is null) continue;
+                // 重複的日期取第一個（和 Swift 的 JSONDecoder 一樣；Fable F-02）：第一個不能用時整天略過，不改用後面的（Codex C-02）。
+                // 不是整數（字串、布林值、小數、超出範圍、null）時只略過這一天
+                if (!seen.Add(entry.Name) || MascotLevel.DayNumber(entry.Name) is null) continue;
                 if (entry.Value.ValueKind == JsonValueKind.Number && Integer(entry.Value) is > 0 and var tokens)
                     result[entry.Name] = tokens;
             }
