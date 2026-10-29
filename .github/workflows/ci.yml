@@ -451,8 +451,11 @@ jobs:
           if (-not $failed) { throw 'tampered zip should stop with a SHA-256 error' }
           if ((Get-Item "$app\AIUsageMonitor.exe").LastWriteTimeUtc -ne $before) { throw 'installed version changed' }
           if (Test-Path "$app.new") { throw 'new folder left behind' }
-          # 清單裡沒有這個版本：也要停
+          # zip 在、但 SHA256SUMS-windows 裡沒有它：也要停
+          Copy-Item $zip (Join-Path $rel 'AIUsageMonitor-windows-x64-0.0.2.zip')
           $failed = $false
-          try { & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.2 -ReleaseDir $rel -NoStart } catch { $failed = $true }
-          if (-not $failed) { throw 'missing zip should stop' }
+          try { & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.2 -ReleaseDir $rel -NoStart } catch { $failed = $_.Exception.Message -match 'SHA256SUMS-windows' }
+          if (-not $failed) { throw 'unlisted zip should stop with a SHA256SUMS-windows error' }
+          if ((Get-Item "$app\AIUsageMonitor.exe").LastWriteTimeUtc -ne $before) { throw 'installed version changed' }
+          if (Test-Path "$app.new") { throw 'new folder left behind' }
           & .\scripts\install-windows-app.ps1 -Uninstall
