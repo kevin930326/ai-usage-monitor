@@ -251,7 +251,8 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
 /// <remarks>
 /// 背景工作（ADR-0017 第 7 節）：Pid 是 AI 程序（0 是不知道，不偵測）；Baseline 是回合開始時已經有的子孫程序（排序過；null 是還沒拍）；
 /// WantsBaseline 要 App 拍基準；CheckAt 下一次看的時間；Pending／PendingSince 上一次看到、不在基準裡的子孫程序（候選，排序過）與第一次出現的時間；
-/// Background 連續兩次都看到同一個候選（背景執行中，Fable F-09）；AwakeSince 背景工作結束的時間，睡覺倒數另外的起點（Fable F-11）
+/// Background 連續兩次都看到同一個候選（背景執行中，Fable F-09）；AwakeSince 背景工作結束的時間，睡覺倒數另外的起點（Fable F-11）；
+/// Probe 拍基準與看背景工作的排程序號：事件重排或取消時加一，非同步回來的舊結果序號不同就不套用（Codex C-01）
 /// </remarks>
 public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentState Stored, AgentNeed? Need, long Since, long Last,
                                   long? TurnStart = null)
@@ -260,6 +261,7 @@ public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentS
     public AgentProcess[]? Baseline { get; init; }
     public bool WantsBaseline { get; init; }
     public long? CheckAt { get; init; }
+    public long Probe { get; init; }
     public AgentProcess[] Pending { get; init; } = [];
     public long? PendingSince { get; init; }
     public bool Background { get; init; }
@@ -350,6 +352,15 @@ public sealed class AgentSessions(long idleAfter)
     /// （Stop→Stop 也重排，Fable F-07）；其他改變狀態的事件都不看、不顯示背景（Fable F-13）。候選與它的起始時間跨回合保留</summary>
     private static AgentSession TrackBackground(AgentSession s, AgentHookEvent e, bool sub, bool changed, long now)
     {
+        var next = Track(s, e, sub, changed, now);
+        // 重排或取消了（新回合一律重拍基準）：還在路上的舊結果作廢
+        return e == AgentHookEvent.UserPromptSubmit || next.WantsBaseline != s.WantsBaseline || next.CheckAt != s.CheckAt
+            ? next with { Probe = s.Probe + 1 }
+            : next;
+    }
+
+    private static AgentSession Track(AgentSession s, AgentHookEvent e, bool sub, bool changed, long now)
+    {
         if (e == AgentHookEvent.UserPromptSubmit) s = s with { Baseline = null, WantsBaseline = s.Pid > 0 };
         if (s.Stored == AgentState.Done && e == AgentHookEvent.Stop && !sub)
         {
@@ -434,22 +445,22 @@ public sealed class AgentSessions(long idleAfter)
     }
 
     /// <summary>要拍基準的工作階段</summary>
-    public List<(AgentKind Ai, string Id, int Pid)> BaselineRequests() =>
-        [.. sessions.Where(s => s.WantsBaseline && s.Pid > 0).Select(s => (s.Ai, s.Id, s.Pid))];
+    public List<(AgentKind Ai, string Id, int Pid, long Probe)> BaselineRequests() =>
+        [.. sessions.Where(s => s.WantsBaseline && s.Pid > 0).Select(s => (s.Ai, s.Id, s.Pid, s.Probe))];
 
     /// <summary>拍好的基準（processes 是 AI 程序底下所有子孫程序；null 是 AI 程序已經不在）</summary>
-    public void SetBaseline(AgentKind ai, string id, int pid, IReadOnlyCollection<AgentProcess>? processes)
+    public void SetBaseline(AgentKind ai, string id, int pid, long probe, IReadOnlyCollection<AgentProcess>? processes)
     {
         var i = sessions.FindIndex(s => s.Ai == ai && s.Id == id && s.Pid == pid);
-        if (i < 0 || !sessions[i].WantsBaseline) return;
+        if (i < 0 || !sessions[i].WantsBaseline || sessions[i].Probe != probe) return;
         // 上一回合留下、還在跑的候選不算常駐（Fable F-06）
         var pending = sessions[i].Pending;
         sessions[i] = sessions[i] with { WantsBaseline = false, Baseline = Limit((processes ?? []).Where(p => Array.BinarySearch(pending, p) < 0)) };
     }
 
     /// <summary>到時間要看背景工作的工作階段</summary>
-    public List<(AgentKind Ai, string Id, int Pid)> BackgroundChecks(long now) =>
-        [.. sessions.Where(s => s.Pid > 0 && s.CheckAt is { } at && at <= now).Select(s => (s.Ai, s.Id, s.Pid))];
+    public List<(AgentKind Ai, string Id, int Pid, long Probe)> BackgroundChecks(long now) =>
+        [.. sessions.Where(s => s.Pid > 0 && s.CheckAt is { } at && at <= now).Select(s => (s.Ai, s.Id, s.Pid, s.Probe))];
 
     /// <summary>下一次要看背景工作的時間；沒有就是 null，App 不排計時器</summary>
     public long? NextBackgroundCheck => sessions.Where(s => s.Pid > 0 && s.CheckAt is not null).Select(s => s.CheckAt).Min();
@@ -458,10 +469,10 @@ public sealed class AgentSessions(long idleAfter)
     /// 看了 AI 程序底下的子孫程序（null 是 AI 程序已經不在）。扣掉基準還有剩的是候選：和上一次的候選有重疊就是背景執行中，第一次看到的
     /// 20 秒後再確認。沒有候選了就離開，睡覺倒數從這一刻重新起算。候選出現超過 30 分鐘把剩下的併進基準。回傳是否有改變
     /// </summary>
-    public bool Observe(AgentKind ai, string id, int pid, IReadOnlyCollection<AgentProcess>? processes, long now)
+    public bool Observe(AgentKind ai, string id, int pid, long probe, IReadOnlyCollection<AgentProcess>? processes, long now)
     {
         var i = sessions.FindIndex(s => s.Ai == ai && s.Id == id && s.Pid == pid);
-        if (i < 0 || sessions[i].CheckAt is null) return false;
+        if (i < 0 || sessions[i].CheckAt is null || sessions[i].Probe != probe) return false;
         var before = sessions[i];
         var s = before;
         var baseline = s.Baseline ?? [];

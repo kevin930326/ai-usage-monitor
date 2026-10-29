@@ -251,11 +251,11 @@ final class AgentMonitor {
                 monitor.probingProcesses = false
                 for (r, start, processes) in taken {
                     if let start { monitor.aiStarts[r.pid] = start }
-                    monitor.sessions.setBaseline(ai: r.ai, id: r.id, pid: r.pid, processes: processes)
+                    monitor.sessions.setBaseline(ai: r.ai, id: r.id, pid: r.pid, probe: r.probe, processes: processes)
                 }
                 var different = false
                 for (c, processes) in seen {
-                    different = monitor.sessions.observe(ai: c.ai, id: c.id, pid: c.pid, processes: processes, at: monitor.now) || different
+                    different = monitor.sessions.observe(ai: c.ai, id: c.id, pid: c.pid, probe: c.probe, processes: processes, at: monitor.now) || different
                 }
                 // 已經沒有工作階段用的 AI 程序不必再記
                 let live = Set(monitor.sessions.sessions.map(\.pid))

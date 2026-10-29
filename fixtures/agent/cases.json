@@ -3824,6 +3824,214 @@
      ]
     }
    ]
+  },
+  {
+   "name": "background-late-empty-result-keeps-new-check",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "hold"
+    },
+    {
+     "t": 65000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 65100,
+     "e": "late",
+     "procs": [
+      [
+       600,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 68000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       700,
+       64500
+      ]
+     ]
+    },
+    {
+     "t": 88000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       700,
+       64500
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "background-late-baseline-from-old-turn-ignored",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2050,
+     "e": "hold"
+    },
+    {
+     "t": 2500,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 3100,
+     "e": "late",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       650,
+       2400
+      ]
+     ]
+    },
+    {
+     "t": 3200,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 4000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 7000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       650,
+       2400
+      ]
+     ]
+    },
+    {
+     "t": 27000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       650,
+       2400
+      ]
+     ]
+    }
+   ]
   }
  ],
  "remote": [

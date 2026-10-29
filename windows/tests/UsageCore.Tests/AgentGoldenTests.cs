@@ -45,11 +45,26 @@ public class AgentGoldenTests
     {
         var sessions = new AgentSessions(testCase["idle_after_ms"]?.GetValue<long>() ?? 300_000);
         var log = new List<string>();
+        // hold：記下現在要拍的基準與要看的工作階段（非同步列程序的途中）；late：途中又有事件之後，才把那時的結果交回來（Codex C-01）
+        List<(AgentKind Ai, string Id, int Pid, long Probe)> heldBaselines = [], heldChecks = [];
         foreach (var e in testCase["events"]!.AsArray())
         {
             var t = e!["t"]!.GetValue<long>();
             switch (e["e"]!.GetValue<string>())
             {
+                case "hold":
+                    heldBaselines = sessions.BaselineRequests();
+                    heldChecks = sessions.BackgroundChecks(t);
+                    log.Add($"{t} hold baselines={heldBaselines.Count} checks={heldChecks.Count}");
+                    break;
+                case "late":
+                    foreach (var r in heldBaselines) sessions.SetBaseline(r.Ai, r.Id, r.Pid, r.Probe, Processes(e["procs"]));
+                    foreach (var c in heldChecks) sessions.Observe(c.Ai, c.Id, c.Pid, c.Probe, Processes(e["procs"]), t);
+                    heldBaselines = [];
+                    heldChecks = [];
+                    var lateNext = sessions.NextBackgroundCheck;
+                    log.Add($"{t} late → {Describe(sessions, t)} next={(lateNext is { } ln ? ln.ToString(CultureInfo.InvariantCulture) : "none")}");
+                    break;
                 case "msg":
                     var ai = e["ai"]!.GetValue<string>();
                     var ev = e["ev"]!.GetValue<string>();
@@ -64,12 +79,12 @@ public class AgentGoldenTests
                             (wants.Count > 0 ? $" baseline? {string.Join(",", wants)}" : ""));
                     break;
                 case "baseline":
-                    foreach (var r in sessions.BaselineRequests()) sessions.SetBaseline(r.Ai, r.Id, r.Pid, Processes(e["procs"]));
+                    foreach (var r in sessions.BaselineRequests()) sessions.SetBaseline(r.Ai, r.Id, r.Pid, r.Probe, Processes(e["procs"]));
                     log.Add($"{t} baseline → {Describe(sessions, t)}");
                     break;
                 case "procs":
                     var due = sessions.BackgroundChecks(t);
-                    foreach (var c in due) sessions.Observe(c.Ai, c.Id, c.Pid, Processes(e["procs"]), t);
+                    foreach (var c in due) sessions.Observe(c.Ai, c.Id, c.Pid, c.Probe, Processes(e["procs"]), t);
                     var nextCheck = sessions.NextBackgroundCheck;
                     log.Add($"{t} procs checked={due.Count} → {Describe(sessions, t)} next={(nextCheck is { } nc ? nc.ToString(CultureInfo.InvariantCulture) : "none")}");
                     break;

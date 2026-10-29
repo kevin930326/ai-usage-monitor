@@ -91,8 +91,23 @@ import Testing
     static func run(_ testCase: SessionCase) -> Named {
         var sessions = AgentSessions(idleAfter: testCase.idle_after_ms ?? 300_000)
         var log: [String] = []
+        // hold：記下現在要拍的基準與要看的工作階段（非同步列程序的途中）；late：途中又有事件之後，才把那時的結果交回來（Codex C-01）
+        var held: (baselines: [(ai: AgentKind, id: String, pid: Int32, probe: Int64)], checks: [(ai: AgentKind, id: String, pid: Int32, probe: Int64)]) = ([], [])
         for event in testCase.events {
             switch event.e {
+            case "hold":
+                held = (sessions.baselineRequests, sessions.backgroundChecks(at: event.t))
+                log.append("\(event.t) hold baselines=\(held.baselines.count) checks=\(held.checks.count)")
+            case "late":
+                for r in held.baselines {
+                    sessions.setBaseline(ai: r.ai, id: r.id, pid: r.pid, probe: r.probe, processes: Self.processes(event.procs))
+                }
+                for c in held.checks {
+                    sessions.observe(ai: c.ai, id: c.id, pid: c.pid, probe: c.probe, processes: Self.processes(event.procs), at: event.t)
+                }
+                held = ([], [])
+                let next = sessions.nextBackgroundCheck.map(String.init) ?? "none"
+                log.append("\(event.t) late → \(describe(sessions, at: event.t)) next=\(next)")
             case "msg":
                 let message = AgentHookMessage(ai: AgentKind(rawValue: event.ai!)!, event: AgentHookEvent(rawValue: event.ev!)!,
                                                need: event.need.flatMap(AgentNeed.init(rawValue:)), session: event.sid!,
@@ -105,13 +120,13 @@ import Testing
                            + (wants.isEmpty ? "" : " baseline? \(wants.joined(separator: ","))"))
             case "baseline":
                 for request in sessions.baselineRequests {
-                    sessions.setBaseline(ai: request.ai, id: request.id, pid: request.pid, processes: Self.processes(event.procs))
+                    sessions.setBaseline(ai: request.ai, id: request.id, pid: request.pid, probe: request.probe, processes: Self.processes(event.procs))
                 }
                 log.append("\(event.t) baseline → \(describe(sessions, at: event.t))")
             case "procs":
                 let due = sessions.backgroundChecks(at: event.t)
                 for check in due {
-                    sessions.observe(ai: check.ai, id: check.id, pid: check.pid, processes: Self.processes(event.procs), at: event.t)
+                    sessions.observe(ai: check.ai, id: check.id, pid: check.pid, probe: check.probe, processes: Self.processes(event.procs), at: event.t)
                 }
                 let next = sessions.nextBackgroundCheck.map(String.init) ?? "none"
                 log.append("\(event.t) procs checked=\(due.count) → \(describe(sessions, at: event.t)) next=\(next)")

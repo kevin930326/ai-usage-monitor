@@ -166,11 +166,11 @@ internal sealed class AgentMonitor : IDisposable
                 foreach (var (r, start, processes) in taken)
                 {
                     if (start is { } t) aiStarts[r.Pid] = t;
-                    Sessions.SetBaseline(r.Ai, r.Id, r.Pid, processes);
+                    Sessions.SetBaseline(r.Ai, r.Id, r.Pid, r.Probe, processes);
                 }
                 var now = Now;
                 var different = false;
-                foreach (var (c, processes) in seen) different |= Sessions.Observe(c.Ai, c.Id, c.Pid, processes, now);
+                foreach (var (c, processes) in seen) different |= Sessions.Observe(c.Ai, c.Id, c.Pid, c.Probe, processes, now);
                 // 已經沒有工作階段用的 AI 程序不必再記
                 var live = Sessions.Ordered(now).Select(s => s.Pid).ToHashSet();
                 aiStarts = aiStarts.Where(kv => live.Contains(kv.Key)).ToDictionary();

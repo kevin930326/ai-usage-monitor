@@ -274,6 +274,8 @@ public struct AgentSession: Sendable, Equatable {
     public var wantsBaseline = false
     /// 下一次看背景工作的時間；nil 是不看
     public var checkAt: Int64? = nil
+    /// 拍基準與看背景工作的排程序號：事件重排或取消時加一，非同步回來的舊結果序號不同就不套用（Codex C-01）
+    public var probe: Int64 = 0
     /// 上一次看到、不在基準裡的子孫程序（候選）。新回合開始時不併進基準（Fable F-06）
     public var pending: Set<AgentProcess> = []
     /// 候選第一次出現的時間；30 分鐘上限從這裡起算
@@ -374,6 +376,9 @@ public struct AgentSessions: Sendable, Equatable {
     /// 背景工作的記錄（ADR-0017 第 7 節）：回合開始拍基準（候選不併進去）；每一次主回合 Stop 後 3 秒看一次（Stop→Stop 也重排，Fable F-07）；
     /// 其他改變狀態的事件（工作中、需要你、出錯、中斷、新開始）都不看、不顯示背景（Fable F-13）。候選與它的起始時間跨回合保留
     static func trackBackground(_ session: inout AgentSession, event: AgentHookEvent, sub: Bool, changed: Bool, at now: Int64) {
+        // 重排或取消了（新回合一律重拍基準）：還在路上的舊結果作廢
+        let scheduled = (session.wantsBaseline, session.checkAt)
+        defer { if event == .userPromptSubmit || (session.wantsBaseline, session.checkAt) != scheduled { session.probe += 1 } }
         if event == .userPromptSubmit {
             session.baseline = nil
             session.wantsBaseline = session.pid > 0
@@ -467,21 +472,22 @@ public struct AgentSessions: Sendable, Equatable {
     // MARK: 背景工作（ADR-0017 第 7 節）
 
     /// 要拍基準的工作階段（AI、ID、AI 程序的 PID）
-    public var baselineRequests: [(ai: AgentKind, id: String, pid: Int32)] {
-        sessions.filter { $0.wantsBaseline && $0.pid > 0 }.map { ($0.ai, $0.id, $0.pid) }
+    public var baselineRequests: [(ai: AgentKind, id: String, pid: Int32, probe: Int64)] {
+        sessions.filter { $0.wantsBaseline && $0.pid > 0 }.map { ($0.ai, $0.id, $0.pid, $0.probe) }
     }
 
     /// 拍好的基準（`processes` 是 AI 程序底下所有子孫程序；nil 是 AI 程序已經不在）
-    public mutating func setBaseline(ai: AgentKind, id: String, pid: Int32, processes: Set<AgentProcess>?) {
-        guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }), sessions[i].wantsBaseline else { return }
+    public mutating func setBaseline(ai: AgentKind, id: String, pid: Int32, probe: Int64, processes: Set<AgentProcess>?) {
+        guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }), sessions[i].wantsBaseline,
+              sessions[i].probe == probe else { return }
         sessions[i].wantsBaseline = false
         // 上一回合留下、還在跑的候選不算常駐（Fable F-06）
         sessions[i].baseline = Set((processes ?? []).subtracting(sessions[i].pending).sorted().prefix(Self.maxProcesses))
     }
 
     /// 到時間要看背景工作的工作階段
-    public func backgroundChecks(at now: Int64) -> [(ai: AgentKind, id: String, pid: Int32)] {
-        sessions.filter { s in s.pid > 0 && s.checkAt.map { $0 <= now } ?? false }.map { ($0.ai, $0.id, $0.pid) }
+    public func backgroundChecks(at now: Int64) -> [(ai: AgentKind, id: String, pid: Int32, probe: Int64)] {
+        sessions.filter { s in s.pid > 0 && s.checkAt.map { $0 <= now } ?? false }.map { ($0.ai, $0.id, $0.pid, $0.probe) }
     }
 
     /// 下一次要看背景工作的時間（所有工作階段中最早的）；沒有就是 nil，App 不排計時器
@@ -492,9 +498,9 @@ public struct AgentSessions: Sendable, Equatable {
     /// 看了 AI 程序底下的子孫程序（nil 是 AI 程序已經不在）。扣掉基準還有剩的是候選：和上一次的候選有重疊就是背景執行中，
     /// 第一次看到的 20 秒後再確認。沒有候選了就離開，睡覺倒數從這一刻重新起算。候選出現超過 30 分鐘把剩下的併進基準。回傳是否有改變
     @discardableResult
-    public mutating func observe(ai: AgentKind, id: String, pid: Int32, processes: Set<AgentProcess>?, at now: Int64) -> Bool {
+    public mutating func observe(ai: AgentKind, id: String, pid: Int32, probe: Int64, processes: Set<AgentProcess>?, at now: Int64) -> Bool {
         guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }),
-              sessions[i].checkAt != nil else { return false }
+              sessions[i].checkAt != nil, sessions[i].probe == probe else { return false }
         let before = sessions[i]
         var s = sessions[i]
         let fresh = processes.map { $0.subtracting(s.baseline ?? []) } ?? []

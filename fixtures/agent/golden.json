@@ -1178,6 +1178,36 @@
         "90000 claude Interrupt → top=claude/a1b2 [claude/a1b2/proj:waiting@90000]",
         "103000 procs checked=0 → top=claude/a1b2 [claude/a1b2/proj:waiting@90000] next=none"
       ]
+    },
+    {
+      "name" : "background-late-empty-result-keeps-new-check",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 hold baselines=0 checks=1",
+        "65000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@68000]",
+        "65100 late → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@68000] next=68000",
+        "68000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@88000] next=88000",
+        "88000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@108000] next=108000"
+      ]
+    },
+    {
+      "name" : "background-late-baseline-from-old-turn-ignored",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2050 hold baselines=1 checks=0",
+        "2500 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@2500] baseline? claude/a1b2",
+        "3000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@3000] baseline? claude/a1b2",
+        "3100 late → top=claude/a1b2 [claude/a1b2/proj:working@3000] next=none",
+        "3200 baseline → top=claude/a1b2 [claude/a1b2/proj:working@3000]",
+        "4000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@4000 check@7000]",
+        "7000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@4000 check@27000] next=27000",
+        "27000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@4000 check@47000] next=47000"
+      ]
     }
   ]
 }
