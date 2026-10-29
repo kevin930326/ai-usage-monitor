@@ -5,6 +5,12 @@
 - 啟動其他程式（Process.Start、ProcessStartInfo）只能在 SystemServices.cs（觸發收集器的 schtasks.exe）
 - App、UsageCore 與 hook（AumHook，ADR-0019）不得有 PackageReference（不帶第三方程式）
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
+- 唯一的例外（2026-10-29，ADR-0015 第 2 節）：事故頁連結。網址只能出現在 UsageCore/IncidentLink.cs，而且只能是
+  https://status.claude.com/incidents/、https://status.openai.com/incidents/ 兩個前綴；用預設瀏覽器打開
+  （UseShellExecute 不是 false）只能在 AIUsageMonitor.Windows/SystemServices.cs 的 IncidentPage 裡出現一次，而且要經過
+  IncidentLink.Link 檢查
+- 這是擋誤用的靜態檢查，不追資料流：SystemServices.cs 裡用 explorer.exe 開網址、IncidentPage 裡把沒檢查過的字串交給
+  ShellExecute、用字串串接組出網址，都要靠 code review 擋（ADR-0015 第 2 節）
 - 傳入 Release 版的執行檔（--release <資料夾>）時，另外確認不含 Debug 專用的字串（示範資料、截圖參數）
 
 用法：python3 windows/tools/check-no-network.py [--release <publish 資料夾>] [--root <windows 資料夾>（測試用）]
@@ -29,7 +35,13 @@ FORBIDDEN = [
     r"CompositionTarget\.Rendering",
 ]
 PROCESS = re.compile(r"\bProcess\.Start\b|\bProcessStartInfo\b|\bShellExecute")
-PROCESS_ALLOWED = {"SystemServices.cs"}
+PROCESS_ALLOWED = ("AIUsageMonitor.Windows", "SystemServices.cs")
+# 事故頁連結的例外：只有這個檔案可以寫網址，而且只能是這兩個前綴
+URL_ALLOWED_FILE = ("UsageCore", "IncidentLink.cs")
+URL_ALLOWED = ("https://status.claude.com/incidents/", "https://status.openai.com/incidents/")
+URL = re.compile(r"(?i:https?://)")
+# 用預設程式打開：UseShellExecute 只要不是寫明 = false 都算
+SHELL_OPEN = re.compile(r"\bUseShellExecute\b(?!\s*=\s*false\b)")
 # Release 版不該有的字串（DebugTools.cs 的參數與示範資料）；.NET 的字串以 UTF-16LE 存放
 DEBUG_STRINGS = ["--render", "--demo", "aum-demo-", "DebugTools", "DemoJson"]
 
@@ -40,6 +52,11 @@ _TOKENS = re.compile(r'("""[\s\S]*?"""|@"(?:[^"]|"")*"|"(?:\\.|[^"\\\n])*"|\'(?:
 
 def strip_comments(text: str) -> str:
     return _TOKENS.sub(lambda m: m.group(1) or "", text)
+
+
+def strip_strings(text: str) -> str:
+    """連字串一起拿掉，只留程式碼（找類別名稱與呼叫時，不被字串內容騙）"""
+    return _TOKENS.sub(lambda m: '""' if m.group(1) else "", text)
 
 
 def check_sources(root: Path = ROOT) -> list[str]:
@@ -54,10 +71,26 @@ def check_sources(root: Path = ROOT) -> list[str]:
                 # XML 命名空間是識別字、不會連線
                 code = re.sub(r'xmlns(?::\w+)?="[^"]*"', "", code)
             rel = path.relative_to(root.parent)
+            url_ok = path.parts[-2:] == URL_ALLOWED_FILE
             for pattern in FORBIDDEN:
                 for m in re.finditer(pattern, code):
+                    # 網址要剛好是前綴、字串在這裡結束（不能在後面接路徑）
+                    if url_ok and pattern == r"(?i:https?://)" and code.startswith(tuple(u + '"' for u in URL_ALLOWED), m.start()):
+                        continue
                     problems.append(f"{rel}: 不允許 {m.group(0)}")
-            if path.suffix == ".cs" and path.name not in PROCESS_ALLOWED and PROCESS.search(code):
+            system_services = path.parts[-2:] == PROCESS_ALLOWED
+            if path.suffix == ".cs":
+                bare = strip_strings(raw)
+                opens = list(SHELL_OPEN.finditer(bare))
+                if opens and not system_services:
+                    problems.append(f"{rel}: 只有 SystemServices.cs 的 IncidentPage 可以用預設程式打開（UseShellExecute）")
+                elif len(opens) > 1:
+                    problems.append(f"{rel}: UseShellExecute 只能出現一次（IncidentPage）")
+                elif opens:
+                    start = bare.find("class IncidentPage")
+                    if start < 0 or opens[0].start() < start or "IncidentLink.Link(" not in bare[start:]:
+                        problems.append(f"{rel}: UseShellExecute 只能在 IncidentPage 裡、經過 IncidentLink.Link 檢查")
+            if path.suffix == ".cs" and not system_services and PROCESS.search(code):
                 problems.append(f"{rel}: 只有 SystemServices.cs 可以啟動其他程式")
             if path.suffix == ".csproj" and "PackageReference" in code:
                 problems.append(f"{rel}: 不允許 PackageReference（App 與 UsageCore 不帶第三方套件）")

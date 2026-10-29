@@ -29,6 +29,7 @@ internal sealed class PanelWindow : Window
 
     public event Action? RefreshRequested;
     public event Action? SettingsRequested;
+    public event Action<string>? IncidentRequested;
     public event Action? QuitRequested;
 
     public PanelWindow(PanelModel model, Palette palette)
@@ -86,6 +87,7 @@ internal sealed class PanelWindow : Window
         var next = new PanelContent(model, palette);
         next.RefreshRequested += () => RefreshRequested?.Invoke();
         next.SettingsRequested += () => SettingsRequested?.Invoke();
+        next.IncidentRequested += url => IncidentRequested?.Invoke(url);
         next.QuitRequested += () => QuitRequested?.Invoke();
         content = next;
         Content = new System.Windows.Controls.ScrollViewer

@@ -177,9 +177,12 @@ internal sealed class UsageStore : IDisposable
 internal static class AppLog
 {
     private const long MaxBytes = 256 * 1024;
+    // 事故頁在背景執行緒打開，失敗時也會寫日誌
+    private static readonly object Gate = new();
 
     public static void Write(string message)
     {
+        lock (Gate)
         try
         {
             var path = DataPaths.Log;
