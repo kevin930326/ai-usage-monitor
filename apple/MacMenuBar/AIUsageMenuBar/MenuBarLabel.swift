@@ -220,7 +220,8 @@ enum MenuBarIcon {
     /// 角色樣式（ADR-0016）：靜止的迷你角色（不動、不眨眼），額度用眼睛的形狀表示（同瀏海面板，沒有狀態點）：
     /// 正常膠囊、剩不到 20% 或預測會用完小圓點、用完 ×、事故半閉眼加冷汗、過期閉眼並轉灰，不只靠顏色；
     /// 表情和瀏海用同一個 `MascotMood`。用得太快右上角加提示色小點。
-    /// 選了外觀時用外觀的靜態畫面（ADR-0021）：三階的直接換色，其他的照瀏海的畫法；資料過期時仍是灰白
+    /// 選了外觀時用外觀的靜態畫面（ADR-0021 第 5 節）：三階的直接換色，格子類特效（LED、像素、ASCII）改用主色三階的實心球加正常眼睛，
+    /// 其他的照瀏海的畫法；資料過期時仍是灰白
     private static func drawCharacter(_ c: MenuBarIconContent, character: MascotCharacter, look: MascotLook?) -> NSImage {
         let palette = MascotController.shared.baseConfig?.palette
         func color(_ rgb: [Double]?, _ fallback: NSColor) -> NSColor {
@@ -228,12 +229,16 @@ enum MenuBarIcon {
             return NSColor(srgbRed: rgb[0] / 255, green: rgb[1] / 255, blue: rgb[2] / 255, alpha: 1)
         }
         let stale = c.state == .stale
-        let look = stale ? nil : look
+        let chosen = stale ? nil : look
+        // 格子類特效：主色三階（`effectTint`，同瀏海的手與像素明暗）當成單色外觀畫，眼睛用預設的深色
+        let gridTones = chosen.flatMap { $0.style.isGrid ? $0.effectTint : nil }
+        let look = gridTones == nil ? chosen : nil
         let tint = palette.map { stale ? $0.white : character.tint($0) }
         let fallback = NSColor(UsageColors.provider(character.provider))
         let solid = look?.style == .solid
-        let light = color(solid ? look?.light : tint?.light, fallback), mid = color(solid ? look?.mid : tint?.mid, fallback)
-        let shade = color(solid ? look?.shade : tint?.shade, fallback)
+        let light = color(gridTones?.light ?? (solid ? look?.light : tint?.light), fallback)
+        let mid = color(gridTones?.mid ?? (solid ? look?.mid : tint?.mid), fallback)
+        let shade = color(gridTones?.shade ?? (solid ? look?.shade : tint?.shade), fallback)
         let mood = c.mood
         let eyes: CharacterIconEyes = switch mood {
         case .stale: .closed
