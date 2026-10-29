@@ -93,10 +93,11 @@ struct MascotPainter {
     }
 
     /// 身體只會平移（沒有晃動、發抖、敲鍵盤、揮手、呼吸、手），身體也不跟著視線變（格子、線框的身體會）：
-    /// 可以把身體畫成固定的圖、只重畫臉
+    /// 可以把身體畫成固定的圖、只重畫臉。鍵盤、前面的手與冷汗原本畫在眼睛上面，拆開後會被臉蓋住，所以也不拆（Fable G2-06）
     static func bodyIsRigid(_ frame: MascotFrame) -> Bool {
         let h = frame.pose
-        let still = [MascotProp.sway, .shiver, .type, .wave, .breathe, .hands].allSatisfy { abs(h[$0]) < 0.0001 }
+        let still = [MascotProp.sway, .shiver, .type, .wave, .breathe, .hands, .kb].allSatisfy { abs(h[$0]) < 0.0001 }
+            && !frame.mood.sweat
         let faceless = frame.look.map { !$0.style.isGrid && $0.style != .wire } ?? true
         // 特效外觀在動（霓虹的呼吸）時身體每格都不一樣
         let frozen = frame.effectTime == nil || frame.look?.style.animates != true

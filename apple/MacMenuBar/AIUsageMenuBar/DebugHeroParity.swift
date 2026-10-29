@@ -42,6 +42,8 @@ enum DebugHeroParity {
             }
             for mood in MascotMood.allCases where mood != .normal {
                 cases.append(("\(side)-mood-\(mood.rawValue)", frame(.claude, look: nil, gaze: (0.3, -0.1), mood: mood), box))
+                // 視線轉到最旁邊：冷汗這類畫在眼睛上面的東西和眼睛重疊時，疊放順序也要一樣（Fable G2-06）
+                cases.append(("\(side)-mood-\(mood.rawValue)-side", frame(.claude, look: nil, gaze: (0.6, -0.3), mood: mood), box))
             }
             for look in looks {
                 cases.append(("\(side)-look-\(look.id)", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400), box))
