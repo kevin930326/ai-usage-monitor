@@ -202,7 +202,10 @@ class IncidentsTest(unittest.TestCase):
         result = service_status.parse_incidents("codex", data)
         self.assertEqual([i["name"] for i in result],
                          ["Degraded performance in ChatGPT and Codex", "Increased latency in ChatGPT and the API"])
-        self.assertTrue(all("ChatGPT" in i["name"] for i in data["incidents"][:3]))
+        chatgpt_only = [i["name"] for i in data["incidents"] if i["status"] != "resolved" and "ChatGPT" in i["name"]
+                        and not service_status.INCIDENT_NAME["codex"].search(i["name"])]
+        self.assertEqual(len(chatgpt_only), 3)  # fixture 裡確實有被排除的 ChatGPT 事故
+        self.assertTrue(all(i["components"] == [] for i in data["incidents"]))
 
     def test_names_drop_control_and_format_characters(self):
         data = {"incidents": [incident("01J", "Codex\u202e errors\u200b\x00\n now")]}

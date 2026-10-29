@@ -92,6 +92,7 @@ powershell -ExecutionPolicy Bypass -File windows\uninstall-task.ps1
 
 ## 限制
 
+- **WSL 裡的 AI 不會被偵測**：WSL 裡的 Claude Code、Codex 用 Linux 那側的 `~/.claude`、`~/.codex`。App 的「連接」只改 Windows 這側的設定檔，不會出現在圓環的 AI 狀態；Token 統計預設也只讀 Windows 這側（指到 `\\wsl$` 沒有測試過、不支援）。WSL 與 Windows 共用 `.claude` 資料夾時，WSL 裡會跑不起 Windows 格式的 hook 指令並顯示 hook 錯誤（[ADR-0019](adr/0019-windows-agent-state-and-sync.md) 第 1 節）。
 - 只在使用者登入時執行（不存密碼）；登出或關機時不統計，下次登入後補上新紀錄（讀取位置記在資料庫）。
 - 排程的 Python 路徑固定為安裝時找到的那一個；升級 Python（路徑改變）後重新執行 `install-task.ps1`。
 - 長路徑：Claude Code 的紀錄路徑包含專案資料夾的完整路徑（`%USERPROFILE%\.claude\projects\<整個專案路徑>\…`），深層的專案很容易超過 260 個字元。沒有開啟 Windows 的長路徑支援（python.org 安裝程式最後的「Disable path length limit」，或群組原則「啟用 Win32 長路徑」）時，這些紀錄檔讀不到、**不會記錄在日誌**，Token 會少算。

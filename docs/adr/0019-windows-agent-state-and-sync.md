@@ -41,7 +41,7 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
   其次使用者資料夾的 `.claude`／`.codex`（F-17）。隔離模式（`--isolated`，測試、截圖、效能量測）一律用資料夾裡的假使用者資料夾。
   C# 的 `JsonObject` 保留鍵順序，但縮排會變成兩格；設定頁說明。
 - 「需要修好」：設定裡的路徑不是目前 App 資料夾的 `aum-hook.exe`，或那個檔案不在。
-- **WSL 裡跑的 AI 不會被偵測**（2026-10-29 使用者決定不支援）：WSL 裡的 Claude Code、Codex 讀的是 Linux 那側的 `~/.claude`、`~/.codex`，「連接」只改 Windows 這側的設定檔，WSL 裡的 AI 不會執行 `aum-hook.exe`，圓環看不到它們的狀態；收集器的 Token 統計預設也只讀 Windows 這側的對話紀錄（`config.json` 的 `claude_config_dir`／`codex_home` 沒有指到 WSL 時）。要支援得在 WSL 裡另裝 Linux 版 hook，再跨過 VM 邊界把事件送進 Windows（`\\wsl$` 檔案或網路），維護與隱私成本不值得。README 的「已知取捨」寫明。
+- **WSL 裡跑的 AI 不會被偵測**（2026-10-29 使用者決定不支援）：WSL 裡的 Claude Code、Codex 讀的是 Linux 那側的 `~/.claude`、`~/.codex`，「連接」只改 Windows 這側的設定檔，App 不替 WSL 寫設定檔、狀態檢查也只看 Windows 這側，也不去 `\\wsl$` 偵測，所以 WSL 裡的 AI 不會出現在圓環上；收集器的 Token 統計預設也只讀 Windows 這側的對話紀錄（把 `claude_config_dir`／`codex_home` 指到 `\\wsl$` 沒有測試過、不支援）。技術上 WSL 可以透過 interop 直接執行 `/mnt/c/…/aum-hook.exe`，但那要使用者自己改 WSL 裡的設定檔，路徑、引號與 hook 失敗時的行為都沒驗證，App 不替你裝、也不保證。WSL 與 Windows 共用同一個 `.claude` 資料夾（符號連結到 `/mnt/c/Users/…/.claude`）時，WSL 裡的 Claude Code 會讀到 Windows 格式的指令而跑不起來，顯示 hook 錯誤（Windows 的指令沒有 Mac 那樣的 `|| true`）；這也是不支援的範圍。README 的「已知取捨」與 `docs/windows.md` 的「限制」寫明。
 
 **傳送**（ADR-0017「hook 寫檔、App 監看資料夾」原本不採用；Windows 例外，因為 ADR-0015 不准用 socket 與 named pipe，F-03）：
 
@@ -119,7 +119,7 @@ Python 不重算彙總：只確認 Swift、C# 產生的 summary 原樣通過 `re
 - Mac 瀏海：「AI 工作階段」分頁在這台的工作階段之後列出其他電腦（電腦圖示＋名稱、AI、狀態、工作階段數）；不改變收合時的外框與數量。
 - Windows 圓環：這台沒有要注意的時，顯示其他電腦的「需要你」（膠囊第二行「工作 PC：Codex 需要你」）。其他電腦的完成、出錯不上圓環：這裡看過也消不掉。
 - iPhone App：打開時與下拉更新時讀 `GET /agents/state`，首頁列出「其他電腦」；404 或逾時時不顯示這一區、不影響額度。
-  **小工具不顯示其他電腦的 AI 狀態**（2026-10-29 使用者決定，BACKLOG 標記不做）：小工具的時間軸由系統排程，約 15～60 分鐘才更新一次，顯示「需要你」這種幾分鐘內就過時的狀態只會誤導；要更即時就得讓小工具更常向中繼要資料，多耗電、多吃中繼的讀取額度，也擠掉小工具本來就小的額度空間。其他電腦的狀態只在 App 首頁（打開或下拉時讀）。
+  **小工具不顯示其他電腦的 AI 狀態**（2026-10-29 使用者決定，工作資料夾的 BACKLOG 標記不做）：小工具每 25 分鐘（資料過期時 60 分鐘）才重新整理，而且受 WidgetKit 每天的更新預算限制，顯示「需要你」這種幾分鐘內就過時的狀態只會誤導；要更即時就得讓小工具更常向中繼要資料，多耗電、多吃中繼的讀取額度，也擠掉小工具本來就小的額度空間。其他電腦的狀態只在 App 首頁（打開或下拉時讀）。
 
 ### 3. iPhone 沒有推播
 
