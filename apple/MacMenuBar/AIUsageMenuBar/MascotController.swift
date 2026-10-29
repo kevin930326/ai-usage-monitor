@@ -639,7 +639,8 @@ final class MascotController {
         // - 收合時 AI 工作中（`followsPointer`，2026-10-29 使用者決定）：視線轉回正前方就停住，敲鍵盤的循環才不會被打斷
         //   （視線在動時改由 SwiftUI 重畫，Core Animation 的那一輪會停）
         if var director, !director.machine.followsPointer || director.pose(at: time())[.follow] <= 0.01 {
-            if !director.machine.followsPointer, director.look(at: time(), dx: 0, dy: 0, threshold: 0.001) {
+            // 直接轉到正前方：平滑轉回的那一小段會讓循環晚一點才建（Fable F-04）
+            if !director.machine.followsPointer, director.look(at: time(), dx: 0, dy: 0, threshold: 0.001, snap: true) {
                 self.director = director
                 lastPointer = nil
                 refresh()
@@ -696,6 +697,8 @@ final class MascotController {
         body(&director)
         self.director = director
         refresh()
+        // 收合時工作結束、醒來：又要看游標了，馬上回到每秒 12 次（不等每秒 1 次的那一下，Fable F-05）
+        if gazeDozing, director.machine.followsPointer, director.pose(at: time())[.follow] > 0.01 { restartGaze() }
     }
 
     // MARK: - 到期與重畫頻率
