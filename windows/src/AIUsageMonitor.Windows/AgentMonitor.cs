@@ -28,7 +28,7 @@ internal sealed class AgentMonitor : IDisposable
     private long lastStateWrite;
     private const long StateRewriteMs = 5 * 60_000;
 
-    public AgentSessions Sessions { get; } = new(10 * 60_000);
+    public AgentSessions Sessions { get; } = new(AppSettings.DefaultSleepMinutes * 60_000L);
     /// <summary>其他電腦要顯示的狀態（30 分鐘內），依狀態排序</summary>
     public IReadOnlyList<RemoteAgent> Remote { get; private set; } = [];
     /// <summary>狀態變了（圓環與系統匣重畫）</summary>
@@ -144,16 +144,15 @@ internal sealed class AgentMonitor : IDisposable
         }
     }
 
-    /// <summary>使用者看過了（打開面板、點圓環）：完成未看與出錯變成等你</summary>
+    /// <summary>
+    /// 使用者看過了（打開面板、點圓環）：完成未看與出錯變成等你。只要有任何工作階段改變就寫 agent-state.json 並重畫：
+    /// 之前只在彙總是完成或出錯時才寫，同時有別的工作階段在工作中或需要你時，看過的不會同步出去（ADR-0017 第 9 節）
+    /// </summary>
     public void MarkSeen()
     {
-        var before = RingAgent.From(Sessions, Now);
-        Sessions.MarkSeen(Now);
-        if (before is { State: AgentState.Done or AgentState.Error })
-        {
-            WriteState(Now);
-            Changed?.Invoke();
-        }
+        if (!Sessions.MarkSeen(Now)) return;
+        WriteState(Now);
+        Changed?.Invoke();
     }
 
     /// <summary>通知設定改了：重新排下一次檢查</summary>

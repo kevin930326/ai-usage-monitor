@@ -351,6 +351,20 @@ public sealed class AgentWindowsTests : IDisposable
     private static AgentHookMessage Event(AgentHookEvent e, long t, AgentNeed? need = null, AgentKind ai = AgentKind.Claude) =>
         new(ai, e, need, "0123456789abcdef", t, "");
 
+    /// <summary>看過的回報有沒有改變：彙總是工作中（另一個工作階段在跑）時，完成的那個標成已看也要算改變（才會寫 agent-state.json）</summary>
+    [Fact]
+    public void MarkSeenReportsChangesEvenWhenAnotherSessionIsWorking()
+    {
+        var sessions = new AgentSessions(600_000);
+        sessions.Apply(Event(AgentHookEvent.UserPromptSubmit, 1), 1_000);
+        sessions.Apply(Event(AgentHookEvent.Stop, 2), 2_000);
+        sessions.Apply(new AgentHookMessage(AgentKind.Claude, AgentHookEvent.UserPromptSubmit, null, "fedcba9876543210", 3, ""), 3_000);
+        Assert.Equal(AgentState.Working, sessions.Top(4_000)!.State(4_000, sessions.IdleAfter));
+        Assert.True(sessions.MarkSeen(5_000));
+        Assert.Equal(0, sessions.Count(AgentState.Done, 5_000));
+        Assert.False(sessions.MarkSeen(6_000));
+    }
+
     [Fact]
     public void RingShowsOnlyWhatNeedsAttention()
     {

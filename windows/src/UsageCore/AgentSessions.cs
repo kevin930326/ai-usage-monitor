@@ -332,11 +332,16 @@ public sealed class AgentSessions(long idleAfter)
     }
 
     /// <summary>使用者看過了（展開或點角色）：完成未看與出錯都變成等你</summary>
-    public void MarkSeen(long now)
+    public bool MarkSeen(long now)
     {
+        var changed = false;
         for (var i = 0; i < sessions.Count; i++)
             if (sessions[i].Stored is AgentState.Done or AgentState.Error)
+            {
                 sessions[i] = sessions[i] with { Stored = AgentState.Waiting, Need = null, Since = now };
+                changed = true;
+            }
+        return changed;
     }
 
     /// <summary>時間經過：工作中或需要你太久沒事件變等你、太久沒事件的移除。回傳是否有改變</summary>
