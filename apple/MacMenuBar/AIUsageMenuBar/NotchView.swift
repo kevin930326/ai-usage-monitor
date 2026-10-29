@@ -34,8 +34,9 @@ struct NotchView: View {
                                 effectsLive: controller.effectsLive,
                                 effectClock: { controller.effectTime(at: $0) },
                                 motion: controller.motion,
-                                heroRate: rate == .idle || rate == .breathing || rate == .gaze || rate == .effect ? rate : nil,
-                                heroClock: { controller.time($0) })
+                                heroRate: rate == .idle || rate == .breathing || rate == .gaze || rate == .gazeOpen || rate == .effect ? rate : nil,
+                                heroClock: { controller.time($0) },
+                                liveGaze: { controller.liveGaze(at: $0) })
                 }
                 .overlay { NotchPulse(active: controller.pulsing, shape: collapsedShape) }
             }
@@ -370,6 +371,8 @@ struct NotchCanvas: View {
     /// 展開待著或睡著：只有角色以這個頻率重畫（時間由 `heroClock` 換算）；nil 時角色照 `time` 畫
     var heroRate: MascotRenderRate?
     var heroClock: ((Date) -> Int)?
+    /// 看滑鼠：每一格的最新視線（nil 時用 director 的）
+    var liveGaze: ((Int) -> (yaw: Double, pitch: Double)?)?
 
     var body: some View {
         let shape = director.panelShape(at: time)
@@ -489,7 +492,8 @@ struct NotchCanvas: View {
 
     private func frame(at time: Int, effectTime: Int? = nil) -> MascotFrame {
         let still = !motion.movesEyes
-        let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
+        // 視線讀 controller 的最新值：看滑鼠的高幀率期間 director 的快照不會更新（不重排 SwiftUI，ADR-0016 第 6 節）
+        let gaze = gazeOverride ?? (still ? (0, 0) : liveGaze?(time) ?? director.gaze(at: time))
         // 只有其他電腦在工作：泡泡旁畫小電腦；展開時、動畫「簡單」「關閉」時也看得出來（泡泡停在亮兩顆，不另外重畫；
         // 收合時的循環照時間亮，Fable G-11）
         let remote = director.machine.thinksRemotely || extras.staticRemote

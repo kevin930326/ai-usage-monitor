@@ -212,7 +212,11 @@ enum DebugTools {
             (close + 178, "notch-close-3", { mascot.closeNow() }),
             (close + 180, "collapsed-think", { mascot.mutate { $0.setBackground(true, at: mascot.time()) } }),
             (close + 200, "think-end", { mascot.mutate { $0.setBackground(false, at: mascot.time()) } }),
-            (close + 202, "exit", { exit(0) }),
+            // 展開、游標一直移動（看滑鼠的高幀率，跟著螢幕更新率，ADR-0016 第 6 節）；停下後回到低頻輪詢
+            (close + 202, "notch-reopen-4", { mascot.pointerEntered() }),
+            (close + 205, "gaze-move-open", { moving = true }),
+            (close + 220, "gaze-still-open", { moving = false }),
+            (close + 230, "exit", { exit(0) }),
         ])
     }
 
