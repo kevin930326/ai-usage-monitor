@@ -120,8 +120,10 @@ public class MascotSheetTests
     {
         Save(windows, macName);
         var macPath = Path.Combine(RepoRoot, "apple", "Snapshots", "mac", macName);
-        if (!File.Exists(macPath)) return;
+        // 基準缺了或讀不到就失敗：並排的對照圖一定要產生（Codex C-02）
+        Assert.True(File.Exists(macPath), $"找不到 Mac 的截圖基準 {macName}");
         using var mac = SKBitmap.Decode(macPath);
+        Assert.True(mac is not null, $"讀不到 Mac 的截圖基準 {macName}");
         using var both = new SKBitmap(mac.Width + 16 + windows.Width, Math.Max(mac.Height, windows.Height));
         using (var canvas = new SKCanvas(both))
         {
