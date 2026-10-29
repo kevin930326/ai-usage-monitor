@@ -14,6 +14,7 @@ from usage_collector import service_status
 from usage_collector.models import ProviderError
 
 NOW = datetime(2026, 10, 24, 3, 0, tzinfo=timezone.utc)
+STATUS_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "status"
 
 
 def summary(indicator="none", components=(), incidents=()):
@@ -194,6 +195,14 @@ class IncidentsTest(unittest.TestCase):
         data = {"incidents": [incident(f"01{n}", name) for n, name in enumerate(names)]}
         result = service_status.parse_incidents("codex", data)
         self.assertEqual([i["name"] for i in result], names[:2])
+
+    def test_chatgpt_only_incidents_do_not_count_for_codex(self):
+        """ADR-0018 第 4 節（2026-10-29 決定）：名稱只寫 ChatGPT 的事故不讓 Codex 生病；同時提到 Codex 或 API 的仍然算"""
+        data = json.loads((STATUS_FIXTURES / "openai-incidents.json").read_text(encoding="utf-8"))
+        result = service_status.parse_incidents("codex", data)
+        self.assertEqual([i["name"] for i in result],
+                         ["Degraded performance in ChatGPT and Codex", "Increased latency in ChatGPT and the API"])
+        self.assertTrue(all("ChatGPT" in i["name"] for i in data["incidents"][:3]))
 
     def test_names_drop_control_and_format_characters(self):
         data = {"incidents": [incident("01J", "Codex\u202e errors\u200b\x00\n now")]}

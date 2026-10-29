@@ -1,6 +1,6 @@
 # ADR-0017：用 hook 取得 AI 的確切狀態
 
-- 狀態：**已接受**（2026-10-28；Fable 5.1 對抗式審查 12 項全部處理，見 PR）
+- 狀態：**已接受**（2026-10-28；Fable 5.1 對抗式審查 12 項全部處理，見 PR）。2026-10-29 mascot3 修訂：「不做」寫明虛擬機與 WSL 裡的 AI 不偵測
 - 日期：2026-10-28
 - 相關：[ADR-0016](0016-mascot-character.md)（角色；本 ADR 取代它「看紀錄資料夾修改時間判斷工作中」的作法，沒接 hook 時才退回）、[ADR-0009](0009-local-history-and-token-stats.md)（本機紀錄）、[ADR-0015](0015-windows-desktop-app.md)（Windows 版，第 4 部分接上同一套）
 - 設計來源：工作資料夾 `design/mascot2-TASK.md` 第 1、2 部分；`design/mascot/RESEARCH-2026-10-28.md`
@@ -114,6 +114,7 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 - **不在瀏海上批准或拒絕指令。** 理由：(1) 要批准就得讓 hook 等 App 回覆，hook 會變成會卡住 AI 的雙向通道，違反「任何錯誤都不擋 AI」；(2) 同一使用者的任何程式都能連到 socket，批准功能會讓假事件變成假批准，最壞情況從「顯示錯」變成「替你按允許」；(3) Claude Code 與 Codex 自己的權限畫面會顯示完整的指令內容，瀏海為了隱私刻意不拿這些內容，沒有資訊就不該讓人做決定。
 - 不讀對話紀錄（`transcript_path`）判斷狀態。
 - 不在 hook 裡做網路請求、不寫檔。
+- **不偵測虛擬機、容器或 Windows 的 WSL 裡跑的 AI**（2026-10-29 使用者決定）：hook 只裝進這台電腦本身的 `~/.claude/settings.json`、`~/.codex/hooks.json`；虛擬機、容器或 WSL 裡的 Claude Code、Codex 讀的是它們自己系統裡的設定檔，不會執行 `aum-hook`，也連不到 App 的 Unix socket，所以不會出現在瀏海上。Windows 的 WSL 見 [ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節；README「已知取捨」寫明。
 
 ## 考慮過的選項
 

@@ -1,0 +1,23 @@
+{
+  "page": {"id": "01FAKEPAGE", "name": "OpenAI", "url": "https://status.openai.com"},
+  "incidents": [
+    {"id": "01JCHATGPTONLY0001", "name": "ChatGPT unavailable for some users", "status": "investigating", "impact": "major",
+     "created_at": "2026-10-29T06:00:00.000Z", "started_at": "2026-10-29T05:58:00.000Z", "resolved_at": null,
+     "shortlink": "https://status.openai.com/incidents/01JCHATGPTONLY0001", "incident_updates": [{"body": "We are investigating."}]},
+    {"id": "01JCHATGPTONLY0002", "name": "Elevated errors for ChatGPT login", "status": "identified", "impact": "minor",
+     "created_at": "2026-10-29T06:10:00.000Z", "started_at": "2026-10-29T06:08:00.000Z", "resolved_at": null,
+     "shortlink": "https://status.openai.com/incidents/01JCHATGPTONLY0002", "incident_updates": [{"body": "A fix is being rolled out."}]},
+    {"id": "01JCHATGPTONLY0003", "name": "ChatGPT connectors degraded", "status": "monitoring", "impact": "minor",
+     "created_at": "2026-10-29T06:20:00.000Z", "started_at": "2026-10-29T06:20:00.000Z", "resolved_at": null,
+     "shortlink": "https://status.openai.com/incidents/01JCHATGPTONLY0003", "incident_updates": []},
+    {"id": "01JCHATGPTCODEX0004", "name": "Degraded performance in ChatGPT and Codex", "status": "investigating", "impact": "major",
+     "created_at": "2026-10-29T06:30:00.000Z", "started_at": "2026-10-29T06:29:00.000Z", "resolved_at": null,
+     "shortlink": "https://status.openai.com/incidents/01JCHATGPTCODEX0004", "incident_updates": [{"body": "Investigating."}]},
+    {"id": "01JCHATGPTAPI0005", "name": "Increased latency in ChatGPT and the API", "status": "identified", "impact": "minor",
+     "created_at": "2026-10-29T06:40:00.000Z", "started_at": "2026-10-29T06:40:00.000Z", "resolved_at": null,
+     "shortlink": "https://status.openai.com/incidents/01JCHATGPTAPI0005", "incident_updates": []},
+    {"id": "01JCODEXRESOLVED06", "name": "Codex tasks failing", "status": "resolved", "impact": "major",
+     "created_at": "2026-10-28T20:00:00.000Z", "started_at": "2026-10-28T20:00:00.000Z", "resolved_at": "2026-10-28T21:00:00.000Z",
+     "shortlink": "https://status.openai.com/incidents/01JCODEXRESOLVED06", "incident_updates": []}
+  ]
+}

@@ -1,6 +1,6 @@
 # ADR-0019：Windows 的 AI 狀態與跨裝置狀態
 
-- 狀態：**已接受**（2026-10-29；第二版，Fable 5.1 對抗式審查 17 項全部處理，見 PR）。第 1 節（Windows 的 hook）在 mascot2 第 4a 部分實作；第 2 節（跨裝置）在第 4b 部分
+- 狀態：**已接受**（2026-10-29；第二版，Fable 5.1 對抗式審查 17 項全部處理，見 PR）。第 1 節（Windows 的 hook）在 mascot2 第 4a 部分實作；第 2 節（跨裝置）在第 4b 部分。2026-10-29 mascot3 修訂：iPhone 小工具不顯示其他電腦（第 2 節）、WSL 不支援的範圍（第 1 節）
 - 日期：2026-10-29
 - 相關：ADR-0011（第二層、裝置密鑰）、ADR-0012（iPhone 配對）、ADR-0015（Windows App 不連網）、ADR-0016（角色）、ADR-0017（hook）
 
@@ -41,7 +41,7 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
   其次使用者資料夾的 `.claude`／`.codex`（F-17）。隔離模式（`--isolated`，測試、截圖、效能量測）一律用資料夾裡的假使用者資料夾。
   C# 的 `JsonObject` 保留鍵順序，但縮排會變成兩格；設定頁說明。
 - 「需要修好」：設定裡的路徑不是目前 App 資料夾的 `aum-hook.exe`，或那個檔案不在。
-- WSL 裡跑的 AI 不支援（設定檔在 Linux 側），寫進 BACKLOG。
+- **WSL 裡跑的 AI 不會被偵測**（2026-10-29 使用者決定不支援）：WSL 裡的 Claude Code、Codex 讀的是 Linux 那側的 `~/.claude`、`~/.codex`，「連接」只改 Windows 這側的設定檔，WSL 裡的 AI 不會執行 `aum-hook.exe`，圓環看不到它們的狀態；收集器的 Token 統計預設也只讀 Windows 這側的對話紀錄（`config.json` 的 `claude_config_dir`／`codex_home` 沒有指到 WSL 時）。要支援得在 WSL 裡另裝 Linux 版 hook，再跨過 VM 邊界把事件送進 Windows（`\\wsl$` 檔案或網路），維護與隱私成本不值得。README 的「已知取捨」寫明。
 
 **傳送**（ADR-0017「hook 寫檔、App 監看資料夾」原本不採用；Windows 例外，因為 ADR-0015 不准用 socket 與 named pipe，F-03）：
 
@@ -119,7 +119,7 @@ Python 不重算彙總：只確認 Swift、C# 產生的 summary 原樣通過 `re
 - Mac 瀏海：「AI 工作階段」分頁在這台的工作階段之後列出其他電腦（電腦圖示＋名稱、AI、狀態、工作階段數）；不改變收合時的外框與數量。
 - Windows 圓環：這台沒有要注意的時，顯示其他電腦的「需要你」（膠囊第二行「工作 PC：Codex 需要你」）。其他電腦的完成、出錯不上圓環：這裡看過也消不掉。
 - iPhone App：打開時與下拉更新時讀 `GET /agents/state`，首頁列出「其他電腦」；404 或逾時時不顯示這一區、不影響額度。
-  小工具不讀（實作時修訂：小工具空間小、更新間隔 15～60 分鐘，列進 BACKLOG）。
+  **小工具不顯示其他電腦的 AI 狀態**（2026-10-29 使用者決定，BACKLOG 標記不做）：小工具的時間軸由系統排程，約 15～60 分鐘才更新一次，顯示「需要你」這種幾分鐘內就過時的狀態只會誤導；要更即時就得讓小工具更常向中繼要資料，多耗電、多吃中繼的讀取額度，也擠掉小工具本來就小的額度空間。其他電腦的狀態只在 App 首頁（打開或下拉時讀）。
 
 ### 3. iPhone 沒有推播
 
@@ -141,7 +141,8 @@ Python 不重算彙總：只確認 Swift、C# 產生的 summary 原樣通過 `re
 - 不從 Windows App 直接連中繼或開 socket／named pipe（ADR-0015）。
 - 通知與圓環沒有核准／拒絕按鈕；不能從任何地方操作 AI。
 - 不在通知裡寫是哪台電腦的哪個資料夾。
-- 不支援 WSL 裡跑的 AI（BACKLOG）。
+- 不支援 WSL 裡跑的 AI（第 1 節；README「已知取捨」）。
+- iPhone 小工具不顯示其他電腦的 AI 狀態（第 2 節：更新間隔太長、耗電）。
 
 ## 影響
 
