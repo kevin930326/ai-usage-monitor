@@ -6,7 +6,7 @@
 
 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週）：iPhone 鎖定畫面的 Live Activity 與小工具、Apple Watch、Mac 選單列。Mac 面板另外顯示額度走勢、消耗熱力圖、這台 Mac 的 Token 統計與兩家服務的狀態。只用其中一個服務也可以。
 
-> 目前發布的版本是 [0.5.0](CHANGELOG.md#050---2026-10-21)（只有原始碼）。之後的 Mac 面板與 Token 統計（v1.5～v1.8）、iPhone 小工具，以及外觀設定、一鍵安裝、設定精靈與 iPhone 配對（v1.9）已在 `main`，**尚未發版**，見 [CHANGELOG](CHANGELOG.md) 的 Unreleased 與[里程碑](docs/03-development-workflow.md#1-里程碑)。下表標「未發版」的功能要從原始碼安裝。
+> 目前的版本是 [1.0.0](CHANGELOG.md#100---2026-10-29)：Mac 的 `.dmg`／一行指令、Windows 收集器的一行指令與 Windows 桌面 App 的 zip 都在 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases)。安裝見[安裝](#安裝)，各版本的變更見 [CHANGELOG](CHANGELOG.md)。
 
 <!-- 同一排的圖以寬度算成等高（SOURCES.tsv 的尺寸 × 寬度）；用 width 不用 height，窄螢幕時換行而不是壓扁 -->
 <p align="center">
@@ -27,6 +27,27 @@
   <img src="docs/images/watch-app.png" width="159" alt="Apple Watch App：剩餘最少的額度與各額度進度條">
 </p>
 
+瀏海與角色（Mac）：滑鼠移到瀏海展開（上），平常收在瀏海兩旁（下）。
+
+<p align="center">
+  <img src="docs/images/mac-notch.png" width="580" alt="Mac 瀏海展開的面板：左邊是角色與等級、連續天數，右邊是 Claude 與 Codex 各額度的剩餘與重置時間">
+</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-notch-collapsed-dark.png">
+    <img src="docs/images/mac-notch-collapsed-light.png" width="580" alt="收合的瀏海：左邊是迷你角色，右邊是剩最少額度的圓環與百分比">
+  </picture>
+</p>
+
+Windows 桌面 App 的懸浮圖示也可以是同一個角色，滑鼠移上去展開：
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-mascot-dark.png">
+    <img src="docs/images/windows-mascot-light.png" width="311" alt="Windows 的懸浮角色展開成膠囊：左邊是角色與等級，右邊是 Claude 與 Codex 每週額度的剩餘與重置時間">
+  </picture>
+</p>
+
 <details>
 <summary>看完整的 Mac 面板（接下來的重置、本週額度走勢、額度消耗、Token 統計、服務狀態）</summary>
 
@@ -39,16 +60,18 @@
 
 </details>
 
-截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
+截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`；Windows 是 CI 以 `--render` 產生），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
 
 ## 功能
 
 | 平台 | 功能 |
 |---|---|
-| iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）（未發版）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 %；外觀設定（跟隨系統、淺色、深色，只套用到 App）與掃描 Mac 上的 QR 碼配對（未發版）；主畫面的 Codex 區塊顯示重置次數卷的張數與最早到期日（未發版，要重新部署中繼） |
+| iPhone | 鎖定畫面與動態島的 Live Activity（剩餘最少的額度、各額度進度條、重置倒數、卡片上的「更新」按鈕）；捷徑動作「重新啟動用量監看」讓卡片整天顯示；主畫面小工具（小／中／大）與鎖定畫面小工具（圓形／矩形／單行）；過期資料轉灰、重置後顯示「已重置」；可切換顯示已用或剩餘 %；外觀設定（跟隨系統、淺色、深色，只套用到 App）與掃描 Mac 上的 QR 碼配對；主畫面的 Codex 區塊顯示重置次數卷的張數與最早到期日（要重新部署中繼） |
 | Apple Watch | 手錶 App 與錶面複雜功能（圓形、矩形、單行）；智慧型堆疊顯示 iPhone 的 Live Activity；設定由 iPhone 傳過來，手錶不需要輸入 |
-| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖；可切換是否含快取讀取）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；Codex 重置次數卷的張數與到期日（滑鼠移上去列出每張）；通知（剩不到 20%、用得太快、額度重置、重置卷 3 天內到期；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈。v1.5 以後的面板與這些功能都未發版 |
-| 收集器 | 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼。由 App 內建的背景收集器（未發版）或 `install-launchd.sh` 裝的 launchd 工作執行，兩者不會同時跑 |
+| Mac 選單列 | 選單列圖示（雙圓環）顯示剩餘最少的額度；卡片式面板：建議接下來用、各額度與「照目前速度」的預測、接下來的重置（8 小時時間軸與每週額度可撐到星期幾）、本週額度走勢、額度消耗熱力圖、這台 Mac 的 Token 統計（本週、單日最高、最長任務、連續天數、活動熱力圖；可切換是否含快取讀取）、服務狀態（分辨「服務異常」與「額度用完」）；完整統計視窗；Codex 重置次數卷的張數與到期日（滑鼠移上去列出每張）；通知（剩不到 20%、用得太快、額度重置、重置卷 3 天內到期；「剩不到 20%」與「重置卷快到期」預設開，其他預設關）；右鍵選單與全域快捷鍵；卡片可排序、收合、隱藏；外觀設定（跟隨系統、淺色、深色）；第一次打開時的設定精靈 |
+| Mac 瀏海與角色 | 滑鼠移到瀏海展開成面板：左邊是角色（Claude 或 Codex）、右邊是兩個服務的額度；收合時瀏海兩旁是迷你角色與剩最少額度的圓環。角色的表情跟著額度與服務狀態，AI 正在跑時敲鍵盤、閒著久了睡覺，點、捏、繞圈有反應，等級隨每天的 Token 成長；沒有瀏海的螢幕在選單列中間畫一個 |
+| Windows PC | 收集器統計這台 PC 的 Token；桌面 App 的懸浮圖示可選雙圓環或角色（和 Mac 瀏海同一個角色），點一下打開卡片式面板 |
+| 收集器 | 每 5 分鐘執行 Claude Code 的 `/usage` 與 Codex CLI 的 `app-server` 取得額度，寫本機快照、額度歷史與 Token 統計，並上傳精簡快照到你自己的中繼。由 App 內建的背景收集器或 `install-launchd.sh` 裝的 launchd 工作執行，兩者不會同時跑 |
 
 Token 統計：面板的統計卡片可切換全部、Claude、Codex，以及是否「含快取讀取」（預設不含；快取讀取是 AI 重複讀取的對話，通常佔總量的大部分）（左）；「完整統計」視窗看一整年、各模型與一天中的時段（右）。
 
@@ -133,17 +156,15 @@ SKIP_WINDOWS=1 scripts/verify-all.sh # 沒有 .NET SDK 時略過 Windows App 的
 
 ### 0. 只有 Mac
 
-> 還沒有發布含 `.dmg` 與 `install.sh` 的版本（Releases 上的 v0.5.0 只有原始碼），下面的「下載安裝」與一行指令要等下一次發布後才能用；在那之前請用最後的「從原始碼安裝」。
-
 **下載安裝**（不需要終端機、不需要自己裝 Python）：從 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 下載 `AIUsageMenuBar-<版本>.dmg`，把「AI 用量」拖到「應用程式」，第一次打開時到「系統設定 › 隱私權與安全性」按「強制打開」（App 用 ad-hoc 簽署，沒有 Apple 公證，見 [ADR-0013](docs/adr/0013-download-and-install.md)）。
 
-或用一行指令（會比對 SHA-256、裝到「應用程式」並打開，不會遇到 Gatekeeper 的「強制打開」）。指令指向固定版本，把 `X.Y.Z` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的版本號：
+或用一行指令（會比對 SHA-256、裝到「應用程式」並打開，不會遇到 Gatekeeper 的「強制打開」）。指令指向固定版本（下面是 1.0.0；之後的版本把 `1.0.0` 換成 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 上的版本號）：
 
 ```bash
-curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.sh | bash
 ```
 
-想先看過再執行：`curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh`，看完 `install.sh` 再 `bash install.sh`。install.sh 裡寫死了該版本 zip 的 SHA-256，下載後比對、不符就停止；它與 zip 來自同一個 Release，保護的是下載與快取途中的完整性，**不能**防止 Release 本身被替換（[ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)）。
+想先看過再執行：`curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.sh`，看完 `install.sh` 再 `bash install.sh`。install.sh 裡寫死了該版本 zip 的 SHA-256，下載後比對、不符就停止；它與 zip 來自同一個 Release，保護的是下載與快取途中的完整性，**不能**防止 Release 本身被替換（[ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)）。
 
 第一次打開會出現**設定精靈**，每一步顯示 ✅ 或要處理的事；需要指令時附「複製」按鈕。App 內建收集器（Python 已內嵌），會在背景每 5 分鐘收集一次；之後可以從「設定 › 一般 › 重新執行設定精靈」再打開。
 
@@ -211,16 +232,19 @@ cd ai-usage-monitor
 Windows 收集器統計這台 PC 上 Claude Code 與 Codex CLI 的 Token（預設不收集額度、不上傳）。開 PowerShell（不需要系統管理員）：
 
 ```powershell
-irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
+irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.ps1 | iex
 ```
 
-`X.Y.Z` 同樣換成 Releases 上的版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
+之後的版本同樣換掉版本號；想先看過：`irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.ps1 -OutFile install.ps1`，看完再執行。SHA-256 的保護範圍與 Mac 相同。
 
 沒有 Python 時會詢問是否用 winget 安裝；下載的檔案比對 SHA-256 後才安裝。細節、選項與限制見 [docs/windows.md](docs/windows.md)。要在 Mac 的面板看到所有電腦的合計，另外設定第二層：見 [docs/tier2-setup.md](docs/tier2-setup.md)。
 
-> 狀態：一行指令要等第一次發布後才能用，在那之前照 [docs/windows.md](docs/windows.md) 從原始碼安裝。
+**在 PC 上看額度（Windows 桌面 App）**：收集器要以 `-WithQuota` 安裝（[docs/windows.md](docs/windows.md)），App 才有額度資料。桌面上會有和 Mac 選單列相同的雙圓環或角色（可拖動、貼邊、全螢幕時隱藏），點一下打開卡片式面板；App 只讀本機的 `usage.json`、不連網。安裝方式選一個：
 
-**在 PC 上看額度（Windows 桌面 App）**：收集器以 `install-task.ps1 -WithQuota` 安裝後，從 repo 執行 `scripts\install-windows-app.ps1`，桌面上會有和 Mac 選單列相同的雙圓環（可拖動、貼邊、全螢幕時隱藏），點一下打開卡片式面板。App 只讀本機的 `usage.json`、不連網。細節與實機確認清單見 [windows/README.md](windows/README.md)（ADR-0015，目前是階段 1）。
+- **下載 zip**（不需要 .NET）：從 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases) 下載符合架構的 `AIUsageMonitor-windows-x64-1.0.0.zip`（ARM64 是 `-arm64-`），以 `Get-FileHash <zip> -Algorithm SHA256` 和 `SHA256SUMS-windows` 比對，解壓到固定的位置後打開 `AIUsageMonitor.exe`。沒有程式碼簽章，第一次打開會出現 SmartScreen，按「其他資訊」→「仍要執行」。
+- **從 repo 的腳本安裝**（會自動比對 SHA-256、更新時再執行一次）：在 repo 資料夾執行 `powershell -ExecutionPolicy Bypass -File scripts\install-windows-app.ps1 -FromRelease`；不加 `-FromRelease` 則用 .NET 10 SDK 從原始碼建置。
+
+細節與實機確認清單見 [windows/README.md](windows/README.md)（ADR-0015）。
 
 ### 解除安裝
 

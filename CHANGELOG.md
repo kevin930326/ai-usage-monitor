@@ -4,12 +4,17 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-29
+
+第一個附發布檔的版本：Mac App 的 `.dmg`／一行安裝、Windows 收集器的一行安裝與 Windows 桌面 App 的自含式 zip（見 README 的「安裝」）。
+
 ### Fixed
 - 瀏海角色（Fable 對抗審查）：「簡單」「關閉」時待著 10 秒不再畫出睡覺的 z；動畫時間改以開機時間計，系統時間倒退時不會凍住又以 60 fps 重畫；展開中換螢幕不再縮回瀏海（收合後才換版面）；示範模式不讀 config.json 的紀錄位置；工作中偵測同時只有一個列舉、收合後回來的舊結果直接丟掉；角色有 VoiceOver 描述（服務、工作中／睡著／待命、額度狀態）
 - 「所有電腦」與單一其他電腦的最長連續天數只算目前這段連續，過去較長、已結束的連續被漏掉：改成從每日資料（最近一年）找所有連續區段的最大值，跨電腦的日子合併計算。Mac（UsageKit）與 Windows（UsageCore）一起改，golden 新增「過去較長、現在較短」與跨裝置的情境。這台 Mac 仍以收集器的個人紀錄為準
 - Windows 收集器（`install-task.ps1 -WithQuota`）每 5 分鐘閃出空白主控台視窗：claude、codex 改在隱藏的主控台（`CREATE_NEW_CONSOLE`＋`SW_HIDE`）與自己的 process group 執行，它們再啟動的孫程序共用這個看不到的主控台；claude 逾時時也連同孫程序一起結束（Job Object）。macOS 與 Linux 不變
 
 ### Changed
+- 版本 1.0.0：Mac、iPhone、手錶 App 與收集器的版本號；README 拿掉「尚未發版」的說明與標記，安裝步驟指向 v1.0.0，加上 Windows 桌面 App 的 zip 與 `install-windows-app.ps1 -FromRelease`，新增瀏海角色與 Windows 角色的截圖
 - 發布（ADR-0013 第 7 節）：推 tag 時 workflow artifact 在草稿 Release 建好後就刪除（失敗或取消也刪）、只保留 1 天，公開時間從 14 天縮短到建置完成到草稿建立之間；pull_request 時以假的 artifact 乾跑刪除流程
 - 角色（mascot）的基礎（ADR-0016，提議中）：Mac（UsageKit）與 Windows（UsageCore）共用的動畫鎖與排隊狀態機（一次只播一個、按鈕與狀態觸發的排隊只留最後一個、手勢忙碌時忽略、短反應中連點 5 下插隊轉暈、模式與動畫分開），時間參數在 `shared/mascot-anim.json`，`fixtures/mascot` 的 golden 讓兩邊排出同樣的順序。畫面還沒有用到，App 外觀不變
 - Windows App 的 UsageCore（ADR-0015 第 4 節）：移植階段 2、3 的計算（近期速度與沒有紀錄的時段、建議接下來用、重置時間軸、每週預測、本週走勢、額度消耗、Token 統計含裝置範圍與含快取讀取、萬／億與時間長度），golden 新增 15 個額度情境（含美東、倫敦日光節約時間）與 5 個 Token 情境，C# 與 Swift 一致；新增唯讀讀取 `history.sqlite3` 的 `HistoryReader`（系統內建的 SQLite，每次讀完就關閉）。畫面還沒有用到，Windows App 的外觀不變
@@ -196,7 +201,8 @@
 - 需求規格、系統架構、開發流程文件
 - ADR-0001 中繼方案、ADR-0002 Live Activity 重開策略
 
-[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kevin930326/ai-usage-monitor/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.3.0...v0.5.0
 [0.3.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kevin930326/ai-usage-monitor/compare/v0.1.0...v0.2.0

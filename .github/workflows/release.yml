@@ -23,6 +23,11 @@ on:
       - scripts/package-windows.py
       - scripts/package-windows-app.py
       - apple/MacMenuBar/LaunchAgent/**
+      # 版本號與 Windows App 的專案、套件鎖定檔：改了就先確認發布建置會過（例如換版本號、加套件）
+      - apple/*/project.yml
+      - windows/Directory.Build.*
+      - windows/src/*/*.csproj
+      - windows/src/*/packages.lock.json
 
 permissions:
   contents: read

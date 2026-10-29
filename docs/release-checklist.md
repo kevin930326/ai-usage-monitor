@@ -12,8 +12,9 @@
 
 ## 2. 版本號
 
-- [ ] 決定版本號 `X.Y.Z`（Releases 上目前是 v0.5.0，只有原始碼）。
+- [ ] 決定版本號 `X.Y.Z`（1.0.0 之前 Releases 上只有原始碼的 v0.5.0）。
 - [ ] `apple/MacMenuBar/project.yml`、`apple/iOSApp/project.yml`、`apple/WatchApp/project.yml` 的 `MARKETING_VERSION` 改成 `X.Y.Z`（三個一致；`build-release.sh` 預設讀 Mac 的）。
+- [ ] `collector/usage_collector/__init__.py` 的 `__version__` 改成 `X.Y.Z`（收集器的 User-Agent 與 Codex `clientInfo`）。
 - [ ] Windows App 不用改：`scripts/package-windows-app.py` 以 `-p:Version=X.Y.Z` 建置，並檢查組件版本與 tag 相同。
 - [ ] `CHANGELOG.md`：`## [Unreleased]` 改成 `## [X.Y.Z] - YYYY-MM-DD`，上面留一個空的 `## [Unreleased]`。
 - [ ] README（英文與 `README.zh-TW.md`）裡「還沒有發布含 `.dmg` 與 `install.sh` 的版本」的提醒移除或改寫。

@@ -1,9 +1,9 @@
 // README 截圖的後製：裁切、縮放、圓角與細邊框（scripts/update-readme-images.sh 依 docs/images/SOURCES.tsv 呼叫）。
 //
 //   swiftc -O scripts/readme-image-post.swift -o build/readme-image-post
-//   build/readme-image-post <PNG 或 GIF> [crop=<y>:<高>] [width=<寬>] [frame=<圓角半徑>]
+//   build/readme-image-post <PNG 或 GIF> [crop=<y>:<高> 或 crop=<x>:<y>:<寬>:<高>] [width=<寬>] [frame=<圓角半徑>]
 //
-// 不管參數順序，一律先裁切（原圖像素，從頂端 y 起留下指定高度），再縮放到指定寬度（等比例），最後加框（縮放後的像素）。
+// 不管參數順序，一律先裁切（原圖像素，從頂端 y 起留下指定高度；四個數字時另外從左邊 x 起留下指定寬度），再縮放到指定寬度（等比例），最後加框（縮放後的像素）。
 // 框：圓角外變透明（GIF 改填 GitHub 頁面的底色，見 framed），沿圓角內緣畫寬度約 1 pt（寬度 ÷ 360，至少 1 像素）的邊框；
 // 圖的外圈偏亮時用淡黑色、偏暗時用淡白色，讓白底與深色底的畫面在 GitHub 的淺色與深色頁面上都有輪廓。
 // GIF 逐格處理，保留每格的停留時間與重複播放的設定。直接覆寫原檔。
@@ -14,7 +14,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 struct Options {
-    var crop: (y: Int, height: Int)?
+    var crop: (x: Int, y: Int, width: Int?, height: Int)?
     var width: Int?
     var frame: Double?
 }
@@ -32,8 +32,12 @@ func parse(_ args: ArraySlice<String>) -> Options {
         switch parts[0] {
         case "crop":
             let numbers = parts[1].split(separator: ":").compactMap { Int($0) }
-            guard numbers.count == 2, numbers[0] >= 0, numbers[1] > 0 else { fail("crop 要寫成 crop=<y>:<高>", 2) }
-            options.crop = (numbers[0], numbers[1])
+            switch numbers.count {
+            case 2 where numbers[0] >= 0 && numbers[1] > 0: options.crop = (0, numbers[0], nil, numbers[1])
+            case 4 where numbers[0] >= 0 && numbers[1] >= 0 && numbers[2] > 0 && numbers[3] > 0:
+                options.crop = (numbers[0], numbers[1], numbers[2], numbers[3])
+            default: fail("crop 要寫成 crop=<y>:<高> 或 crop=<x>:<y>:<寬>:<高>", 2)
+            }
         case "width":
             guard let width = Int(parts[1]), width > 0 else { fail("width 要是正整數", 2) }
             options.width = width
@@ -110,7 +114,7 @@ func framed(_ image: CGImage, radius: Double, light: Bool, opaque: Bool) -> CGIm
 }
 
 let arguments = CommandLine.arguments
-guard arguments.count >= 2 else { fail("用法：readme-image-post <PNG 或 GIF> [crop=<y>:<高>] [width=<寬>] [frame=<半徑>]", 2) }
+guard arguments.count >= 2 else { fail("用法：readme-image-post <PNG 或 GIF> [crop=<y>:<高> 或 <x>:<y>:<寬>:<高>] [width=<寬>] [frame=<半徑>]", 2) }
 let url = URL(fileURLWithPath: arguments[1])
 let options = parse(arguments.dropFirst(2))
 
@@ -123,9 +127,10 @@ var light: Bool?
 for index in 0..<count {
     guard var image = CGImageSourceCreateImageAtIndex(source, index, nil) else { fail("讀不到第 \(index + 1) 格", 3) }
     if let crop = options.crop {
-        guard crop.y + crop.height <= image.height,
-              let cropped = image.cropping(to: CGRect(x: 0, y: crop.y, width: image.width, height: crop.height)) else {
-            fail("裁切範圍超出圖片（高 \(image.height)）", 2)
+        let width = crop.width ?? image.width - crop.x
+        guard crop.y + crop.height <= image.height, crop.x + width <= image.width,
+              let cropped = image.cropping(to: CGRect(x: crop.x, y: crop.y, width: width, height: crop.height)) else {
+            fail("裁切範圍超出圖片（\(image.width)×\(image.height)）", 2)
         }
         image = cropped
     }

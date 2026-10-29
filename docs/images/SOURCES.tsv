@@ -1,8 +1,9 @@
 # README 截圖（docs/images/）的來源：scripts/update-readme-images.sh 依這張表產生，scripts/check-readme-images.py 依這張表檢查。
 # 欄位以 tab 分隔：圖片	來源	對應的截圖基準（apple/Snapshots/ 下；- 表示沒有）	寬度（像素；- 表示原尺寸）	後製（- 表示沒有）
-# 後製：crop=<y>:<高>＝從頂端 y 起裁切（原圖像素）；frame=<半徑>＝圓角與約 1 pt 的細邊框（縮放後的像素）。由 scripts/readme-image-post.swift 處理
+# 後製：crop=<y>:<高>＝從頂端 y 起裁切（原圖像素；crop=<x>:<y>:<寬>:<高> 另外左右裁切）；frame=<半徑>＝圓角與約 1 pt 的細邊框（縮放後的像素）。由 scripts/readme-image-post.swift 處理
 # 來源：mac:<檔名>＝Mac 的 ImageRenderer 輸出（AUM_RENDER_DIR）；ios:<檔名>＝iPhone 模擬器的 ImageRenderer 輸出（AUM_RENDER）；
-#       ios-screen:<home|settings>-<light|dark>＝iPhone 模擬器的截圖（App 主畫面、設定畫面）；watch-screen:app＝手錶模擬器的截圖
+#       ios-screen:<home|settings>-<light|dark>＝iPhone 模擬器的截圖（App 主畫面、設定畫面）；watch-screen:app＝手錶模擬器的截圖；
+#       win:<路徑>＝CI 的 windows-screens artifact（README_IMAGES_WIN_DIR）裡的圖
 # iPhone 的 Live Activity 卡片與小工具沒有放進 README：ImageRenderer 把 ProgressView 畫成黃色佔位符，只適合截圖比對。
 mac-panel-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-	frame=24
 mac-panel-top-light.png	mac:panel-light.png	apple/Snapshots/mac/panel-light.png	-	crop=0:1232 frame=24
@@ -22,3 +23,8 @@ iphone-island.png	ios:island-normal.png	apple/Snapshots/ios/island-normal.png	-	
 iphone-settings-pairing-light.png	ios-screen:settings-light	-	520	frame=72
 iphone-settings-pairing-dark.png	ios-screen:settings-dark	-	520	frame=72
 watch-app.png	watch-screen:app	-	-	frame=60
+mac-notch.png	mac:notch-level.png	apple/Snapshots/mac/notch-level.png	-	crop=20:60:1160:360 frame=40
+mac-notch-collapsed-light.png	mac:notch-menubar-light.png	apple/Snapshots/mac/notch-menubar-light.png	-	crop=20:64:1520:64 frame=12
+mac-notch-collapsed-dark.png	mac:notch-menubar-dark.png	apple/Snapshots/mac/notch-menubar-dark.png	-	crop=20:64:1520:64 frame=12
+windows-mascot-light.png	win:mascot/expand-right-light-light.png	-	-	frame=16
+windows-mascot-dark.png	win:mascot/expand-right-dark-dark.png	-	-	frame=16
