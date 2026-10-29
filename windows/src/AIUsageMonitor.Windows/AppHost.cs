@@ -34,6 +34,8 @@ internal sealed class AppHost : IDisposable
     private MascotLevel? level;
     private Dictionary<string, long> levelDays = [];
     private bool levelLoading;
+    /// <summary>面板是從系統匣打開的（等級卡片晚一點加進來、面板變高時，照同樣的方式重新放）</summary>
+    private bool panelFromTray;
     private bool disposed;
 
     public AppHost(Dispatcher dispatcher)
@@ -145,16 +147,25 @@ internal sealed class AppHost : IDisposable
         {
             var history = new HistoryReader(DataPaths.History).LocalLevelDays() ?? [];
             return MascotLevelLedger.Update(DataPaths.Level, MascotLevelLedger.Merge(known, history), today);
-        }).ContinueWith(task =>
+        }).ContinueWith(task => dispatcher.BeginInvoke(() =>
         {
+            // 回到 UI 執行緒用 AppHost 自己的 dispatcher，不靠呼叫端的 SynchronizationContext（Fable F-06）
             levelLoading = false;
-            if (task.IsCompletedSuccessfully)
+            if (!task.IsCompletedSuccessfully)
             {
-                levelDays = task.Result;
-                level = MascotLevel.From(levelDays, today);
+                AppLog.Write($"level load failed: {task.Exception?.InnerException?.GetType().Name}");
+                return;
             }
-            panel?.SetModel(Model);
-        }, TaskScheduler.FromCurrentSynchronizationContext());
+            levelDays = task.Result.Days;
+            // level.json 讀不到或寫不進去：只有歷史，可能比真正的等級低；已經有值時沿用（Fable F-08）
+            if (!task.Result.Saved && level is not null) return;
+            var hadCard = level is not null;
+            level = MascotLevel.From(levelDays, today);
+            if (panel is null) return;
+            panel.SetModel(Model);
+            // 等級卡片晚一點才加進來，面板變高：重新放，不讓它往下長出螢幕或蓋住工作列（Fable F-05）
+            if (!hadCard && level is not null) PlacePanel(panel, panelFromTray);
+        }));
     }
 
     /// <summary>外觀改變（設定或系統的深淺色）：圓環、系統匣、面板重畫；面板的材質在下次打開時套用</summary>
@@ -271,6 +282,7 @@ internal sealed class AppHost : IDisposable
         // 打開面板＝看過了：完成未看與出錯的徽章拿掉
         agents.MarkSeen();
         now = Clock.Now;
+        panelFromTray = fromTray;
         LoadLevel();
         var window = new PanelWindow(Model, AppPalette);
         window.RefreshRequested += () => _ = RefreshAsync();
@@ -295,6 +307,16 @@ internal sealed class AppHost : IDisposable
         window.ShowActivated = true;
         window.Show();
         window.UpdateLayout();
+        var hwnd = PlacePanel(window, fromTray);
+        window.Activate();
+        NativeMethods.SetForegroundWindow(hwnd);
+        window.PlayAppear();
+    }
+
+    /// <summary>量出面板的大小，放到圓環旁邊或系統匣的角落；回傳視窗代碼</summary>
+    private IntPtr PlacePanel(PanelWindow window, bool fromTray)
+    {
+        window.UpdateLayout();
         var hwnd = new WindowInteropHelper(window).Handle;
         NativeMethods.GetCursorPos(out var cursor);
         var monitor = NativeMethods.Monitor(fromTray || ring is null
@@ -315,9 +337,7 @@ internal sealed class AppHost : IDisposable
                 if (NativeMethods.WindowRect(hwnd) == target) break;
             }
         }
-        window.Activate();
-        NativeMethods.SetForegroundWindow(hwnd);
-        window.PlayAppear();
+        return hwnd;
     }
 
     private async System.Threading.Tasks.Task RefreshAsync()
