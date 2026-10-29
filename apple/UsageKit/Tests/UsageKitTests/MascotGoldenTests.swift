@@ -46,6 +46,8 @@ import Testing
     struct Final: Codable, Equatable {
         var open: Bool
         var mode: String
+        /// 臉跟著游標轉（`followsPointer`）
+        var follow: Bool
         var playing: String?
         var pending: String?
         var queued: String?
@@ -77,7 +79,7 @@ import Testing
         return Output(
             name: testCase.name,
             log: machine.log.map(\.description),
-            final: Final(open: machine.isOpen, mode: machine.mode.rawValue,
+            final: Final(open: machine.isOpen, mode: machine.mode.rawValue, follow: machine.followsPointer,
                          playing: machine.playing?.animation.rawValue, pending: machine.pending?.rawValue,
                          queued: machine.queued?.rawValue,
                          status: machine.statusLevel))

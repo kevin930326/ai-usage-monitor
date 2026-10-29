@@ -246,6 +246,8 @@ final class MascotController {
         if intro { playedIntro = true }
         director.open(at: time(), intro: intro)
         self.director = director
+        // 收合時工作中或睡著不看游標（每秒 1 次）：展開一律追，馬上恢復每秒 12 次
+        if gazeDozing { restartGaze() }
         if !PanelSettings.shared.notchHintShown { showsHint = true }
         let monitor = AgentMonitor.shared
         if monitor.sessions.count(.needsYou, at: monitor.now) > 0 { page = .agents }
@@ -632,8 +634,17 @@ final class MascotController {
     #endif
 
     private func pollPointer() {
-        // 睡著（臉不跟著轉）時不必看游標：降到每秒 1 次，醒來後恢復
-        if let director, director.pose(at: time())[.follow] <= 0.01 {
+        // 不追游標時不必看：降到每秒 1 次，恢復後回到每秒 12 次。
+        // - 收合時睡著（臉不跟著轉）
+        // - 收合時 AI 工作中（`followsPointer`，2026-10-29 使用者決定）：視線轉回正前方就停住，敲鍵盤的循環才不會被打斷
+        //   （視線在動時改由 SwiftUI 重畫，Core Animation 的那一輪會停）
+        if var director, !director.machine.followsPointer {
+            // 直接轉到正前方：平滑轉回的那一小段會讓循環晚一點才建（Fable F-04）
+            if director.look(at: time(), dx: 0, dy: 0, threshold: 0.001, snap: true) {
+                self.director = director
+                lastPointer = nil
+                refresh()
+            }
             if !gazeDozing {
                 gazeDozing = true
                 scheduleGaze(interval: 1)
@@ -652,6 +663,12 @@ final class MascotController {
         guard var director, let origin = NotchPanelController.shared.canvasOrigin() else { return }
         let t = time()
         let pose = director.pose(at: t)
+        // 姿勢暫時不看（反應、轉場中 `.follow` 為 0）：照樣每秒 12 次，轉回來就接著看
+        // （Codex C-02：以前這裡也降到每秒 1 次，工作結束後要等下一次才恢復）
+        guard pose[.follow] > 0.01 else {
+            lastPointer = nil
+            return
+        }
         // 畫布座標：左上為原點、y 往下；螢幕座標：左下為原點、y 往上。
         // 比較的是「游標相對角色」的位置：游標沒動但角色移動（展開、收合、換螢幕）時也會重新對準（Codex 第二輪 C-02）
         let dx = pointer.x - (origin.x + pose[.x])
@@ -686,6 +703,8 @@ final class MascotController {
         body(&director)
         self.director = director
         refresh()
+        // 收合時工作結束、醒來：又要看游標了，馬上回到每秒 12 次（不等每秒 1 次的那一下，Fable F-05）
+        if gazeDozing, director.machine.followsPointer { restartGaze() }
     }
 
     // MARK: - 到期與重畫頻率

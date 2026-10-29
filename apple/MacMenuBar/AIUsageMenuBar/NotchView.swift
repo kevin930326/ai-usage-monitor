@@ -224,7 +224,8 @@ struct NotchEffectHero: View {
 
 /// 收合時的動態（ADR-0021）：角色停在收合的位置，只有小範圍在動，所以預先畫好一輪、交給 Core Animation 循環播放。
 /// App 自己每一格都不用重畫（SwiftUI 每秒更新 12 次光是排版與送出就要約 3% CPU）。
-/// - AI 工作中：會動的特效照特效動；其他外觀是簡化的敲鍵盤（小手上下、身體輕晃）。每秒 12 格
+/// - AI 工作中：會動的特效照特效動；其他外觀是簡化的敲鍵盤（低頭、小手上下、身體輕晃）。所有外觀的右上方都有思考泡泡：
+///   三個小點約每 250 毫秒多亮一顆，三顆全亮後清空重來（一輪的長度要能整除，所以每一步是一輪的 1/4n，約 225～250 毫秒）。每秒 12 格
 /// - 睡著：慢慢的呼吸（約 4.4 秒一次）加一個飄起的小 z；特效停在那一格。每秒 4 格
 @MainActor
 enum MascotEffectLoop {
@@ -260,7 +261,7 @@ enum MascotEffectLoop {
         case .work:
             if let look = canvas.look, let effect = MascotLookRenderer.loopDuration(look, radius: base[.r] * base[.sc]) {
                 return Plan(length: effect, fps: 12, clock: effectTime(now) ?? 0, box: canvas.effectBox) {
-                    AnyView(canvas.effectFrame(effectTime: $0))
+                    AnyView(canvas.effectFrame(effectTime: $0, thinkingDots: MascotThinking.dots(at: $0, loop: effect)))
                 }
             }
             // 手放在身體前下方（同展開時敲鍵盤的位置），不畫鍵盤
@@ -268,7 +269,7 @@ enum MascotEffectLoop {
             let pose = base.with([.hands: 1, .type: 1, .sway: 0.5, .lx: w.left[0], .ly: w.left[1], .lz: w.left[2],
                                   .rx: w.right[0], .ry: w.right[1], .rz: w.right[2]])
             return Plan(length: typingMs, fps: 12, clock: now, box: canvas.effectBox) {
-                AnyView(canvas.effectFrame(effectTime: nil, pose: pose, time: $0))
+                AnyView(canvas.effectFrame(effectTime: nil, pose: pose, time: $0, thinkingDots: MascotThinking.dots(at: $0, loop: typingMs)))
             }
         case .sleep:
             let pose = base.with([.breathe: 1])
@@ -412,12 +413,14 @@ struct NotchCanvas: View {
     }
 
     /// 角色停在 `time`、特效在 `effectTime` 的那一格（`effectBox` 大小）。收合時的動態另外給姿勢、畫的時間與 z 的進度
-    func effectFrame(effectTime: Int?, pose: MascotPose? = nil, time drawTime: Int? = nil, dozeRise: Double? = nil) -> some View {
+    func effectFrame(effectTime: Int?, pose: MascotPose? = nil, time drawTime: Int? = nil, dozeRise: Double? = nil,
+                     thinkingDots: Int? = nil) -> some View {
         let box = effectBox
         var f = frame(at: time, effectTime: effectTime)
         if let pose { f.pose = pose }
         if let drawTime { f.time = drawTime }
         f.dozeRise = dozeRise
+        f.thinkingDots = thinkingDots
         return Canvas(rendersAsynchronously: false) { [f] canvas, _ in
             canvas.translateBy(x: -box.minX, y: -box.minY)
             MascotPainter(config: director.config).draw(f, in: &canvas, particles: false)

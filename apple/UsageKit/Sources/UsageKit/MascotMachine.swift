@@ -191,6 +191,10 @@ public struct MascotMachine: Sendable {
         self.statusLevel = statusLevel
     }
 
+    /// 臉跟著游標轉（ADR-0016 第 6 節，2026-10-29 使用者決定）：展開時一律追；收合時醒著沒事（待命、舉手）照舊追，
+    /// AI 工作中不追（低頭敲鍵盤的動畫才不會被打斷）、睡著不追
+    public var followsPointer: Bool { isOpen || (mode != .work && mode != .sleep) }
+
     public var isIntro: Bool { introUntil != nil }
     public var isBusy: Bool { playing != nil || restUntil != nil }
 

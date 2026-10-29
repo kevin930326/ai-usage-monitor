@@ -44,6 +44,7 @@ public class MascotGoldenTests
         }
         var final = new JsonObject
         {
+            ["follow"] = machine.FollowsPointer,
             ["mode"] = MascotNames.Name(machine.Mode),
             ["open"] = machine.IsOpen,
             ["status"] = machine.StatusLevel,

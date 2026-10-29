@@ -70,13 +70,13 @@ public struct MascotDirector: Sendable {
     public mutating func cheer(at time: Int, react: Bool = true) { apply { $0.cheer(at: time, react: react) } }
 
     /// 臉朝游標轉（`dx`、`dy` 是游標相對角色中心的距離，px；整個螢幕都看，展開與收合都一樣）。
-    /// 目標和現在差不到 `threshold`（弧度）時不更新，回傳 false，畫面不必重畫
+    /// 目標和現在差不到 `threshold`（弧度）時不更新，回傳 false，畫面不必重畫。`snap` 時直接轉到位（不平滑）
     @discardableResult
-    public mutating func look(at time: Int, dx: Double, dy: Double, threshold: Double = 0) -> Bool {
+    public mutating func look(at time: Int, dx: Double, dy: Double, threshold: Double = 0, snap: Bool = false) -> Bool {
         let f = config.hero.follow
         let target = (min(max(dx / f.yawSpanPx, -1), 1) * f.yawMax, min(max(-dy / f.pitchSpanPx, -1), 1) * f.pitchMax)
         guard abs(target.0 - gazeTarget.yaw) > threshold || abs(target.1 - gazeTarget.pitch) > threshold else { return false }
-        gazeFrom = gaze(at: time)
+        gazeFrom = snap ? target : gaze(at: time)
         gazeTarget = target
         gazeStart = time
         return true

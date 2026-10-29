@@ -337,7 +337,7 @@ final class PanelSettings {
         }
     }
 
-    /// 角色的眼睛跟著游標（整個螢幕，展開與收合都看；預設開）
+    /// 角色的眼睛跟著游標（整個螢幕；展開一律看，收合時工作中與睡著不看，ADR-0016 第 3 節第 8 點；預設開）
     var mascotFollowPointer: Bool {
         didSet {
             defaults.set(mascotFollowPointer, forKey: Key.mascotFollowPointer)
