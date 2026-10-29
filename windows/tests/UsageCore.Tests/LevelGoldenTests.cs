@@ -75,18 +75,49 @@ public class LevelGoldenTests
         {
             var file = Path.Combine(folder, MascotLevelLedger.FileName);
             var days = new Dictionary<string, long> { ["2026-10-27"] = 50_000, ["2026-10-28"] = 80_000, ["2026-10-29"] = 20_000 };
-            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29"));
-            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long>(), "2026-10-29"));
+            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29").Days);
+            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long>(), "2026-10-29").Days);
             Assert.Equal(days, MascotLevelLedger.Decode(File.ReadAllText(file)));
             var stamp = File.GetLastWriteTimeUtc(file);
-            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long> { ["2026-10-28"] = 1 }, "2026-10-29"));
+            Assert.Equal(days, MascotLevelLedger.Update(file, new Dictionary<string, long> { ["2026-10-28"] = 1 }, "2026-10-29").Days);
             Assert.Equal(stamp, File.GetLastWriteTimeUtc(file));
 
             // 壞掉：改名保留、從歷史重建
             File.WriteAllText(file, "{\"days\": {");
-            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29"));
+            Assert.Equal(days, MascotLevelLedger.Update(file, days, "2026-10-29").Days);
             Assert.True(File.Exists(Path.Combine(folder, MascotLevelLedger.CorruptName)));
             Assert.Equal(days, MascotLevelLedger.Decode(File.ReadAllText(file)));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>讀不到時 Saved 為 false（清除歷史與顯示靠它判斷；Fable F-01、F-08）</summary>
+    [Fact]
+    public void LedgerReportsWhenItCannotBeRead()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "aum-level-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, MascotLevelLedger.FileName);
+        var days = new Dictionary<string, long> { ["2026-10-29"] = 20_000 };
+        try
+        {
+            Assert.True(MascotLevelLedger.Update(file, days, "2026-10-29").Saved);
+            Assert.True(MascotLevelLedger.Update(file, new Dictionary<string, long>(), "2026-10-29").Saved);
+            if (OperatingSystem.IsWindows())
+            {
+                using var held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                Assert.False(MascotLevelLedger.Update(file, days, "2026-10-29").Saved);
+            }
+            else
+            {
+                File.SetUnixFileMode(file, UnixFileMode.None);
+                Assert.False(MascotLevelLedger.Update(file, days, "2026-10-29").Saved);
+                File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            Assert.False(File.Exists(file + ".tmp"));
         }
         finally
         {

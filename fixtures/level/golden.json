@@ -298,5 +298,41 @@
       "xp" : 10
     },
     "stored_ok" : true
+  },
+  {
+    "name" : "ledger-number-forms",
+    "result" : {
+      "active_days" : 5,
+      "current_streak" : 5,
+      "level" : 2,
+      "longest_streak" : 5,
+      "to_next" : 87,
+      "xp" : 63
+    },
+    "stored_ok" : true
+  },
+  {
+    "name" : "ledger-duplicate-day-takes-first",
+    "result" : {
+      "active_days" : 2,
+      "current_streak" : 2,
+      "level" : 1,
+      "longest_streak" : 2,
+      "to_next" : 29,
+      "xp" : 21
+    },
+    "stored_ok" : true
+  },
+  {
+    "name" : "ledger-trailing-garbage",
+    "result" : {
+      "active_days" : 1,
+      "current_streak" : 1,
+      "level" : 1,
+      "longest_streak" : 1,
+      "to_next" : 40,
+      "xp" : 10
+    },
+    "stored_ok" : false
   }
 ]
