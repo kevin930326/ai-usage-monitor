@@ -234,6 +234,9 @@ internal static class DebugTools
             Shot("collapsed-sleep", 3300, d => d.SetAgentIdle(true, 0));
             // 背景執行中（ADR-0017 第 7 節）：呼吸加慢速思考泡泡
             Shot("collapsed-think", 3300, d => d.SetBackground(true, 0));
+            // 角色合併所有電腦（ADR-0019 第 2 節）：只有其他電腦在工作時想，泡泡旁有小電腦
+            Shot("collapsed-remote-think", 3300, d => d.SetRemoteWorking(true, 0));
+            Shot("expand-remote-think", 3000, d => { d.Open(0, false); d.SetRemoteWorking(true, 0); }, expand: 1);
             Shot("collapsed-needs-you", 3000, d => d.SetNeedsYou(true, 0), agent: AgentStates[0].Agent);
             Shot("collapsed-percent", 3000, _ => { }, style: RingStyle.MascotPercent);
             Shot("collapsed-pulse", 3800, _ => { }, pulseAt: 3000);

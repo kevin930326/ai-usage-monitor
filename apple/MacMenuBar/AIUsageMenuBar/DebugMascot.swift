@@ -219,6 +219,11 @@ enum DebugMascot {
             Shot(name: "expanded-agents-background", setup: { $0.setBackground(true, at: 0); $0.open(at: 0, intro: false) }, time: 1500,
                  extras: NotchExtras(page: .agents, agents: [row(.claude, "ai-usage-monitor", .background, minutes: 4),
                                                              row(.codex, "web-app", .done, minutes: 1)])),
+            // 角色合併所有電腦（ADR-0019 第 2 節）：只有其他電腦在工作時想，泡泡旁有小電腦
+            Shot(name: "collapsed-remote-thinking", setup: { $0.setRemoteWorking(true, at: 0) }, time: 2000,
+                 extras: NotchExtras(remote: [RemoteAgent(device: "桌機", ai: .claude, state: .working, sessions: 1)])),
+            Shot(name: "expanded-remote-thinking", setup: { $0.setRemoteWorking(true, at: 0); $0.open(at: 0, intro: false) }, time: 1500,
+                 extras: NotchExtras(page: .agents, remote: [RemoteAgent(device: "桌機", ai: .claude, state: .working, sessions: 1)])),
         ]
         // 有瀏海的 Mac（實體瀏海 185 寬）與沒有瀏海時的假瀏海
         let notch = NotchLayout(notchWidth: 185, notchHeight: 32, hasNotch: true)
