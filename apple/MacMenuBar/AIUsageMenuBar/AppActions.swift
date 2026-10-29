@@ -12,6 +12,8 @@ import UsageKit
 enum AppActions {
     /// 打開完整統計視窗（由 SwiftUI 的 `openWindow` 提供；選單列標籤出現時設定）
     static var openStats: (() -> Void)?
+    /// 「歷史／完整統計」入口的圖示（瀏海分頁）
+    static let statsSymbol = "chart.line.uptrend.xyaxis"
     /// 右鍵選單（選單列圖示、瀏海）的結束項目
     static let quitTitle = "結束 AI 用量"
     /// 打開設定視窗（由 SwiftUI 的 `openSettings` 提供）
