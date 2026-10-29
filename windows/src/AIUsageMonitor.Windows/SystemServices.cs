@@ -248,8 +248,9 @@ internal static class IncidentPage
             using var process = Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
             return true;
         }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException)
+        catch (Exception e)
         {
+            // 在背景執行緒執行（AppHost），任何例外都只記類別名稱
             AppLog.Write($"incident page open failed: {e.GetType().Name}");
             return false;
         }
