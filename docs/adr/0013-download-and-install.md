@@ -197,7 +197,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 - 第一次發布：使用者決定直接打 tag 產生草稿 Release、看過再發布，不先跑 `workflow_dispatch`。
 - **artifact 提前公開的時間縮短**（2026-10-29 修訂，winmascot-release 第 3 部分）：推 tag 時 `mac`、`windows` 兩個 job 把產出上傳成 workflow artifact，`draft-release` 再從那裡取檔建立草稿。
   repo 是公開的，artifact 任何登入 GitHub 的人都能下載，所以：
-  - `delete-artifacts` job（`needs: [mac, windows, draft-release]`、`if: always()`）在草稿建立之後，以 `gh api` 刪除這次執行的所有 artifact，並再列一次確認沒有剩下（有剩下就失敗）。建置或建立草稿失敗、取消時也刪。
+  - `delete-artifacts` job（`needs: [mac, windows, draft-release]`、`if: always()`）在草稿建立之後，以 `gh api` 刪除這次執行的所有 artifact，並再列一次確認沒有剩下（有剩下就失敗）。建置或建立草稿失敗、取消時也刪；所以 `draft-release` 失敗後只重跑失敗的 job 會找不到 artifact，要刪掉已建立的草稿（若有）後「Re-run all jobs」整個重來。
   - artifact 只保留 1 天（原本 14 天）：刪除的 job 失敗時，最多公開 1 天；這時到 Actions 頁面手動刪除。
   - 草稿 Release 的檔案只有 repo 的協作者看得到，按發布後才公開。
   - **仍有的公開時間窗**：artifact 從上傳完成起就能下載，到另一個建置 job 完成、草稿建好、`delete-artifacts` 執行後才刪；先完成的那邊（通常是 Windows）約公開十幾到幾十分鐘，後完成的約幾分鐘。

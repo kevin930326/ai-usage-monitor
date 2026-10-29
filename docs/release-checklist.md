@@ -37,6 +37,7 @@
 
 - [ ] 在 `main` 的最新 commit 打 `vX.Y.Z` 並推上去。
 - [ ] 等 `release` workflow 完成：`mac`、`windows`、`draft-release`、`delete-artifacts` 四個 job 都成功；這次執行的 Actions 頁面下方「Artifacts」是空的。
+- [ ] `draft-release` 失敗時：先刪掉已建立的草稿（若有），再按「Re-run all jobs」整個重來；只重跑失敗的 job 會因 artifact 已刪而再失敗。
 
 ## 5. 檢查草稿 Release
 
