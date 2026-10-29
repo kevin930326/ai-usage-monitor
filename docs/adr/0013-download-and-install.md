@@ -193,7 +193,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 
 - 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`），只有刪除 artifact 的 job 有 `actions: write`。
 - 第三方 action 固定到 commit SHA（供應鏈）。
-- 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳任何東西。
+- 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳產出（2026-10-29 起 `delete-artifacts` 另外上傳一個假的 artifact 乾跑，見下）。
 - 第一次發布：使用者決定直接打 tag 產生草稿 Release、看過再發布，不先跑 `workflow_dispatch`。
 - **artifact 提前公開的時間縮短**（2026-10-29 修訂，winmascot-release 第 3 部分）：推 tag 時 `mac`、`windows` 兩個 job 把產出上傳成 workflow artifact，`draft-release` 再從那裡取檔建立草稿。
   repo 是公開的，artifact 任何登入 GitHub 的人都能下載，所以：
@@ -205,7 +205,7 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
     上傳前加密要新增 repo 密鑰（不在這次的範圍）；改用 `actions/cache` 傳檔（沒有公開下載端點）是 best-effort、要另外刪 cache，列為之後可以做的改善。
   - **pull_request 乾跑**：建置照舊不上傳；`delete-artifacts` 上傳一個假的 `dry-run` artifact、找到它、刪掉、確認沒有剩下，驗證權限與 API 呼叫。fork 的 PR 沒有寫入權限，不跑這個 job。
   - 不採用「建置與建立草稿在同一個 job」：Mac 要 macOS runner、Windows 要 Windows runner，合不成一個 job；改成兩個 job 各自建立或更新草稿則要兩個 job 都有 `contents: write`，而且兩邊會搶著建立同一個 Release。
-  - `workflow_dispatch` 的產出本來就是給人下載的 artifact，不刪（第 6 點：不執行）。
+  - `workflow_dispatch` 的產出本來就是給人下載的 artifact，不刪（上面寫的「不執行 `workflow_dispatch`」仍然有效）。
 
 ## 後果
 
