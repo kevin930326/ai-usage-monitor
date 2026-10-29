@@ -39,6 +39,15 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
 
     public MascotController Controller => controller;
 
+    /// <summary>
+    /// 展開、只有視線在轉時（看滑鼠的高幀率）角色與 Lv 改畫在圓環視窗的另一層：每一格只重畫這一層，膠囊、額度兩行的文字不必重建
+    /// （透明視窗每重繪一次整張都很貴）。展開時圓環畫一次就設好（<see cref="FloatingRingRenderer"/>，裡面再依 <see cref="DefersHero"/> 決定畫不畫），收合、貼邊時 null
+    /// </summary>
+    public Action<DrawingContext>? Overlay { get; set; }
+
+    /// <summary>這一格的角色要不要改畫在 <see cref="Overlay"/></summary>
+    public bool DefersHero(double progress) => progress >= 1 && controller.Rate == MascotRenderRate.GazeOpen;
+
     /// <summary>上一次畫角色時角色的中心（視窗座標，DIP；含展開的進度、往左展開的移動與推回工作區的距離）；還沒畫過時 null</summary>
     public Point? HeroCenter => mapping?.Center;
 

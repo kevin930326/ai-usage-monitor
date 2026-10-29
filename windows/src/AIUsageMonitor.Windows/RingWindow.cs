@@ -23,7 +23,7 @@ internal sealed class RingWindow : Window
     public static readonly DependencyProperty RevealProperty = DependencyProperty.Register(
         nameof(Reveal), typeof(double), typeof(RingWindow), new PropertyMetadata(1.0, (d, _) => ((RingWindow)d).RevealChanged()));
     public static readonly DependencyProperty ExpandProperty = DependencyProperty.Register(
-        nameof(Expand), typeof(double), typeof(RingWindow), new PropertyMetadata(0.0, (d, _) => ((RingWindow)d).surface.InvalidateVisual()));
+        nameof(Expand), typeof(double), typeof(RingWindow), new PropertyMetadata(0.0, (d, _) => ((RingWindow)d).Redraw()));
 
     /// <summary>展開與收合的時間（秒，0.18～0.25）；角色的大小跟著它自己的彈簧（約 0.5 秒），視窗留到它收完</summary>
     private double ExpandSeconds => Mascot is not null ? 0.5 : 0.22;
@@ -32,6 +32,7 @@ internal sealed class RingWindow : Window
     private static readonly TimeSpan CollapseDelay = TimeSpan.FromSeconds(0.4);
 
     private readonly Surface surface;
+    private readonly Overlay overlay;
     private readonly DispatcherTimer collapseTimer;
     private IRingFace face = GlassRingFace.Shared;
     private IntPtr handle;
@@ -89,7 +90,11 @@ internal sealed class RingWindow : Window
         Width = Height = sizeDip;
         Opacity = opacity;
         surface = new Surface(this);
-        Content = surface;
+        overlay = new Overlay(this);
+        var layers = new System.Windows.Controls.Grid();
+        layers.Children.Add(surface);
+        layers.Children.Add(overlay);
+        Content = layers;
         Focusable = false;
         collapseTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = CollapseDelay };
         collapseTimer.Tick += (_, _) =>
@@ -111,7 +116,7 @@ internal sealed class RingWindow : Window
 
     private void RevealChanged()
     {
-        surface.InvalidateVisual();
+        Redraw();
         Mascot?.Controller.SetDocked(Docked);
     }
 
@@ -156,7 +161,7 @@ internal sealed class RingWindow : Window
         details = nextDetails;
         palette = nextPalette;
         if (!changed) return;
-        surface.InvalidateVisual();
+        Redraw();
         System.Windows.Automation.AutomationProperties.SetName(this, next.AccessibilityText);
     }
 
@@ -167,7 +172,7 @@ internal sealed class RingWindow : Window
         ticks = showTicks;
         dockToEdge = dockEnabled;
         if (dockChanged && monitor is not null) MoveTo(ring);
-        else surface.InvalidateVisual();
+        else Redraw();
     }
 
     /// <summary>換圓環面：圓環或角色（ADR-0015 第 6 節）</summary>
@@ -176,7 +181,9 @@ internal sealed class RingWindow : Window
         if (ReferenceEquals(face, next)) return;
         if (Mascot is { } old)
         {
-            old.Controller.Changed -= surface.InvalidateVisual;
+            old.Controller.Changed -= Redraw;
+            old.Controller.FrameTick -= RedrawHero;
+            old.Overlay = null;
             old.Controller.CloseRequested -= CollapseNow;
             old.Controller.HeroOnScreen = null;
             old.Controller.ContainsPointer = null;
@@ -185,7 +192,8 @@ internal sealed class RingWindow : Window
         face = next;
         if (Mascot is { } mascot)
         {
-            mascot.Controller.Changed += surface.InvalidateVisual;
+            mascot.Controller.Changed += Redraw;
+            mascot.Controller.FrameTick += RedrawHero;
             mascot.Controller.CloseRequested += CollapseNow;
             // 貼邊的標籤是靜態的一格：不看滑鼠（ADR-0015 第 7 節「角色」）
             // 角色實際畫的位置（展開中往膠囊左端移、推回工作區的距離都照畫的那一格，Codex C-02）；還沒畫過時用圓環中心
@@ -198,7 +206,7 @@ internal sealed class RingWindow : Window
             mascot.Controller.SetDocked(Docked);
         }
         CollapseNow();
-        surface.InvalidateVisual();
+        Redraw();
     }
 
     private MascotFace? Mascot => face as MascotFace;
@@ -341,7 +349,7 @@ internal sealed class RingWindow : Window
         Width = rect.Width / scale;
         Height = rect.Height / scale;
         if (NativeMethods.WindowRect(Handle) != rect) NativeMethods.PlaceWindow(Handle, rect);
-        surface.InvalidateVisual();
+        Redraw();
     }
 
     private FloatingScene Scene()
@@ -497,6 +505,34 @@ internal sealed class RingWindow : Window
             return new IntPtr(NativeMethods.MA_NOACTIVATE);
         }
         return IntPtr.Zero;
+    }
+
+    /// <summary>角色的狀態變了：整個重畫（圓環畫的時候決定角色要不要放到上面那一層）</summary>
+    private void Redraw()
+    {
+        surface.InvalidateVisual();
+        overlay.InvalidateVisual();
+    }
+
+    /// <summary>看滑鼠的一格：展開的膠囊已經畫過（角色由上面那一層畫）時只重畫那一層，否則整個重畫</summary>
+    private void RedrawHero()
+    {
+        if (Mascot?.Overlay is not null) overlay.InvalidateVisual();
+        else Redraw();
+    }
+
+    /// <summary>角色那一層（展開時看滑鼠，<see cref="MascotFace.Overlay"/>）：不接收滑鼠</summary>
+    private sealed class Overlay : FrameworkElement
+    {
+        private readonly RingWindow owner;
+
+        public Overlay(RingWindow owner)
+        {
+            this.owner = owner;
+            IsHitTestVisible = false;
+        }
+
+        protected override void OnRender(DrawingContext dc) => owner.Mascot?.Overlay?.Invoke(dc);
     }
 
     private sealed class Surface(RingWindow owner) : FrameworkElement

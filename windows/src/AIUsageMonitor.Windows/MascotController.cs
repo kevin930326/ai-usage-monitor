@@ -87,7 +87,11 @@ internal sealed class MascotController : IDisposable
         Config = LoadConfig();
         Looks = LoadLooks();
         Painter = new MascotPainter(Config);
-        frameTimer = Timer(dispatcher, DispatcherPriority.Render, () => Changed?.Invoke());
+        frameTimer = Timer(dispatcher, DispatcherPriority.Render, () =>
+        {
+            if (Rate == MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
+            else Changed?.Invoke();
+        });
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
         rateTimer = OneShot(dispatcher, () => Refresh());
         gazeTimer = Timer(dispatcher, DispatcherPriority.Background, PollPointer);
@@ -118,6 +122,8 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>畫面要重畫</summary>
     public event Action? Changed;
+    /// <summary>展開、只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話只重畫角色那一層（<see cref="MascotFace.Overlay"/>），不送 Changed</summary>
+    public event Action? FrameTick;
     /// <summary>要收合（保持展開取消、設定改變）</summary>
     public event Action? CloseRequested;
     /// <summary>展開了：讀一次等級（ADR-0020 第 4 節）</summary>
