@@ -61,6 +61,8 @@ Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, ref bool value, uint ini);
+[DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, IntPtr value, uint ini);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 public static IntPtr Find(int pid, string title) {
@@ -80,6 +82,18 @@ public static bool PanelVisible(int pid) {
     return false;
 }
 '@
+
+# 系統的「用戶端區域動畫」關著時 App 把角色當成「簡單」（不動），量到的不是完整動畫的數字。
+# CI 的 runner 常把它關掉：-Ci 時在這次登入工作階段暫時打開（不寫進使用者設定），結束時還原；本機量測照使用者的設定
+$SpiGetClientAreaAnimation = 0x1042
+$SpiSetClientAreaAnimation = 0x1043
+$animation = $false
+[void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
+$animationBefore = $animation
+if ($Ci -and -not $animation) {
+    [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]1, 0)
+    [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
+}
 
 # 環境變數只在量測期間指到暫存資料夾，結束（含失敗）時還原，App 結束、暫存資料夾刪除
 $previousHome = $env:AI_USAGE_MONITOR_HOME
@@ -184,6 +198,7 @@ try {
     if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force }
     $env:AI_USAGE_MONITOR_HOME = $previousHome
     Remove-Item -Recurse -Force $home2 -ErrorAction SilentlyContinue
+    if ($animation -ne $animationBefore) { [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]0, 0) }
 }
 
 $limits = if ($Ci) { 0.3, 4, 0.6 } else { 0.1, 2, 0.3 }
@@ -217,6 +232,8 @@ $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
+$lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"
+$lines += ""
 $lines += "處理器 $cores 個；$([Environment]::OSVersion.VersionString)；$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
 $text = $lines -join "`n"
 [IO.File]::WriteAllText($Output, $text + "`n", (New-Object Text.UTF8Encoding($false)))

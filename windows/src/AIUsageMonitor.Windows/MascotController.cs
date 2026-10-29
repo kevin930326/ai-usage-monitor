@@ -119,7 +119,17 @@ internal sealed class MascotController : IDisposable
 
     public MascotCharacter Character => settings.MascotProvider == "codex" ? MascotCharacter.Codex : MascotCharacter.Claude;
     public MascotLook? Look => Looks?.Look(settings.MascotLook);
-    public MascotMotionLevel Motion => MascotMotion.Effective(settings.MascotMotion, SystemLook.AnimationsEnabled);
+    public MascotMotionLevel Motion
+    {
+        get
+        {
+#if DEBUG
+            // 截圖一律以「完整」畫，不受執行環境的系統動畫設定影響（CI 的 runner 常把它關掉）
+            if (shotMotion is { } shot) return shot;
+#endif
+            return MascotMotion.Effective(settings.MascotMotion, SystemLook.AnimationsEnabled);
+        }
+    }
     public bool IsOpen => Director?.Machine.IsOpen == true;
 
     /// <summary>毫秒時間基準（單調遞增，不受改系統時間影響）</summary>
@@ -133,6 +143,7 @@ internal sealed class MascotController : IDisposable
     /// <summary>截圖：狀態機從時間 0 開始、照 setup 擺好，畫 time 那一刻（計時器不會跑：截圖不進訊息迴圈）</summary>
     public void Shot(long time, Action<MascotDirector> setup, int? level = null, long? pulseAt = null)
     {
+        shotMotion = settings.MascotMotion;
         fixedTime = 0;
         Director = new MascotDirector(Config, startTime: 0);
         Director.SetStill(!Motion.AnimatesBody(), 0);
@@ -144,8 +155,12 @@ internal sealed class MascotController : IDisposable
         Level = level;
         PulseAt = pulseAt;
         shown = true;
+        // 停住的畫面也畫 time 那一刻（Refresh 只在重畫頻率改變時才記下停住的時間）
+        StoppedAt = time;
         Refresh();
     }
+
+    private MascotMotionLevel? shotMotion;
 #endif
 
     /// <summary>特效那一格的時間；null 是靜態的一格（動畫「簡單」「關閉」、不會動的外觀）</summary>
