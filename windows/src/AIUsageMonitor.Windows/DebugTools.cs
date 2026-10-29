@@ -244,11 +244,13 @@ internal static class DebugTools
             Shot("collapsed-led", 3000, _ => { }, look: "X9");
             if (wallpaper == "busy")
             {
-                Shot("expand-start", 120, d => d.Open(0, false), expand: 1);
+                Shot("expand-start", 40, d => d.Open(0, false), expand: 1);
                 continue;
             }
-            // 展開剛開始：膠囊從透明淡入，角色從原位移過去
-            Shot("expand-start", 120, Open(), expand: 1);
+            // 展開剛開始：膠囊從透明淡入（前 25% 的進度），角色與陰影從原位移過去。
+            // 40 ms 時彈簧（190／0.74）的進度約 0.12，膠囊約半透明（Codex C-02：120 ms 已經 0.58、完全不透明）
+            Shot("expand-start", 40, Open(), expand: 1);
+            Shot("expand-start-left", 40, Open(), direction: RingExpandDirection.Left, expand: 1);
             Shot("expand-right", 3000, Open(), expand: 1, level: 7);
             Shot("expand-left", 3000, Open(), scenario: "too_fast", direction: RingExpandDirection.Left, expand: 1);
             // 貼邊時也是膠囊，朝螢幕內側展開；貼右邊時角色從邊緣移到膠囊左端
