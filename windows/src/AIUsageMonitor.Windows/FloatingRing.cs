@@ -156,6 +156,14 @@ internal static class FloatingRingRenderer
         new GradientStop(Color.FromArgb(90, 0, 0, 0), 0), new GradientStop(Color.FromArgb(40, 0, 0, 0), 0.55), new GradientStop(Color.FromArgb(0, 0, 0, 0), 1),
     }));
 
+    /// <summary>收合時角色底下那一圈很淡的陰影：淺色、深色與花俏的桌布上都看得出輪廓（icons 第 6 部分）</summary>
+    private static readonly Brush HeroShadow = Frozen(new RadialGradientBrush(new GradientStopCollection
+    {
+        new GradientStop(Color.FromArgb(70, 0, 0, 0), 0.55), new GradientStop(Color.FromArgb(28, 0, 0, 0), 0.78), new GradientStop(Color.FromArgb(0, 0, 0, 0), 1),
+    }));
+    /// <summary>展開的前 25%：膠囊從透明淡入（收合時沒有圓底）</summary>
+    private const double BodyFadeIn = 0.25;
+
     private static T Frozen<T>(T freezable) where T : Freezable
     {
         freezable.Freeze();
@@ -163,8 +171,10 @@ internal static class FloatingRingRenderer
     }
 
     /// <summary>
-    /// 角色（ADR-0015 第 6 節）：身體不透明（同 Mac 瀏海的卡片色，只有圓角外透明）、文字一律深色外觀；展開的大小跟著狀態機的面板進度
-    /// （和 Mac 一樣的彈簧），額度兩行的透明度跟著 <see cref="MascotDirector.Content"/>。需要你時外框琥珀色；等你時外框白色脈動。
+    /// 角色（ADR-0015 第 6 節）：收合時沒有圓底，只有角色浮在桌面上、底下一圈很淡的陰影（透明處滑鼠穿透到後面的視窗：層疊視窗逐像素透明）；
+    /// 展開時膠囊淡入，身體不透明（同 Mac 瀏海的卡片色，只有圓角外透明）、文字一律深色外觀；展開的大小跟著狀態機的面板進度
+    /// （和 Mac 一樣的彈簧），額度兩行的透明度跟著 <see cref="MascotDirector.Content"/>。需要你時外框琥珀色、等你時外框白色脈動
+    /// （收合時繞著頭）。
     /// </summary>
     private static void DrawMascot(DrawingContext dc, FloatingScene s, MascotFace face)
     {
@@ -196,25 +206,44 @@ internal static class FloatingRingRenderer
             var x1 = s.Dock == RingDock.Left ? center.X : edge.Right;
             if (x1 > x0) dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), null, new Rect(x0, center.Y - r, x1 - x0, 2 * r));
         }
-        // 視窗收著時一律是圓底；展開中照狀態機的進度（彈簧可能超過 1 一點，視窗只有完整展開那麼大）
+        // 視窗收著時沒有圓底；展開中照狀態機的進度（彈簧可能超過 1 一點，視窗只有完整展開那麼大）
         var progress = s.Expand > 0 && controller.Director is { } d ? Math.Clamp(d.PanelShape(t).Progress, 0, 1) : 0;
         center += s.Shift * progress;
         var (shape, rect) = progress > 0 ? Expanded(s, center, r, progress)
             : (new EllipseGeometry(center, r, r), new Rect(center.X - r, center.Y - r, 2 * r, 2 * r));
-        dc.DrawGeometry(MascotBody, MascotEdge, shape);
-        dc.PushClip(shape);
-        if (progress > 0) face.DrawRipple(dc, rect, s.PixelsPerDip);
+        var body = Math.Clamp(progress / BodyFadeIn, 0, 1);
+        // 收合時的頭：陰影、琥珀色外圈與脈動繞著它
+        var headRing = face.HeroPlacement(center, r, 0) is { } place ? new EllipseGeometry(place.Center, place.Radius + 3, place.Radius + 3) : shape;
         // 角色一律在膠囊左端（往左展開時從圓環移過去），兩行在角色右邊
         var slot = RingShape.MascotSlot(s.Direction, s.RingDip);
-        face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect, slot: slot);
-        dc.Pop();
+        // 陰影跟著角色移動（Codex C-01：往左展開時不傳 slot 會留在圓環的位置）
+        if (body < 1 && face.HeroPlacement(center, r, progress, slot) is { } hero)
+        {
+            dc.PushOpacity(1 - body);
+            dc.DrawEllipse(HeroShadow, null, hero.Center + new Vector(0, hero.Radius * 0.18), hero.Radius * 1.45, hero.Radius * 1.45);
+            dc.Pop();
+        }
+        if (progress > 0)
+        {
+            dc.PushOpacity(body);
+            dc.DrawGeometry(MascotBody, MascotEdge, shape);
+            dc.Pop();
+            dc.PushClip(shape);
+            face.DrawRipple(dc, rect, s.PixelsPerDip);
+            face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect, slot: slot);
+            dc.Pop();
+        }
+        else
+        {
+            face.DrawHero(dc, center, r, 0, s.PixelsPerDip, bounds: rect, slot: slot);
+        }
         if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center + new Vector(slot * progress, 0), r, s.PixelsPerDip);
         if (progress <= 0 && face.ShowsPercent && s.Content.Provider.Length > 0) DrawPercent(dc, s.Content, center, r, s.PixelsPerDip);
-        if (needsYou) dc.DrawGeometry(null, AmberPen, Inset(shape, center, r));
+        if (needsYou) dc.DrawGeometry(null, AmberPen, progress > 0 ? Inset(shape, center, r) : headRing);
         else if (controller.PulseAt is { } pulse && progress <= 0)
         {
             var opacity = MascotController.PulseOpacity((double)(controller.Time() - pulse) / MascotController.PulseMs);
-            if (opacity > 0) dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), 255, 255, 255)), 3), Inset(shape, center, r));
+            if (opacity > 0) dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), 255, 255, 255)), 3), headRing);
         }
         var rows = controller.Director?.Content(t).Opacity ?? 0;
         DrawRows(dc, s, shape, center, progress > 0 ? rows : 0, MascotPalette, RingShape.MascotInfo(s.Direction, s.RingDip));

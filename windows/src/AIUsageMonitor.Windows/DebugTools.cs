@@ -165,33 +165,33 @@ internal static class DebugTools
             void Shot(string name, BitmapSource bitmap) => Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"), bitmap, failures);
             foreach (var state in new[] { "normal", "too_fast", "critical", "stale" })
             {
-                Shot($"ring-{state}", Desk(dark, palette, Content(state), Details(state), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+                Shot($"ring-{state}", Desk(wallpaper, palette, Content(state), Details(state), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
             }
-            Shot("ring-empty", Desk(dark, palette, RingContent.Empty, RingDetails.Empty, RingExpandDirection.Right, RingDock.None, 0, ticks: false));
-            Shot("ring-ticks", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: true));
-            Shot("expand-right", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
-            Shot("expand-left", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Left, RingDock.None, 1, ticks: false));
-            Shot("expand-down", Desk(dark, palette, Content("critical"), Details("critical"), RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
-            Shot("expand-forecast", Desk(dark, palette, Content("forecast"), Details("forecast"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
-            Shot("expand-half", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0.5, ticks: false));
-            Shot("dock-tab", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
-            Shot("dock-tab-right", Desk(dark, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Down, RingDock.Right, 0, ticks: false, reveal: 0));
-            Shot("dock-reveal", Desk(dark, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0.6));
+            Shot("ring-empty", Desk(wallpaper, palette, RingContent.Empty, RingDetails.Empty, RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+            Shot("ring-ticks", Desk(wallpaper, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: true));
+            Shot("expand-right", Desk(wallpaper, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
+            Shot("expand-left", Desk(wallpaper, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Left, RingDock.None, 1, ticks: false));
+            Shot("expand-down", Desk(wallpaper, palette, Content("critical"), Details("critical"), RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
+            Shot("expand-forecast", Desk(wallpaper, palette, Content("forecast"), Details("forecast"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
+            Shot("expand-half", Desk(wallpaper, palette, Content("normal"), Details("normal"), RingExpandDirection.Right, RingDock.None, 0.5, ticks: false));
+            Shot("dock-tab", Desk(wallpaper, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
+            Shot("dock-tab-right", Desk(wallpaper, palette, Content("too_fast"), Details("too_fast"), RingExpandDirection.Down, RingDock.Right, 0, ticks: false, reveal: 0));
+            Shot("dock-reveal", Desk(wallpaper, palette, Content("normal"), Details("normal"), RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0.6));
             // AI 狀態（ADR-0019）：圓環、展開的膠囊（第二行是 AI 的狀態）、貼邊的標籤
             foreach (var (name, agent) in AgentStates)
             {
                 var content = Content("normal").WithAgent(agent);
-                Shot($"agent-{name}", Desk(dark, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
-                Shot($"agent-{name}-expand", Desk(dark, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
+                Shot($"agent-{name}", Desk(wallpaper, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 0, ticks: false));
+                Shot($"agent-{name}-expand", Desk(wallpaper, palette, content, Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
             }
-            Shot("agent-needs-you-tab", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
+            Shot("agent-needs-you-tab", Desk(wallpaper, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
                                              RingExpandDirection.Down, RingDock.Left, 0, ticks: false, reveal: 0));
-            Shot("agent-needs-you-nodata", Desk(dark, palette, RingContent.Empty.WithAgent(AgentStates[0].Agent), RingDetails.Empty,
+            Shot("agent-needs-you-nodata", Desk(wallpaper, palette, RingContent.Empty.WithAgent(AgentStates[0].Agent), RingDetails.Empty,
                                                 RingExpandDirection.Right, RingDock.None, 1, ticks: false));
-            Shot("agent-needs-you-down", Desk(dark, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
+            Shot("agent-needs-you-down", Desk(wallpaper, palette, Content("normal").WithAgent(AgentStates[0].Agent), Details("normal"),
                                               RingExpandDirection.Down, RingDock.Left, 1, ticks: false));
             // 其他電腦需要你（ADR-0019 第 2 節）：膠囊第二行前面是那台的名稱
-            Shot("agent-remote-expand", Desk(dark, palette,
+            Shot("agent-remote-expand", Desk(wallpaper, palette,
                                              Content("normal").WithAgent(new RingAgent(AgentKind.Codex, AgentState.NeedsYou, null, "工作 PC")),
                                              Details("normal"), RingExpandDirection.Right, RingDock.None, 1, ticks: false));
         }
@@ -209,9 +209,9 @@ internal static class DebugTools
         Directory.CreateDirectory(output);
         RingContent Content(string scenario) => RingContent.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
         RingDetails Details(string scenario) => RingDetails.From(UsageDecoder.Decode(DemoJson(scenario, now)), WindowChoice.Automatic, now);
-        foreach (var wallpaper in new[] { "light", "dark" })
+        // 收合時沒有圓底（icons 第 6 部分）：收合的畫面另外放在花俏的桌布上
+        foreach (var wallpaper in new[] { "light", "dark", "busy" })
         {
-            var dark = wallpaper == "dark";
             void Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
                       RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
                       RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null, double scale = Scale)
@@ -222,7 +222,7 @@ internal static class DebugTools
                 var face = new MascotFace(controller) { ShowsPercent = style == RingStyle.MascotPercent };
                 var content = Content(scenario).WithAgent(agent);
                 Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"),
-                     Desk(dark, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale), failures);
+                     Desk(wallpaper, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale), failures);
                 controller.Dispose();
             }
             Action<MascotDirector> Open(bool intro = false) => d => d.Open(0, intro);
@@ -242,6 +242,15 @@ internal static class DebugTools
             Shot("collapsed-pulse", 3800, _ => { }, pulseAt: 3000);
             Shot("collapsed-neon", 3000, _ => { }, look: "X8");
             Shot("collapsed-led", 3000, _ => { }, look: "X9");
+            if (wallpaper == "busy")
+            {
+                Shot("expand-start", 40, d => d.Open(0, false), expand: 1);
+                continue;
+            }
+            // 展開剛開始：膠囊從透明淡入（前 25% 的進度），角色與陰影從原位移過去。
+            // 40 ms 時彈簧（190／0.74）的進度約 0.12，膠囊約半透明（Codex C-02：120 ms 已經 0.58、完全不透明）
+            Shot("expand-start", 40, Open(), expand: 1);
+            Shot("expand-start-left", 40, Open(), direction: RingExpandDirection.Left, expand: 1);
             Shot("expand-right", 3000, Open(), expand: 1, level: 7);
             Shot("expand-left", 3000, Open(), scenario: "too_fast", direction: RingExpandDirection.Left, expand: 1);
             // 貼邊時也是膠囊，朝螢幕內側展開；貼右邊時角色從邊緣移到膠囊左端
@@ -286,7 +295,7 @@ internal static class DebugTools
     /// 一個畫面放在示範桌布上（漸層＋兩團柔和的色塊，看得出半透明的玻璃）。貼邊時桌布左（右）邊就是螢幕邊緣，
     /// 圓環離邊緣 8 DIP（同 RingPlacement.SnapMargin）
     /// </summary>
-    private static BitmapSource Desk(bool darkWallpaper, Palette palette, RingContent content, RingDetails details,
+    private static BitmapSource Desk(string wallpaper, Palette palette, RingContent content, RingDetails details,
                                      RingExpandDirection direction, RingDock dock, double expand, bool ticks, double reveal = 1,
                                      IRingFace? face = null, double scale = Scale)
     {
@@ -317,15 +326,37 @@ internal static class DebugTools
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
-            Wallpaper(dc, width, height, darkWallpaper);
+            Wallpaper(dc, width, height, wallpaper);
             FloatingRingRenderer.Draw(dc, scene);
         }
         return Bitmap(visual, width, height, scale: scale);
     }
 
-    private static void Wallpaper(DrawingContext dc, double width, double height, bool dark)
+    /// <summary>light、dark，或 busy（花俏的照片風：高彩度的色塊與白色、黑色的細節，收合時沒有圓底的角色要看得清楚）</summary>
+    private static void Wallpaper(DrawingContext dc, double width, double height, string wallpaper)
     {
         var bounds = new Rect(0, 0, width, height);
+        if (wallpaper == "busy")
+        {
+            dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(0xFF, 0xD1, 0x4D), Color.FromRgb(0x2F, 0x9E, 0xE8), 20), null, bounds);
+            var colors = new[] { Color.FromRgb(0xF2, 0x4E, 0x6B), Color.FromRgb(0xFF, 0xFF, 0xFF), Color.FromRgb(0x1D, 0x1D, 0x24),
+                                 Color.FromRgb(0x5B, 0xD1, 0x7A), Color.FromRgb(0xF5, 0x8A, 0x3D), Color.FromRgb(0x8E, 0x5B, 0xE8) };
+            // 固定的條紋與圓點（不用亂數：每次截圖一樣）
+            for (var i = 0; i < 14; i++)
+            {
+                var stripe = new Rect(i * width / 9 - width * 0.2, 0, width / 22, height);
+                dc.PushTransform(new RotateTransform(28, stripe.Left + stripe.Width / 2, height / 2));
+                dc.DrawRectangle(new SolidColorBrush(Color.FromArgb(150, colors[i % colors.Length].R, colors[i % colors.Length].G, colors[i % colors.Length].B)), null, stripe);
+                dc.Pop();
+            }
+            for (var i = 0; i < 24; i++)
+            {
+                var c = colors[(i * 5) % colors.Length];
+                dc.DrawEllipse(new SolidColorBrush(c), null, new Point(width * ((i * 37) % 100) / 100.0, height * ((i * 61) % 100) / 100.0), 3 + i % 4 * 3, 3 + i % 4 * 3);
+            }
+            return;
+        }
+        var dark = wallpaper == "dark";
         dc.DrawRectangle(new LinearGradientBrush(
             dark ? Color.FromRgb(0x18, 0x1E, 0x2E) : Color.FromRgb(0xD9, 0xE4, 0xF2),
             dark ? Color.FromRgb(0x2B, 0x1C, 0x2C) : Color.FromRgb(0xF3, 0xE6, 0xD6), 35), null, bounds);
