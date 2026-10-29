@@ -46,6 +46,14 @@ public static class AgentSummary
 /// <summary>其他電腦的一個 AI 要顯示的狀態</summary>
 public sealed record RemoteAgent(string Device, AgentKind Ai, AgentState State, int Sessions)
 {
+    /// <summary>進入這個狀態的時間、中繼收到的時間（換算成本機時間，ms；ADR-0019「角色合併所有電腦」，同 Swift）</summary>
+    public long? Since { get; init; }
+    public long Updated { get; init; }
+    /// <summary>中繼時鐘的原始 since（不換算）：看過的出錯用它認（換算會隨每次下載的時間差變動，Codex C-01）</summary>
+    public long? RelaySince { get; init; }
+    /// <summary>清單裡列不列（等你、閒置不列，只給角色算醒著）</summary>
+    public bool IsListed { get; init; } = true;
+
     /// <summary>「桌機：Claude Code 需要你」</summary>
     public string Text => $"{Device}：{AgentText.Name(Ai)} {State switch
     {
@@ -71,9 +79,10 @@ public static class RemoteAgents
 
     /// <summary>
     /// 讀 <c>agent-remote.json</c>（格式見 AgentSync.swift）。多久以前＝中繼那邊的差（now − updated_at，同一個時鐘）＋下載後在本機經過的時間。
-    /// 格式不對整個不顯示；個別欄位不對略過那一列。依狀態（需要你最前）、裝置名稱、AI 排序
+    /// 格式不對整個不顯示；個別欄位不對略過那一列。依狀態（需要你最前）、裝置名稱、AI 排序。
+    /// all：等你、閒置也留著（IsListed 為 false），角色合併所有電腦時用
     /// </summary>
-    public static List<RemoteAgent> Parse(byte[] data, long localNow)
+    public static List<RemoteAgent> Parse(byte[] data, long localNow, bool all = false)
     {
         var list = new List<RemoteAgent>();
         if (data.Length > 64 * 1024) return list;
@@ -102,10 +111,16 @@ public static class RemoteAgents
                     if (AgentNames.Kind(Text(row["ai"])) is not { } ai || seen.Contains(ai)
                         || State(Text(row["state"])) is not { } state || Int(row["sessions"]) is not { } sessions || sessions is < 0 or > 32) continue;
                     seen.Add(ai);
-                    if (state is not (AgentState.NeedsYou or AgentState.Error or AgentState.Working or AgentState.Done)) continue;
+                    var listed = state is AgentState.NeedsYou or AgentState.Error or AgentState.Working or AgentState.Done;
+                    if (!listed && !all) continue;
+                    var since = Int(row["since"]);
                     // 完成、出錯：從進入的時間算 30 分鐘（中繼的時鐘＋下載後經過的時間）；App 每分鐘重讀一次
-                    if (state is AgentState.Done or AgentState.Error && Int(row["since"]) is { } since && now - since + elapsed >= FadeAfter) continue;
-                    list.Add(new RemoteAgent(name, ai, state, (int)sessions));
+                    if (state is AgentState.Done or AgentState.Error && since is { } s && now - s + elapsed >= FadeAfter) continue;
+                    // 中繼的時間換成本機：中繼的 now 對到本機的 fetched_at
+                    list.Add(new RemoteAgent(name, ai, state, (int)sessions)
+                    {
+                        Since = since is { } at ? fetched + at - now : null, Updated = fetched + updated - now, RelaySince = since, IsListed = listed,
+                    });
                 }
             }
             catch (ArgumentException) { }   // 這台的物件有重複的鍵：略過

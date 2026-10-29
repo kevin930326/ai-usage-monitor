@@ -58,6 +58,8 @@ extension NotchView {
                            hint: controller.showsHint,
                            page: rows.isEmpty && store.remoteAgents.isEmpty ? .overview : controller.page,
                            agents: rows, remote: store.remoteAgents,
+                           remoteNeedsYou: controller.activity?.needsYou == true && !rows.contains { $0.state == .needsYou },
+                           staticRemote: !controller.motion.animatesBody && controller.activity?.thinksRemotely == true,
                            level: MascotLevelStore.shared.level)
     }
 
@@ -79,10 +81,14 @@ struct NotchExtras: Equatable {
     var agents: [NotchAgentRow] = []
     /// 其他電腦的 AI 狀態（ADR-0019 第 2 節）：只在「AI 工作階段」分頁列出，不改變收合時的外框與數量
     var remote: [RemoteAgent] = []
+    /// 其他電腦需要你（ADR-0019「角色合併所有電腦」）：外框也變琥珀色；收合時的數量只算這台
+    var remoteNeedsYou = false
+    /// 動畫「簡單」「關閉」時只有其他電腦在工作：狀態機不進 think，小電腦照合併後的狀態靜態顯示（Fable G-11）
+    var staticRemote = false
     /// 角色等級（ADR-0020）；沒有任何活躍日時 nil
     var level: MascotLevel?
 
-    var needsYou: Bool { agents.contains { $0.state == .needsYou } }
+    var needsYou: Bool { remoteNeedsYou || agents.contains { $0.state == .needsYou } }
     /// 有東西可以列在「AI 工作階段」分頁
     var hasAgentPage: Bool { !agents.isEmpty || !remote.isEmpty }
     /// 收合時顯示的數量：閒置以外的工作階段，兩個以上才顯示
@@ -367,12 +373,14 @@ struct NotchCanvas: View {
     /// VoiceOver：角色、在做什麼、額度狀態（畫面上只靠姿勢與表情，Fable F-07）
     private var heroDescription: String {
         let mode = director.isStill ? .none : director.mode
-        let activity = switch mode {
-        case .raise: "舉手，有 AI 需要你"
-        case .work: "工作中"
-        case .sleep: "睡著了"
-        case .think: "AI 在背景執行"
-        case .none: "待命"
+        let activity = if director.machine.thinksRemotely || extras.staticRemote { "其他電腦的 AI 工作中" } else {
+            switch mode {
+            case .raise: "舉手，有 AI 需要你"
+            case .work: "工作中"
+            case .sleep: "睡著了"
+            case .think: "AI 在背景執行"
+            case .none: "待命"
+            }
         }
         let status = switch director.mood {
         case .stale: "額度資料過期或讀取失敗"
@@ -451,11 +459,15 @@ struct NotchCanvas: View {
     private func frame(at time: Int, effectTime: Int? = nil) -> MascotFrame {
         let still = !motion.movesEyes
         let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
+        // 只有其他電腦在工作：泡泡旁畫小電腦；展開時、動畫「簡單」「關閉」時也看得出來（泡泡停在亮兩顆，不另外重畫；
+        // 收合時的循環照時間亮，Fable G-11）
+        let remote = director.machine.thinksRemotely || extras.staticRemote
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            mood: director.mood(at: time),
-                           sleeping: director.showsSleep, dozing: director.showsDoze, effects: director.effects,
+                           sleeping: director.showsSleep, dozing: director.showsDoze,
+                           thinkingDots: remote ? 2 : nil, remoteBadge: remote, remoteBadgeAbove: director.machine.isOpen, effects: director.effects,
                            ripple: director.ripple, character: character, look: look, effectTime: effectTime)
     }
 

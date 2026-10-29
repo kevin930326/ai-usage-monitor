@@ -44,6 +44,10 @@ internal sealed class AgentMonitor : IDisposable
     public AgentSessions Sessions { get; } = new(AppSettings.DefaultSleepMinutes * 60_000L);
     /// <summary>其他電腦要顯示的狀態（30 分鐘內），依狀態排序</summary>
     public IReadOnlyList<RemoteAgent> Remote { get; private set; } = [];
+    /// <summary>同上，含等你、閒置（角色合併所有電腦用，ADR-0019「角色合併所有電腦」）</summary>
+    public IReadOnlyList<RemoteAgent> RemoteAll { get; private set; } = [];
+    /// <summary>其他電腦的出錯在這台看過（打開面板、展開、點角色）：since 改了才再難過。只在記憶體（Fable G-06）</summary>
+    public IReadOnlySet<string> SeenRemoteErrors { get; private set; } = new HashSet<string>();
     /// <summary>狀態變了（圓環與系統匣重畫）</summary>
     public event Action? Changed;
     /// <summary>該發的通知（標題、內容）</summary>
@@ -225,9 +229,10 @@ internal sealed class AgentMonitor : IDisposable
         {
             data = [];
         }
-        List<RemoteAgent> loaded = data.Length == 0 ? [] : RemoteAgents.Parse(data, now);
-        if (Enumerable.SequenceEqual(loaded, Remote)) return false;
-        Remote = loaded;
+        List<RemoteAgent> all = data.Length == 0 ? [] : RemoteAgents.Parse(data, now, all: true);
+        if (Enumerable.SequenceEqual(all, RemoteAll)) return false;
+        RemoteAll = all;
+        Remote = [.. all.Where(r => r.IsListed)];
         return true;
     }
 
@@ -266,9 +271,13 @@ internal sealed class AgentMonitor : IDisposable
     /// </summary>
     public void MarkSeen()
     {
-        if (!Sessions.MarkSeen(Now)) return;
-        WriteState(Now);
-        Changed?.Invoke();
+        var sessions = Sessions.MarkSeen(Now);
+        if (sessions) WriteState(Now);
+        // 只留現在還在的出錯，舊的記號不累積
+        var errors = RemoteAll.Where(r => r.State == AgentState.Error).Select(AgentActivity.ErrorKey).ToHashSet();
+        var remote = !errors.IsSubsetOf(SeenRemoteErrors);
+        if (remote) SeenRemoteErrors = errors;
+        if (sessions || remote) Changed?.Invoke();
     }
 
     /// <summary>通知設定改了：重新排下一次檢查</summary>

@@ -7,9 +7,12 @@ public static class MascotFrames
     /// <summary>從狀態機組出某一刻的畫面（同 Mac NotchCanvas.frame(at:)）。still：動畫「關閉」時眼睛不動（不眨眼、不看滑鼠）；
     /// gaze 有值時用它（截圖固定視線）</summary>
     public static MascotFrame From(MascotDirector director, long time, MascotCharacter character, MascotLook? look,
-        long? effectTime = null, bool still = false, (double Yaw, double Pitch)? gaze = null)
+        long? effectTime = null, bool still = false, (double Yaw, double Pitch)? gaze = null, bool staticRemote = false)
     {
         var g = gaze ?? (still ? (0, 0) : director.Gaze(time));
+        // 只有其他電腦在工作而想：泡泡亮兩顆＋旁邊的小電腦（ADR-0019「角色合併所有電腦」，同 Mac NotchView 的 frame(at:)）
+        // staticRemote：動畫「簡單」「關閉」時狀態機不進 think，照合併後的狀態靜態顯示（Fable G-11）
+        var remote = director.Machine.ThinksRemotely || staticRemote;
         return new MascotFrame
         {
             Time = time,
@@ -27,6 +30,9 @@ public static class MascotFrames
             Character = character,
             Look = look,
             EffectTime = effectTime,
+            ThinkingDots = remote ? 2 : null,
+            RemoteBadge = remote,
+            RemoteBadgeAbove = director.Machine.IsOpen,
         };
     }
 }

@@ -250,11 +250,12 @@ final class MascotController {
         if gazeDozing { restartGaze() }
         if !PanelSettings.shared.notchHintShown { showsHint = true }
         let monitor = AgentMonitor.shared
-        if monitor.sessions.count(.needsYou, at: monitor.now) > 0 { page = .agents }
+        // 任何一台需要你：展開時切到「AI 工作階段」（清單寫出是哪台，Fable G-05）
+        if monitor.sessions.count(.needsYou, at: monitor.now) > 0 || activity?.needsYou == true { page = .agents }
         refresh()
         restartActivityChecks()
-        // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）
-        AgentMonitor.shared.markSeen()
+        // 展開就算看過了：「完成」與「出錯」不再當成新消息（ADR-0017）；其他電腦的出錯在這台壓下（Fable G-06）
+        markSeen()
         // 等級（ADR-0020）：每次展開重新讀；升級時 levelUp 歡呼
         MascotLevelStore.shared.refresh()
     }
@@ -370,7 +371,7 @@ final class MascotController {
         guard gestures.hits(point, center: CGPoint(x: pose[.x], y: pose[.y]), radius: pose[.r]) else { return false }
         pressedOnCharacter = true
         mutate { $0.press(at: t) }
-        AgentMonitor.shared.markSeen()
+        markSeen()
         return true
     }
 
@@ -513,23 +514,51 @@ final class MascotController {
     static let pulseEveryMs = 7000
     static let pulseMs = 1600
 
+    /// 本機＋其他電腦合併後的狀態（ADR-0019「角色合併所有電腦」）；表情、外框與展開的分頁也看它
+    private(set) var activity: AgentActivity?
+    /// 其他電腦的出錯在這台看過（展開、點角色）：since 改了才再難過。只在記憶體（Fable G-06）
+    @ObservationIgnored private var seenRemoteErrors: Set<String> = []
+
+    /// 看過了：本機的完成與出錯變成等你；其他電腦現在的出錯不再讓角色難過（那台的清單照舊）
+    private func markSeen() {
+        AgentMonitor.shared.markSeen()
+        let errors = UsageStore.shared.remoteAll.filter { $0.state == .error }.map(AgentActivity.errorKey)
+        guard !Set(errors).isSubset(of: seenRemoteErrors) else { return }
+        // 只留現在還在的，舊的記號不累積
+        seenRemoteErrors = Set(errors)
+        applyActivity()
+        updateStatus()
+    }
+
+    /// `agent-remote.json` 改了、或每分鐘：重算角色的狀態與表情
+    func remoteChanged() {
+        applyActivity()
+        updateStatus()
+        updatePulse()
+    }
+
     private func applyActivity() {
+        let monitor = AgentMonitor.shared
+        let (working, idle) = monitor.sessions.activity(at: monitor.now, fallback: fallbackActivity)
+        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
+        let merged = AgentActivity.combine(localWorking: working, localIdle: idle,
+                                           localNeedsYou: monitor.sessions.count(.needsYou, at: monitor.now) > 0,
+                                           localBackground: monitor.sessions.count(.background, at: monitor.now) > 0,
+                                           remote: UsageStore.shared.remoteAll, now: monitor.now, idleAfter: monitor.sessions.idleAfter,
+                                           seenErrors: seenRemoteErrors)
+        if merged != activity { activity = merged }
         guard motion.animatesBody, let machine = director?.machine else { return }
         #if DEBUG
         if debugSkipsActivity { return }
         #endif
-        let monitor = AgentMonitor.shared
-        let (working, idle) = monitor.sessions.activity(at: monitor.now, fallback: fallbackActivity)
-        let needsYou = monitor.sessions.count(.needsYou, at: monitor.now) > 0
-        // 背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑
-        let background = monitor.sessions.count(.background, at: monitor.now) > 0
-        guard machine.isWorking != working || machine.isAgentIdle != idle || machine.isNeedsYou != needsYou
-            || machine.isBackground != background else { return }
+        guard machine.isWorking != merged.working || machine.isAgentIdle != merged.idle || machine.isNeedsYou != merged.needsYou
+            || machine.isBackground != merged.background || machine.isRemoteWorking != merged.remoteWorking else { return }
         mutate {
-            $0.setWorking(working, at: time())
-            $0.setAgentIdle(idle, at: time())
-            $0.setNeedsYou(needsYou, at: time())
-            $0.setBackground(background, at: time())
+            $0.setWorking(merged.working, at: time())
+            $0.setAgentIdle(merged.idle, at: time())
+            $0.setNeedsYou(merged.needsYou, at: time())
+            $0.setBackground(merged.background, at: time())
+            $0.setRemoteWorking(merged.remoteWorking, at: time())
         }
     }
 
@@ -544,8 +573,9 @@ final class MascotController {
                                      incident: MascotMood.hasIncident(store.snapshot, provider: provider),
                                      runsOut: MascotMood.runsOut(store.snapshot, provider: provider, now: store.now))
         let monitor = AgentMonitor.shared
-        let mood = MascotMood.agent(monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter),
-                                    quota: quota)
+        let top = monitor.sessions.top(at: monitor.now)?.state(at: monitor.now, idleAfter: monitor.sessions.idleAfter)
+        // 其他電腦需要你、出錯也算（遠端的完成不讓角色開心）
+        let mood = MascotMood.agent(activity.map { $0.moodState(localTop: top) } ?? top, quota: quota)
         if director?.mood != mood { mutate { $0.setMood(mood) } }
         setStatus(level)
         // 換了服務、表情沒變時不會經過 refresh：循環的那一輪照新的配色重建（Codex C-01）
@@ -789,13 +819,16 @@ final class MascotController {
         var look: String?
         var layout: NotchLayout
         var motion: MascotMotionLevel
+        /// 只有其他電腦在工作（泡泡旁的小電腦，Fable G-12）
+        var remote: Bool
     }
 
     private func updateEffectLoop() {
         guard let director else { return }
         let key = renderRate == .effect && !director.machine.isOpen
             ? EffectLoopKey(mode: director.mode, mood: director.mood, statusLevel: director.machine.statusLevel,
-                            character: PanelSettings.shared.mascotCharacter, look: look?.id, layout: layout, motion: motion)
+                            character: PanelSettings.shared.mascotCharacter, look: look?.id, layout: layout, motion: motion,
+                            remote: director.machine.thinksRemotely)
             : nil
         guard key != effectLoopKey else { return }
         effectLoopKey = key

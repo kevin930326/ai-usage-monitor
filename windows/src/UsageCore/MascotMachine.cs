@@ -157,6 +157,10 @@ public sealed class MascotMachine
     /// <summary>有 AI 需要你（要權限、問你問題）：舉手，優先於工作中與睡覺</summary>
     public bool IsNeedsYou { get; private set; }
     public bool IsBackground { get; private set; }
+    /// <summary>只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：同背景執行中，想（think），畫面在泡泡旁加小電腦</summary>
+    public bool IsRemoteWorking { get; private set; }
+    /// <summary>think 的原因只有其他電腦（本機不是背景執行中）：畫面在泡泡旁畫小電腦</summary>
+    public bool ThinksRemotely => Mode == MascotMode.Think && IsRemoteWorking && !IsBackground;
 
     /// <summary>
     /// 臉跟著游標轉（ADR-0016 第 6 節，2026-10-29 使用者決定）：展開時一律追；收合時醒著沒事（待命、舉手）照舊追，
@@ -360,6 +364,14 @@ public sealed class MascotMachine
         UpdateMode();
     }
 
+    /// <summary>其他電腦在工作：本機沒在工作時想（think），不睡</summary>
+    public void SetRemoteWorking(bool working, long time)
+    {
+        Begin(time);
+        IsRemoteWorking = working;
+        UpdateMode();
+    }
+
     /// <summary>背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑。優先於睡覺，工作中與需要你優先於它</summary>
     public void SetBackground(bool background, long time)
     {
@@ -388,7 +400,7 @@ public sealed class MascotMachine
 
     private void UpdateMode() => SetMode(IsNeedsYou ? MascotMode.Raise
                                          : IsWorking ? MascotMode.Work
-                                         : IsBackground ? MascotMode.Think : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
+                                         : IsBackground || IsRemoteWorking ? MascotMode.Think : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
 
     /// <summary>額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；
     /// 回到正常只換表情，排隊中的提醒也丟掉。react 為 false（靜音、勿擾）時只換表情、不播也不鼓</summary>

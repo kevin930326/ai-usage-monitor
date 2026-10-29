@@ -81,6 +81,7 @@ public class MascotDirectorGoldenTests
             case "idle": director.SetAgentIdle(On(), t); break;
             case "needs": director.SetNeedsYou(On(), t); break;
             case "background": director.SetBackground(On(), t); break;
+            case "remote": director.SetRemoteWorking(On(), t); break;
             case "cheer": director.Cheer(t, e["react"]?.GetValue<bool>() ?? true); break;
             case "status": director.SetStatus(e["level"]?.GetValue<int>() ?? 0, t, e["react"]?.GetValue<bool>() ?? true); break;
             case "look": director.Look(t, e["dx"]?.GetValue<double>() ?? 0, e["dy"]?.GetValue<double>() ?? 0, snap: e["snap"]?.GetValue<bool>() ?? false); break;

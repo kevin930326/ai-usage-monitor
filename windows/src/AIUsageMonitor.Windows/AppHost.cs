@@ -60,7 +60,8 @@ internal sealed class AppHost : IDisposable
     private Palette TrayPalette => new(SystemLook.TaskbarIsDark);
 
     private RingContent Content => RingContent.From(store.Snapshot, settings.RingWindow, now)
-        .WithAgent(RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), agents.Remote));
+        .WithAgent(RingAgent.From(agents.Sessions, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), agents.Remote,
+                                  merged: settings.RingStyle != RingStyle.Ring, seenErrors: agents.SeenRemoteErrors));
     private RingDetails Details => RingDetails.From(store.Snapshot, settings.RingWindow, now);
 
     public void Start()

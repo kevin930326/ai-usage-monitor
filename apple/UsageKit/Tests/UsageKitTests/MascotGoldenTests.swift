@@ -52,6 +52,8 @@ import Testing
         var pending: String?
         var queued: String?
         var status: Int
+        /// 只有其他電腦在工作而想（`thinksRemotely`，泡泡旁畫小電腦）；false 不輸出
+        var remote: Bool?
     }
 
     static func run(_ testCase: Case, timing: MascotTiming) throws -> Output {
@@ -72,6 +74,7 @@ import Testing
             case "silence": machine.silence(at: event.t)
             case "needs": machine.setNeedsYou(event.on ?? false, at: event.t)
             case "background": machine.setBackground(event.on ?? false, at: event.t)
+            case "remote": machine.setRemoteWorking(event.on ?? false, at: event.t)
             case "cheer": machine.cheer(at: event.t, react: event.react ?? true)
             case "advance": machine.advance(to: event.t)
             default: Issue.record("未知的事件 \(event.e)（\(testCase.name)）")
@@ -83,7 +86,7 @@ import Testing
             final: Final(open: machine.isOpen, mode: machine.mode.rawValue, follow: machine.followsPointer,
                          playing: machine.playing?.animation.rawValue, pending: machine.pending?.rawValue,
                          queued: machine.queued?.rawValue,
-                         status: machine.statusLevel))
+                         status: machine.statusLevel, remote: machine.thinksRemotely ? true : nil))
     }
 
     @Test func goldenMatchesMachine() throws {

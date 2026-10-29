@@ -35,6 +35,10 @@ struct MascotFrame {
     var dozeRise: Double?
     /// 收合時 AI 工作中的思考泡泡（ADR-0021 第 4 節）：右上方三個小點中亮了幾顆（0…3）；nil 時不畫
     var thinkingDots: Int?
+    /// 只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：泡泡旁的小電腦
+    var remoteBadge = false
+    /// 小電腦放在點的上方（展開時；收合時上方沒有空間，放在點的右邊）
+    var remoteBadgeAbove = false
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
@@ -426,6 +430,20 @@ struct MascotPainter {
 
     // MARK: - 特效
 
+    /// 小電腦（螢幕＋底座）：思考泡泡右邊，表示是別台電腦在跑。size 是角色半徑
+    private func drawComputer(at c: CGPoint, size R: Double, in context: inout GraphicsContext) {
+        let w = R * 0.66, h = R * 0.46, line = max(0.8, R * 0.09)
+        let screen = CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h)
+        let tint = Color(red: 0.85, green: 0.85, blue: 0.89)
+        context.stroke(Path(roundedRect: screen, cornerRadius: R * 0.07), with: .color(tint), lineWidth: line)
+        var stand = Path()
+        stand.move(to: CGPoint(x: c.x, y: screen.maxY))
+        stand.addLine(to: CGPoint(x: c.x, y: screen.maxY + R * 0.12))
+        stand.move(to: CGPoint(x: c.x - w * 0.28, y: screen.maxY + R * 0.14))
+        stand.addLine(to: CGPoint(x: c.x + w * 0.28, y: screen.maxY + R * 0.14))
+        context.stroke(stand, with: .color(tint), style: StrokeStyle(lineWidth: line, lineCap: .round))
+    }
+
     private func drawEffects(_ frame: MascotFrame, placed: (x: Double, y: Double, r: Double), in context: inout GraphicsContext) {
         let (x, y, R) = placed
         guard R >= 2 else { return }
@@ -445,6 +463,11 @@ struct MascotPainter {
                 let center = CGPoint(x: x + R * 0.95 + Double(i) * R * 0.367, y: y - R * 0.95)
                 context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
                              with: .color(i < lit ? on : Color.white.opacity(0.22)))
+            }
+            // 小電腦：收合時在點的右邊；展開時在中間那顆點的上方（放在右邊會超出角色卡）
+            if frame.remoteBadge {
+                let at = frame.remoteBadgeAbove ? CGPoint(x: x + R * 1.32, y: y - R * 1.55) : CGPoint(x: x + R * 2.15, y: y - R * 0.98)
+                drawComputer(at: at, size: R, in: &context)
             }
         }
         // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）

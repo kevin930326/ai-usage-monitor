@@ -10,15 +10,32 @@ namespace AIUsageMonitor.Core;
 /// </summary>
 public sealed record RingAgent(AgentKind Ai, AgentState State, AgentNeed? Need, string? Device = null)
 {
-    public static RingAgent? From(AgentSessions sessions, long now, IReadOnlyList<RemoteAgent>? remote = null)
+    /// <summary>
+    /// merged（角色樣式，ADR-0019「角色合併所有電腦」，Fable G-13）：膠囊第二行和角色講同一件事：任何一台需要你 > 出錯（其他電腦的出錯
+    /// 在這台看過就不算，seenErrors）> 這台的完成。圓環樣式（C2）維持原本：這台沒有要注意的時才顯示其他電腦的需要你
+    /// </summary>
+    public static RingAgent? From(AgentSessions sessions, long now, IReadOnlyList<RemoteAgent>? remote = null, bool merged = false,
+                                  IReadOnlySet<string>? seenErrors = null)
     {
         // 背景執行中排在完成未看前面但不上圓環：跳過它，別的工作階段的完成未看照樣顯示（ADR-0017 第 7 節）
-        if (sessions.Ordered(now).FirstOrDefault(s => s.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error)
-            is { } top)
+        var local = sessions.Ordered(now).FirstOrDefault(s => s.State(now, sessions.IdleAfter) is AgentState.NeedsYou or AgentState.Done or AgentState.Error);
+        var localState = local?.State(now, sessions.IdleAfter);
+        // 角色樣式：其他電腦的需要你和角色一樣只在中繼收到後 20 分鐘內算（AgentActivity.RemoteEffect，Codex C-02）
+        bool Needs(RemoteAgent r) => r.State == AgentState.NeedsYou && (!merged || now - r.Updated <= AgentActivity.RemoteEffect);
+        if (merged && localState != AgentState.NeedsYou)
         {
-            return new RingAgent(top.Ai, top.State(now, sessions.IdleAfter), top.Stored == AgentState.NeedsYou ? top.Need : null);
+            if (remote?.FirstOrDefault(Needs) is { } needs) return new RingAgent(needs.Ai, AgentState.NeedsYou, null, needs.Device);
+            if (localState != AgentState.Error
+                && remote?.FirstOrDefault(r => r.State == AgentState.Error && seenErrors?.Contains(AgentActivity.ErrorKey(r)) != true) is { } error)
+            {
+                return new RingAgent(error.Ai, AgentState.Error, null, error.Device);
+            }
         }
-        return remote?.FirstOrDefault(r => r.State == AgentState.NeedsYou) is { } other
+        if (local is { } top)
+        {
+            return new RingAgent(top.Ai, localState!.Value, top.Stored == AgentState.NeedsYou ? top.Need : null);
+        }
+        return remote?.FirstOrDefault(Needs) is { } other
             ? new RingAgent(other.Ai, AgentState.NeedsYou, null, other.Device)
             : null;
     }

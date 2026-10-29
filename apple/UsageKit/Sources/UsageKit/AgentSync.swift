@@ -41,14 +41,26 @@ public struct RemoteAgent: Sendable, Equatable {
     public var id: String
     /// 本機時間（ms）到了就不顯示：中繼收到後滿 30 分鐘（畫面停著不重新下載時也會消失）
     public var expiresAt: Int64
+    /// 進入這個狀態的時間、中繼收到的時間（換算成本機時間，ms；同一個中繼時鐘，ADR-0019「角色合併所有電腦」）
+    public var since: Int64?
+    public var updated: Int64
+    /// 中繼時鐘的原始 `since`（不換算）：看過的出錯用它認（換算會隨每次下載的時間差變動，Codex C-01）
+    public var relaySince: Int64?
+    /// 清單裡列不列（等你、閒置不列，只給角色算醒著）
+    public var isListed: Bool
 
-    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil, expiresAt: Int64 = .max) {
+    public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil, expiresAt: Int64 = .max,
+                since: Int64? = nil, updated: Int64 = 0, relaySince: Int64? = nil, isListed: Bool = true) {
         self.device = device
         self.ai = ai
         self.state = state
         self.sessions = sessions
         self.id = id ?? "\(device)/\(ai.rawValue)"
         self.expiresAt = expiresAt
+        self.since = since
+        self.updated = updated
+        self.relaySince = relaySince
+        self.isListed = isListed
     }
 
     public func isShown(at localNow: Int64) -> Bool { localNow < expiresAt }
@@ -85,8 +97,8 @@ public enum RemoteAgents {
 
     /// 讀 `agent-remote.json`：`{"v":1,"fetched_at":<本機 ms>,"now":<中繼 ms>,"devices":[{"name","ais":[…],"updated_at":<中繼 ms>}]}`。
     /// 多久以前＝中繼那邊的差（now − updated_at，同一個時鐘）＋下載後在本機經過的時間。格式不對整個不顯示；個別欄位不對略過那一列。
-    /// 依狀態（需要你最前）、裝置名稱、AI 排序
-    public static func parse(_ data: Data, localNow: Int64) -> [RemoteAgent] {
+    /// 依狀態（需要你最前）、裝置名稱、AI 排序。`all`：等你、閒置也留著（`isListed` 為 false），角色合併所有電腦時用
+    public static func parse(_ data: Data, localNow: Int64, all: Bool = false) -> [RemoteAgent] {
         guard data.count <= 64 * 1024,
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               int(root["v"]) == 1,
@@ -106,15 +118,19 @@ public enum RemoteAgents {
                       let state = (row["state"] as? String).flatMap(AgentState.init(rawValue:)),
                       let sessions = int(row["sessions"]), (0...32).contains(sessions) else { continue }
                 seen.insert(ai)
-                guard shown.contains(state) else { continue }
+                let listed = shown.contains(state)
+                guard listed || all else { continue }
                 var expires = fetched + maxAge - (now - updated) + 1
+                let since = int(row["since"])
                 // 完成、出錯：從進入的時間（中繼夾在 updated_at 之前 24 小時內）算 30 分鐘，用中繼的時鐘＋下載後經過的時間
-                if fades.contains(state), let since = int(row["since"]) {
+                if fades.contains(state), let since {
                     guard now - since + elapsed < fadeAfter else { continue }
                     expires = min(expires, fetched + fadeAfter - (now - since))
                 }
+                // 中繼的時間換成本機：中繼的 now 對到本機的 fetched_at
                 list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)",
-                                        expiresAt: expires))
+                                        expiresAt: expires, since: since.map { fetched + $0 - now }, updated: fetched + updated - now,
+                                        relaySince: since, isListed: listed))
             }
         }
         return list.sorted { a, b in
