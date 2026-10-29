@@ -50,6 +50,9 @@ public sealed record AgentActivity(bool Working, bool Background, bool NeedsYou,
         return new AgentActivity(localWorking, localBackground, needsYou, remoteWorking, remoteError, localIdle && !remoteAwake);
     }
 
+    /// <summary>只有其他電腦在工作（同狀態機的 ThinksRemotely）：動畫「簡單」「關閉」時狀態機不換姿勢，小電腦照這個靜態顯示（Fable G-11）</summary>
+    public bool ThinksRemotely => RemoteWorking && !Working && !Background && !NeedsYou;
+
     /// <summary>表情用的狀態：需要你 > 出錯（本機或遠端）> 本機最重要的狀態。遠端的完成不讓角色開心</summary>
     public AgentState? MoodState(AgentState? localTop) =>
         NeedsYou ? AgentState.NeedsYou : localTop == AgentState.Error || RemoteError ? AgentState.Error : localTop;

@@ -59,6 +59,7 @@ extension NotchView {
                            page: rows.isEmpty && store.remoteAgents.isEmpty ? .overview : controller.page,
                            agents: rows, remote: store.remoteAgents,
                            remoteNeedsYou: controller.activity?.needsYou == true && !rows.contains { $0.state == .needsYou },
+                           staticRemote: !controller.motion.animatesBody && controller.activity?.thinksRemotely == true,
                            level: MascotLevelStore.shared.level)
     }
 
@@ -82,6 +83,8 @@ struct NotchExtras: Equatable {
     var remote: [RemoteAgent] = []
     /// 其他電腦需要你（ADR-0019「角色合併所有電腦」）：外框也變琥珀色；收合時的數量只算這台
     var remoteNeedsYou = false
+    /// 動畫「簡單」「關閉」時只有其他電腦在工作：狀態機不進 think，小電腦照合併後的狀態靜態顯示（Fable G-11）
+    var staticRemote = false
     /// 角色等級（ADR-0020）；沒有任何活躍日時 nil
     var level: MascotLevel?
 
@@ -456,7 +459,7 @@ struct NotchCanvas: View {
         let gaze = gazeOverride ?? (still ? (0, 0) : director.gaze(at: time))
         // 只有其他電腦在工作：泡泡旁畫小電腦；展開時、動畫「簡單」「關閉」時也看得出來（泡泡停在亮兩顆，不另外重畫；
         // 收合時的循環照時間亮，Fable G-11）
-        let remote = director.machine.thinksRemotely
+        let remote = director.machine.thinksRemotely || extras.staticRemote
         return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),

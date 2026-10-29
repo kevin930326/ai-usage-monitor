@@ -62,6 +62,9 @@ public struct AgentActivity: Equatable, Sendable {
                              remoteError: remoteError, idle: localIdle && !remoteAwake)
     }
 
+    /// 只有其他電腦在工作（同狀態機的 `thinksRemotely`）：動畫「簡單」「關閉」時狀態機不換姿勢，小電腦照這個靜態顯示（Fable G-11）
+    public var thinksRemotely: Bool { remoteWorking && !working && !background && !needsYou }
+
     /// 表情用的狀態：需要你 > 出錯（本機或遠端）> 本機最重要的狀態。遠端的完成不讓角色開心（不是這台完成的）
     public func moodState(localTop: AgentState?) -> AgentState? {
         if needsYou { return .needsYou }

@@ -111,7 +111,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         }
         var t = still ? controller.StoppedAt : FrameTime();
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
-            still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null);
+            still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null, staticRemote: controller.StaticRemote);
         dc.DrawImage(hero.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
     }
 

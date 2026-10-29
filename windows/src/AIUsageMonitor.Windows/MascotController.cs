@@ -172,7 +172,7 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>某一刻的畫面</summary>
     public MascotFrame? Frame(long t) => Director is { } d
-        ? MascotFrames.From(d, t, Character, Look, EffectTime(t), still: !Motion.MovesEyes())
+        ? MascotFrames.From(d, t, Character, Look, EffectTime(t), still: !Motion.MovesEyes(), staticRemote: StaticRemote)
         : null;
 
     // ---------- 設定檔 ----------
@@ -457,6 +457,9 @@ internal sealed class MascotController : IDisposable
     /// <summary>本機＋其他電腦合併後的狀態（ADR-0019「角色合併所有電腦」）；表情與膠囊第二行也看它</summary>
     public AgentActivity? Activity { get; private set; }
 
+    /// <summary>動畫「簡單」「關閉」時只有其他電腦在工作：小電腦靜態顯示（Fable G-11）</summary>
+    public bool StaticRemote => !Motion.AnimatesBody() && Activity?.ThinksRemotely == true;
+
     private AgentActivity? Merged(long now)
     {
         if (agents is null) return null;
@@ -470,7 +473,9 @@ internal sealed class MascotController : IDisposable
     private void ApplyActivity()
     {
         var merged = Merged(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var wasStatic = StaticRemote;
         Activity = merged;
+        if (StaticRemote != wasStatic) Refresh();
         if (!Motion.AnimatesBody() || Director is not { } director || merged is null) return;
         var m = director.Machine;
         if (m.IsWorking == merged.Working && m.IsAgentIdle == merged.Idle && m.IsNeedsYou == merged.NeedsYou
