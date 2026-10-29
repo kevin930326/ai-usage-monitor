@@ -33,6 +33,8 @@ struct MascotFrame {
     var dozing = false
     /// 收著睡著時小 z 飄起的進度（0…1，ADR-0021 收合時的動態）；nil 時 z 靜止
     var dozeRise: Double?
+    /// 收合時 AI 工作中的思考泡泡（ADR-0021 第 4 節）：右上方三個小點中亮了幾顆（0…3）；nil 時不畫
+    var thinkingDots: Int?
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
@@ -88,6 +90,16 @@ struct MascotPainter {
         case .solid: return (look.light ?? [], look.mid ?? [], look.shade ?? [])
         case .led, .pixel, .ascii: return look.effectTint
         case .linear, .neon, .wire: return nil
+        }
+    }
+
+    /// 思考泡泡亮起的顏色：服務色與單色外觀用淺色、直線漸層用最亮的一段、特效外觀用主色
+    private func thinkingColor(_ frame: MascotFrame) -> [Double] {
+        guard let look = frame.look else { return frame.character.tint(config.palette).light }
+        switch look.style {
+        case .solid: return look.light ?? config.palette.white.light
+        case .linear: return look.stops?.max { $0.reduce(0, +) < $1.reduce(0, +) } ?? config.palette.white.light
+        case .led, .pixel, .neon, .wire, .ascii: return look.color ?? config.palette.white.light
         }
     }
 
@@ -421,6 +433,17 @@ struct MascotPainter {
             for i in 0..<3 {
                 let a = now / 260 + Double(i) * 2.094
                 drawStar(at: CGPoint(x: x + cos(a) * R * 0.95, y: y - R * 1.15 + sin(a) * R * 0.22), size: R * 0.15, in: &context)
+            }
+        }
+        if let lit = frame.thinkingDots {
+            // 思考泡泡：右上方三個小點依序亮起（參考頁的收合座標 R = 9 時間距 3.3、半徑 1.15）；
+            // 亮的用角色的淺色（特效外觀用主色），暗的用半透明白
+            let on = color(thinkingColor(frame))
+            for i in 0..<3 {
+                let r = R * 0.128
+                let center = CGPoint(x: x + R * 0.95 + Double(i) * R * 0.367, y: y - R * 0.95)
+                context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
+                             with: .color(i < lit ? on : Color.white.opacity(0.22)))
             }
         }
         // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）
