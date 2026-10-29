@@ -82,7 +82,7 @@ jobs:
           name: mac-${{ steps.version.outputs.version }}
           path: build/release/out/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 14 || 1 }}
 
   windows:
     name: Windows App（自含式 zip，x64、ARM64）
@@ -145,7 +145,7 @@ jobs:
           name: windows-${{ steps.version.outputs.version }}
           path: build/release/windows/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: ${{ github.event_name == 'workflow_dispatch' && 14 || 1 }}
 
   draft-release:
     name: 建立草稿 Release
