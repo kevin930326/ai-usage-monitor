@@ -225,7 +225,7 @@ struct NotchEffectHero: View {
 /// 收合時的動態（ADR-0021）：角色停在收合的位置，只有小範圍在動，所以預先畫好一輪、交給 Core Animation 循環播放。
 /// App 自己每一格都不用重畫（SwiftUI 每秒更新 12 次光是排版與送出就要約 3% CPU）。
 /// - AI 工作中：會動的特效照特效動；其他外觀是簡化的敲鍵盤（低頭、小手上下、身體輕晃）。所有外觀的右上方都有思考泡泡：
-///   三個小點約每 250 毫秒多亮一顆，三顆全亮後清空重來（一輪的長度要能整除，所以每一步是一輪的 1/4n，約 230～250 毫秒）。每秒 12 格
+///   三個小點約每 250 毫秒多亮一顆，三顆全亮後清空重來（一輪的長度要能整除，所以每一步是一輪的 1/4n，約 225～250 毫秒）。每秒 12 格
 /// - 睡著：慢慢的呼吸（約 4.4 秒一次）加一個飄起的小 z；特效停在那一格。每秒 4 格
 @MainActor
 enum MascotEffectLoop {
@@ -243,15 +243,6 @@ enum MascotEffectLoop {
     static let typingMs = 2 * Double.pi * 310
     /// 呼吸 sin(t/700)
     static let breathMs = 2 * Double.pi * 700
-    /// 思考泡泡每多亮一顆的目標間隔（參考頁 260 毫秒）
-    static let thinkingStepMs = 260.0
-
-    /// 一輪 `length` 毫秒裡第 `t` 毫秒亮了幾顆：0、1、2、3 輪流，一輪剛好走完整數次（接回開頭看不出斷點）
-    static func thinkingDots(at t: Int, length: Double) -> Int {
-        let cycles = max(1, (length / (thinkingStepMs * 4)).rounded())
-        let step = length / (cycles * 4)
-        return Int((Double(t).truncatingRemainder(dividingBy: length) / step).rounded(.down)) % 4
-    }
 
     /// 一輪怎麼畫：長度、每秒幾格、目前時鐘（決定從哪裡開始）、範圍，以及畫第 t 毫秒的那一格
     struct Plan {
@@ -270,7 +261,7 @@ enum MascotEffectLoop {
         case .work:
             if let look = canvas.look, let effect = MascotLookRenderer.loopDuration(look, radius: base[.r] * base[.sc]) {
                 return Plan(length: effect, fps: 12, clock: effectTime(now) ?? 0, box: canvas.effectBox) {
-                    AnyView(canvas.effectFrame(effectTime: $0, thinkingDots: thinkingDots(at: $0, length: effect)))
+                    AnyView(canvas.effectFrame(effectTime: $0, thinkingDots: MascotThinking.dots(at: $0, loop: effect)))
                 }
             }
             // 手放在身體前下方（同展開時敲鍵盤的位置），不畫鍵盤
@@ -278,7 +269,7 @@ enum MascotEffectLoop {
             let pose = base.with([.hands: 1, .type: 1, .sway: 0.5, .lx: w.left[0], .ly: w.left[1], .lz: w.left[2],
                                   .rx: w.right[0], .ry: w.right[1], .rz: w.right[2]])
             return Plan(length: typingMs, fps: 12, clock: now, box: canvas.effectBox) {
-                AnyView(canvas.effectFrame(effectTime: nil, pose: pose, time: $0, thinkingDots: thinkingDots(at: $0, length: typingMs)))
+                AnyView(canvas.effectFrame(effectTime: nil, pose: pose, time: $0, thinkingDots: MascotThinking.dots(at: $0, loop: typingMs)))
             }
         case .sleep:
             let pose = base.with([.breathe: 1])
