@@ -795,7 +795,11 @@ final class MascotController {
         #if DEBUG
         if let debugPointer { pointer = debugPointer() }
         #endif
-        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else { return }
+        // 讀不到角色的位置（瀏海正在換螢幕、隱藏）：高幀率也要停，不然 display link 會一直跑到下次展開
+        guard var director, let origin = NotchPanelController.shared.canvasOrigin() else {
+            endGazeLink()
+            return
+        }
         let t = time()
         let pose = director.pose(at: t)
         // 姿勢暫時不看（反應、轉場中 `.follow` 為 0）：照樣每秒 12 次，轉回來就接著看
