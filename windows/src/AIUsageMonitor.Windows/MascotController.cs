@@ -73,6 +73,7 @@ internal sealed class MascotController : IDisposable
         this.settings = settings;
         this.agents = agents;
         this.store = store;
+        SyncIdleAfter();
         Config = LoadConfig();
         Looks = LoadLooks();
         Painter = new MascotPainter(Config);
@@ -277,10 +278,17 @@ internal sealed class MascotController : IDisposable
     /// <summary>外觀、角色、睡覺的分鐘數等設定改了</summary>
     public void SettingsChanged()
     {
+        SyncIdleAfter();
         MotionChanged();
         UpdateStatus();
         RestartActivityChecks();
         Refresh();
+    }
+
+    /// <summary>hook 工作階段多久沒動靜算閒著（睡覺）：照設定的睡覺分鐘數，和沒有 hook 時的紀錄修改時間一致（同 Mac 的 AgentMonitor.idleAfterMs）</summary>
+    private void SyncIdleAfter()
+    {
+        if (agents is not null) agents.Sessions.IdleAfter = settings.MascotSleepMinutes * 60_000L;
     }
 
     private bool CanDetect(MascotMachine m) =>
