@@ -39,6 +39,15 @@
   </picture>
 </p>
 
+Windows 桌面 App 的懸浮圖示也可以是同一個角色，滑鼠移上去展開：
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/windows-mascot-dark.png">
+    <img src="docs/images/windows-mascot-light.png" width="311" alt="Windows 的懸浮角色展開成膠囊：左邊是角色與等級，右邊是 Claude 與 Codex 每週額度的剩餘與重置時間">
+  </picture>
+</p>
+
 <details>
 <summary>看完整的 Mac 面板（接下來的重置、本週額度走勢、額度消耗、Token 統計、服務狀態）</summary>
 
@@ -51,7 +60,7 @@
 
 </details>
 
-截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
+截圖都是示範資料（Debug 版的 `AUM_DEMO`／`scripts/make-demo-history.py`；Windows 是 CI 以 `--render` 產生），不是真實用量；由 `scripts/update-readme-images.sh` 產生（來源見 `docs/images/SOURCES.tsv`）。
 
 ## 功能
 

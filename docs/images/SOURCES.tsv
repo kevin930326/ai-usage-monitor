@@ -26,3 +26,5 @@ watch-app.png	watch-screen:app	-	-	frame=60
 mac-notch.png	mac:notch-level.png	apple/Snapshots/mac/notch-level.png	-	crop=20:60:1160:360 frame=40
 mac-notch-collapsed-light.png	mac:notch-menubar-light.png	apple/Snapshots/mac/notch-menubar-light.png	-	crop=20:64:1520:64 frame=12
 mac-notch-collapsed-dark.png	mac:notch-menubar-dark.png	apple/Snapshots/mac/notch-menubar-dark.png	-	crop=20:64:1520:64 frame=12
+windows-mascot-light.png	win:mascot/expand-right-light-light.png	-	-	frame=16
+windows-mascot-dark.png	win:mascot/expand-right-dark-dark.png	-	-	frame=16
