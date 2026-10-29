@@ -3,7 +3,9 @@
 
 - 原始碼不得出現網路（System.Net、HttpClient、Socket、WinHttp、WebSocket…）與認證（CredRead、PasswordVault…）的 API
 - 啟動其他程式（Process.Start、ProcessStartInfo）只能在 SystemServices.cs（觸發收集器的 schtasks.exe）
-- App、UsageCore 與 hook（AumHook，ADR-0019）不得有 PackageReference（不帶第三方程式）
+- App、UsageCore 與 hook（AumHook，ADR-0019）不得有 PackageReference（不帶第三方程式）。唯一的例外（2026-10-29，ADR-0015
+  第 1 節）：角色的繪製 MascotRender 只能參考 SkiaSharp、版本以 [x.y.z] 固定，並且有 packages.lock.json（只含 SkiaSharp 與它的
+  Win32、macOS 原生檔，版本相同、有雜湊）
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
 - 唯一的例外（2026-10-29，ADR-0015 第 2 節）：事故頁連結。網址只能出現在 UsageCore/IncidentLink.cs，而且只能是
   https://status.claude.com/incidents/、https://status.openai.com/incidents/ 兩個前綴；用預設瀏覽器打開
@@ -17,6 +19,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -42,6 +45,10 @@ URL_ALLOWED = ("https://status.claude.com/incidents/", "https://status.openai.co
 URL = re.compile(r"(?i:https?://)")
 # 用預設程式打開：UseShellExecute 只要不是寫明 = false 都算
 SHELL_OPEN = re.compile(r"\bUseShellExecute\b(?!\s*=\s*false\b)")
+# 第三方套件的唯一例外：角色的繪製（ADR-0015 第 1 節）
+SKIA_PROJECT = ("MascotRender", "MascotRender.csproj")
+SKIA_REFERENCE = re.compile(r'<PackageReference\s+Include="SkiaSharp"\s+Version="\[(\d+\.\d+\.\d+)\]"\s*/>')
+SKIA_LOCKED = {"SkiaSharp", "SkiaSharp.NativeAssets.Win32", "SkiaSharp.NativeAssets.macOS"}
 # Release 版不該有的字串（DebugTools.cs 的參數與示範資料）；.NET 的字串以 UTF-16LE 存放
 DEBUG_STRINGS = ["--render", "--demo", "aum-demo-", "DebugTools", "DemoJson"]
 
@@ -61,7 +68,8 @@ def strip_strings(text: str) -> str:
 
 def check_sources(root: Path = ROOT) -> list[str]:
     problems = []
-    for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore", root / "src" / "AumHook"):
+    for folder in (root / "src" / "AIUsageMonitor.Windows", root / "src" / "UsageCore", root / "src" / "AumHook",
+                   root / "src" / "MascotRender"):
         for path in sorted(folder.rglob("*")):
             if path.suffix not in (".cs", ".xaml", ".csproj", ".props") or "obj" in path.parts or "bin" in path.parts:
                 continue
@@ -92,8 +100,36 @@ def check_sources(root: Path = ROOT) -> list[str]:
                         problems.append(f"{rel}: UseShellExecute 只能在 IncidentPage 裡、經過 IncidentLink.Link 檢查")
             if path.suffix == ".cs" and not system_services and PROCESS.search(code):
                 problems.append(f"{rel}: 只有 SystemServices.cs 可以啟動其他程式")
-            if path.suffix == ".csproj" and "PackageReference" in code:
+            if path.suffix == ".csproj" and path.parts[-2:] == SKIA_PROJECT:
+                problems += check_skia(path, code, rel)
+            elif path.suffix == ".csproj" and "PackageReference" in code:
                 problems.append(f"{rel}: 不允許 PackageReference（App 與 UsageCore 不帶第三方套件）")
+    return problems
+
+
+def check_skia(path: Path, code: str, rel: Path) -> list[str]:
+    """MascotRender 只能參考固定版本的 SkiaSharp，而且用 packages.lock.json 鎖住雜湊"""
+    references = re.findall(r"<PackageReference\b[^>]*>", code)
+    pinned = SKIA_REFERENCE.findall(code)
+    if len(references) != 1 or len(pinned) != 1:
+        return [f"{rel}: 只允許一個 PackageReference：SkiaSharp，版本以 [x.y.z] 固定"]
+    version = pinned[0]
+    if not re.search(r"<RestorePackagesWithLockFile>\s*true\s*</RestorePackagesWithLockFile>", code):
+        return [f"{rel}: 要用 packages.lock.json（RestorePackagesWithLockFile）"]
+    lock_path = path.with_name("packages.lock.json")
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [f"{rel}: 找不到或讀不懂 packages.lock.json"]
+    problems = []
+    for framework, packages in lock.get("dependencies", {}).items():
+        for name, entry in packages.items():
+            if entry.get("type") == "Project":
+                continue
+            if name not in SKIA_LOCKED:
+                problems.append(f"{rel}: packages.lock.json 有不允許的套件 {name}（{framework}）")
+            elif entry.get("resolved") != version or not entry.get("contentHash"):
+                problems.append(f"{rel}: packages.lock.json 的 {name} 不是 {version} 或沒有雜湊")
     return problems
 
 

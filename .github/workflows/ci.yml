@@ -365,6 +365,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet test windows/tests/UsageCore.Tests
+      # 角色的繪製（SkiaSharp）：和 Mac 相同情境的截圖與並排比對圖（build/win-mascot/compare-*.png）
+      - run: dotnet test windows/tests/MascotRender.Tests
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-mascot
+          path: build/win-mascot/
+          if-no-files-found: ignore
       - name: Build Release (x64, ARM64) without Debug strings
         run: |
           foreach ($rid in 'win-x64', 'win-arm64') {

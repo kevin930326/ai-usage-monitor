@@ -249,4 +249,4 @@ Mac 的 `MascotLookRenderer` 用 CoreGraphics 畫身體。瀏海的 Canvas（`wi
 - 進入那個狀態時要畫一輪（18～36 張），之後到狀態改變前不再畫。
 - ADR-0010 第 1 節、ADR-0016 第 7 節加註指回本 ADR；MASCOT-SPEC、設計 skill 同步更新。
 - 格子特效的眼睛格不跟著 roll（揮手晃動時眼睛不跟頭轉，Fable F-11），記在 BACKLOG。
-- Windows 的角色（BACKLOG 第 12 節）之後讀同一份資料。畫法要照本 ADR 第 2 節重寫一份 C#（Direct2D／Win2D），沒有 golden；要比對就用截圖。
+- Windows 的角色（BACKLOG 第 12 節）讀同一份資料。畫法照本 ADR 第 2 節重寫一份 C#（SkiaSharp，`windows/src/MascotRender`，[ADR-0015](0015-windows-desktop-app.md) 第 1 節），沒有 golden；用和 Mac 相同情境的截圖並排比對。
