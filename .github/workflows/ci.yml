@@ -425,3 +425,32 @@ jobs:
           & .\scripts\install-windows-app.ps1 -Uninstall
           if (Test-Path $app) { throw 'not removed' }
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\windows-app.json'))) { throw 'settings should be kept' }
+      - name: install-windows-app.ps1 -FromRelease (fake release, SHA-256)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $app = Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\WindowsApp'
+          # 假的 Release：上面建好的 x64 Release 包成和 package-windows-app.py 一樣的 zip（裡面一個 AIUsageMonitor 資料夾）
+          $rel = Join-Path $env:RUNNER_TEMP 'fake-release'
+          $stage = Join-Path $env:RUNNER_TEMP 'fake-stage'
+          New-Item -ItemType Directory -Force -Path $rel, $stage | Out-Null
+          Copy-Item -Recurse "$env:RUNNER_TEMP\rel-win-x64" (Join-Path $stage 'AIUsageMonitor')
+          $zip = Join-Path $rel 'AIUsageMonitor-windows-x64-0.0.1.zip'
+          Compress-Archive -Path (Join-Path $stage 'AIUsageMonitor') -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          Set-Content (Join-Path $rel 'SHA256SUMS-windows') "$hash  AIUsageMonitor-windows-x64-0.0.1.zip"
+          & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.1 -ReleaseDir $rel -NoStart
+          if (-not (Test-Path "$app\AIUsageMonitor.exe")) { throw 'not installed from release' }
+          $before = (Get-Item "$app\AIUsageMonitor.exe").LastWriteTimeUtc
+          # 檔案被改過（SHA-256 不一致）：要停，而且不動已安裝的版本
+          Add-Content $zip 'tampered'
+          $failed = $false
+          try { & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.1 -ReleaseDir $rel -NoStart } catch { $failed = $_.Exception.Message -match 'SHA-256' }
+          if (-not $failed) { throw 'tampered zip should stop with a SHA-256 error' }
+          if ((Get-Item "$app\AIUsageMonitor.exe").LastWriteTimeUtc -ne $before) { throw 'installed version changed' }
+          if (Test-Path "$app.new") { throw 'new folder left behind' }
+          # 清單裡沒有這個版本：也要停
+          $failed = $false
+          try { & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.2 -ReleaseDir $rel -NoStart } catch { $failed = $true }
+          if (-not $failed) { throw 'missing zip should stop' }
+          & .\scripts\install-windows-app.ps1 -Uninstall
