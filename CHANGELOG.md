@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Changed
+- 瀏海展開後的分頁圖示：「總覽」從房子改成角色的臉（自訂 SF Symbol `notch.face`，圓框加兩顆膠囊眼，隨字重縮放、跟著文字顏色，`scripts/make-face-symbol.py` 產生）、「完整面板」改成 `list.bullet.rectangle`（右鍵選單同一項一起換）、「歷史」改成 `chart.line.uptrend.xyaxis`；順序、滑鼠提示與 VoiceOver 不變
+
 ## [1.0.0] - 2026-10-29
 
 第一個附發布檔的版本：Mac App 的 `.dmg`／一行安裝、Windows 收集器的一行安裝與 Windows 桌面 App 的自含式 zip（見 README 的「安裝」）。

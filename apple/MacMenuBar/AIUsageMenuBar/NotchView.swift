@@ -543,7 +543,7 @@ struct NotchContent: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: NotchTab.spacing) {
-                NotchTab(symbol: "house.fill", label: "總覽", selected: extras.page == .overview) {
+                NotchTab(symbol: NotchTab.faceSymbol, custom: true, label: "總覽", selected: extras.page == .overview) {
                     MascotController.shared.setPage(.overview)
                 }
                 if extras.hasAgentPage {
@@ -553,7 +553,7 @@ struct NotchContent: View {
                     }
                 }
                 NotchTab(symbol: FullPanelController.symbol, label: FullPanelController.openHelp) { FullPanelController.shared.open() }
-                NotchTab(symbol: "clock", label: "歷史") { AppActions.openStats?(); NSApplication.shared.activate() }
+                NotchTab(symbol: AppActions.statsSymbol, label: "歷史") { AppActions.openStats?(); NSApplication.shared.activate() }
                 NotchTab(symbol: "gearshape", label: "設定") { AppActions.openSettings?(); NSApplication.shared.activate() }
             }
             .frame(height: 20)
@@ -907,7 +907,12 @@ struct NotchTab: View {
     static let width = 22.0
     static let spacing = 4.0
 
+    /// 「總覽」：角色的臉（Assets.xcassets 的自訂 symbol，由 scripts/make-face-symbol.py 產生）
+    static let faceSymbol = "notch.face"
+
     let symbol: String
+    /// `symbol` 是 Asset Catalog 的自訂 symbol（不是 SF Symbols）
+    var custom = false
     let label: String
     var selected = false
     /// 需要你時 AI 工作階段的分頁用琥珀色
@@ -916,7 +921,7 @@ struct NotchTab: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
+            (custom ? Image(symbol) : Image(systemName: symbol))
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: Self.width, height: 20)
                 .background(Capsule().fill(selected ? Color(red: 0x26 / 255, green: 0x26 / 255, blue: 0x2e / 255) : .clear))
