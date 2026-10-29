@@ -45,16 +45,16 @@ Mac 的畫法（`MascotDrawing.swift`、`MascotLookRenderer.swift`）用到 Core
 
 | 項目 | 決定 |
 |---|---|
-| 套件 | `SkiaSharp`（MIT，.NET Foundation 的 mono/SkiaSharp），版本以 `[4.153.1]` 固定；相依只有它自己的 `NativeAssets.Win32`（x64、ARM64 的 `libSkiaSharp.dll`）與 `NativeAssets.macOS`（Mac 上跑測試用）。**不用** `SkiaSharp.Views.WPF`（多一個套件，而且 `SKElement` 每次重畫都配置新的點陣圖） |
-| 鎖定 | `packages.lock.json` 記下每個套件的版本與內容雜湊並提交；CI（`CI=true`）以 `RestoreLockedMode` 還原，雜湊不同或鎖定檔過時就失敗。升級版本：改 csproj 的版本、`dotnet restore --force-evaluate` 重產鎖定檔、在 PR 說明變更 |
-| 範圍 | 只有 `MascotRender` 能參考它；App、UsageCore、AumHook 仍然不得有 `PackageReference`。`check-no-network.py` 檢查：`MascotRender.csproj` 只能有一個 `PackageReference`（`SkiaSharp`、`[x.y.z]`）、有鎖定檔、鎖定檔只含上面三個套件且版本相同、都有雜湊；`MascotRender` 的原始碼和 App 一樣不得出現網路與認證的 API |
+| 套件 | `SkiaSharp`（MIT，Microsoft 發行、原始碼 mono/SkiaSharp，4.153.1 是 release/4.153.1 的 commit 4783f514；套件要求接受授權），版本以 `[4.153.1]` 固定；相依只有它自己的 `NativeAssets.Win32`（x64、ARM64 的 `libSkiaSharp.dll`）與 `NativeAssets.macOS`（Mac 上跑測試用；沒有 Linux 的原生檔，所以 `MascotRender.Tests` 只在 Mac 與 Windows 跑）。**不用** `SkiaSharp.Views.WPF`（多一個套件、要參考 WPF，Mac 就不能建置與測試） |
+| 鎖定 | `packages.lock.json` 記下每個套件的版本與內容雜湊並提交；CI（`CI=true`）以 `RestoreLockedMode` 還原，雜湊不同或鎖定檔過時就失敗；`RuntimeIdentifiers` 設成 `win-x64;win-arm64`，App 以 `-r` 發行時也照鎖定檔還原。升級版本：改 csproj 的版本、`dotnet restore --force-evaluate` 重產鎖定檔、在 PR 說明變更 |
+| 範圍 | 只有 `MascotRender` 能參考它；App、UsageCore、AumHook 仍然不得參考套件。`check-no-network.py` 檢查：`windows/`（測試除外）所有的 `*.csproj`、`*.props`、`*.targets`、`Directory.*` 除了 `MascotRender.csproj` 都不得有 `PackageReference`、`GlobalPackageReference`、`PackageDownload`、`PackageVersion`，也不得有 `nuget.config`、`Directory.Packages.props`；`MascotRender.csproj` 只能有一個 `PackageReference`（`SkiaSharp`、`[x.y.z]`）、有鎖定檔，鎖定檔的 framework 剛好有上面三個套件（平台的區段只有原生檔）、版本相同、都有雜湊；`MascotRender` 的原始碼和 App 一樣不得出現網路與認證的 API |
 | 畫法 | `MascotPainter`、`MascotLookPainter` 逐段對照 Mac 的兩個檔案（同樣的數字從 `shared/` 讀，表情內部的形狀照抄）；畫在 `SKCanvas`，App 把像素複製到 `WriteableBitmap` 交給 WPF 顯示（只在角色有變化時） |
 | 比對 | 沒有 golden（像素和 CoreGraphics 不會完全相同）：`MascotRender.Tests` 用和 Mac `DebugMascot` 相同的情境（固定時間、種子、視線）畫出表情、外觀、收合與過場的對照圖，左邊放 Mac 的截圖基準、右邊放 Windows，存在 `build/win-mascot/compare-*.png`；Mac（verify-all）與 Windows（CI artifact `windows-mascot`）都會產生。Mac 上能跑，所以改畫法時在 Mac 就能並排檢查 |
-| 大小 | `libSkiaSharp.dll` x64 約 11 MB、ARM64 約 13 MB，加上 `SkiaSharp.dll` 0.6 MB；發行檔不帶原生檔的 `.pdb`（約 90 MB） |
+| 大小 | `libSkiaSharp.dll` x64 約 13 MB、ARM64 約 11 MB，加上 `SkiaSharp.dll` 0.6 MB。原生檔套件在 `runtimes/<rid>/native/` 也帶了 `libSkiaSharp.pdb`（約 90 MB）：`windows/Directory.Build.targets` 在 `ResolvePackageAssets` 之後把它移出複製清單，`check-no-network.py --release` 遇到第三方 `.pdb` 就失敗 |
 
 **為什麼不用 WPF 的 `DrawingContext`**：沒有雙圓錐漸層（`RadialGradientBrush` 的 `GradientOrigin` 不能有起點半徑，高光中心會不同）、
-陰影只能用 `Effect`（整個元素一次、每格都要重算，霓虹與線框的發光很花 CPU），也不能在 Mac 上畫出截圖比對；寫成兩套畫法（Mac 一套、WPF 一套）
-就得各自調整到看起來一樣。**為什麼不用 Direct2D／Win2D**：要 P/Invoke 或 WinRT 的投影、同樣不能在 Mac 上測試。
+陰影只能用 `Effect`（整個元素一次；軟體繪製時——遠端桌面、沒有 GPU 的 VM——每格都在 CPU 重算，霓虹與線框的發光很慢），也不能在 Mac 上畫出截圖比對；寫成兩套畫法（Mac 一套、WPF 一套）
+就得各自調整到看起來一樣。**為什麼不用 Direct2D／Win2D**：放射漸層同樣只有原點偏移、沒有起點半徑（和 WPF 一樣畫不出雙圓錐漸層），還要 P/Invoke 或 WinRT 的投影、同樣不能在 Mac 上測試。
 
 **風險**：多了一個第三方原生程式（供應鏈）——以固定版本、雜湊鎖定、只在一個專案、靜態檢查限制；Skia 本身沒有網路功能，App 仍以防火牆實測確認不連網（第 2 節的實機確認）。
 
@@ -95,7 +95,7 @@ Mac 的畫法（`MascotDrawing.swift`、`MascotLookRenderer.swift`）用到 Core
 - **唯一的網址例外：事故頁連結**（2026-10-29 使用者決定，ADR-0018 第 4 節）：面板的事故那行可以點，用**預設瀏覽器**打開那個事故頁。App 自己仍不連網——網址交給 Windows 的 ShellExecute，由使用者的瀏覽器打開。只在使用者點了（或用鍵盤按下）那一行時；網址必須**剛好**是 `https://status.claude.com/incidents/<ID>` 或 `https://status.openai.com/incidents/<ID>`（收集器實際查的兩個狀態頁；ID 只有英數字、底線、連字號，1～64 字；大小寫、帳號、連接埠、查詢字串、片段、多一層路徑都不收），其他一律不開、只顯示文字。規則是 UsageCore `IncidentLink` 與 Swift `ServiceIncident.link` 的共用邏輯，`fixtures/incident-links.json` 兩邊比對；開啟前在 `SystemServices.cs` 的 `IncidentPage` 再檢查一次。除了這個由使用者點擊、交給 ShellExecute 打開的瀏覽器，啟動的程式只有 `schtasks.exe /Run`：「立即更新」的 `\AIUsageMonitor\Collector`，以及 AI 狀態改變時的 `\AIUsageMonitor\AgentSync`
   （ADR-0019 第 2 節；都是觸發使用者自己的排程，不連網、不需要系統管理員）。
 - **驗證**：
-  1. CI 靜態檢查 `windows/tools/check-no-network.py`：App 與 UsageCore 的原始碼不得出現網路（`System.Net`、`HttpClient`、`WebRequest`、`Socket`、`WinHttp`…）、認證（`CredRead`、`CredWrite`、`PasswordVault`…）的 API；`Process.Start` 只能在觸發收集器的那個檔案；不得有 `PackageReference`（App；唯一的例外是 `MascotRender` 固定版本的 SkiaSharp，第 1 節「角色的繪製」）；不得用 `CompositionTarget.Rendering`。網址的例外只有事故頁連結：網址只能出現在 `UsageCore/IncidentLink.cs` 而且只能剛好是上面兩個前綴；用預設程式打開（`UseShellExecute` 不是寫明 `false`）只能在 `AIUsageMonitor.Windows/SystemServices.cs` 的 `IncidentPage` 出現一次、而且經過 `IncidentLink.Link`（`scripts/tests/test_check_no_network.py`）。這是擋誤用的靜態檢查、不追資料流：`SystemServices.cs` 本來就能啟動程式（例如用 `explorer.exe` 開網址），`IncidentPage` 裡是否真的只把檢查過的字串交出去、有沒有用字串串接組出網址，仍要靠 code review。
+  1. CI 靜態檢查 `windows/tools/check-no-network.py`：App 與 UsageCore 的原始碼不得出現網路（`System.Net`、`HttpClient`、`WebRequest`、`Socket`、`WinHttp`…）、認證（`CredRead`、`CredWrite`、`PasswordVault`…）的 API；`Process.Start` 只能在觸發收集器的那個檔案；`windows/`（測試除外）的專案與共用設定不得參考套件、不得有 `nuget.config`（唯一的例外是 `MascotRender` 固定版本的 SkiaSharp，第 1 節「角色的繪製」）；不得用 `CompositionTarget.Rendering`。網址的例外只有事故頁連結：網址只能出現在 `UsageCore/IncidentLink.cs` 而且只能剛好是上面兩個前綴；用預設程式打開（`UseShellExecute` 不是寫明 `false`）只能在 `AIUsageMonitor.Windows/SystemServices.cs` 的 `IncidentPage` 出現一次、而且經過 `IncidentLink.Link`（`scripts/tests/test_check_no_network.py`）。這是擋誤用的靜態檢查、不追資料流：`SystemServices.cs` 本來就能啟動程式（例如用 `explorer.exe` 開網址），`IncidentPage` 裡是否真的只把檢查過的字串交出去、有沒有用字串串接組出網址，仍要靠 code review。
   2. 實機：防火牆封鎖 App 的輸出連線後一切正常；Process Monitor 看不到 TCP/UDP 與認證存取，只有點事故那行時有一次 ShellExecute（實機確認清單）。
 - **檔案變更**：`FileSystemWatcher` 監看**資料夾**（收集器先寫暫存檔再改名，監看檔案本身會在改名後失效，同 Mac 的 `UsageStore`），`*.json`、300 ms 去抖動後重讀；內容與上一份相同時不通知畫面。watcher 出錯時由每分鐘的計時器重讀並重建。閒置時沒有輪詢。
 - **SQLite（階段 2）**：Windows 內建的 `winsqlite3.dll`（Windows 10 起，x64／ARM64 都有），開法照 Mac 的 `HistoryStore`：`SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX`（不加 CREATE）＋`PRAGMA query_only = ON`＋`busy_timeout`；不用 `mode=ro`（WAL 下 `-shm` 不存在時開不了）。不用 `Microsoft.Data.Sqlite`（多帶原生 DLL 與一個套件相依）。
@@ -226,16 +226,24 @@ Mac 的畫法（`MascotDrawing.swift`、`MascotLookRenderer.swift`）用到 Core
   [ADR-0016](0016-mascot-character.md) 第 6、7 節（同一份狀態機，重畫的頻率也相同）：
   | 狀態 | 計時器 |
   |---|---|
-  | 收合、沒在動 | **沒有**（和圓環相同） |
+  | 圖示樣式不是角色（圓環、角色＋%以外）、只顯示系統匣 | 角色的物件不建立；切回圓環時停止計時器、釋放點陣圖 |
+  | 全螢幕隱藏、圖示關閉 | 全部停止（重畫、輪播、讀游標、看紀錄檔都停）；顯示時重建一次 |
+  | 收合、沒在動 | **沒有**重畫的計時器；只有讀游標（下面「看滑鼠」，每秒 4 次、游標沒動不重畫；Mac 實測收合閒置 0.10% 就含這個） |
   | 收合、AI 工作中（敲鍵盤＋思考泡泡）或特效外觀在動 | 一輪（約 2 秒）先畫好的點陣圖，每秒 12 格輪播；不追游標 |
   | 收合、睡著（呼吸＋小 z） | 先畫好的一輪（約 4.4 秒），每秒 4 格輪播 |
-  | 展開待著（眨眼、看滑鼠） | 每秒 30 格，兩次眨眼之間畫面不動就停止，到下次眨眼再開始 |
+  | 貼邊收合（半個頭＋眼睛的標籤） | 靜態一格：不輪播、不看滑鼠；滑出後照上面的規則 |
+  | 面板開著 | 圓環不展開（第 6 節），角色照「收合」的規則 |
+  | 展開待著（眨眼、看滑鼠） | 每秒 30 格，兩次眨眼之間畫面不動就停止，到下次眨眼再開始；只有視線在轉時每秒 15 格 |
+  | 展開、睡著（呼吸） | 每秒 10 格 |
   | 過場、反應動畫中 | 每秒 60 格，結束後回到上一列或停止 |
+  - 頻率與 Mac 的 `MascotRenderRate` 相同（ADR-0016 第 6 節）。
   - 一個角色用的 `DispatcherTimer`（`DispatcherPriority.Render`），頻率依上表切換、不需要時停止；仍不用 `CompositionTarget.Rendering`。
-  - 看滑鼠：`GetCursorPos` 輪詢（不裝鉤子），游標有動時每秒約 12 次、停住 1 秒後每秒 4 次；收合時工作中或睡著每秒 1 次；設定關閉或圖示隱藏時停止。視線變化小於門檻不重畫。
+  - 看滑鼠：`GetCursorPos` 輪詢（不裝鉤子），游標有動時每秒約 12 次、游標與角色都停住 1 秒後每秒 4 次（收合閒置時迷你角色的眼睛也跟著游標，ADR-0016 第 7 節）；
+    收合時 AI 工作中或睡著不追游標，改成每秒 1 次只看「是否又該追游標」（同 Mac 的 `pollPointer`；狀態改變時馬上回到每秒 12 次）；設定關閉時停止。視線變化小於門檻不重畫。
   - 「工作中」與睡覺：沒接 hook 的 AI 看紀錄資料夾的修改時間（展開時每 5 秒、收著時每 60 秒，不讀內容；同 ADR-0016 第 5 節）。
-  - 門檻：閒置（收合、沒在動）≤ 0.1% 不放寬；展開待著 ≤ 4%（同 ADR-0016）；收合工作中、收合睡著記錄並寫進 PR（目標 ≤ 1%，超過就降頻或簡化）；
-    `measure-perf.ps1` 加這四個狀態。
+  - 門檻：閒置（收合、沒在動，含每秒 4 次讀游標）≤ 0.1% 不放寬；展開待著 ≤ 4%（同 ADR-0016）；收合工作中、收合睡著記錄並寫進 PR（目標 ≤ 1%，超過就降頻或簡化）。
+  - 量測這四個狀態（`measure-perf.ps1 -Mascot`，Release 版也能跑）：暫存的 `windows-app.json` 設樣式＝角色、睡覺 1 分鐘；`CLAUDE_CONFIG_DIR` 指到暫存資料夾、
+    每 10 秒修改一個假的紀錄檔製造「工作中」，停止修改後等睡著；第二個執行個體的具名事件 `--expand-ring`／`--collapse-ring` 讓圓環展開、收合（不移動真的游標）。
 - **量測**：`windows/tools/measure-perf.ps1`：`AI_USAGE_MONITOR_HOME` 指到暫存資料夾、放示範的 `usage.json`，啟動 Release 版 App，每秒以 `Get-Process` 取樣；以第二個執行個體的命令（`--show-panel`、`--hide-panel`，具名事件）開關面板兩次；輸出各階段的平均與最大值，寫進 PR。Release 版也能量測（不需要 Debug 的示範程式）。
 
 ## 8. 截圖、測試與安裝
