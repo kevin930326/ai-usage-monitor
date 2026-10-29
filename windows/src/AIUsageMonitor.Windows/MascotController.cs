@@ -89,7 +89,7 @@ internal sealed class MascotController : IDisposable
         Painter = new MascotPainter(Config);
         frameTimer = Timer(dispatcher, DispatcherPriority.Render, () => Changed?.Invoke());
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
-        rateTimer = OneShot(dispatcher, Refresh);
+        rateTimer = OneShot(dispatcher, () => Refresh());
         gazeTimer = Timer(dispatcher, DispatcherPriority.Background, PollPointer);
         trackTimer = Timer(dispatcher, DispatcherPriority.Render, PollPointer);
         workTimer = Timer(dispatcher, DispatcherPriority.Background, CheckWorking);
@@ -339,11 +339,13 @@ internal sealed class MascotController : IDisposable
         var t = Time();
         var pose = director.Pose(t);
         var gesture = gestures.Move(x, y, t, pose[MascotProp.X], pose[MascotProp.Y], pose[MascotProp.R], CanDetect(director.Machine));
+        // 游標在視窗裡每動一次（約每 16 毫秒）都會來：沒有手勢、而且照計時器在重畫時不另外整張重繪
+        // （透明視窗每重繪一次都很貴；以前展開看滑鼠時 CI 量到 10～14%，和看滑鼠的頻率無關）
         Mutate(d =>
         {
             d.Move(t);
             if (gesture is { } g) d.Gesture(g, t);
-        });
+        }, redraw: gesture is not null || !Rate.FollowsGaze());
         hoverTimer.Stop();
         if (gestures.HoverDeadline is { } deadline) Start(hoverTimer, deadline - t);
     }
@@ -739,18 +741,20 @@ internal sealed class MascotController : IDisposable
 
     // ---------- 到期與重畫頻率 ----------
 
-    public void Mutate(Action<MascotDirector> body)
+    /// <summary>redraw = false：重畫頻率沒變時不馬上重繪（下一格的計時器會畫）</summary>
+    public void Mutate(Action<MascotDirector> body, bool redraw = true)
     {
         if (Director is not { } director) return;
         body(director);
-        Refresh();
+        Refresh(redraw);
         // 收合時工作結束、醒來：又要看游標了，馬上回到每秒 12 次
         if (gazeDozing && director.Machine.FollowsPointer) RestartGaze();
     }
 
     /// <summary>依狀態機的下一個到期時間排一次計時器（不輪詢）；並決定重畫頻率（同 Mac 的 refresh）</summary>
-    public void Refresh()
+    public void Refresh(bool redraw = true)
     {
+        var before = Rate;
         deadlineTimer.Stop();
         rateTimer.Stop();
         if (Director is not { } director || !shown)
@@ -814,7 +818,7 @@ internal sealed class MascotController : IDisposable
         if (pulsing) Start(rateTimer, PulseMs - (now - PulseAt!.Value) + 10);
         else if (live && rate is MascotRenderRate.Stopped or MascotRenderRate.Effect) Start(rateTimer, director.NextBlink(now) - now);
         else if (rate is not (MascotRenderRate.Stopped or MascotRenderRate.Effect)) Start(rateTimer, 250);
-        Changed?.Invoke();
+        if (redraw || Rate != before || !Rate.FollowsGaze()) Changed?.Invoke();
     }
 
     private void SetRate(MascotRenderRate rate, MascotCollapsedMotion? loop, object? key = null)
