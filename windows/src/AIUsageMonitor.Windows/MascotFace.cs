@@ -62,8 +62,10 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         var heroCenter = new Point(center.X + inward * radius * HeroFill * (2 * TabShown - 1), center.Y);
         if (controller.Loop is not null)
         {
-            if (inward < 0) dc.PushTransform(new ScaleTransform(-1, 1, heroCenter.X, 0));
-            DrawHero(dc, heroCenter, radius, 0, options.PixelsPerDip);
+            // 收合的一輪把角色往左下移、縮小（讓出泡泡與 z 的位置）：標籤上抵銷這個位移，頭照樣露出約 60%
+            var busyCenter = new Point(center.X + inward * radius * BusyFill * (2 * TabShown - 1), center.Y);
+            if (inward < 0) dc.PushTransform(new ScaleTransform(-1, 1, busyCenter.X, 0));
+            DrawHero(dc, busyCenter - BusyShift * radius, radius, 0, options.PixelsPerDip);
             if (inward < 0) dc.Pop();
             return;
         }
