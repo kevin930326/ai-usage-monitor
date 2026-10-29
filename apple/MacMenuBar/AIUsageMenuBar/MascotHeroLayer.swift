@@ -185,13 +185,15 @@ final class MascotHeroLayerView: NSView {
         }
         guard let body else { return }
         place(bodyLayer, at: bounds.offsetBy(dx: at.x - body.at.x, dy: at.y - body.at.y))
-        // 臉在身體的範圍裡（眼睛的發光、腮紅都不超過 1.2 倍半徑），加上呼吸的位移
+        place(heroLayer, at: Self.faceBox(frame, at: body.at).offsetBy(dx: -box.minX, dy: -box.minY).intersection(bounds))
+        heroLayer.setNeedsDisplay()
+    }
+
+    /// 每格重畫的臉那一塊（畫布座標）：眼睛的發光、腮紅都不超過 1.2 倍半徑（`DebugHeroParity` 也照這塊裁）
+    static func faceBox(_ frame: MascotFrame, at center: CGPoint) -> CGRect {
         let r = frame.pose[.r] * frame.pose[.sc]
         let half = (r * 1.2 + 6).rounded(.up)
-        let face = CGRect(x: body.at.x - half, y: body.at.y - half, width: half * 2, height: half * 2)
-            .offsetBy(dx: -box.minX, dy: -box.minY).intersection(bounds)
-        place(heroLayer, at: face)
-        heroLayer.setNeedsDisplay()
+        return CGRect(x: center.x - half, y: center.y - half, width: half * 2, height: half * 2)
     }
 
     /// 圖層放在 `rect`（y 往下）；這個 view 的 backing layer 沒有翻轉時（y 往上）換算

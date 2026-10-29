@@ -86,7 +86,8 @@ enum DebugHeroParity {
         UsageStore.log("hero parity: \(cases.count - failed)/\(cases.count) ok")
     }
 
-    /// 和 `MascotHeroLayerView` 同一份畫法：身體只會平移時先畫身體、再畫臉（同兩層疊起來），否則整個一起畫
+    /// 和 `MascotHeroLayerView` 同一份畫法：身體只會平移時先畫身體、再畫臉（同兩層疊起來；臉只畫在同一塊 `faceBox` 裡，
+    /// 裁掉東西的話比對會失敗，Codex C-03），否則整個一起畫
     static func coreGraphics(_ frame: MascotFrame, painter: MascotPainter, box: CGRect, scale: Double) -> CGImage? {
         let w = Int((box.width * scale).rounded(.up)), h = Int((box.height * scale).rounded(.up))
         guard let cg = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
@@ -101,7 +102,11 @@ enum DebugHeroParity {
             cg.scaleBy(x: 1, y: -1)
             cg.draw(body, in: CGRect(origin: .zero, size: box.size))
             cg.restoreGState()
+            let face = MascotHeroLayerView.faceBox(frame, at: painter.heroCenter(frame)).offsetBy(dx: -box.minX, dy: -box.minY)
+            cg.saveGState()
+            cg.clip(to: face)
             MascotHeroLayerView.paint(frame, parts: .face, painter: painter, box: box, clip: nil, in: cg)
+            cg.restoreGState()
         } else {
             MascotHeroLayerView.paint(frame, parts: [.body, .face], painter: painter, box: box, clip: nil, in: cg)
         }
