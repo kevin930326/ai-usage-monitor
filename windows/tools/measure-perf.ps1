@@ -11,6 +11,9 @@
     - 再開關 5 次，比較第一次與最後一次關閉後的記憶體
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
       （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
+    - 角色（預設的圖示樣式，ADR-0015 第 7 節「角色」）：上面的「閒置」是收合、沒在動（含每秒 4 次讀游標），「展開、靜止」是展開待著；
+      另外量收合時 AI 工作中（每 5 秒改一次假的紀錄檔，等收著時每 60 秒一次的檢查看到後取樣 30 秒）與收合睡著
+      （紀錄檔改成 31 分鐘前，等下一次檢查後取樣 30 秒）。--isolated 時 AI 的設定資料夾在暫存資料夾的 .claude，不碰真的 ~/.claude
   CPU% ＝ TotalProcessorTime 的差 ÷ 經過時間 ÷ 處理器數 × 100（工作管理員的算法）。
   結果印成 Markdown 表格，並寫到 -Output。CPU 超過門檻只印警告（CI 的 runner 雜訊大；正式紀錄以 x64 桌機為準），記憶體增加超過 5 MB 時結束碼 1。
 
@@ -44,6 +47,12 @@ $usage = @"
     {"id": "weekly", "label": "每週", "used_pct": 22, "resets_at": "$(Iso 130)"}]}}}
 "@
 [IO.File]::WriteAllText((Join-Path $home2 'usage.json'), $usage, (New-Object Text.UTF8Encoding($false)))
+# 角色：睡覺的分鐘數設最長（30），閒置時是「醒著、沒在工作」；假的紀錄檔 2 分鐘前改過（不是工作中）
+[IO.File]::WriteAllText((Join-Path $home2 'windows-app.json'), '{"ring_style": "mascot", "mascot_sleep_minutes": 30}', (New-Object Text.UTF8Encoding($false)))
+$log = Join-Path $home2 '.claude\projects\demo\session.jsonl'
+New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+[IO.File]::WriteAllText($log, '{}')
+(Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-2)
 $cores = [Environment]::ProcessorCount
 
 # 面板是否真的開著：找這個程序、標題 "AI Usage Monitor"、看得見的頂層視窗（面板關閉＝視窗銷毀）
@@ -134,6 +143,8 @@ try {
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r0)
         [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
         $hoverPeak = PeakDuring 1
+        # 角色第一次展開有過場（約 4.7 秒）：播完再量待著
+        Start-Sleep -Seconds 5
         $r1 = New-Object AumPerf.Win+RECT
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r1)
         $hoverOpen = Sample 5
@@ -152,6 +163,21 @@ try {
         }
     }
 
+    # 角色：收合時 AI 工作中（敲鍵盤的一輪，每秒 12 格）
+    function Touch { (Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow }
+    function SampleTouching([int]$seconds) {
+        $sum = 0; $n = [int]($seconds / 5)
+        for ($i = 0; $i -lt $n; $i++) { Touch; $sum += (Sample 5).Cpu }
+        [Math]::Round($sum / $n, 3)
+    }
+    [void][AumPerf.Win]::SetCursorPos(5, 5)
+    [void](SampleTouching 70)
+    $working = SampleTouching 30
+    # 收合睡著（呼吸的一輪，每秒 4 格）：紀錄檔改成 31 分鐘前，等下一次檢查
+    (Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-31)
+    Start-Sleep -Seconds 70
+    $sleeping = Sample 30
+
     Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
     Start-Sleep -Seconds 3
 } finally {
@@ -162,7 +188,7 @@ try {
 
 $limits = if ($Ci) { 0.3, 4, 0.6 } else { 0.1, 2, 0.3 }
 $rows = @(
-    @('閒置（圓環顯示、面板關閉）', $idle.Cpu, $limits[0], $idle.WorkingSetMB),
+    @('閒置（角色收合、沒在動、面板關閉）', $idle.Cpu, $limits[0], $idle.WorkingSetMB),
     @('面板開啟、動畫中（最大值）', $peak, $null, $open.WorkingSetMB),
     @('面板開啟、靜止', $open.Cpu, $limits[1], $open.WorkingSetMB),
     @('關閉後 1 分鐘', $after.Cpu, $limits[2], $after.WorkingSetMB)
@@ -176,13 +202,17 @@ foreach ($r in $rows) {
 }
 $lines += "| 重複開關 5 次後的記憶體增加 | — | ≤ +5 MB | $memGrowth |"
 if ($null -ne $hoverOpen) {
-    $lines += "| 圓環展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
-    $lines += "| 圓環展開、靜止 | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
-    $lines += "| 圓環收起動畫中（最大值） | $collapsePeak | 記錄 | — |"
+    $lines += "| 圖示展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
+    $lines += "| 圖示展開待著（角色眨眼、看滑鼠） | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
+    $lines += "| 圖示收起動畫中（最大值） | $collapsePeak | 記錄 | — |"
     $lines += "| 收起後（30 秒後） | $($afterHover.Cpu) | ≤ $($limits[2]) | $($afterHover.WorkingSetMB) |"
     if ($hoverOpen.Cpu -gt $limits[1]) { $warnings += "ring expanded: $($hoverOpen.Cpu)% > $($limits[1])%" }
     if ($afterHover.Cpu -gt $limits[2]) { $warnings += "after ring collapse: $($afterHover.Cpu)% > $($limits[2])%" }
 }
+$lines += "| 角色收合、AI 工作中（每秒 12 格） | $working | 記錄（目標 ≤ 1） | — |"
+$lines += "| 角色收合、睡著（每秒 4 格） | $($sleeping.Cpu) | 記錄（目標 ≤ 1） | $($sleeping.WorkingSetMB) |"
+if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
+if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
