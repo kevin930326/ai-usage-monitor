@@ -25,6 +25,9 @@ internal sealed class AppHost : IDisposable
     private readonly DispatcherTimer minute;
     private readonly AgentMonitor agents;
     private readonly AgentHookInstaller hooks = new();
+    /// <summary>懸浮圖示是角色時的狀態與畫法（樣式是圓環時不顯示，計時器全停）</summary>
+    private readonly MascotController mascot;
+    private readonly MascotFace mascotFace;
     private RingWindow? ring;
     private PanelWindow? panel;
     private SettingsWindow? settingsWindow;
@@ -49,6 +52,8 @@ internal sealed class AppHost : IDisposable
         minute = new DispatcherTimer(DispatcherPriority.Background, dispatcher);
         minute.Tick += (_, _) => OnMinute();
         agents = new AgentMonitor(dispatcher, DataPaths.Home, settings);
+        mascot = new MascotController(settings, agents, store, dispatcher);
+        mascotFace = new MascotFace(mascot);
     }
 
     private Palette AppPalette => new(SystemLook.IsDark(settings.Appearance));
@@ -66,7 +71,12 @@ internal sealed class AppHost : IDisposable
         {
             hint = null;
             Refresh();
+            mascot.UpdateStatus();
         };
+        // 展開就讀一次等級（ADR-0020 第 4 節）；升級時角色歡呼
+        mascot.Opened += LoadLevel;
+        // Windows 的「顯示動畫」改了：角色的動畫程度跟著換（關閉時用「簡單」）
+        SystemParameters.StaticPropertyChanged += OnSystemParameter;
         tray.DoubleClicked += () => TogglePanel(fromTray: true);
         tray.ContextMenuRequested += (_, _) => ShowMenu(fromTray: true);
         tray.SettingsChanged += () =>
@@ -83,6 +93,8 @@ internal sealed class AppHost : IDisposable
         };
         fullscreen.Start();
         agents.Changed += RefreshIndicators;
+        agents.Changed += mascot.AgentStateChanged;
+        agents.Finished += mascot.AgentFinished;
         agents.Notify += (title, body) => tray.Notify(title, body);
         agents.Start();
         store.Start();
@@ -107,6 +119,12 @@ internal sealed class AppHost : IDisposable
         store.Poll();
         agents.Tick();
         Refresh();
+        mascot.UpdateStatus();
+    }
+
+    private void OnSystemParameter(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SystemParameters.ClientAreaAnimation) or nameof(SystemParameters.HighContrast)) mascot.MotionChanged();
     }
 
     /// <summary>aum-hook.exe 寫好事件檔、觸發了具名事件</summary>
@@ -161,6 +179,7 @@ internal sealed class AppHost : IDisposable
             if (!task.Result.Saved && level is not null) return;
             var hadCard = level is not null;
             level = MascotLevel.From(levelDays, today);
+            mascot.LevelChanged(level?.Level);
             if (panel is null) return;
             panel.SetModel(Model);
             // 等級卡片晚一點才加進來，面板變高：重新放，不讓它往下長出螢幕或蓋住工作列（Fable F-05）
@@ -203,6 +222,9 @@ internal sealed class AppHost : IDisposable
         fullscreen.Enabled = ring is not null && settings.HideInFullscreen;
         if (ring is not null)
         {
+            // 圖示樣式：圓環（C2）或角色（預設）、角色＋%
+            mascotFace.ShowsPercent = settings.RingStyle == RingStyle.MascotPercent;
+            ring.SetFace(settings.RingStyle == RingStyle.Ring ? GlassRingFace.Shared : mascotFace);
             ring.Opacity = settings.Opacity;
             ring.SetOptions(settings.RingTicks, settings.DockToEdge);
             if (Math.Abs(ring.RingDip - AppSettings.RingDip(settings.RingSize)) > 0.1)
@@ -217,6 +239,13 @@ internal sealed class AppHost : IDisposable
     }
 
     private void ApplyVisibility()
+    {
+        ApplyRingVisibility();
+        // 角色只在看得到時動（全螢幕隱藏、只顯示系統匣、樣式是圓環時全部停止）
+        mascot.SetShown(ring is { IsVisible: true } && settings.RingStyle != RingStyle.Ring);
+    }
+
+    private void ApplyRingVisibility()
     {
         if (ring is null) return;
         var hide = settings.HideInFullscreen && fullscreen.IsFullscreen;
@@ -365,6 +394,7 @@ internal sealed class AppHost : IDisposable
             item.Click += (_, _) => action();
             menu.Items.Add(item);
         }
+        if (!fromTray && settings.RingStyle != RingStyle.Ring) AddMascotItems(menu);
         Add("打開面板", () => OpenPanel(fromTray));
         Add("立即更新", () => _ = RefreshAsync());
         Add("設定…", OpenSettings);
@@ -383,8 +413,57 @@ internal sealed class AppHost : IDisposable
         // 它本身不能成為前景；剛按了右鍵，這個程序有成為前景的資格）
         NativeMethods.SetForegroundWindow(tray.Handle);
         if (!fromTray) menu.PlacementTarget = ring;
+        // 選單開著時滑鼠移到選單上不算離開角色
+        mascot.MenuOpened();
+        menu.Closed += (_, _) => mascot.MenuClosed();
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         menu.IsOpen = true;
+    }
+
+    /// <summary>角色的動作與表情、保持展開、靜音與勿擾（同 Mac 瀏海的右鍵選單）</summary>
+    private void AddMascotItems(ContextMenu menu)
+    {
+        var animates = mascot.Motion.AnimatesBody();
+        MenuItem Item(string header, Action action, bool enabled = true, bool check = false)
+        {
+            var item = new MenuItem { Header = header, IsEnabled = enabled, IsCheckable = check };
+            item.Click += (_, _) => action();
+            return item;
+        }
+        var actions = new MenuItem { Header = "動作" };
+        foreach (var (request, title) in MascotMenu.Actions) actions.Items.Add(Item(title, () => mascot.Play(request), animates));
+        var faces = new MenuItem { Header = "表情" };
+        foreach (var mood in MascotMenu.Faces) faces.Items.Add(Item(mood.Title(), () => mascot.PlayFace(mood), animates));
+        menu.Items.Add(actions);
+        menu.Items.Add(faces);
+        if (!animates)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = mascot.Motion == MascotMotionLevel.Simple ? "角色動畫是「簡單」：不播動作與表情" : "角色動畫已關閉：不播動作與表情",
+                IsEnabled = false,
+            });
+        }
+        menu.Items.Add(new Separator());
+        var pin = Item("保持展開", () =>
+        {
+            mascot.SetPinned(!mascot.Pinned);
+            if (mascot.Pinned) ring?.OpenPinned();
+        }, check: true);
+        pin.IsChecked = mascot.Pinned;
+        pin.ToolTip = "滑鼠離開也不收合；再點一次收起";
+        menu.Items.Add(pin);
+        if (settings.MascotQuietUntil is { } until && until > DateTimeOffset.Now)
+        {
+            menu.Items.Add(Item($"取消靜音（靜音到 {until.ToLocalTime():HH:mm}）", () => mascot.SetQuiet(null)));
+        }
+        else
+        {
+            menu.Items.Add(Item("靜音 1 小時", () => mascot.SetQuiet(DateTimeOffset.Now.AddHours(1))));
+            menu.Items.Add(Item("勿擾到明天早上 8 點", () =>
+                mascot.SetQuiet(new DateTimeOffset(MascotMoods.TomorrowMorning(DateTime.Now)))));
+        }
+        menu.Items.Add(new Separator());
     }
 
     private void SetDisplayMode(DisplayMode mode)
@@ -414,6 +493,7 @@ internal sealed class AppHost : IDisposable
         agents.SettingsChanged();
         ApplyDisplayMode();
         ApplyLook();
+        mascot.SettingsChanged();
     }
 
     public void Quit()
@@ -427,6 +507,8 @@ internal sealed class AppHost : IDisposable
         if (disposed) return;
         disposed = true;
         minute.Stop();
+        SystemParameters.StaticPropertyChanged -= OnSystemParameter;
+        mascot.Dispose();
         // 先關圓環再停全螢幕偵測：停止時「不是全螢幕」的通知不會把隱藏中的圓環再顯示一下
         fullscreen.Changed -= ApplyVisibility;
         panel?.SafeClose();

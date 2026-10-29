@@ -97,6 +97,36 @@ internal sealed class SettingsView : StackPanel
         Children.Add(Check("貼在螢幕左右邊緣時收成半圓的小標籤", settings.DockToEdge, v => settings.DockToEdge = v));
         Children.Add(Check("圓環外圍顯示刻度（這個額度週期過了多少時間）", settings.RingTicks, v => settings.RingTicks = v));
 
+        Section("角色");
+        Row("圖示樣式", Choice([("角色", RingStyle.Mascot), ("圓環", RingStyle.Ring), ("角色＋%", RingStyle.MascotPercent)],
+            settings.RingStyle, v => settings.RingStyle = v));
+        Row("角色", Choice([("Claude", "claude"), ("Codex", "codex")], settings.MascotProvider, v => settings.MascotProvider = v));
+        var looks = new List<(string, string?)> { ("跟著服務（Claude 珊瑚、Codex 青瓷）", null) };
+        if (MascotController.LoadLooks() is { } list)
+        {
+            foreach (var look in list.Looks)
+            {
+                var group = list.Groups.FirstOrDefault(g => g.Id == look.Group)?.Name;
+                looks.Add((group is null ? look.Name : $"{group}：{look.Name}", look.Id));
+            }
+        }
+        Row("角色外觀", Choice(looks, settings.MascotLook, v => settings.MascotLook = v));
+        Row("過場", Choice([("每次展開", MascotIntroChoice.Every), ("只有第一次", MascotIntroChoice.FirstOnly), ("關閉", MascotIntroChoice.Off)],
+            settings.MascotIntro, v => settings.MascotIntro = v));
+        Row("角色動畫", Choice([("完整", MascotMotionLevel.Full), ("簡單", MascotMotionLevel.Simple), ("關閉", MascotMotionLevel.Off)],
+            settings.MascotMotion, v => settings.MascotMotion = v));
+        if (!SystemLook.AnimationsEnabled)
+        {
+            Children.Add(Note("Windows 關閉了「顯示動畫」，所以目前以「簡單」顯示：角色身體不動、只有眼睛會眨和看滑鼠。"));
+        }
+        Children.Add(Note("完整：點一下有隨機的小反應，繞圈、甩動、停在角色上也有反應，右鍵可以選所有動作與表情；額度提醒時跳一下，"
+            + "Claude 或 Codex 在跑時敲鍵盤，睡著時呼吸。簡單：身體不動、只有眼睛會眨和看滑鼠，不播過場與反應。關閉：角色完全靜止。"
+            + "三種都用眼睛的樣子顯示額度。「工作中」與睡覺照下面「AI 狀態」連接的 hook；沒連接的 AI 只看紀錄檔的修改時間，不讀內容。"));
+        Children.Add(Check("眼睛跟著游標（收合時 AI 工作中與睡著不看）", settings.MascotFollowPointer, v => settings.MascotFollowPointer = v));
+        Row("睡覺", Choice([.. AppSettings.SleepMinuteChoices.Select(m => ($"閒置 {m} 分鐘後", m))],
+            settings.MascotSleepMinutes, v => settings.MascotSleepMinutes = v));
+        Children.Add(Check("AI 等你下一個指令時，收合的角色外框輕輕脈動", settings.MascotWaitingPulse, v => settings.MascotWaitingPulse = v));
+
         Section("一般");
         Children.Add(Check("登入 Windows 時自動啟動", settings.LaunchAtLogin, v => settings.LaunchAtLogin = v));
         Row("外觀", Choice([("跟隨系統", Appearance.System), ("淺色", Appearance.Light), ("深色", Appearance.Dark)],

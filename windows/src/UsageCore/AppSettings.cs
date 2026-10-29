@@ -39,6 +39,22 @@ public sealed class AppSettings
     public int AgentNeedsYouSeconds { get; set; } = 20;
     /// <summary>跑超過幾分鐘的任務完成時發通知（0＝關閉）</summary>
     public int AgentLongTaskMinutes { get; set; } = 3;
+    /// <summary>懸浮圖示的樣式（預設角色；可切回 C2 圓環或角色加百分比）</summary>
+    public RingStyle RingStyle { get; set; } = RingStyle.Mascot;
+    /// <summary>角色的服務色：claude 或 codex（同 Mac 的「角色」）</summary>
+    public string MascotProvider { get; set; } = "claude";
+    /// <summary>角色外觀（shared/mascot-looks.json 的代號）；null 是跟著服務色</summary>
+    public string? MascotLook { get; set; }
+    public MascotIntroChoice MascotIntro { get; set; } = MascotIntroChoice.FirstOnly;
+    public MascotMotionLevel MascotMotion { get; set; } = MascotMotionLevel.Full;
+    /// <summary>眼睛跟著游標</summary>
+    public bool MascotFollowPointer { get; set; } = true;
+    /// <summary>Claude 與 Codex 都閒置幾分鐘後睡</summary>
+    public int MascotSleepMinutes { get; set; } = 5;
+    /// <summary>等你下一個指令時，收著的角色每 7 秒輕輕脈動</summary>
+    public bool MascotWaitingPulse { get; set; } = true;
+    /// <summary>靜音或勿擾到這個時間（不播提醒、不鼓一下；只換表情）</summary>
+    public DateTimeOffset? MascotQuietUntil { get; set; }
     public List<SavedPosition> Positions { get; set; } = [];
     public List<DateTimeOffset> CollectorKicks { get; set; } = [];
 
@@ -46,6 +62,9 @@ public sealed class AppSettings
 
     public static readonly int[] NeedsYouSecondChoices = [0, 10, 20, 30, 60, 120];
     public static readonly int[] LongTaskMinuteChoices = [0, 1, 3, 5, 10, 20];
+    public static readonly int[] SleepMinuteChoices = [1, 3, 5, 10, 15, 30];
+
+    public bool IsMascotQuiet(DateTimeOffset now) => MascotQuietUntil is { } until && until > now;
 
     public AgentNoticePolicy AgentNoticePolicy => new(
         AgentNeedsYouSeconds > 0 ? AgentNeedsYouSeconds * 1000L : long.MaxValue,
@@ -84,6 +103,16 @@ public sealed class AppSettings
         settings.RingTicks = Bool(root["ring_ticks"]) ?? false;
         settings.AgentNeedsYouSeconds = Choice(Number(root["agent_needs_you_seconds"]), NeedsYouSecondChoices, 20);
         settings.AgentLongTaskMinutes = Choice(Number(root["agent_long_task_minutes"]), LongTaskMinuteChoices, 3);
+        settings.RingStyle = Enum(root["ring_style"], RingStyle.Mascot);
+        settings.MascotProvider = Text(root["mascot_provider"]) is "codex" ? "codex" : "claude";
+        settings.MascotLook = Text(root["mascot_look"]) is { Length: > 0 and <= 32 } look ? look : null;
+        settings.MascotIntro = Enum(root["mascot_intro"], MascotIntroChoice.FirstOnly);
+        settings.MascotMotion = Enum(root["mascot_motion"], MascotMotionLevel.Full);
+        settings.MascotFollowPointer = Bool(root["mascot_follow_pointer"]) ?? true;
+        settings.MascotSleepMinutes = Choice(Number(root["mascot_sleep_minutes"]), SleepMinuteChoices, 5);
+        settings.MascotWaitingPulse = Bool(root["mascot_waiting_pulse"]) ?? true;
+        if (Number(root["mascot_quiet_until"]) is { } quiet && quiet is > 0 and < 1e11)
+            settings.MascotQuietUntil = DateTimeOffset.FromUnixTimeSeconds((long)quiet);
         if (root["positions"] is JsonArray positions)
         {
             foreach (var p in positions.OfType<JsonObject>())
@@ -125,6 +154,15 @@ public sealed class AppSettings
             ["ring_ticks"] = RingTicks,
             ["agent_needs_you_seconds"] = AgentNeedsYouSeconds,
             ["agent_long_task_minutes"] = AgentLongTaskMinutes,
+            ["ring_style"] = Name(RingStyle),
+            ["mascot_provider"] = MascotProvider,
+            ["mascot_look"] = MascotLook,
+            ["mascot_intro"] = Name(MascotIntro),
+            ["mascot_motion"] = Name(MascotMotion),
+            ["mascot_follow_pointer"] = MascotFollowPointer,
+            ["mascot_sleep_minutes"] = MascotSleepMinutes,
+            ["mascot_waiting_pulse"] = MascotWaitingPulse,
+            ["mascot_quiet_until"] = MascotQuietUntil is { } q ? JsonValue.Create(q.ToUnixTimeSeconds()) : null,
             ["positions"] = new JsonArray([.. Positions.Select(p => (JsonNode)new JsonObject { ["key"] = p.Key, ["x"] = p.X, ["y"] = p.Y, ["used"] = p.Used })]),
             ["collector_kicks"] = new JsonArray([.. CollectorKicks.Select(k => (JsonNode)JsonValue.Create(k.ToUnixTimeSeconds()))]),
         };
@@ -136,6 +174,8 @@ public sealed class AppSettings
     [
         "schema", "display_mode", "ring_window", "ring_size", "opacity", "hide_in_fullscreen", "launch_at_login", "appearance",
         "dock_to_edge", "ring_ticks", "agent_needs_you_seconds", "agent_long_task_minutes",
+        "ring_style", "mascot_provider", "mascot_look", "mascot_intro", "mascot_motion", "mascot_follow_pointer",
+        "mascot_sleep_minutes", "mascot_waiting_pulse", "mascot_quiet_until",
         "positions", "collector_kicks",
     ];
 

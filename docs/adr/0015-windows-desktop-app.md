@@ -217,7 +217,7 @@ Mac 的畫法（`MascotDrawing.swift`、`MascotLookRenderer.swift`）用到 Core
 | 面板開啟、靜止 | ≤ 2% | 記錄；> 4% 警告 |
 | 動畫播放中 | 記錄最大值 | 記錄 |
 | 關閉後 1 分鐘 | ≤ 0.3% | 記錄；> 0.6% 警告 |
-| 重複開關後記憶體 | 工作集 ≤ +5 MB | 同（失敗） |
+| 重複開關後記憶體 | 開關 5 次暖機後、再開關 10 次：工作集 ≤ +5 MB（2026-10-29：CI 打開系統動畫後，第一次播面板動畫的快取讓暖機多 6～10 MB，暖機只記錄） | 同（失敗） |
 
 - CPU% ＝ `TotalProcessorTime` 的差 ÷ 經過時間 ÷ 處理器數 × 100（工作管理員的算法）；記憶體看 `WorkingSet64` 與 `PrivateMemorySize64`。
 - **計時器**：整個 App 只有一個 `DispatcherTimer`，對齊整分鐘、之後每 60 秒（`DispatcherPriority.Background`）：更新圓環的內圈與狀態（內容以整數化的鍵比較，相同就不重繪）、面板開著時更新倒數與更新時間。不用每秒更新的相對時間。全螢幕隱藏期間照跑但不畫。
@@ -242,8 +242,9 @@ Mac 的畫法（`MascotDrawing.swift`、`MascotLookRenderer.swift`）用到 Core
     收合時 AI 工作中或睡著不追游標，改成每秒 1 次只看「是否又該追游標」（同 Mac 的 `pollPointer`；狀態改變時馬上回到每秒 12 次）；設定關閉時停止。視線變化小於門檻不重畫。
   - 「工作中」與睡覺：沒接 hook 的 AI 看紀錄資料夾的修改時間（展開時每 5 秒、收著時每 60 秒，不讀內容；同 ADR-0016 第 5 節）。
   - 門檻：閒置（收合、沒在動，含每秒 4 次讀游標）≤ 0.1% 不放寬；展開待著 ≤ 4%（同 ADR-0016）；收合工作中、收合睡著記錄並寫進 PR（目標 ≤ 1%，超過就降頻或簡化）。
-  - 量測這四個狀態（`measure-perf.ps1 -Mascot`，Release 版也能跑）：暫存的 `windows-app.json` 設樣式＝角色、睡覺 1 分鐘；`CLAUDE_CONFIG_DIR` 指到暫存資料夾、
-    每 10 秒修改一個假的紀錄檔製造「工作中」，停止修改後等睡著；第二個執行個體的具名事件 `--expand-ring`／`--collapse-ring` 讓圓環展開、收合（不移動真的游標）。
+  - 量測這四個狀態（`measure-perf.ps1`，Release 版也能跑；角色是預設樣式）：`--isolated` 時 AI 的設定資料夾在暫存資料夾的 `.claude`，
+    放一個假的紀錄檔。收合閒置＝紀錄檔 2 分鐘前改過（醒著、沒在工作，睡覺設 30 分鐘）；展開待著＝`SetCursorPos` 移到圖示上（同圓環的量法）；
+    收合工作中＝每 5 秒改一次紀錄檔，等收著時每 60 秒一次的檢查看到；收合睡著＝紀錄檔改成 31 分鐘前，等下一次檢查。
 - **量測**：`windows/tools/measure-perf.ps1`：`AI_USAGE_MONITOR_HOME` 指到暫存資料夾、放示範的 `usage.json`，啟動 Release 版 App，每秒以 `Get-Process` 取樣；以第二個執行個體的命令（`--show-panel`、`--hide-panel`，具名事件）開關面板兩次；輸出各階段的平均與最大值，寫進 PR。Release 版也能量測（不需要 Debug 的示範程式）。
 
 ## 8. 截圖、測試與安裝

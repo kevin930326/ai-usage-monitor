@@ -8,9 +8,12 @@
     - 閒置（圓環顯示、面板關閉）30 秒
     - 打開面板（第二個執行個體送 --show-panel）：前 2 秒（動畫）每 0.25 秒取樣記最大值，之後靜止 10 秒
     - 關閉面板（--hide-panel）後等 60 秒，再取樣 30 秒
-    - 再開關 5 次，比較第一次與最後一次關閉後的記憶體
+    - 再開關 5 次（暖機，只記錄）、再 10 次，比較這 10 次前後的記憶體（洩漏檢查）
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
       （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
+    - 角色（預設的圖示樣式，ADR-0015 第 7 節「角色」）：上面的「閒置」是收合、沒在動（含每秒 4 次讀游標），「展開、靜止」是展開待著；
+      另外量收合時 AI 工作中（每 5 秒改一次假的紀錄檔，等收著時每 60 秒一次的檢查看到後取樣 30 秒）與收合睡著
+      （紀錄檔改成 31 分鐘前，等下一次檢查後取樣 30 秒）。--isolated 時 AI 的設定資料夾在暫存資料夾的 .claude，不碰真的 ~/.claude
   CPU% ＝ TotalProcessorTime 的差 ÷ 經過時間 ÷ 處理器數 × 100（工作管理員的算法）。
   結果印成 Markdown 表格，並寫到 -Output。CPU 超過門檻只印警告（CI 的 runner 雜訊大；正式紀錄以 x64 桌機為準），記憶體增加超過 5 MB 時結束碼 1。
 
@@ -44,6 +47,12 @@ $usage = @"
     {"id": "weekly", "label": "每週", "used_pct": 22, "resets_at": "$(Iso 130)"}]}}}
 "@
 [IO.File]::WriteAllText((Join-Path $home2 'usage.json'), $usage, (New-Object Text.UTF8Encoding($false)))
+# 角色：睡覺的分鐘數設最長（30），閒置時是「醒著、沒在工作」；假的紀錄檔 2 分鐘前改過（不是工作中）
+[IO.File]::WriteAllText((Join-Path $home2 'windows-app.json'), '{"ring_style": "mascot", "mascot_sleep_minutes": 30}', (New-Object Text.UTF8Encoding($false)))
+$log = Join-Path $home2 '.claude\projects\demo\session.jsonl'
+New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
+[IO.File]::WriteAllText($log, '{}')
+(Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-2)
 $cores = [Environment]::ProcessorCount
 
 # 面板是否真的開著：找這個程序、標題 "AI Usage Monitor"、看得見的頂層視窗（面板關閉＝視窗銷毀）
@@ -52,6 +61,8 @@ Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, ref bool value, uint ini);
+[DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, IntPtr value, uint ini);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
 public static IntPtr Find(int pid, string title) {
@@ -71,6 +82,18 @@ public static bool PanelVisible(int pid) {
     return false;
 }
 '@
+
+# 系統的「用戶端區域動畫」關著時 App 把角色當成「簡單」（不動），量到的不是完整動畫的數字。
+# CI 的 runner 常把它關掉：-Ci 時在這次登入工作階段暫時打開（不寫進使用者設定），結束時還原；本機量測照使用者的設定
+$SpiGetClientAreaAnimation = 0x1042
+$SpiSetClientAreaAnimation = 0x1043
+$animation = $false
+[void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
+$animationBefore = $animation
+if ($Ci -and -not $animation) {
+    [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]1, 0)
+    [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
+}
 
 # 環境變數只在量測期間指到暫存資料夾，結束（含失敗）時還原，App 結束、暫存資料夾刪除
 $previousHome = $env:AI_USAGE_MONITOR_HOME
@@ -114,16 +137,24 @@ try {
     Send '--hide-panel' $false
     Start-Sleep -Seconds 60
     $after = Sample 30
-    $memFirst = $after.WorkingSetMB
-    for ($i = 0; $i -lt 5; $i++) {
-        Send '--show-panel' $true
-        Start-Sleep -Seconds 2
-        Send '--hide-panel' $false
-        Start-Sleep -Seconds 2
+    # 洩漏檢查：前 5 次開關是暖機（系統動畫開著時 WPF 第一次播動畫會建立快取，工作集一次多幾 MB），只記錄；
+    # 判斷洩漏用第 5 次到第 15 次之間的增加（每次都留下東西的話 10 次會累積起來）
+    function Cycles([int]$count) {
+        for ($i = 0; $i -lt $count; $i++) {
+            Send '--show-panel' $true
+            Start-Sleep -Seconds 2
+            Send '--hide-panel' $false
+            Start-Sleep -Seconds 2
+        }
+        Start-Sleep -Seconds 20
+        Sample 10
     }
-    Start-Sleep -Seconds 20
-    $last = Sample 10
-    $memGrowth = [Math]::Round($last.WorkingSetMB - $memFirst, 1)
+    $memFirst = $after
+    $warm = Cycles 5
+    $last = Cycles 10
+    $memWarmup = [Math]::Round($warm.WorkingSetMB - $memFirst.WorkingSetMB, 1)
+    $memGrowth = [Math]::Round($last.WorkingSetMB - $warm.WorkingSetMB, 1)
+    $privateGrowth = [Math]::Round($last.PrivateMB - $warm.PrivateMB, 1)
 
     # 滑鼠移上去展開、移開收起
     $hoverNote = '未展開（找不到圓環或滑鼠移動沒有送到）'
@@ -134,6 +165,8 @@ try {
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r0)
         [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
         $hoverPeak = PeakDuring 1
+        # 角色第一次展開有過場（約 4.7 秒）：播完再量待著
+        Start-Sleep -Seconds 5
         $r1 = New-Object AumPerf.Win+RECT
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r1)
         $hoverOpen = Sample 5
@@ -152,17 +185,33 @@ try {
         }
     }
 
+    # 角色：收合時 AI 工作中（敲鍵盤的一輪，每秒 12 格）
+    function Touch { (Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow }
+    function SampleTouching([int]$seconds) {
+        $sum = 0; $n = [int]($seconds / 5)
+        for ($i = 0; $i -lt $n; $i++) { Touch; $sum += (Sample 5).Cpu }
+        [Math]::Round($sum / $n, 3)
+    }
+    [void][AumPerf.Win]::SetCursorPos(5, 5)
+    [void](SampleTouching 70)
+    $working = SampleTouching 30
+    # 收合睡著（呼吸的一輪，每秒 4 格）：紀錄檔改成 31 分鐘前，等下一次檢查
+    (Get-Item $log).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(-31)
+    Start-Sleep -Seconds 70
+    $sleeping = Sample 30
+
     Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
     Start-Sleep -Seconds 3
 } finally {
     if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force }
     $env:AI_USAGE_MONITOR_HOME = $previousHome
     Remove-Item -Recurse -Force $home2 -ErrorAction SilentlyContinue
+    if ($animation -ne $animationBefore) { [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]0, 0) }
 }
 
 $limits = if ($Ci) { 0.3, 4, 0.6 } else { 0.1, 2, 0.3 }
 $rows = @(
-    @('閒置（圓環顯示、面板關閉）', $idle.Cpu, $limits[0], $idle.WorkingSetMB),
+    @('閒置（角色收合、沒在動、面板關閉）', $idle.Cpu, $limits[0], $idle.WorkingSetMB),
     @('面板開啟、動畫中（最大值）', $peak, $null, $open.WorkingSetMB),
     @('面板開啟、靜止', $open.Cpu, $limits[1], $open.WorkingSetMB),
     @('關閉後 1 分鐘', $after.Cpu, $limits[2], $after.WorkingSetMB)
@@ -174,19 +223,26 @@ foreach ($r in $rows) {
     $lines += "| $($r[0]) | $($r[1]) | $limit | $($r[3]) |"
     if ($null -ne $r[2] -and $r[1] -gt $r[2]) { $warnings += "$($r[0]): $($r[1])% > $($r[2])%" }
 }
-$lines += "| 重複開關 5 次後的記憶體增加 | — | ≤ +5 MB | $memGrowth |"
+$lines += "| 面板開關 5 次（暖機）的記憶體增加 | — | 記錄 | $memWarmup |"
+$lines += "| 再開關 10 次的記憶體增加（工作集／私有） | — | ≤ +5 MB | $memGrowth／$privateGrowth |"
 if ($null -ne $hoverOpen) {
-    $lines += "| 圓環展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
-    $lines += "| 圓環展開、靜止 | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
-    $lines += "| 圓環收起動畫中（最大值） | $collapsePeak | 記錄 | — |"
+    $lines += "| 圖示展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
+    $lines += "| 圖示展開待著（角色眨眼、看滑鼠） | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
+    $lines += "| 圖示收起動畫中（最大值） | $collapsePeak | 記錄 | — |"
     $lines += "| 收起後（30 秒後） | $($afterHover.Cpu) | ≤ $($limits[2]) | $($afterHover.WorkingSetMB) |"
     if ($hoverOpen.Cpu -gt $limits[1]) { $warnings += "ring expanded: $($hoverOpen.Cpu)% > $($limits[1])%" }
     if ($afterHover.Cpu -gt $limits[2]) { $warnings += "after ring collapse: $($afterHover.Cpu)% > $($limits[2])%" }
 }
+$lines += "| 角色收合、AI 工作中（每秒 12 格） | $working | 記錄（目標 ≤ 1） | — |"
+$lines += "| 角色收合、睡著（每秒 4 格） | $($sleeping.Cpu) | 記錄（目標 ≤ 1） | $($sleeping.WorkingSetMB) |"
+if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
+if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
+$lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"
+$lines += ""
 $lines += "處理器 $cores 個；$([Environment]::OSVersion.VersionString)；$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
 $text = $lines -join "`n"
 [IO.File]::WriteAllText($Output, $text + "`n", (New-Object Text.UTF8Encoding($false)))

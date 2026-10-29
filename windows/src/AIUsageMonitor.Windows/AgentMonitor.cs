@@ -35,6 +35,8 @@ internal sealed class AgentMonitor : IDisposable
     public event Action? Changed;
     /// <summary>該發的通知（標題、內容）</summary>
     public event Action<string, string>? Notify;
+    /// <summary>有一個回合剛完成（角色揮手）</summary>
+    public event Action? Finished;
 
     public AgentMonitor(Dispatcher dispatcher, string home, AppSettings settings)
     {
@@ -74,8 +76,14 @@ internal sealed class AgentMonitor : IDisposable
     {
         if (!started) return;
         var now = Now;
+        var done = Done(now);
         Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now), now);
+        if (Done(now).Except(done).Any()) Finished?.Invoke();
     }
+
+    /// <summary>目前「完成」的工作階段（剛變成完成的就是剛完成一個回合）</summary>
+    private HashSet<(AgentKind, string)> Done(long now) =>
+        Sessions.Ordered(now).Where(s => s.Stored == AgentState.Done).Select(s => (s.Ai, s.Id)).ToHashSet();
 
     /// <summary>每分鐘：時間經過的狀態改變（工作中太久、需要你太久）、退路的掃描與其他電腦的狀態</summary>
     public void Tick()
@@ -83,7 +91,9 @@ internal sealed class AgentMonitor : IDisposable
         if (!started) return;
         var now = Now;
         var remoteChanged = LoadRemote(now);
+        var done = Done(now);
         Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || remoteChanged, now);
+        if (Done(now).Except(done).Any()) Finished?.Invoke();
         if (now - lastStateWrite >= StateRewriteMs) WriteState(now, rewrite: true);
     }
 
