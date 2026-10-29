@@ -516,6 +516,8 @@ private struct HistorySettingsSection: View {
                 result = done
             } catch HistoryStore.WriteError.copiesRemain {
                 result = "已清除歷史，但每週備份或保留的舊檔刪不掉：請手動刪除 history.sqlite3 旁的 backups 資料夾與 history.corrupt-* 檔案"
+            } catch HistoryStore.WriteError.levelNotPreserved {
+                result = "角色等級存不進 level.json，沒有清除：請確認 App 資料夾可以寫入後再試"
             } catch HistoryStore.WriteError.unsupportedSchema {
                 result = "歷史資料的版本不符，沒有變更"
             } catch {

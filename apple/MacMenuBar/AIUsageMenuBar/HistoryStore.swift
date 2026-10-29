@@ -288,6 +288,8 @@ final class HistoryStore {
         case failed
         /// 歷史已清除，但每週備份或保留的舊檔刪不掉（ADR-0014 D-1）
         case copiesRemain
+        /// 角色等級存不進 level.json：沒有清除（ADR-0020 第 1 節，Fable F-01）
+        case levelNotPreserved
     }
 
     /// 改保留期間：寫入 `meta.retention_days`；縮短時立即刪除超出的資料（收集器每天也會依 meta 再刪一次）。
@@ -324,23 +326,32 @@ final class HistoryStore {
     /// 額度歷史沒有來源可以重建）。保留 `meta`（裝置 ID、保留期間）。
     /// 不重新掃描時 `file_tokens` 歸零而不刪除：對應的加總已清除，之後收集器重算該檔時只清空、不會扣到新的資料。
     nonisolated func clear(rescan: Bool, now: Date = RenderClock.now) throws {
-        // 角色等級（ADR-0020 第 1 節）：先把 level_days 併進獨立的 level.json，清除後等級不變低（level.json 不刪）
-        MascotLevelStore.preserve(history: url, now: now)
         var tables = ["quota_samples", "collector_runs", "daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached",
                       "level_days"]
         if rescan { tables += ["scan_state", "seen_ids", "seen_tasks", "file_tokens"] }
-        try write(vacuum: true) { db in
-            Self.existingTables(db, tables).allSatisfy { Self.exec(db, "DELETE FROM \($0)", []) }
-                && (rescan || Self.existingTables(db, ["file_tokens"]).allSatisfy {
-                    Self.exec(db, "UPDATE \($0) SET input_tokens = 0, cache_write_tokens = 0, cache_read_tokens = 0,"
-                        + " output_tokens = 0, reasoning_tokens = 0", [])
-                })
-                && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
-                    + " 'token_bad_lines', 'token_long_lines', 'token_days_from', 'seen_cutoff_day')", []))
-                // 不重新掃描時，今天以前的每日 Token 不會再算回來
-                && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
-                // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時，也不等失敗後的退避）
-                && Self.exec(db, "DELETE FROM meta WHERE key IN ('sync_last_success', 'sync_next_at', 'sync_failures')", [])
+        var preserved = true
+        do {
+            try write(vacuum: true) { db in
+                // 角色等級（ADR-0020 第 1 節）：在同一個交易裡先把 level_days 併進獨立的 level.json（不刪），
+                // 確定存好了才刪；收集器在讀與刪之間寫不進來（BEGIN IMMEDIATE）。存不進去就整個不清除
+                guard let days = Self.levelDays(db), MascotLevelStore.preserve(days, history: url, now: now) else {
+                    preserved = false
+                    return false
+                }
+                return Self.existingTables(db, tables).allSatisfy { Self.exec(db, "DELETE FROM \($0)", []) }
+                    && (rescan || Self.existingTables(db, ["file_tokens"]).allSatisfy {
+                        Self.exec(db, "UPDATE \($0) SET input_tokens = 0, cache_write_tokens = 0, cache_read_tokens = 0,"
+                            + " output_tokens = 0, reasoning_tokens = 0", [])
+                    })
+                    && (!rescan || Self.exec(db, "DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done',"
+                        + " 'token_bad_lines', 'token_long_lines', 'token_days_from', 'seen_cutoff_day')", []))
+                    // 不重新掃描時，今天以前的每日 Token 不會再算回來
+                    && (rescan || Self.raiseTokenDaysFrom(db, Self.tokenDay(now)))
+                    // 第二層：其他電腦的每日資料也一起刪了，收集器下一輪就重新下載（不用等一小時，也不等失敗後的退避）
+                    && Self.exec(db, "DELETE FROM meta WHERE key IN ('sync_last_success', 'sync_next_at', 'sync_failures')", [])
+                }
+        } catch WriteError.failed where !preserved {
+            throw WriteError.levelNotPreserved
         }
         guard removeCopies() else { throw WriteError.copiesRemain }
     }
@@ -362,6 +373,22 @@ final class HistoryStore {
     }
 
     /// `daily_tokens` 最早的一天；沒有資料時為 nil
+    /// `level_days` 的每一天（沒有這張表時是空的）；讀取失敗 nil
+    private nonisolated static func levelDays(_ db: OpaquePointer) -> [String: Int64]? {
+        guard existingTables(db, ["level_days"]).count == 1 else { return [:] }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT day, tokens FROM level_days", -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        var days: [String: Int64] = [:]
+        while true {
+            let step = sqlite3_step(stmt)
+            if step == SQLITE_DONE { return days }
+            guard step == SQLITE_ROW else { return nil }
+            guard let text = sqlite3_column_text(stmt, 0) else { continue }
+            days[String(cString: text)] = sqlite3_column_int64(stmt, 1)
+        }
+    }
+
     private nonisolated static func firstTokenDay(_ db: OpaquePointer) -> String? {
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }

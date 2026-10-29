@@ -50,36 +50,47 @@ public enum MascotLevelLedger {
     public static let corruptName = "level.corrupt.json"
     private static let lock = NSLock()
 
-    /// 把 `days`（歷史的 `level_days`，加上這次執行已經看過的日子）併進 `file`，回傳合併後的每一天。
+    /// `update` 的結果
+    public struct Outcome: Equatable, Sendable {
+        /// 合併後的每一天
+        public var days: [String: Int64]
+        /// `level.json` 現在確定含有傳入的每一天（本來就有，或寫成了）。false：讀不到或寫不進去，
+        /// `days` 可能比檔案裡的少（等級可能看起來變低），也不能拿來當清除歷史的保證（Fable F-01、F-08）
+        public var saved: Bool
+    }
+
+    /// 把 `days`（歷史的 `level_days`，加上這次執行已經看過的日子）併進 `file`。
     /// - 檔案不在：從 `days` 建立。
-    /// - 讀不懂（壞掉）：改名成 `level.corrupt.json` 保留，從 `days` 重建（每天取較大值，所以不會比歷史低）。
-    /// - 讀不到（權限之類）：不改寫，只回傳 `days`，下次再試。
+    /// - 讀不懂（壞掉）：改名成 `level.corrupt.json` 保留（只留最近一份），從 `days` 重建（每天取較大值，所以不會比歷史低，
+    ///   但檔案裡其他合法的日子只留在 `level.corrupt.json`）。
+    /// - 讀不到（權限之類）：不改寫，回傳 `days`、`saved` 為 false，下次再試。
     /// - 內容沒有變大就不改寫；寫入先寫暫存檔（0600）再改名取代（不會留下寫一半的檔案）。
-    public static func update(file: URL, adding days: [String: Int64], today: String) -> [String: Int64] {
+    public static func update(file: URL, adding days: [String: Int64], today: String) -> Outcome {
         lock.lock()
         defer { lock.unlock() }
         let fm = FileManager.default
         var stored: [String: Int64] = [:]
         var exists = fm.fileExists(atPath: file.path)
         if exists {
-            guard let data = try? Data(contentsOf: file) else { return merge(days, [:]) }
+            guard let data = try? Data(contentsOf: file) else { return Outcome(days: merge(days, [:]), saved: false) }
             if let decoded = decode(data) {
                 stored = decoded
             } else {
                 let corrupt = file.deletingLastPathComponent().appendingPathComponent(corruptName)
-                guard rename(file.path, corrupt.path) == 0 else { return merge(days, [:]) }
+                guard rename(file.path, corrupt.path) == 0 else { return Outcome(days: merge(days, [:]), saved: false) }
                 exists = false
             }
         }
         let merged = merge(stored, days)
-        if exists && merged == stored { return merged }
+        if exists && merged == stored { return Outcome(days: merged, saved: true) }
         let temp = file.deletingLastPathComponent().appendingPathComponent(".\(fileName).tmp")
         try? fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if fm.createFile(atPath: temp.path, contents: encode(merged, today: today), attributes: [.posixPermissions: 0o600]),
-           rename(temp.path, file.path) != 0 {
+        guard fm.createFile(atPath: temp.path, contents: encode(merged, today: today), attributes: [.posixPermissions: 0o600]),
+              rename(temp.path, file.path) == 0 else {
             try? fm.removeItem(at: temp)
+            return Outcome(days: merged, saved: false)
         }
-        return merged
+        return Outcome(days: merged, saved: true)
     }
 
     /// 寫入 `level.json` 的內容（鍵排序、日期排序，內容相同時位元組相同，沒變就不用改寫）

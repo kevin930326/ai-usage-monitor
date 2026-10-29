@@ -25,23 +25,28 @@ final class MascotLevelStore {
         let known = knownDays
         Task.detached(priority: .utility) {
             let history = Self.read(url)
-            let days = MascotLevelLedger.update(file: Self.ledger(for: url), adding: MascotLevelLedger.merge(known, history ?? [:]),
-                                                today: today)
+            let outcome = MascotLevelLedger.update(file: Self.ledger(for: url), adding: MascotLevelLedger.merge(known, history ?? [:]),
+                                                   today: today)
+            let days = outcome.days
             await MainActor.run {
                 let store = MascotLevelStore.shared
                 store.loading = false
                 // 歷史讀不到（還沒有表、被鎖住）而且 level.json 也沒有東西：保留上一次的
                 guard history != nil || !days.isEmpty else { return }
                 store.knownDays = days
-                store.apply(MascotLevel(days: days, today: today))
+                // level.json 讀不到或寫不進去：只有歷史，可能比真正的等級低。已經有值時沿用，不讓等級看起來變低（Fable F-08）
+                guard outcome.saved || store.level == nil else { return }
+                store.apply(MascotLevel(days: days, today: today), complete: outcome.saved)
             }
         }
     }
 
-    func apply(_ level: MascotLevel?) {
+    /// `complete` 為 false（level.json 讀不到，只有歷史）時不把已慶祝的等級往下修，之後讀到完整的等級不會重播慶祝
+    func apply(_ level: MascotLevel?, complete: Bool = true) {
         self.level = level
         retry?.cancel()
         let settings = PanelSettings.shared
+        guard complete else { return }
         guard let level else {
             // 成功讀到、但沒有任何活躍日（新安裝，或 level.json 也被刪掉）：從頭算，之後的第一個等級只記下（Codex C-03）
             settings.celebratedLevel = 0
@@ -80,10 +85,10 @@ final class MascotLevelStore {
         history.deletingLastPathComponent().appendingPathComponent(MascotLevelLedger.fileName)
     }
 
-    /// 清除歷史之前呼叫：把 `level_days` 先併進 `level.json`，清除後等級不變低（ADR-0020 第 1 節）
-    nonisolated static func preserve(history url: URL, now: Date) {
-        guard let days = read(url) else { return }
-        _ = MascotLevelLedger.update(file: ledger(for: url), adding: days, today: TokenCalendar.key(now, calendar: TokenCalendar.make()))
+    /// 清除歷史時（同一個交易裡、刪除之前）呼叫：把 `level_days` 併進 `level.json`。回傳是否確定存好了；
+    /// false 時不能清除，不然等級會變低（ADR-0020 第 1 節，Fable F-01）
+    nonisolated static func preserve(_ days: [String: Int64], history url: URL, now: Date) -> Bool {
+        MascotLevelLedger.update(file: ledger(for: url), adding: days, today: TokenCalendar.key(now, calendar: TokenCalendar.make())).saved
     }
 
     nonisolated static func read(_ url: URL) -> [String: Int64]? {
@@ -93,7 +98,7 @@ final class MascotLevelStore {
             return nil
         }
         defer { sqlite3_close_v2(db) }
-        sqlite3_busy_timeout(db, 200)  // 收集器正在寫入時稍等（展開時讀，不能讓瀏海卡住）
+        sqlite3_busy_timeout(db, 200)  // 收集器正在寫入時稍等（展開時在背景讀，太久會讓等級晚出現）
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, "SELECT day, tokens FROM level_days", -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
