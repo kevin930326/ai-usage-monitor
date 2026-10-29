@@ -189,12 +189,20 @@ ad-hoc 簽署（`Signature=adhoc`、`TeamIdentifier=not set`）的 `AUMProbe.app
 |---|---|
 | push tag `v*` | Mac：xcodegen、`scripts/build-release.sh`（Release 建置、內嵌 Python、ad-hoc 簽署、.zip、.dmg、`SHA256SUMS`、寫入 SHA-256 的 `install.sh`）；Windows：收集器＋PowerShell 腳本的 .zip（`collector/windows/` 存在時）；Windows App 的自含式 zip（x64、ARM64）與 `SHA256SUMS-windows`（ADR-0015，`windows` job）；產生建置來源證明（`actions/attest-build-provenance`）；以 `gh release create --draft` 建立**草稿** Release 並上傳檔案（要人到 GitHub 按發布） |
 | `workflow_dispatch` | 同樣的建置，只上傳成 workflow artifact，不建立 Release、不產生證明 |
+| `pull_request`（發布相關檔案改動時） | 同樣的建置與檢查，不上傳產出；刪除 artifact 的 job 上傳一個假的 artifact 再刪掉（乾跑） |
 
-- 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`）。
+- 權限：預設 `contents: read`；只有建立草稿 Release 的 job 有 `contents: write`（以及證明需要的 `id-token: write`、`attestations: write`），只有刪除 artifact 的 job 有 `actions: write`。
 - 第三方 action 固定到 commit SHA（供應鏈）。
 - 今晚只寫 workflow，不打 tag、不建立 Release。這個 repo 是公開的，workflow artifact 任何登入 GitHub 的人都能下載，所以也不執行 `workflow_dispatch`；改以 `pull_request`（發布相關檔案改動時）跑同樣的建置與檢查、不上傳任何東西。
 - 第一次發布：使用者決定直接打 tag 產生草稿 Release、看過再發布，不先跑 `workflow_dispatch`。
-- 注意：推 tag 時 `mac` job 一樣會把 `build/release/out/` 上傳成 workflow artifact（保留 14 天），`draft-release` job 再從那裡取檔。所以草稿只讓 Release 頁面不公開，**檔案在按發布前就能被任何登入 GitHub 的人下載**。第一次發布前要決定：接受這段提前公開，或改成建立草稿後刪除 artifact、把建置與建立草稿合成一個 job（Codex C-01，記在 BACKLOG）。
+- **artifact 不提前公開**（2026-10-29 修訂，winmascot-release 第 3 部分）：推 tag 時 `mac`、`windows` 兩個 job 把產出上傳成 workflow artifact，`draft-release` 再從那裡取檔建立草稿。
+  repo 是公開的，artifact 任何登入 GitHub 的人都能下載，所以：
+  - `delete-artifacts` job（`needs: [mac, windows, draft-release]`、`if: always()`）在草稿建立之後，以 `gh api` 刪除這次執行的所有 artifact，並再列一次確認沒有剩下（有剩下就失敗）。建置或建立草稿失敗、取消時也刪。
+  - artifact 只保留 1 天（原本 14 天）：刪除的 job 失敗時，最多公開 1 天；這時到 Actions 頁面手動刪除。
+  - 草稿 Release 的檔案只有 repo 的協作者看得到，按發布後才公開。
+  - **pull_request 乾跑**：建置照舊不上傳；`delete-artifacts` 上傳一個假的 `dry-run` artifact、找到它、刪掉、確認沒有剩下，驗證權限與 API 呼叫。fork 的 PR 沒有寫入權限，不跑這個 job。
+  - 不採用「建置與建立草稿在同一個 job」：Mac 要 macOS runner、Windows 要 Windows runner，合不成一個 job；改成兩個 job 各自建立或更新草稿則要兩個 job 都有 `contents: write`，而且兩邊會搶著建立同一個 Release。
+  - `workflow_dispatch` 的產出本來就是給人下載的 artifact，不刪（第 6 點：不執行）。
 
 ## 後果
 

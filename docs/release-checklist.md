@@ -5,7 +5,7 @@
 
 ## 1. 發布前決定（第一次）
 
-- [ ] **artifact 提前公開**：推 tag 時 `mac`、`windows` 兩個 job 都會把產出上傳成 workflow artifact（保留 14 天），`draft-release` 再從那裡取檔。repo 是公開的，所以**草稿 Release 還沒發布，檔案就能被任何登入 GitHub 的人下載**（ADR-0013 第 7 節「注意」，Codex C-01）。決定接受，或先改 workflow（建立草稿後刪除 artifact，或把建置與建立草稿合成一個 job）再打 tag。
+- [x] **artifact 提前公開**（2026-10-29 已處理）：`release.yml` 的 `delete-artifacts` job 在草稿建立後刪除這次執行的 artifact（失敗時也刪），artifact 只保留 1 天；pull_request 時以假的 artifact 乾跑（ADR-0013 第 7 節）。
 - [ ] **Windows App 沒有程式碼簽章**：第一次打開會出現 SmartScreen「Windows 已保護您的電腦」，要按「其他資訊」→「仍要執行」。確認 README 的說明可以接受，或先取得簽章憑證（不在這份清單的範圍）。
 - [ ] **Windows App 階段 1 已在實機確認**（ADR-0015）：至少在一台 Windows 11（x64）上解壓、打開、看到懸浮圓環與通知區域圖示、讀到收集器的 `usage.json`。ARM64 沒有實機時，在發布說明寫明「未在實機驗證」。
 - [ ] **Mac App 的「強制打開」**：App 只有 ad-hoc 簽署（ADR-0013 第 1 節），第一次打開要在「系統設定 › 隱私權與安全性」按「強制打開」；README 的說明與實際畫面一致。
@@ -36,7 +36,7 @@
 ## 4. 打 tag（使用者）
 
 - [ ] 在 `main` 的最新 commit 打 `vX.Y.Z` 並推上去。
-- [ ] 等 `release` workflow 完成：`mac`、`windows`、`draft-release` 三個 job 都成功。
+- [ ] 等 `release` workflow 完成：`mac`、`windows`、`draft-release`、`delete-artifacts` 四個 job 都成功；這次執行的 Actions 頁面下方「Artifacts」是空的。
 
 ## 5. 檢查草稿 Release
 
@@ -77,5 +77,5 @@
 ## 7. 發布之後
 
 - [ ] 中繼（Cloudflare Worker）**不隨 Release 部署**：有改到 `relay/` 時，另外照 `docs/tier2-setup.md` 部署。
-- [ ] 若第 1 節決定接受 artifact 提前公開，14 天後 artifact 自動過期；想提早移除可在 Actions 頁面刪除。
+- [ ] `delete-artifacts` 失敗過的話：到那次執行的 Actions 頁面確認 artifact 已刪（1 天後也會自動過期）。
 - [ ] 把這次發布遇到的問題寫回這份清單。

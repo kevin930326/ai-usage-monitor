@@ -2,8 +2,10 @@
 # - 推 v* tag：建置 Mac 的 .zip、.dmg、install.sh、SHA256SUMS，以及 Windows App 的自含式 zip（x64、ARM64）與 SHA256SUMS-windows，
 #   產生建置來源證明，建立「草稿」Release（要人到 GitHub 按發布）
 # - workflow_dispatch：同樣的建置，只上傳成 workflow artifact，不建立 Release、不產生證明
-# - pull_request（只在發布相關檔案改動時）：只確認建置與檢查會過，不上傳任何東西
-# 第三方 action 一律固定到 commit SHA；預設只有讀取權限，建立草稿的 job 才有寫入權限。
+# - pull_request（只在發布相關檔案改動時）：確認建置與檢查會過；刪除 artifact 的步驟以一個小的假 artifact 乾跑
+# - 草稿建立後（或任何一個 job 失敗時）刪除這次執行的所有 workflow artifact：repo 是公開的，artifact 任何登入 GitHub 的人都能
+#   下載，不刪的話草稿還沒發布檔案就公開了（ADR-0013 第 7 節）。artifact 也只保留 1 天，刪除失敗時最多公開 1 天
+# 第三方 action 一律固定到 commit SHA；預設只有讀取權限，建立草稿的 job 才有寫入權限，刪除 artifact 的 job 才有 actions: write。
 name: release
 
 on:
@@ -80,7 +82,7 @@ jobs:
           name: mac-${{ steps.version.outputs.version }}
           path: build/release/out/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   windows:
     name: Windows App（自含式 zip，x64、ARM64）
@@ -143,7 +145,7 @@ jobs:
           name: windows-${{ steps.version.outputs.version }}
           path: build/release/windows/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   draft-release:
     name: 建立草稿 Release
@@ -171,3 +173,47 @@ jobs:
         run: |
           gh release create "$TAG" out/* --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
             --title "AI 用量 $TAG" --notes "草稿：確認檔案、SHA256SUMS 與 SHA256SUMS-windows 後再按發布。安裝方式見 README；第一次發布照 docs/release-checklist.md。"
+
+  # 刪除這次執行的 workflow artifact（ADR-0013 第 7 節）：推 tag 時在草稿建立之後（建置或建立草稿失敗也刪），
+  # pull_request 時上傳一個假的 artifact 再刪，確認權限與 API 呼叫會成功（fork 的 PR 沒有寫入權限，不跑）。
+  # workflow_dispatch 的產出就是 artifact（給人下載），不刪
+  delete-artifacts:
+    name: 刪除這次的 artifact
+    if: >-
+      always() && (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+    needs: [mac, windows, draft-release]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: 乾跑用的假 artifact
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p dry-run
+          echo "release.yml dry run ${GITHUB_RUN_ID}" > dry-run/README.txt
+      - name: 上傳假的 artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dry-run
+          path: dry-run/
+          retention-days: 1
+      - name: 刪除並確認沒有剩下
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          list() { gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --paginate --jq '.artifacts[] | "\(.id) \(.name)"'; }
+          found=$(list)
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && ! grep -q ' dry-run$' <<<"$found"; then
+            echo "找不到乾跑的 artifact" >&2; exit 1
+          fi
+          while read -r id name; do
+            [ -n "$id" ] || continue
+            echo "刪除 $name（$id）"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"
+          done <<<"$found"
+          left=$(list)
+          if [ -n "$left" ]; then echo "還有沒刪掉的 artifact：$left" >&2; exit 1; fi
+          echo "這次執行的 artifact 都刪掉了"
