@@ -122,7 +122,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         // 收合時跳一下、揮手會超出圓底：畫的範圍是圓底的 2.3 倍
         var half = r * 1.15;
         var area = p > 0 && bounds is { } b ? b : new Rect(center.X - half, center.Y - half, half * 2, half * 2);
-        // 完全展開、只有視線在轉（看滑鼠的高幀率）：只畫角色周圍一塊（同 Mac，提醒光環最大 3 倍身體半徑），
+        // 完全展開、只有視線在轉（看滑鼠的高幀率，每秒 60 格）：只畫角色周圍一塊（同 Mac，提醒光環最大 3 倍身體半徑），
         // 不必每格把整個膠囊大小的點陣圖重畫、複製一次（ADR-0016 第 6 節「縮小重畫範圍」）
         var slotUsed = hero;
         if (p >= 1 && bounds is { } capsule && controller.Rate == MascotRenderRate.GazeOpen)
