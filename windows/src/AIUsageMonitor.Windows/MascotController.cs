@@ -502,8 +502,11 @@ internal sealed class MascotController : IDisposable
             MascotMoods.HasIncident(snapshot, provider), MascotMoods.RunsOut(snapshot, provider, now));
         var ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var top = agents.Sessions.Top(ms)?.State(ms, agents.Sessions.IdleAfter);
+        // 每分鐘也重算合併的狀態並存下來：遠端的檔案沒變、動畫「簡單」「關閉」時不跑 CheckWorking，
+        // 小電腦與需要你的 20 分鐘效力要靠這裡過期（Codex C-03）
+        ApplyActivity();
         // 其他電腦需要你、出錯也算（遠端的完成不讓角色開心）
-        var mood = MascotMoods.Agent(Merged(ms) is { } merged ? merged.MoodState(top) : top, quota);
+        var mood = MascotMoods.Agent(Activity is { } merged ? merged.MoodState(top) : top, quota);
         if (director.Mood != mood) Mutate(d => d.SetMood(mood));
         if (director.Machine.StatusLevel != level)
         {
