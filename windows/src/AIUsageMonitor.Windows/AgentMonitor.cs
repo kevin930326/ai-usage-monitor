@@ -184,14 +184,20 @@ internal sealed class AgentMonitor : IDisposable
     public void Pump()
     {
         if (!started) return;
-        var now = Now;
+        Drain(Now, false);
+    }
+
+    /// <summary>
+    /// 讀 inbox 並套用（Pump 與 Tick 共用：讀不到的事件留到下一次，可能由 Tick 補讀）。剛完成一個回合時發完成的事件，
+    /// 宿主程式在前景就開始算停留（Codex C-02）
+    /// </summary>
+    private void Drain(long now, bool otherChanged)
+    {
         var done = Done(now);
-        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now), now);
-        if (Done(now).Except(done).Any())
-        {
-            Finished?.Invoke();
-            CheckHost();
-        }
+        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || otherChanged, now);
+        if (!Done(now).Except(done).Any()) return;
+        Finished?.Invoke();
+        CheckHost();
     }
 
     /// <summary>目前「完成」的工作階段（剛變成完成的就是剛完成一個回合）</summary>
@@ -203,10 +209,7 @@ internal sealed class AgentMonitor : IDisposable
     {
         if (!started) return;
         var now = Now;
-        var remoteChanged = LoadRemote(now);
-        var done = Done(now);
-        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || remoteChanged, now);
-        if (Done(now).Except(done).Any()) Finished?.Invoke();
+        Drain(now, LoadRemote(now));
         if (now - lastStateWrite >= StateRewriteMs) WriteState(now, rewrite: true);
     }
 
