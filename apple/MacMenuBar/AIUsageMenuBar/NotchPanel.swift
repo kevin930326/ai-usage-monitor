@@ -68,11 +68,15 @@ final class NotchPanelController {
         }
         place()
         panel?.orderFrontRegardless()
+        // 新的面板：控制器還在看滑鼠的話（`heroOnLayer` 沒變、不會再通知）由這裡啟動角色的圖層
+        heroLayerChanged()
         MascotController.shared.panelVisibilityChanged()
     }
 
     private func hide() {
         MascotController.shared.closeNow()
+        // 收合時看滑鼠的圖層可能正在畫：先停掉它的 display link，之後的 heroLayerChanged 已經找不到這個面板（Codex C-01）
+        panel?.container.stopHeroLayer()
         panel?.orderOut(nil)
         panel = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -212,6 +216,10 @@ final class NotchContainerView: NSView {
         effectLoopView.layer?.contents = loop.images.first
         effectLoopView.layer?.add(animation, forKey: "effect")
         if !controller.effectLoopPlaying { controller.effectLoopPlaying = true }
+    }
+
+    func stopHeroLayer() {
+        heroLayerView.stop()
     }
 
     /// 只有視線在轉時由 `MascotHeroLayerView` 畫角色；其他時候停掉它的 display link

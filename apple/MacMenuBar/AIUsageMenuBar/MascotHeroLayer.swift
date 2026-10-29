@@ -12,6 +12,8 @@ final class MascotHeroLayerView: NSView {
     /// 在畫布上的範圍（角色停住那一刻的位置，含特效）
     private(set) var box = CGRect.zero
     private var link: CADisplayLink?
+    /// display link 會留住它的 target：用這個只弱參照 view 的小物件，view 才放得掉（Codex C-01）
+    private let linkTarget = LinkTarget()
     private var lastDraw = Int.min
     #if DEBUG
     /// 量測用：這一秒畫了幾格（`DebugTools.perfFrames`）
@@ -71,6 +73,7 @@ final class MascotHeroLayerView: NSView {
         layer?.addSublayer(bodyLayer)
         layer?.addSublayer(heroLayer)
         painter.view = self
+        linkTarget.view = self
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -105,7 +108,7 @@ final class MascotHeroLayerView: NSView {
         body = nil
         bodyLayer.contents = nil
         if link == nil {
-            let link = displayLink(target: self, selector: #selector(tick(_:)))
+            let link = displayLink(target: linkTarget, selector: #selector(LinkTarget.tick(_:)))
             link.add(to: .main, forMode: .common)
             self.link = link
         }
@@ -128,7 +131,7 @@ final class MascotHeroLayerView: NSView {
         current = nil
     }
 
-    @objc private func tick(_ link: CADisplayLink) {
+    fileprivate func tick() {
         // `preferredFrameRateRange` 只是建議：多的自己跳過（留 3 毫秒的誤差）
         let t = MascotController.shared.time()
         guard t - lastDraw >= 1000 / fps - 3 else { return }
@@ -231,6 +234,14 @@ final class MascotHeroLayerView: NSView {
         cg.scaleBy(x: scale, y: -scale)
         paint(frame, parts: parts, painter: painter, box: box, clip: clip, in: cg)
         return cg.makeImage()
+    }
+
+    private final class LinkTarget: NSObject {
+        weak var view: MascotHeroLayerView?
+
+        @MainActor @objc func tick(_ link: CADisplayLink) {
+            view?.tick()
+        }
     }
 
     /// 圖層的 delegate（NSView 自己是它的 backing layer 的 delegate，另外的圖層用這個）
