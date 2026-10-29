@@ -212,12 +212,19 @@ enum DebugTools {
         ])
     }
 
-    /// 外觀的特效（ADR-0021）：收著時 AI 工作中（特效每秒 12 次）、閒置（靜態）、展開待著。游標固定不動
+    /// 外觀的特效（ADR-0021）：收著時 AI 工作中（特效每秒 12 次）、閒置（靜態）、展開待著。
+    /// 收著工作中的那 30 秒游標繞圈（收合工作中不看滑鼠，循環不能因此停掉，2026-10-29），其他時候固定不動
     private static func runLookPerfSchedule(_ look: String) {
         let mascot = MascotController.shared
         mascot.debugSkipsActivity = true
         let screen = NSScreen.main?.frame ?? .zero
-        mascot.debugPointer = { CGPoint(x: screen.midX, y: screen.midY) }
+        let start = Date()
+        mascot.debugPointer = {
+            let t = Date().timeIntervalSince(start)
+            guard (10..<40).contains(t) else { return CGPoint(x: screen.midX, y: screen.midY) }
+            let a = t * 2 * .pi / 3
+            return CGPoint(x: screen.midX + cos(a) * 300, y: screen.midY + sin(a) * 200)
+        }
         mascot.followPointerChanged()
         PanelSettings.shared.mascotLook = look == "none" ? nil : look
         schedule([
