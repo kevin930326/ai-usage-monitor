@@ -66,6 +66,12 @@ internal sealed class RingWindow : Window
 
     /// <summary>點一下（沒有拖動）</summary>
     public event Action? Clicked;
+    /// <summary>點了展開後 AI 那一列（ADR-0017 第 10 節）：跳回那個工作階段，不開面板</summary>
+    public event Action<RingAgent>? AgentClicked;
+
+    /// <summary>滑鼠在可以點的 AI 那一列上（這台的工作階段）</summary>
+    private bool OverAgentRow(Point point) =>
+        content.Agent is not null && FloatingRingRenderer.AgentRow(Scene()) is { } row && row.Contains(point);
     /// <summary>拖動結束：參數是放開時圓環的位置（實體像素）</summary>
     public event Action<PixelRect>? DragEnded;
 
@@ -397,6 +403,9 @@ internal sealed class RingWindow : Window
         {
             mascot.Controller.PointerMoved(point.X, point.Y);
         }
+        // 這台的工作階段那一列：游標變手指（其他電腦的不能跳，不顯示可以點的樣子）
+        var hand = !pressed && content.Agent?.Session is not null && OverAgentRow(e.GetPosition(surface));
+        if ((Cursor == Cursors.Hand) != hand) Cursor = hand ? Cursors.Hand : null;
         if (!pressed) return;
         NativeMethods.GetCursorPos(out var cursor);
         var dx = cursor.X - pressCursor.X;
@@ -435,6 +444,10 @@ internal sealed class RingWindow : Window
         if (wasDragging)
         {
             DragEnded?.Invoke(NativeMethods.WindowRect(Handle));
+        }
+        else if (content.Agent is { } agent && OverAgentRow(e.GetPosition(surface)))
+        {
+            AgentClicked?.Invoke(agent);
         }
         else
         {

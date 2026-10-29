@@ -236,3 +236,19 @@ QR 碼含讀取密鑰：測試時不要截圖或錄影終端機畫面。
 | 17.1 | 在暫存資料夾建 1 GB 的磁碟映像並掛載（`hdiutil create -size 1g -fs APFS -volname aumtest /tmp/aum.dmg && hdiutil attach /tmp/aum.dmg`），塞到剩不到 500 MB（`mkfile 600m /Volumes/aumtest/fill`），以 `AI_USAGE_MONITOR_HOME=/Volumes/aumtest python3 -m usage_collector --write-local --quiet` 執行兩次 | `usage.json` 有 `local_status`（`low_disk`、剩餘 MB）；沒有 `history.sqlite3`；日誌（stderr）只有第一次記「磁碟剩餘空間不足」 | |
 | 17.2 | 以同一個資料夾打開 Debug 版面板（`AI_USAGE_MONITOR_HOME=/Volumes/aumtest AUM_DEMO_PANEL=1`） | 面板底部顯示「磁碟空間不足（剩 N MB），暫停記錄額度歷史與 Token 統計；用量照常更新」，淺色、深色都看得清楚 | |
 | 17.3 | 刪掉 `fill` 再執行一次收集器 | 日誌記「磁碟空間已恢復」；`usage.json` 沒有 `local_status`、建立了 `history.sqlite3`；面板的警告消失。最後 `hdiutil detach /Volumes/aumtest` 並刪掉映像 | |
+
+## 18. 點工作階段跳回那個 session（ADR-0017 第 10 節）
+
+| # | 操作步驟 | 預期結果 | 結果 |
+|---|---|---|---|
+| 18.1 | Terminal 開兩個分頁，各跑一個 Claude Code；切到別的 App，展開瀏海「AI 工作階段」點第一個 | 第一次出現「自動化」詢問（說明寫「只比對分頁的 tty，不讀內容」）；允許後 Terminal 到前面、切到那個分頁；滑鼠移到列上底色變亮、游標變手指 | |
+| 18.2 | iTerm2 開分割窗格，各跑一個 AI，點其中一個 | iTerm2 到前面，選到那個窗格 | |
+| 18.3 | 在系統設定的「自動化」關掉 AI 用量對 Terminal 的權限，重開 App 再點 | 只把 Terminal 帶到前面；設定「AI 狀態」出現怎麼打開權限的說明 | |
+| 18.4 | 重新安裝 App（`install-mac-app.sh`）後再點 Terminal 的工作階段 | 再問一次「自動化」（已知取捨） | |
+| 18.5 | tmux 兩個 window 各跑一個 AI，另一個 Terminal 分頁 attach 到別的 session；點 tmux 裡的工作階段 | 切到那個 window 與 pane（client 在別的 session 時先切 session），Terminal 切到 client 的分頁 | |
+| 18.6 | VS Code 整合終端機、Claude App、Codex App 各一個工作階段，點它們 | 那個 App 到前面（不切分頁） | |
+| 18.7 | 等「需要你」的通知出現後點通知 | 跳到那個工作階段，瀏海不展開；工作階段已結束時展開瀏海並釘住，那一列顯示「找不到這個工作階段的視窗」2 秒 | |
+| 18.8 | 用 `nohup` 或 `tmux -L other` 跑 AI，點它 | 那一列顯示「找不到這個工作階段的視窗」，VoiceOver 播報；2 秒後恢復 | |
+| 18.9 | 其他電腦的列（開了 AI 狀態同步） | 沒有可點的樣子；點了顯示「在<電腦名稱>上」 | |
+| 18.10 | 點完之後看 `~/Library/Logs/AIUsageMonitor` 的 App 日誌 | 只有 `agent jump: tab／app／no host` 這類種類，沒有 PID、tty、程式或資料夾名稱 | |
+

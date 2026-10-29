@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- 點工作階段跳回那個 session（ADR-0017 第 10 節）：Mac 點瀏海「AI 工作階段」的一列或「需要你」「完成」的通知，把那個工作階段所在的程式帶到前面；Terminal、iTerm2 切到那個分頁（第一次會問「自動化」權限，拒絕後只帶 App），tmux 切到那個 pane。Windows 點膠囊上的 AI 那一列或氣球通知，把 Windows Terminal、主控台、VS Code 或 Claude App 帶到前面（不切分頁）。找不到時那一列顯示「找不到這個工作階段的視窗」2 秒；其他電腦的列顯示「在<電腦名稱>上」。只用 PID、父 PID、開始時間、程式識別與 tty，不讀命令列、標題或內容。Swift／C# 共用 `fixtures/agent-jump/cases.json`
 - AI 背景執行中（ADR-0017 第 7 節）：回合結束後 AI 程序底下還有回合中新產生的程序（例如背景等 CI），角色顯示「背景執行中」（收合時慢慢呼吸加慢速思考泡泡）、不睡；只看 PID、父 PID、開始時間，不讀命令列或內容。候選要連續兩次看到才算、新回合保留上一回合的背景工作、最多 30 分鐘。Mac 與 Windows，Swift／C# golden
 - 切回 AI 的程式就算看過（ADR-0017 第 8 節）：完成之後切到 Claude App、Codex App、終端機或編輯器（`shared/agent-hosts.json`），或完成時已在前景並停留 3 秒，那些 AI 的「完成未看」變成等你；需要你與出錯不清。只比對 bundle ID／執行檔名稱，不讀視窗標題
 - Windows App：`install-windows-app.ps1`（含 `-FromRelease`）在開始功能表建立「AI Usage Monitor」捷徑（目前使用者），`-Uninstall` 時刪除；右鍵「結束」後從那裡再打開（README 寫上，也可 Win+R 執行安裝資料夾的 exe）。CI 檢查捷徑的建立、更新後還在與移除

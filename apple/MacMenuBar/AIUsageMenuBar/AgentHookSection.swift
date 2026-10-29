@@ -17,6 +17,12 @@ struct AgentHookSection: View {
             ForEach(AgentKind.allCases, id: \.self) { ai in
                 row(ai)
             }
+            if AgentJumper.automationDenied {
+                Label("要從瀏海或通知切到 Terminal／iTerm2 的分頁，請在 系統設定 → 隱私權與安全性 → 自動化 允許「AI 用量」控制 Terminal／iTerm2。沒允許時只把 App 帶到前面。",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text("需要你時通知").font(.subheadline.weight(.semibold)).padding(.top, 4)
             FlowChips(choices: PanelSettings.needsYouSecondChoices.map { ($0, $0 == 0 ? "關閉" : "\($0) 秒後") },
                       selected: settings.agentNeedsYouSeconds) { settings.agentNeedsYouSeconds = $0 }

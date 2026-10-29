@@ -5,6 +5,7 @@ import UsageKit
 /// AI 狀態的系統通知（mascot2 第 2 部分）：需要你超過設定的秒數、跑超過設定分鐘數的任務完成。
 /// 判斷在 UsageKit（`AgentSessions.notices`）；這裡只去重、檢查靜音與勿擾、送出。
 /// 通知中心會把內容存到磁碟，所以內容只有 AI 與種類：不含資料夾名稱、工作階段 ID 或任何對話內容。
+/// `userInfo` 帶工作階段的鹽雜湊（hook 算的，不是 session ID 原文；鹽只在這台、換了就對不回任何東西），點通知跳回那個工作階段用（ADR-0017 第 10 節）。
 /// 專注模式由系統處理（通知中心本來就遵守）。
 @MainActor
 final class AgentNotifier {
@@ -52,7 +53,7 @@ final class AgentNotifier {
             content.body = "跑了 \(PanelSettings.shared.agentLongTaskMinutes) 分鐘以上的任務完成了"
         }
         content.threadIdentifier = "agent"
-        content.userInfo = ["agent": true]
+        content.userInfo = ["agent": true, "ai": notice.ai.rawValue, "session": notice.session]
         // 識別碼不帶工作階段：通知中心的資料庫裡只有隨機值
         let request = UNNotificationRequest(identifier: "agent-\(UUID().uuidString)", content: content, trigger: nil)
         center.add(request) { error in

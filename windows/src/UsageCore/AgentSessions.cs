@@ -570,7 +570,8 @@ public sealed class AgentSessions(long idleAfter)
 }
 
 /// <summary>該發的系統通知。只有 AI、種類與工作階段，不含資料夾名稱：通知中心會把通知內容存到磁碟（隱私底線）</summary>
-public sealed record AgentNotice(AgentKind Ai, AgentNoticeKind Kind, AgentNeed? Need, string Key);
+/// <summary>Session：工作階段的鹽雜湊（hook 算的），點氣球通知跳回那個工作階段用（ADR-0017 第 10 節）</summary>
+public sealed record AgentNotice(AgentKind Ai, AgentNoticeKind Kind, AgentNeed? Need, string Key, string Session = "");
 
 public enum AgentNoticeKind { NeedsYou, Done }
 
@@ -587,9 +588,9 @@ public static class AgentNotices
         {
             var key = Key(s);
             if (s.Stored == AgentState.NeedsYou && now - s.Since >= policy.NeedsYouAfter)
-                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.NeedsYou, s.Need, key));
+                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.NeedsYou, s.Need, key, s.Id));
             else if (s.Stored == AgentState.Done && s.TurnStart is { } start && s.Since - start >= policy.LongTask)
-                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.Done, null, key));
+                list.Add(new AgentNotice(s.Ai, AgentNoticeKind.Done, null, key, s.Id));
         }
         return list;
     }

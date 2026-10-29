@@ -75,17 +75,29 @@ public static class AgentProcessTree
         return found;
     }
 
-    /// <summary>所有程序的（PID、父 PID）。PROCESSENTRY32W 也帶執行檔名稱，這裡不讀</summary>
-    private static List<(int Pid, int Parent)> Snapshot()
+    /// <summary>
+    /// 點工作階段跳回去（ADR-0017 第 10 節）：所有程序的父 PID 與執行檔名稱（PROCESSENTRY32W 只有檔名，沒有路徑）。只在點擊時列一次
+    /// </summary>
+    public static Dictionary<int, (int Parent, string Name)> Names()
     {
-        var result = new List<(int, int)>();
+        var result = new Dictionary<int, (int, string)>();
+        foreach (var (pid, parent, name) in Entries()) result[pid] = (parent, name);
+        return result;
+    }
+
+    /// <summary>所有程序的（PID、父 PID）</summary>
+    private static List<(int Pid, int Parent)> Snapshot() => [.. Entries().Select(e => (e.Pid, e.Parent))];
+
+    private static List<(int Pid, int Parent, string Name)> Entries()
+    {
+        var result = new List<(int, int, string)>();
         var snapshot = CreateToolhelp32Snapshot(SnapProcess, 0);
         if (snapshot == InvalidHandle) return result;
         try
         {
             var entry = new ProcessEntry { Size = (uint)Marshal.SizeOf<ProcessEntry>() };
             for (var ok = Process32FirstW(snapshot, ref entry); ok; ok = Process32NextW(snapshot, ref entry))
-                result.Add(((int)entry.ProcessId, (int)entry.ParentProcessId));
+                result.Add(((int)entry.ProcessId, (int)entry.ParentProcessId, entry.ExeFile));
         }
         finally
         {

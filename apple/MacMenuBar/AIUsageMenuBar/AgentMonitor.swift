@@ -26,6 +26,9 @@ final class AgentMonitor {
     @ObservationIgnored private var backgroundTimer: Timer?
     /// AI 程序的開始時間（拍基準時記下）：之後 PID 被重用就當成 AI 已結束。只在記憶體
     @ObservationIgnored private var aiStarts: [Int32: Int64] = [:]
+    /// 收到事件時記下的 AI 程序開始時間（點工作階段跳回去時檢查 PID 沒被重用，ADR-0017 第 10 節）。
+    /// 以「AI、工作階段、PID」為鍵：工作階段結束後 PID 被新的工作階段重用時，新的有自己的紀錄（Codex C-02）。只在記憶體
+    @ObservationIgnored private var pidStarts: [String: Int64] = [:]
     /// 列程序中（同時只跑一次）
     @ObservationIgnored private var probingProcesses = false
     /// 前景的宿主程式代表哪些 AI、從什麼時候開始在前景（ADR-0017 第 8 節）；只記這兩個，不記程式名稱
@@ -35,6 +38,14 @@ final class AgentMonitor {
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
     @ObservationIgnored private lazy var hosts = AgentHosts.decode(
         Bundle.main.url(forResource: "agent-hosts", withExtension: "json").flatMap { try? Data(contentsOf: $0) } ?? Data())
+
+    /// 宿主程式的清單（`shared/agent-hosts.json`）
+    var hostList: AgentHosts { hosts }
+
+    /// 工作階段的 AI 程序（第一次收到帶這個 PID 的事件時）的開始時間；不知道時 nil
+    func pidStart(ai: AgentKind, session: String, pid: Int32) -> Int64? { pidStarts[Self.startKey(ai, session, pid)] }
+
+    private static func startKey(_ ai: AgentKind, _ session: String, _ pid: Int32) -> String { "\(ai.rawValue)/\(session)/\(pid)" }
 
     private static var idleAfterMs: Int64 { Int64(PanelSettings.shared.mascotSleepMinutes) * 60_000 }
 
@@ -160,6 +171,15 @@ final class AgentMonitor {
             return
         }
         received += 1
+        if message.pid > 0, !message.sub {
+            let key = Self.startKey(message.ai, message.session, message.pid)
+            if pidStarts[key] == nil {
+                // 已經結束的工作階段不必再記
+                let live = Set(sessions.sessions.map { Self.startKey($0.ai, $0.id, $0.pid) })
+                pidStarts = pidStarts.filter { live.contains($0.key) }
+                pidStarts[key] = AgentProcessTree.start(message.pid)
+            }
+        }
         let after = sessions.sessions.first { $0.ai == message.ai && $0.id == message.session }?.stored
         changed()
         // 一個回合剛完成：角色揮手（收著時瀏海鼓一下）；宿主程式在前景的話 3 秒後算看過

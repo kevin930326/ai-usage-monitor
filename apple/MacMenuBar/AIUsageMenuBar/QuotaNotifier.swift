@@ -112,12 +112,24 @@ extension QuotaNotifier: UNUserNotificationCenterDelegate {
         let info = response.notification.request.content.userInfo
         let card = info["card"] as? String
         let agent = info["agent"] as? Bool == true
+        let ai = (info["ai"] as? String).flatMap(AgentKind.init(rawValue:))
+        let session = info["session"] as? String
         await MainActor.run {
-            // AI 狀態的通知：展開瀏海並保持展開，直接看到工作階段列表（瀏海關掉時改開面板）
-            if agent, NotchPanelController.shared.isShown {
-                MascotController.shared.setPinned(true)
+            // AI 狀態的通知：跳回那個工作階段（ADR-0017 第 10 節）；找不到（工作階段結束了、沒有宿主）才展開瀏海並保持展開，
+            // 直接看到工作階段列表（瀏海關掉時改開面板）
+            @MainActor func fallback() {
+                if agent, NotchPanelController.shared.isShown {
+                    MascotController.shared.setPinned(true)
+                    MascotController.shared.setPage(.agents)
+                    if let ai, let session { MascotController.shared.showJumpHint("\(ai.rawValue)/\(session)", "找不到這個工作階段的視窗") }
+                } else {
+                    AppActions.openPanel(highlight: card)
+                }
+            }
+            if agent, let ai, let session, !session.isEmpty {
+                AgentJumper.jump(ai: ai, id: session) { ok in if !ok { fallback() } }
             } else {
-                AppActions.openPanel(highlight: card)
+                fallback()
             }
         }
     }

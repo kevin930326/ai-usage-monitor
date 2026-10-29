@@ -34,6 +34,20 @@ internal sealed class AgentMonitor : IDisposable
     private bool probing;
     /// <summary>AI 程序的建立時間（PID 被重用時不會把別的程序當成 AI）</summary>
     private Dictionary<int, long> aiStarts = [];
+    /// <summary>收到事件時記下的 AI 程序開始時間（點工作階段跳回去時檢查 PID 沒被重用，ADR-0017 第 10 節）。只在記憶體</summary>
+    private Dictionary<(AgentKind, string, int), long> pidStarts = [];
+
+    /// <summary>宿主程式的清單（shared/agent-hosts.json）</summary>
+    public AgentHosts Hosts => hosts;
+
+    /// <summary>
+    /// 工作階段的 AI 程序（第一次看到這個 PID 時）的開始時間；不知道時 null。以「AI、工作階段、PID」為鍵：
+    /// 工作階段結束後 PID 被新的工作階段重用時，新的有自己的紀錄（Codex C-02）
+    /// </summary>
+    public long? PidStart(AgentKind ai, string session, int pid) => pidStarts.TryGetValue((ai, session, pid), out var start) ? start : null;
+
+    /// <summary>最後一則氣球通知的工作階段：點氣球時跳那一個（氣球沒有參數；新的取代舊的，Fable H-13）</summary>
+    public (AgentKind Ai, string Session)? LastNotice { get; private set; }
     private readonly HashSet<string> seen = [];
     private readonly AgentNoticeLog log = new();
     private bool started;
@@ -198,7 +212,9 @@ internal sealed class AgentMonitor : IDisposable
     private void Drain(long now, bool otherChanged)
     {
         var done = Done(now);
-        Evaluate(AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now) || otherChanged, now);
+        var applied = AgentInbox.Apply(Sessions, AgentInbox.Drain(home, seen), now);
+        RecordStarts(now);
+        Evaluate(applied || otherChanged, now);
         if (!Done(now).Except(done).Any()) return;
         Finished?.Invoke();
         CheckHost();
@@ -283,12 +299,25 @@ internal sealed class AgentMonitor : IDisposable
     /// <summary>通知設定改了：重新排下一次檢查</summary>
     public void SettingsChanged() => Evaluate(false, Now);
 
+    /// <summary>新出現的 AI 程序記下開始時間；已經沒有工作階段用的丟掉</summary>
+    private void RecordStarts(long now)
+    {
+        var live = Sessions.Ordered(now).Where(s => s.Pid > 0).Select(s => (s.Ai, s.Id, s.Pid)).ToHashSet();
+        if (live.SetEquals(pidStarts.Keys)) return;
+        pidStarts = pidStarts.Where(kv => live.Contains(kv.Key)).ToDictionary();
+        foreach (var key in live)
+        {
+            if (!pidStarts.ContainsKey(key) && AgentProcessTree.Start(key.Pid) is { } start) pidStarts[key] = start;
+        }
+    }
+
     private void Evaluate(bool changed, long now)
     {
         var policy = settings.AgentNoticePolicy;
         foreach (var notice in log.Take(Sessions, now, policy))
         {
             var (title, body) = AgentText.Notice(notice, settings.AgentLongTaskMinutes);
+            LastNotice = (notice.Ai, notice.Session);
             Notify?.Invoke(title, body);
             AppLog.Write($"notified agent {notice.Kind} {AgentNames.Name(notice.Ai)}");
         }

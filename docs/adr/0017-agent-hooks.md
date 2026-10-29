@@ -100,7 +100,8 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 - 磁碟上只有鹽與 socket；事件只在記憶體。日誌只寫計數（收到幾筆、丟掉幾筆，App 結束時一行），不寫欄位內容；連接失敗的日誌只寫是哪個 AI，不寫路徑。
 - 資料夾名稱只給畫面用（展開瀏海的「AI 工作階段」列表）；不進 usage.json、歷史、中繼、日誌，也**不進系統通知**：通知中心會把通知內容存在磁碟上，所以通知只寫哪個 AI、要你做什麼（允許、回答、確認計畫、完成），識別碼是隨機值。
-- 工作階段 ID 是加鹽雜湊，換鹽（重裝或刪除 `agent/`）後無法和舊的對應。
+- 工作階段 ID 是加鹽雜湊，換鹽（重裝或刪除 `agent/`）後無法和舊的對應。2026-10-30 起 Mac 通知的 `userInfo` 帶 AI 與這個鹽雜湊（點通知跳回去，第 10 節）：不是資料夾名稱或 session ID 原文，鹽換了就對不回任何東西；通知的識別碼仍是隨機值。
+- 跳回工作階段（第 10 節）只在點擊時讀程序樹與 tty，tmux 只讀 tty 與數字 ID，AppleScript 只比對 tty；都不寫磁碟、不寫日誌（只記結果的種類）。
 - 背景工作偵測（第 7 節）只用程序是否存在、PID、父 PID、開始時間，hook 另外讀父程序的名稱；切回宿主程式（第 8 節）只用前景程式的 bundle ID／執行檔名稱。都只在記憶體、比對完就丟，不讀命令列、環境變數、工作目錄、視窗標題或任何內容，不寫磁碟、不寫日誌、不上傳。
 
 ### 6. 瀏海上的呈現（mascot2 第 2 部分）
@@ -109,7 +110,7 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 - **完成**：一個回合變成 `done` 的那一刻，展開時排隊揮手；收著時瀏海鼓一下、迷你角色揮手（狀態機事件 `cheer`，兩邊 golden）。完成未看、額度正常時角色開心（^ ^），展開或點角色才變回平常。
 - **出錯**：角色難過，看過後回到額度的表情。額度偏高、用完、過期的表情優先於「完成未看」的開心，但不優先於出錯。
 - **等你下指令**：收合的瀏海每 7 秒沿外框淡淡亮一次（1.6 秒，只在亮的時候每秒重畫 20 次）；設定可關，靜音、勿擾、動畫「關閉」時不亮。
-- **系統通知**：需要你超過 N 秒（預設 20）、跑超過 N 分鐘（預設 3；從不在跑進入工作中時記回合開始，需要你之後繼續不算新回合）的回合完成；0 表示關閉。判斷（`AgentSessions.notices`、`nextNoticeCheck`）在共用邏輯並有 golden；App 只去重、照下一次檢查時間排一個計時器，不輪詢。走通知中心（遵守專注模式）；靜音與勿擾時不送也不補送。點通知會展開瀏海並保持展開。
+- **系統通知**：需要你超過 N 秒（預設 20）、跑超過 N 分鐘（預設 3；從不在跑進入工作中時記回合開始，需要你之後繼續不算新回合）的回合完成；0 表示關閉。判斷（`AgentSessions.notices`、`nextNoticeCheck`）在共用邏輯並有 golden；App 只去重、照下一次檢查時間排一個計時器，不輪詢。走通知中心（遵守專注模式）；靜音與勿擾時不送也不補送。點通知會跳回那個工作階段；找不到才展開瀏海並保持展開（第 10 節第 8 點）。
 - 動畫程度「簡單」「關閉」時角色姿勢不變（同 ADR-0016），外框、數量與列表照常。
 - **其他電腦**（2026-10-30，ADR-0019 第 2 節「角色合併所有電腦」）：舉手、外框琥珀色、難過的表情與睡覺也算其他電腦（`agent-remote.json`）的需要你、出錯、工作中；只有其他電腦在工作時角色想（泡泡旁有小電腦）。收合時的數量、完成的揮手與系統通知只算這台。
 
@@ -146,7 +147,7 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 **問題**（使用者）：在 Claude App 裡看完回覆、沒點圓環，「完成了」一直掛著。
 
-1. 前景程式換成某個 AI 的宿主程式時，把**這台電腦**上那些 AI 的「完成未看」一起標成已看，並寫 `agent-state.json`。**需要你與出錯不會因為切換程式而清掉**。
+1. 前景程式換成某個 AI 的宿主程式時（從清單或通知跳過去也算，第 10 節第 5 點），把**這台電腦**上那些 AI 的「完成未看」一起標成已看，並寫 `agent-state.json`。**需要你與出錯不會因為切換程式而清掉**。
 2. 要在「完成」之後才切過去才算；完成的那一刻宿主程式已經在前景的，**停留 3 秒**（`AgentHosts.dwellMs`）也算（使用者在 TASK 定的規則）。Fable F-15 指出：終端機與編輯器使用者多數時間就在宿主程式裡，另一個分頁完成的 3 秒後就自動看過；這是使用者選的取捨，列在影響與 README，需要時可改成只對專屬 App 套停留。
 3. 宿主程式清單在 `shared/agent-hosts.json`（Mac 的 bundle ID、Windows 的執行檔名稱，不分大小寫）：Claude 桌面 App → claude；Codex 桌面 App → codex；終端機與編輯器 → claude 與 codex 都算（App 不知道終端機裡跑的是哪一個，也不去查；在終端機看 Codex 也會清掉 Claude 的完成未看，Fable F-16）。
 4. **只取程式識別**：Mac 用 `NSWorkspace.didActivateApplicationNotification` 的 `bundleIdentifier`（本 App 自己變成前景時不算切換，Fable F-18）；Windows 用 `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`（`WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS`，不注入其他程式；委派保留參考），取前景視窗的 PID 再 `QueryFullProcessImageName` 只留檔名。提權（系統管理員）的終端機打不開，不算宿主。不讀視窗標題、不寫日誌、不保存歷史。
@@ -158,12 +159,55 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 
 **顯示端自動淡出**：其他電腦的「完成了」「出錯」從進入那個狀態（`since`）起超過 30 分鐘（`RemoteAgents.fadeAfter`）就不顯示。`since` 是那台電腦「最早進入該狀態」的時間（多個完成未看時被最老的拖下去，維持 Fable F-01 的選擇，F-19）；用中繼的時鐘換算（`now − since`，加上下載後在本機經過的時間）。對方時鐘慢會提早淡出，快則被中繼夾在 `updated_at` 內（F-20）。`since` 缺或不是非負整數時照舊、不淡出（F-21）。需要你、工作中不淡出。Swift、C# 與 iPhone（`parseRelay` 走同一個 `parse`）同一份規則，golden 有情境。
 
+### 10. 點工作階段跳回那個 session（2026-10-30，icons 第 7 部分）
+
+**問題**（使用者）：看到「需要你」「完成了」之後要自己去找是哪個視窗、哪個分頁。
+
+**做法**：點一下把那個工作階段所在的程式帶到前面，能切到分頁的就切到分頁。可以點的地方：Mac 展開瀏海「AI 工作階段」清單的一列、「需要你」「完成」的系統通知；Windows 展開膠囊上那一列（Windows 沒有工作階段清單，跳那一列彙總選出的工作階段）、氣球通知。設計經 Fable 對抗式審查（`reviews/part7-adr0017-fable-triage.md`，在工作資料夾）。
+
+1. **找宿主程式**（只在點下去那一刻，在背景執行緒，結果回主執行緒；不預先、不輪詢）：
+   - 起點是 hook 送來的 AI 程序（第 7 節第 1 點）。App 第一次收到帶 PID 的事件時在記憶體記下（PID, 開始時間）；點的時候 PID 已結束或開始時間不同（PID 重用）當成找不到。
+   - 沿父程序往上，最多 16 層；每一層要求「父的開始時間 ≤ 子的」，否則當成斷鏈（父 PID 已被重用）。
+   - **Mac**：第一個 `NSRunningApplication(processIdentifier:)` 的 bundle ID 在 `shared/agent-hosts.json` 清單裡的就是宿主；有 bundle ID 但不在清單（例如 VS Code 的 helper）繼續往上；遇到程序名稱 `tmux`（伺服器 daemonize 後父程序是 launchd）改走第 2 點第 1 項。走到 PID 1 都沒找到算找不到。
+   - **Windows**：每一層看那個程序有沒有可見、沒有擁有者的頂層視窗（`EnumWindows`＋`GetWindowThreadProcessId`），第一個「執行檔名稱在清單裡、而且有視窗」的就是要帶到前面的（shell、`openconsole.exe` 沒有自己的視窗，會繼續往上到 `WindowsTerminal.exe`；傳統主控台的視窗屬於 shell 的子程序 `conhost.exe` 時，以 `AgentJump.ConsoleOwners` 把有可見視窗的 conhost／openconsole 算給它的父程序（只看執行檔名稱、父 PID 與開始時間，Fable H-04、Codex C-01；實機確認）。
+   - Mac 另外取 AI 程序的**控制終端機**（`proc_pidinfo(PROC_PIDTBSDINFO)` 的 `e_tdev` 換成 `/dev/ttysNNN`，格式必須是 `/dev/ttys` 加 3～4 位數字）；取不到就跳過 tmux 與 AppleScript，直接帶 App 到前面。
+   - **只用 PID、父 PID、開始時間、bundle ID／執行檔名稱、程序名稱、tty 與視窗的 PID／可見性**；不讀命令列、環境變數、工作目錄、視窗標題或任何內容。共用邏輯是 `AgentJump`（UsageKit／UsageCore），程序圖由呼叫端注入。
+2. **Mac 的切換**（依序試，失敗就退到下一級）：
+   1. **tmux**：`tmux list-panes -a -F '#{pane_tty} #{pane_id} #{session_id}'` 以 AI 程序的 tty 找到 pane；`list-clients -F '#{client_tty} #{client_pid} #{session_id} #{client_activity}'`（`#{session_id}` 在 list-clients 裡是 client 目前那個 session 的 ID，`client_session` 是名稱所以不用）取 activity 最近的 client；client 在別的 session 時 `switch-client -c <client tty> -t <session id>`，再 `select-window`、`select-pane -t <pane id>`；然後從 client PID 往上找宿主（第 1 點），是 Terminal／iTerm2 時再以 client 的 tty 切分頁。
+      - 只讀 tty 與數字 ID，不讀 session、window、pane 的名稱或內容；每列格式不對就略過；輸出只拿來比對，不記錄、不顯示。
+      - 執行 `/opt/homebrew/bin/tmux` 或 `/usr/local/bin/tmux`（先找到哪個用哪個），環境只給 `PATH`（這兩個目錄），stdout 最多讀 64 KB、2 秒逾時就結束它、stderr 丟掉；只在點擊時執行。
+      - 只支援預設 socket（App 不讀 AI 程序的 `TMUX` 環境變數）；`tmux -L`／`-S` 與 `screen` 不支援，找不到宿主。
+   2. **Terminal、iTerm2**：AppleScript 依 tty 找分頁。Terminal：`tabs of windows` 的 `tty`，`set selected tab`、`set index of w to 1`、`activate`；iTerm2：`sessions of tabs of windows` 的 `tty`，`select` 那個 window、tab、session，`activate`。
+      - 腳本是 App 內寫死的 handler `jumpto`，tty 以 Apple Event 參數傳入（不拼字串），送之前再驗證一次格式。
+      - 送之前在背景執行緒以 `AEDeterminePermissionToAutomateTarget`（`askUserIfNeeded: true`）問權限：第一次出現 macOS「自動化」的詢問（`NSAppleEventsUsageDescription`）。被拒絕（`errAEEventNotPermitted`）時只帶 App 到前面，設定的「AI 狀態」寫怎麼到「系統設定 → 隱私權與安全性 → 自動化」打開（只在記憶體，重開 App 後重新判斷）。
+      - 權限確定後腳本在主執行緒執行（`NSAppleScript` 不能跨執行緒），腳本內 `with timeout of 2 seconds`，最多讓瀏海停 2 秒；通常一瞬間完成。
+   3. **其他宿主**（Ghostty、Warp、WezTerm、VS Code、Cursor、Windsurf、Claude App、Codex App）：只把 App 帶到前面（`NSWorkspace.openApplication`，和在 Dock 點那個 App 一樣；macOS 14 起背景 App 呼叫 `activate()` 可能被忽略），不需要權限、不能指定分頁。
+3. **Windows 的切換**：最小化的視窗先 `ShowWindow(SW_RESTORE)`，再 `SetForegroundWindow`；失敗（前景鎖，例如點氣球時 App 不是前景）就以 `FlashWindowEx` 閃工作列按鈕。Windows Terminal 只帶到前面、不切分頁。不讀標題、不送訊息到別的視窗（不用 `SendMessage`、`AttachThreadInput`）、不安裝鉤子、不注入、不需要系統管理員。
+4. **其他電腦的工作階段**：不能跳。點了顯示「在<電腦名稱>上」。
+5. **跳過去不另外清「看過」**：帶到前面之後第 8 節照常（切到宿主就清完成未看、停留 3 秒的規則不變）；需要你與出錯照舊不清。
+6. **提示**：找不到宿主時那一列（Windows 是膠囊那一列）原地換成「找不到這個工作階段的視窗」，2 秒後恢復，VoiceOver／朗讀程式同時播報。暫時的，不進截圖基準。日誌只寫結果的種類（`agent jump: tab`／`app`／`window`／`flash`／`no host`／`no process`），不寫 PID、tty 或程式名稱。
+7. **介面**：可以點的列在滑鼠移上去時底色變亮、游標變手指；VoiceOver 的動作名稱「切到這個工作階段」。Windows 的膠囊是畫出來的、圓環不接收焦點，所以圓環與系統匣的右鍵選單在有這台的工作階段時多一項「切到 Claude（Codex）的工作階段」（鍵盤：Win+B 到系統匣、選單鍵；Codex C-03）。其他電腦的列不顯示可點的樣子。
+8. **通知**：
+   - Mac：通知的 `userInfo` 帶 AI 與工作階段的鹽雜湊（第 5 節）。點了找得到宿主就只跳、不展開瀏海；找不到（含工作階段已經結束的舊通知）才照原本的行為展開瀏海並釘住，在那一列顯示提示。
+   - Windows：氣球通知沒有參數，App 在記憶體記住最後一則氣球的工作階段，收到 `NIN_BALLOONUSERCLICK` 時跳那一個。
+9. **不加新的全域快捷鍵**；不能從清單或通知操作 AI（只把視窗帶到前面）。
+10. **測試**：共用邏輯以 `fixtures/agent-jump/cases.json`（Swift 與 C# 同一份）測往上走、16 層上限、PID 重用、斷鏈、helper 繼續往上、遇到 tmux 轉 client、Windows 逐層找視窗；tmux 輸出的解析與 client 的選擇；tty 格式（含引號、換行）。實機見 `docs/manual-test-checklist.md` 與 `windows/README.md`。
+
+| 誤判情境 | 結果 |
+|---|---|
+| tmux 用 `-L`／`-S` 的伺服器、`screen` | 找不到宿主（提示） |
+| AI 經中介程序執行、沒有控制終端機 | 不切分頁，只帶 App |
+| 經 `nohup`、`launchd` 脫離、在 SSH 裡跑 | 找不到 |
+| 一個 Terminal／iTerm2 視窗裡的分割窗格 | Terminal 的分割共用 tty，切到分頁即可；iTerm2 選那個 session |
+| Windows 系統管理員的終端機 | 一般權限的 App 可能帶不到前面（閃工作列按鈕），實機確認 |
+
 ## 不做
 
 - **不在瀏海上批准或拒絕指令。** 理由：(1) 要批准就得讓 hook 等 App 回覆，hook 會變成會卡住 AI 的雙向通道，違反「任何錯誤都不擋 AI」；(2) 同一使用者的任何程式都能連到 socket，批准功能會讓假事件變成假批准，最壞情況從「顯示錯」變成「替你按允許」；(3) Claude Code 與 Codex 自己的權限畫面會顯示完整的指令內容，瀏海為了隱私刻意不拿這些內容，沒有資訊就不該讓人做決定。
 - 不讀對話紀錄（`transcript_path`）判斷狀態。
 - 不讀程序的命令列、環境變數或工作目錄來猜背景工作是什麼（第 7 節只看程序樹）；不追沒有父子關係的程序。
 - 不在 hook 裡做網路請求、不寫檔。
+- 跳回工作階段（第 10 節）不讀終端機的內容、標題或分頁名稱；不送 AppleScript 給 Terminal、iTerm2 以外的程式；不用輔助使用（Accessibility）權限去點別的 App 的分頁。Windows 不加工作階段清單（BACKLOG）。
 - **不偵測虛擬機、容器或 Windows 的 WSL 裡跑的 AI**（2026-10-29 使用者決定）：hook 只裝進這台電腦本身的 `~/.claude/settings.json`、`~/.codex/hooks.json`；虛擬機、容器或 WSL 裡的 Claude Code、Codex 通常讀的是它們自己系統裡的設定檔；就算共用了這台的 `~/.claude`（例如 devcontainer 掛進去），裡面找不到 `aum-hook` 或連不到 App 的 Unix socket（Mac 的指令結尾是 `2>/dev/null || true`，安靜結束），所以 hook 的狀態（需要你、完成、出錯）不會出現在瀏海上。例外：共用了這台的紀錄資料夾（`~/.claude/projects`、`~/.codex/sessions`）時，那個 AI 沒有 hook 工作階段，退回的修改時間判斷（`MascotActivityProbe`）分不出紀錄是誰寫的，角色可能顯示「工作中」。Windows 的 WSL 見 [ADR-0019](0019-windows-agent-state-and-sync.md) 第 1 節；README「已知取捨」寫明。
 
 ## 考慮過的選項
@@ -182,3 +226,4 @@ Claude Code 與 Codex 都有官方的 hook：在固定的時間點執行一個�
 - App 被移動後 hook 指向舊路徑。Claude Code 經 `sh -c` 執行指令，結束碼非 0 也非 2 時會在**對話裡**顯示 hook error 與標準錯誤的第一行（2026-10-28 官方文件），所以指令結尾加上 `2>/dev/null || true`：找不到程式時什麼都不做、不擋 AI，App 下次啟動時顯示「需要修好」。修好會改變指令，Codex 要再到 `/hooks` 信任一次。（考慮過讓指令指向資料夾裡固定位置的符號連結，搬 App 就不必修；但多一個要維護的連結，App 被刪掉時連結也會留著，先不採用。）
 - Windows（第 4 部分）用同一套事件、狀態與 golden，傳送改成 hook 寫檔＋具名事件叫醒 App（[ADR-0019](0019-windows-agent-state-and-sync.md)；ADR-0015 不准 socket 與具名管道）。指令**不能**照搬 `'<路徑>' claude`：Claude Code 在 Windows 沒有 Git Bash 時用 PowerShell，這種寫法是語法錯誤；Windows 改用官方的 exec 形式（`"command": "<exe>", "args": ["claude"]`，不經 shell），`isOurs` 也要同時看 `command` 與 `args`。
 - 背景執行中（第 7 節）會誤報與漏報（誤判表）；終端機與編輯器算兩個 AI 的宿主，切過去 3 秒就會把兩個 AI 的完成未看都清掉（第 8 節）。README「已知取捨」寫明。
+- 跳回工作階段（第 10 節）：Mac 第一次切到 Terminal／iTerm2 分頁時會跳「自動化」權限詢問，拒絕後只帶 App 到前面。App 是 ad-hoc 簽署（macOS 以簽章的雜湊認 App），**每次重裝都會再問一次**，系統設定的「自動化」裡可能留著舊項目；README「已知取捨」寫明。Info.plist 新增 `NSAppleEventsUsageDescription`；沒開 Hardened Runtime，不需要 apple-events entitlement。Mac 會在點擊時執行 `tmux`（找得到時），README 的隱私表加一列。只有 Terminal、iTerm2 與 tmux 能切到分頁，其他宿主只帶 App。

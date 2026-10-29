@@ -24,5 +24,7 @@
 	<string>public.app-category.developer-tools</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>切到 AI 工作階段所在的終端機分頁。只比對分頁的 tty，不讀內容。</string>
 </dict>
 </plist>

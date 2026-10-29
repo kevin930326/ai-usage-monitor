@@ -1,0 +1,715 @@
+{
+ "_comment": "點工作階段跳回那個 session（ADR-0017 第 10 節）的共用規則：Swift（UsageKit AgentJump）與 C#（UsageCore AgentJump）跑同一份。walk 的 start 是收到事件時記下的 AI 開始時間（null 是不知道）；mac／windows 是兩個平台各自的結果。宿主清單用 shared/agent-hosts.json",
+ "walk": [
+  {
+   "name": "terminal-tab",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    },
+    {
+     "pid": 200,
+     "ppid": 100,
+     "start": 20,
+     "name": "login",
+     "tty": "/dev/ttys003"
+    },
+    {
+     "pid": 300,
+     "ppid": 200,
+     "start": 30,
+     "name": "zsh",
+     "tty": "/dev/ttys003"
+    },
+    {
+     "pid": 400,
+     "ppid": 300,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys003"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "app",
+    "pid": 100,
+    "bundle": "com.apple.Terminal",
+    "tty": "/dev/ttys003"
+   },
+   "windows": null
+  },
+  {
+   "name": "unknown-start-still-walks",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "iTerm2",
+     "bundle": "com.googlecode.iterm2"
+    },
+    {
+     "pid": 300,
+     "ppid": 100,
+     "start": 30,
+     "name": "zsh",
+     "tty": "/dev/ttys011"
+    },
+    {
+     "pid": 400,
+     "ppid": 300,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys011"
+    }
+   ],
+   "ai": 400,
+   "start": null,
+   "mac": {
+    "kind": "app",
+    "pid": 100,
+    "bundle": "com.googlecode.iterm2",
+    "tty": "/dev/ttys011"
+   },
+   "windows": null
+  },
+  {
+   "name": "vscode-helper-keeps-walking",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Electron",
+     "bundle": "com.microsoft.VSCode"
+    },
+    {
+     "pid": 150,
+     "ppid": 100,
+     "start": 15,
+     "name": "Code Helper (Pl",
+     "bundle": "com.microsoft.VSCode.helper.plugin"
+    },
+    {
+     "pid": 300,
+     "ppid": 150,
+     "start": 30,
+     "name": "zsh",
+     "tty": "/dev/ttys010"
+    },
+    {
+     "pid": 400,
+     "ppid": 300,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys010"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "app",
+    "pid": 100,
+    "bundle": "com.microsoft.VSCode",
+    "tty": "/dev/ttys010"
+   },
+   "windows": null
+  },
+  {
+   "name": "claude-app-no-tty",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Claude",
+     "bundle": "com.anthropic.claudefordesktop"
+    },
+    {
+     "pid": 400,
+     "ppid": 100,
+     "start": 40,
+     "name": "claude"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "app",
+    "pid": 100,
+    "bundle": "com.anthropic.claudefordesktop",
+    "tty": null
+   },
+   "windows": null
+  },
+  {
+   "name": "tmux-server-goes-to-client",
+   "processes": [
+    {
+     "pid": 50,
+     "ppid": 1,
+     "start": 5,
+     "name": "tmux"
+    },
+    {
+     "pid": 60,
+     "ppid": 50,
+     "start": 6,
+     "name": "zsh",
+     "tty": "/dev/ttys005"
+    },
+    {
+     "pid": 70,
+     "ppid": 60,
+     "start": 7,
+     "name": "node",
+     "tty": "/dev/ttys005"
+    }
+   ],
+   "ai": 70,
+   "start": 7,
+   "mac": {
+    "kind": "tmux",
+    "tty": "/dev/ttys005"
+   },
+   "windows": null
+  },
+  {
+   "name": "tmux-without-tty-is-none",
+   "processes": [
+    {
+     "pid": 50,
+     "ppid": 1,
+     "start": 5,
+     "name": "tmux"
+    },
+    {
+     "pid": 70,
+     "ppid": 50,
+     "start": 7,
+     "name": "node"
+    }
+   ],
+   "ai": 70,
+   "start": 7,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "pid-reused-is-none",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    },
+    {
+     "pid": 400,
+     "ppid": 100,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys003"
+    }
+   ],
+   "ai": 400,
+   "start": 39,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "parent-pid-reused-breaks-chain",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    },
+    {
+     "pid": 300,
+     "ppid": 100,
+     "start": 50,
+     "name": "zsh"
+    },
+    {
+     "pid": 400,
+     "ppid": 300,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys003"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "detached-under-launchd-is-none",
+   "processes": [
+    {
+     "pid": 400,
+     "ppid": 1,
+     "start": 40,
+     "name": "node"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "missing-ai-is-none",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    }
+   ],
+   "ai": 400,
+   "start": null,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "bad-tty-is-dropped",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    },
+    {
+     "pid": 400,
+     "ppid": 100,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys003\"; quit"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "app",
+    "pid": 100,
+    "bundle": "com.apple.Terminal",
+    "tty": null
+   },
+   "windows": null
+  },
+  {
+   "name": "deeper-than-16-is-none",
+   "processes": [
+    {
+     "pid": 100,
+     "ppid": 1,
+     "start": 10,
+     "name": "Terminal",
+     "bundle": "com.apple.Terminal"
+    },
+    {
+     "pid": 200,
+     "ppid": 100,
+     "start": 20,
+     "name": "sh"
+    },
+    {
+     "pid": 201,
+     "ppid": 200,
+     "start": 21,
+     "name": "sh"
+    },
+    {
+     "pid": 202,
+     "ppid": 201,
+     "start": 22,
+     "name": "sh"
+    },
+    {
+     "pid": 203,
+     "ppid": 202,
+     "start": 23,
+     "name": "sh"
+    },
+    {
+     "pid": 204,
+     "ppid": 203,
+     "start": 24,
+     "name": "sh"
+    },
+    {
+     "pid": 205,
+     "ppid": 204,
+     "start": 25,
+     "name": "sh"
+    },
+    {
+     "pid": 206,
+     "ppid": 205,
+     "start": 26,
+     "name": "sh"
+    },
+    {
+     "pid": 207,
+     "ppid": 206,
+     "start": 27,
+     "name": "sh"
+    },
+    {
+     "pid": 208,
+     "ppid": 207,
+     "start": 28,
+     "name": "sh"
+    },
+    {
+     "pid": 209,
+     "ppid": 208,
+     "start": 29,
+     "name": "sh"
+    },
+    {
+     "pid": 210,
+     "ppid": 209,
+     "start": 30,
+     "name": "sh"
+    },
+    {
+     "pid": 211,
+     "ppid": 210,
+     "start": 31,
+     "name": "sh"
+    },
+    {
+     "pid": 212,
+     "ppid": 211,
+     "start": 32,
+     "name": "sh"
+    },
+    {
+     "pid": 213,
+     "ppid": 212,
+     "start": 33,
+     "name": "sh"
+    },
+    {
+     "pid": 214,
+     "ppid": 213,
+     "start": 34,
+     "name": "sh"
+    },
+    {
+     "pid": 215,
+     "ppid": 214,
+     "start": 35,
+     "name": "sh"
+    },
+    {
+     "pid": 216,
+     "ppid": 215,
+     "start": 36,
+     "name": "sh"
+    },
+    {
+     "pid": 400,
+     "ppid": 216,
+     "start": 40,
+     "name": "node",
+     "tty": "/dev/ttys003"
+    }
+   ],
+   "ai": 400,
+   "start": 40,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "windows-terminal",
+   "processes": [
+    {
+     "pid": 10,
+     "ppid": 5,
+     "start": 1,
+     "name": "WindowsTerminal.exe",
+     "window": true
+    },
+    {
+     "pid": 20,
+     "ppid": 10,
+     "start": 2,
+     "name": "OpenConsole.exe"
+    },
+    {
+     "pid": 30,
+     "ppid": 10,
+     "start": 3,
+     "name": "pwsh.exe"
+    },
+    {
+     "pid": 40,
+     "ppid": 30,
+     "start": 4,
+     "name": "codex.exe"
+    }
+   ],
+   "ai": 40,
+   "start": 4,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": {
+    "pid": 10
+   }
+  },
+  {
+   "name": "windows-classic-console",
+   "processes": [
+    {
+     "pid": 5,
+     "ppid": 4,
+     "start": 1,
+     "name": "explorer.exe",
+     "window": true
+    },
+    {
+     "pid": 30,
+     "ppid": 5,
+     "start": 3,
+     "name": "cmd.exe",
+     "window": true
+    },
+    {
+     "pid": 40,
+     "ppid": 30,
+     "start": 4,
+     "name": "codex.exe"
+    }
+   ],
+   "ai": 40,
+   "start": 4,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": {
+    "pid": 30
+   }
+  },
+  {
+   "name": "windows-vscode",
+   "processes": [
+    {
+     "pid": 10,
+     "ppid": 5,
+     "start": 1,
+     "name": "Code.exe",
+     "window": true
+    },
+    {
+     "pid": 15,
+     "ppid": 10,
+     "start": 2,
+     "name": "Code.exe"
+    },
+    {
+     "pid": 30,
+     "ppid": 15,
+     "start": 3,
+     "name": "powershell.exe"
+    },
+    {
+     "pid": 40,
+     "ppid": 30,
+     "start": 4,
+     "name": "node.exe"
+    }
+   ],
+   "ai": 40,
+   "start": 4,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": {
+    "pid": 10
+   }
+  },
+  {
+   "name": "windows-only-explorer-is-none",
+   "processes": [
+    {
+     "pid": 5,
+     "ppid": 4,
+     "start": 1,
+     "name": "explorer.exe",
+     "window": true
+    },
+    {
+     "pid": 40,
+     "ppid": 5,
+     "start": 4,
+     "name": "codex.exe"
+    }
+   ],
+   "ai": 40,
+   "start": 4,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  },
+  {
+   "name": "windows-pid-reused-is-none",
+   "processes": [
+    {
+     "pid": 10,
+     "ppid": 5,
+     "start": 1,
+     "name": "WindowsTerminal.exe",
+     "window": true
+    },
+    {
+     "pid": 40,
+     "ppid": 10,
+     "start": 4,
+     "name": "codex.exe"
+    }
+   ],
+   "ai": 40,
+   "start": 5,
+   "mac": {
+    "kind": "none"
+   },
+   "windows": null
+  }
+ ],
+ "tmux": [
+  {
+   "name": "other-session-switches",
+   "panes": "/dev/ttys004 %1 $0\n/dev/ttys005 %3 $1\n",
+   "clients": "/dev/ttys001 812 $0 1761700000\n",
+   "tty": "/dev/ttys005",
+   "plan": {
+    "pane": "%3",
+    "session": "$1",
+    "client_tty": "/dev/ttys001",
+    "client_pid": 812,
+    "switch": true
+   }
+  },
+  {
+   "name": "same-session-no-switch",
+   "panes": "/dev/ttys005 %3 $1\n",
+   "clients": "/dev/ttys001 812 $1 1761700000\n",
+   "tty": "/dev/ttys005",
+   "plan": {
+    "pane": "%3",
+    "session": "$1",
+    "client_tty": "/dev/ttys001",
+    "client_pid": 812,
+    "switch": false
+   }
+  },
+  {
+   "name": "most-recent-client",
+   "panes": "/dev/ttys005 %3 $1\n",
+   "clients": "/dev/ttys001 812 $0 1761700000\n/dev/ttys002 813 $1 1761700100\n",
+   "tty": "/dev/ttys005",
+   "plan": {
+    "pane": "%3",
+    "session": "$1",
+    "client_tty": "/dev/ttys002",
+    "client_pid": 813,
+    "switch": false
+   }
+  },
+  {
+   "name": "malformed-lines-skipped",
+   "panes": "evil;rm %1 $0\n/dev/ttys005 %x $1\n/dev/ttys005 %3 $1 extra\n/dev/ttys005 %7 $2\n",
+   "clients": "/dev/ttys001 abc $0 1\n/dev/ttys001 1 $0 1\n/dev/ttys009 900 $2 5\n",
+   "tty": "/dev/ttys005",
+   "plan": {
+    "pane": "%7",
+    "session": "$2",
+    "client_tty": "/dev/ttys009",
+    "client_pid": 900,
+    "switch": false
+   }
+  },
+  {
+   "name": "no-pane-is-none",
+   "panes": "/dev/ttys004 %1 $0\n",
+   "clients": "/dev/ttys001 812 $0 1\n",
+   "tty": "/dev/ttys005",
+   "plan": null
+  },
+  {
+   "name": "no-client-is-none",
+   "panes": "/dev/ttys005 %3 $1\n",
+   "clients": "",
+   "tty": "/dev/ttys005",
+   "plan": null
+  }
+ ],
+ "tty": [
+  {
+   "value": "/dev/ttys003",
+   "valid": true
+  },
+  {
+   "value": "/dev/ttys1000",
+   "valid": true
+  },
+  {
+   "value": "/dev/ttys03",
+   "valid": false
+  },
+  {
+   "value": "/dev/ttys12345",
+   "valid": false
+  },
+  {
+   "value": "/dev/tty003",
+   "valid": false
+  },
+  {
+   "value": "/dev/ttys003\n",
+   "valid": false
+  },
+  {
+   "value": "/dev/ttys00\"3",
+   "valid": false
+  },
+  {
+   "value": "",
+   "valid": false
+  },
+  {
+   "value": "/dev/ttys00a",
+   "valid": false
+  }
+ ]
+}

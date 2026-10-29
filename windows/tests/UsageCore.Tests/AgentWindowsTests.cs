@@ -373,7 +373,7 @@ public sealed class AgentWindowsTests : IDisposable
         Assert.Null(RingAgent.From(sessions, 2_000));
         sessions.Apply(Event(AgentHookEvent.PermissionRequest, 2), 2_000);
         var agent = RingAgent.From(sessions, 3_000)!;
-        Assert.Equal(new RingAgent(AgentKind.Claude, AgentState.NeedsYou, AgentNeed.Permission), agent);
+        Assert.Equal(new RingAgent(AgentKind.Claude, AgentState.NeedsYou, AgentNeed.Permission) { Session = "0123456789abcdef" }, agent);
         Assert.Equal("Claude Code 需要你", agent.Title);
         Assert.Equal("等你允許一個動作", agent.Detail);
         var content = RingContent.Empty.WithAgent(agent);
