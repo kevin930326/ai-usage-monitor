@@ -24,6 +24,13 @@ public struct MascotConfig: Sendable {
                             expressions: file.expressions, gestures: file.gestures, interaction: file.machine)
     }
 
+    /// `#RRGGBB` → [r, g, b]（0～255）；格式不對時是黑色（設定檔由測試檢查）
+    public static func rgb(_ hex: String) -> [Double] {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return [0, 0, 0] }
+        return [Double(value >> 16 & 0xFF), Double(value >> 8 & 0xFF), Double(value & 0xFF)]
+    }
+
     private struct File: Decodable {
         var panel: Panel
         var hero: Hero
@@ -93,6 +100,8 @@ public struct MascotConfig: Sendable {
         public var brow: Brow
         public var follow: Follow
         public var blink: Blink
+        /// 工作中的鍵盤（展開與收合共用）
+        public var keyboard: Keyboard
 
         public struct IntroPlace: Decodable, Sendable { public var x: Double; public var y: Double; public var radius: Double; public var startDrop: Double }
         public struct Highlight: Decodable, Sendable { public var x: Double; public var y: Double; public var radius: Double }
@@ -117,6 +126,27 @@ public struct MascotConfig: Sendable {
             public var pitchSpanPx: Double
         }
         public struct Blink: Decodable, Sendable { public var minGapMs: Int; public var maxGapMs: Int; public var closeMs: Int; public var holdMs: Int; public var openMs: Int }
+        public struct Keyboard: Decodable, Sendable {
+            public var y: Double
+            public var width: Double
+            public var height: Double
+            /// `#RRGGBB`
+            public var color: String
+            public var shine: Shine
+            public var keys: Keys
+            public struct Shine: Decodable, Sendable { public var x: Double; public var y: Double; public var width: Double; public var height: Double; public var alpha: Double }
+            public struct Keys: Decodable, Sendable {
+                public var count: Int
+                public var x: Double
+                public var step: Double
+                public var y: Double
+                public var width: Double
+                public var height: Double
+                public var color: String
+                public var phase: Double
+                public var onAbove: Double
+            }
+        }
     }
 
     public struct Tint: Decodable, Sendable {
