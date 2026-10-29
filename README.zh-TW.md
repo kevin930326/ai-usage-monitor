@@ -268,7 +268,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | `set-relay.sh` | Keychain `AIUsageMonitor-relay-write`、`config.json` | 中繼寫入密鑰；中繼網址（不含密鑰） |
 | 收集器 | `~/Library/Logs/AIUsageMonitor/collector.log`、`collector.log*.repeats.json`（Windows：`%LOCALAPPDATA%\AIUsageMonitor\collector.log`、`collector.log.repeats.json`） | 錯誤訊息（不含 token、Claude Code 的輸出或對話紀錄的內容）；`.repeats.json` 是同樣的訊息與時間，用來讓重複的錯誤每小時只記一行 |
 | Mac 選單列 App | App 的 UserDefaults | 選單列圖示樣式與顯示的額度（`menuBar.*`）、面板設定（`panel.*`：卡片順序、收合、走勢與統計的範圍、統計是否含快取讀取）、通知開關（`notify.low`／`notify.tooFast`／`notify.reset`）、啟動時是否已詢問過通知權限（`notify.askedAtLaunch`）與已通知的事件鍵（`notify.sent`，保留 8 天）、快捷鍵（`hotKey.panel`）、「更新」觸發收集器的時間（`collector.kicks`）、外觀（`app.appearance`）、設定精靈是否已完成（`wizard.completed`） |
-| Mac 選單列 App | `~/Library/Application Support/AIUsageMonitor/level.json`（`0600`；壞掉時改名為 `level.corrupt.json` 保留） | 角色等級：每天的 Token 主數字（日期與數字，只增不減）、經驗值與等級。瀏海展開時與「清除歷史」之前更新；清除歷史不刪它，等級不會變低（[ADR-0020](docs/adr/0020-mascot-level.md) 第 1 節） |
+| Mac 選單列 App | `~/Library/Application Support/AIUsageMonitor/level.json`（`0600`；壞掉時改名為 `level.corrupt.json` 保留，只留最近一份） | 角色等級：每天的 Token 主數字（日期與數字，只增不減）、經驗值與等級。瀏海展開時與「清除歷史」之前更新；清除歷史不刪它，等級不會變低；存不進去時不清除（[ADR-0020](docs/adr/0020-mascot-level.md) 第 1 節） |
 | Mac 選單列 App | `history.sqlite3` | 只在設定中改保留期間（`meta.retention_days`；延長時另記 `meta.token_days_from`，即還有每日 Token 的第一天），或確認「清除歷史」「縮短保留期間」「清除並重新掃描」後寫入；開啟資料庫時把檔案與 `-wal`、`-shm` 改回 `0600` |
 | Mac 選單列 App | 你選擇的位置 | 「匯出額度 CSV」：每小時的額度歷史；「匯出 Token CSV」：每日 Token（日期、服務、模型、四種 Token、任務數與秒數） |
 | Mac 選單列 App | 通知中心 | 通知內容（服務、額度名稱與剩餘 %）。「剩不到 20%」預設開，第一次打開 App 時由系統詢問是否允許；另外兩種只在你打開開關後 |
@@ -282,7 +282,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/ins
 | iPhone | Live Activity 與小工具 | 各額度百分比、重置時間、方案、錯誤訊息；**鎖定時也看得到** |
 | Apple Watch | Keychain（`AfterFirstUnlockThisDeviceOnly`）、UserDefaults（`relayURL`）、App Group 的 `usage.json` | 讀取密鑰、中繼網址、最新快照（給複雜功能，**錶面上隨時看得到**百分比） |
 | Windows App | `%LOCALAPPDATA%\AIUsageMonitor\windows-app.json`、`logs\windows-app.log` | 顯示方式、圓環的額度／大小／透明度與每個螢幕的位置、外觀、「立即更新」觸發收集器的時間；錯誤的類型與位置（不含用量數字） |
-| Windows App | `%LOCALAPPDATA%\AIUsageMonitor\level.json`（壞掉時改名為 `level.corrupt.json`） | 角色等級（只算這台電腦）：每天的 Token 主數字、經驗值與等級；面板打開時讀 `history.sqlite3` 的 `record_days`（唯讀）後更新 |
+| Windows App | `%LOCALAPPDATA%\AIUsageMonitor\level.json`（壞掉時改名為 `level.corrupt.json`，只留最近一份） | 角色等級（只算這台電腦）：每天的 Token 主數字、經驗值與等級；面板打開時讀 `history.sqlite3` 的 `record_days`（唯讀）後更新 |
 | Windows App | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `AIUsageMonitor` | 開機自動啟動（安裝時預設開；設定關掉即移除） |
 
 iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給開著的手錶 App，系統不保存訊息（FR-30）。寫入密鑰只存在 Mac 的 Keychain 與 Cloudflare，不會傳到 iPhone 或手錶。

@@ -4,7 +4,8 @@
   （第二層下載，`input + cache_write + output`，同 record_days 的主數字）。這台自己在中繼上的列不會下載（token_sync）。
 - 寫入取較大值、已有的日子不刪：保留期間清掉舊資料、其他電腦的列整批取代、Codex 重算變小，都不會讓它變小。
 - 只有日期與數字；不上傳。App（Mac、Windows）讀這張表，以 UsageKit／UsageCore 的 MascotLevel 算經驗值與等級。
-- 「清除歷史」（App 刪表）時一併清空，是唯一會變小的情況。
+- 「清除歷史」（App 刪表）時一併清空，是這張表唯一會變小的情況；App 在刪之前先把它併進自己的 level.json（只增不減），
+  所以顯示的等級不會因此變低。
 """
 from __future__ import annotations
 

@@ -8,7 +8,7 @@ import Foundation
 ///   讀取時以 `days` 重算。
 /// - 合併：每一天取較大值；只留合法的 `YYYY-MM-DD` 而且 `tokens > 0` 的日子（和 `MascotLevel` 的活躍日相同）。
 /// - 讀取：不是 JSON 物件、沒有 `days` 物件時當成壞掉（nil），由呼叫端從歷史重算；`days` 裡格式不對的項目
-///   （日期不合法、不是非負整數、布林值）略過，其他照用。
+///   （日期不合法、不是正整數、布林值）略過，其他照用；剛好是整數的數字（1.0、1e4）當成整數，重複的鍵取第一個。
 public enum MascotLevelLedger {
     public static let schemaVersion = 1
 
