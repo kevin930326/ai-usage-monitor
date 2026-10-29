@@ -37,6 +37,8 @@ struct MascotFrame {
     var thinkingDots: Int?
     /// 只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：泡泡旁的小電腦
     var remoteBadge = false
+    /// 小電腦放在點的上方（展開時；收合時上方沒有空間，放在點的右邊）
+    var remoteBadgeAbove = false
     var effects: [MascotEffect]
     var ripple: MascotRipple?
     var character: MascotCharacter
@@ -462,7 +464,11 @@ struct MascotPainter {
                 context.fill(Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)),
                              with: .color(i < lit ? on : Color.white.opacity(0.22)))
             }
-            if frame.remoteBadge { drawComputer(at: CGPoint(x: x + R * 2.15, y: y - R * 0.98), size: R, in: &context) }
+            // 小電腦：收合時在點的右邊；展開時在中間那顆點的上方（放在右邊會超出角色卡）
+            if frame.remoteBadge {
+                let at = frame.remoteBadgeAbove ? CGPoint(x: x + R * 1.32, y: y - R * 1.55) : CGPoint(x: x + R * 2.15, y: y - R * 0.98)
+                drawComputer(at: at, size: R, in: &context)
+            }
         }
         // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）
         let zColor = Color(red: 0.85, green: 0.85, blue: 0.89)

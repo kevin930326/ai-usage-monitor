@@ -32,6 +32,7 @@ public static class MascotFrames
             EffectTime = effectTime,
             ThinkingDots = remote ? 2 : null,
             RemoteBadge = remote,
+            RemoteBadgeAbove = director.Machine.IsOpen,
         };
     }
 }

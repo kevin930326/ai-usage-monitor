@@ -39,6 +39,8 @@ public sealed record MascotFrame
     public int? ThinkingDots { get; init; }
     /// <summary>只有其他電腦在工作（ADR-0019「角色合併所有電腦」）：泡泡旁的小電腦</summary>
     public bool RemoteBadge { get; init; }
+    /// <summary>小電腦放在點的上方（展開時；收合時放在點的右邊）</summary>
+    public bool RemoteBadgeAbove { get; init; }
     public IReadOnlyList<MascotEffect> Effects { get; init; } = [];
     public MascotRipple? Ripple { get; init; }
     public MascotCharacter Character { get; init; } = MascotCharacter.Claude;

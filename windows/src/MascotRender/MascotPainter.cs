@@ -483,7 +483,12 @@ public sealed class MascotPainter(MascotConfig config)
                 paint.Color = i < litCount ? on : WithAlpha(SKColors.White, 0.22);
                 canvas.DrawOval(Oval(x + R * 0.95 + i * R * 0.367, y - R * 0.95, r, r), paint);
             }
-            if (frame.RemoteBadge) DrawComputer(canvas, x + R * 2.15, y - R * 0.98, R);
+            // 小電腦（同 Mac）：收合時在點的右邊；展開時在中間那顆點的上方（放在右邊會超出角色卡）
+            if (frame.RemoteBadge)
+            {
+                if (frame.RemoteBadgeAbove) DrawComputer(canvas, x + R * 1.32, y - R * 1.55, R);
+                else DrawComputer(canvas, x + R * 2.15, y - R * 0.98, R);
+            }
         }
         // z 用三段線畫（每格排版文字太花 CPU，睡著時一直在重畫）
         if (frame.Dozing)

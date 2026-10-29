@@ -467,7 +467,7 @@ struct NotchCanvas: View {
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            mood: director.mood(at: time),
                            sleeping: director.showsSleep, dozing: director.showsDoze,
-                           thinkingDots: remote ? 2 : nil, remoteBadge: remote, effects: director.effects,
+                           thinkingDots: remote ? 2 : nil, remoteBadge: remote, remoteBadgeAbove: director.machine.isOpen, effects: director.effects,
                            ripple: director.ripple, character: character, look: look, effectTime: effectTime)
     }
 
