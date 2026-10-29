@@ -21,7 +21,7 @@ namespace AIUsageMonitor.Windows;
 internal sealed class RingWindow : Window
 {
     public static readonly DependencyProperty RevealProperty = DependencyProperty.Register(
-        nameof(Reveal), typeof(double), typeof(RingWindow), new PropertyMetadata(1.0, (d, _) => ((RingWindow)d).surface.InvalidateVisual()));
+        nameof(Reveal), typeof(double), typeof(RingWindow), new PropertyMetadata(1.0, (d, _) => ((RingWindow)d).RevealChanged()));
     public static readonly DependencyProperty ExpandProperty = DependencyProperty.Register(
         nameof(Expand), typeof(double), typeof(RingWindow), new PropertyMetadata(0.0, (d, _) => ((RingWindow)d).surface.InvalidateVisual()));
 
@@ -100,6 +100,15 @@ internal sealed class RingWindow : Window
     }
 
     /// <summary>0＝貼邊的半圓標籤、1＝圓環在原位</summary>
+    /// <summary>收成貼邊的標籤（完全收進去）</summary>
+    private bool Docked => dock != RingDock.None && Reveal <= 0;
+
+    private void RevealChanged()
+    {
+        surface.InvalidateVisual();
+        Mascot?.Controller.SetDocked(Docked);
+    }
+
     public double Reveal
     {
         get => (double)GetValue(RevealProperty);
@@ -165,6 +174,7 @@ internal sealed class RingWindow : Window
             old.Controller.CloseRequested -= CollapseNow;
             old.Controller.HeroOnScreen = null;
             old.Controller.ContainsPointer = null;
+            old.Controller.SetDocked(false);
         }
         face = next;
         if (Mascot is { } mascot)
@@ -172,9 +182,10 @@ internal sealed class RingWindow : Window
             mascot.Controller.Changed += surface.InvalidateVisual;
             mascot.Controller.CloseRequested += CollapseNow;
             // 貼邊的標籤是靜態的一格：不看滑鼠（ADR-0015 第 7 節「角色」）
-            mascot.Controller.HeroOnScreen = () => IsVisible && monitor is not null && !(dock != RingDock.None && Reveal <= 0)
+            mascot.Controller.HeroOnScreen = () => IsVisible && monitor is not null && !Docked
                 ? (ring.Left + ring.Width / 2.0, ring.Top + ring.Height / 2.0, monitor.Scale) : null;
             mascot.Controller.ContainsPointer = () => IsMouseOver;
+            mascot.Controller.SetDocked(Docked);
         }
         CollapseNow();
         surface.InvalidateVisual();

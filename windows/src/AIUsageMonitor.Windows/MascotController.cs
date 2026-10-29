@@ -208,6 +208,18 @@ internal sealed class MascotController : IDisposable
         Refresh();
     }
 
+    private bool docked;
+
+    /// <summary>收進貼邊的標籤（或拉出來）：標籤是靜態一格，不重畫、不看滑鼠、不脈動（ADR-0015 第 7 節「角色」）</summary>
+    public void SetDocked(bool value)
+    {
+        if (docked == value) return;
+        docked = value;
+        RestartGaze();
+        UpdatePulse();
+        Refresh();
+    }
+
     /// <summary>圖示顯示或隱藏（全螢幕、樣式改成圓環、只顯示系統匣）：隱藏時所有計時器都停</summary>
     public void SetShown(bool value)
     {
@@ -511,7 +523,7 @@ internal sealed class MascotController : IDisposable
     private void UpdatePulse()
     {
         var ms = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var wanted = agents is not null && settings.MascotWaitingPulse && shown && !IsOpen && Motion != MascotMotionLevel.Off && SystemLook.AnimationsEnabled
+        var wanted = agents is not null && settings.MascotWaitingPulse && shown && !docked && !IsOpen && Motion != MascotMotionLevel.Off && SystemLook.AnimationsEnabled
             && !settings.IsMascotQuiet(DateTimeOffset.Now)
             && agents.Sessions.Top(ms)?.State(ms, agents.Sessions.IdleAfter) == AgentState.Waiting;
         if (wanted == pulseTimer.IsEnabled) return;
@@ -551,7 +563,7 @@ internal sealed class MascotController : IDisposable
         lastPointer = null;
         pointerStillTicks = 0;
         gazeDozing = false;
-        if (!settings.MascotFollowPointer || !Motion.MovesEyes() || Director is null || !shown)
+        if (!settings.MascotFollowPointer || !Motion.MovesEyes() || Director is null || !shown || docked)
         {
             if (Director is { } d && d.Look(Time(), 0, 0, threshold: 0.001)) Refresh();
             return;
@@ -637,6 +649,14 @@ internal sealed class MascotController : IDisposable
         }
         var now = Time();
         if (director.NextDeadline is { } deadline) Start(deadlineTimer, deadline - now);
+        if (docked && !director.Machine.IsOpen)
+        {
+            // 標籤只畫停住的一格：狀態機照常到期，但不重畫
+            if (Rate != MascotRenderRate.Stopped) StoppedAt = now;
+            SetRate(MascotRenderRate.Stopped, null);
+            Changed?.Invoke();
+            return;
+        }
         var animating = director.IsAnimating(now);
         var motion = Motion;
         var live = director.IsLive && motion.MovesEyes();
