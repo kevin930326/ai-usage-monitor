@@ -389,19 +389,23 @@ struct MascotPainter {
             }
         }
 
-        // 工作中的鍵盤
+        // 工作中的鍵盤：中灰底、上緣淡白亮線、一排深灰按鍵輪流亮成光暈色（shared/mascot-anim.json `hero.keyboard`）
         if h[.kb] > 0.01 {
-            let kx = x, ky = y + R * 1.02 * sy, kw = R * 1.75, kh = R * 0.27
+            let k = config.hero.keyboard
+            let kx = x, ky = y + R * k.y * sy, kw = R * k.width, kh = R * k.height
             var g = context
             g.opacity = h[.kb]
             g.fill(Path(roundedRect: CGRect(x: kx - kw / 2, y: ky - kh / 2, width: kw, height: kh), cornerRadius: kh / 2),
-                   with: .color(Color(red: 0x2b / 255, green: 0x2b / 255, blue: 0x33 / 255)))
-            let shine = CGRect(x: kx - kw * 0.45, y: ky - kh * 0.36 - kh * 0.06, width: kw * 0.9, height: kh * 0.12)
-            g.fill(Path(roundedRect: shine, cornerRadius: kh * 0.06), with: .color(.white.opacity(0.16)))
-            for i in 0..<7 {
-                let on = sin(now / 62 + Double(i) * 1.7) > 0.75
-                let rect = CGRect(x: kx - kw * 0.36 + Double(i) * kw * 0.12, y: ky - kh * 0.05, width: kw * 0.07, height: kh * 0.22)
-                g.fill(Path(rect), with: .color(on ? color(look?.glow ?? frame.character.tint(config.palette).glow, 0.95) : .white.opacity(0.25)))
+                   with: .color(color(MascotConfig.rgb(k.color))))
+            let shine = CGRect(x: kx + kw * k.shine.x, y: ky + kh * k.shine.y, width: kw * k.shine.width, height: kh * k.shine.height)
+            g.fill(Path(shine), with: .color(.white.opacity(k.shine.alpha)))
+            let keyColor = color(MascotConfig.rgb(k.keys.color))
+            let lit = color(look?.glow ?? frame.character.tint(config.palette).glow)
+            for i in 0..<k.keys.count {
+                let on = sin(now / 62 + Double(i) * k.keys.phase) > k.keys.onAbove
+                let rect = CGRect(x: kx + kw * (k.keys.x + Double(i) * k.keys.step), y: ky + kh * k.keys.y,
+                                  width: kw * k.keys.width, height: kh * k.keys.height)
+                g.fill(Path(rect), with: .color(on ? lit : keyColor))
             }
         }
 

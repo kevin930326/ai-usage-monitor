@@ -23,6 +23,18 @@ import Testing
         #expect(sin(config.hero.eye.yaw) >= 0.27)
     }
 
+    /// 工作中的鍵盤（2026-10-29 改淺灰）：中灰底比深灰按鍵亮，黑色瀏海上才看得出鍵盤；按鍵在底的範圍內
+    @Test func keyboardIsLightGrayWithDarkKeys() throws {
+        let k = try Self.config().hero.keyboard
+        #expect(MascotConfig.rgb(k.color) == [0x9A, 0x9A, 0xA6])
+        #expect(MascotConfig.rgb(k.keys.color) == [0x5E, 0x5E, 0x6A])
+        #expect(MascotConfig.rgb("#zzzzzz") == [0, 0, 0])
+        #expect(MascotConfig.rgb(k.color).reduce(0, +) > MascotConfig.rgb(k.keys.color).reduce(0, +) + 3 * 50)
+        let right = k.keys.x + Double(k.keys.count - 1) * k.keys.step + k.keys.width
+        #expect(k.keys.x > -0.5 && right < 0.5)
+        #expect(k.shine.alpha == 0.35)
+    }
+
     @Test func sameEventsGiveSameFrames() throws {
         let config = try Self.config()
         func run() -> MascotDirector {
