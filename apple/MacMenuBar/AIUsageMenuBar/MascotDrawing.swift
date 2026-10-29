@@ -86,11 +86,8 @@ struct MascotPainter {
             let tint = frame.character.tint(config.palette)
             return (tint.light, tint.mid, tint.shade)
         }
-        switch look.style {
-        case .solid: return (look.light ?? [], look.mid ?? [], look.shade ?? [])
-        case .led, .pixel, .ascii: return look.effectTint
-        case .linear, .neon, .wire: return nil
-        }
+        if look.style.isGrid { return look.effectTint }
+        return look.style == .solid ? (look.light ?? [], look.mid ?? [], look.shade ?? []) : nil
     }
 
     /// 思考泡泡亮起的顏色：服務色與單色外觀用淺色、直線漸層用最亮的一段、特效外觀用主色

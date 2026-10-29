@@ -232,3 +232,27 @@ internal static class AgentSyncTrigger
         _ = CollectorTrigger.RunAsync("/Run", "/TN", TaskName);
     }
 }
+
+/// <summary>
+/// 用預設瀏覽器打開事故頁（ADR-0015 第 2 節的唯一例外，2026-10-29）：只在使用者點了事故那行時，
+/// 而且網址再檢查一次符合 <see cref="IncidentLink"/>（https、status.claude.com／status.openai.com、/incidents/&lt;ID&gt;）。
+/// App 自己不連網：交給 Windows 的 ShellExecute，由使用者的瀏覽器打開。check-no-network.py 只允許這裡用 UseShellExecute。
+/// </summary>
+internal static class IncidentPage
+{
+    public static bool Open(string? url)
+    {
+        if (IncidentLink.Link(url) is not { } link) return false;
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(link) { UseShellExecute = true });
+            return true;
+        }
+        catch (Exception e)
+        {
+            // 在背景執行緒執行（AppHost），任何例外都只記類別名稱
+            AppLog.Write($"incident page open failed: {e.GetType().Name}");
+            return false;
+        }
+    }
+}

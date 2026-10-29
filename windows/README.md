@@ -1,8 +1,9 @@
 # Windows 桌面 App
 
 PC 上的懸浮圓環與卡片式面板（[ADR-0015](../docs/adr/0015-windows-desktop-app.md)，FR-61）。WPF／.NET 10，x64 與 ARM64。
-**只讀本機檔案**：收集器寫的 `%LOCALAPPDATA%\AIUsageMonitor\usage.json`。App 不連網、不持有密鑰；唯一啟動的程式是按「立即更新」時的
-`schtasks.exe /Run /TN \AIUsageMonitor\Collector`（觸發收集器，60 秒內一次、24 小時 100 次）。
+**只讀本機檔案**：收集器寫的 `%LOCALAPPDATA%\AIUsageMonitor\usage.json`。App 不連網、不持有密鑰；啟動的程式只有按「立即更新」時的
+`schtasks.exe /Run /TN \AIUsageMonitor\Collector`（觸發收集器，60 秒內一次、24 小時 100 次），以及使用者點面板的事故那行時，
+經 ShellExecute 用預設瀏覽器打開官方狀態頁的事故頁（只限 `status.claude.com`、`status.openai.com`，ADR-0015 第 2 節）。
 
 目前是階段 1：懸浮圓環、系統匣圖示、面板（主圓環卡片、額度卡片）、設定。Token 統計、走勢、通知等見 ADR-0015 第 5 節的階段表。
 
@@ -33,7 +34,7 @@ windows/
 │       ├── TrayIcon.cs          # 系統匣圖示（Shell_NotifyIcon，沒有 WinForms）
 │       ├── FullscreenWatcher.cs # 全螢幕偵測（事件驅動，沒有輪詢）
 │       ├── UsageStore.cs        # 監看與讀取 usage.json、設定檔、紀錄檔
-│       ├── SystemServices.cs    # 單一執行個體、開機自動啟動（HKCU Run）、觸發收集器（唯一啟動程式的地方）
+│       ├── SystemServices.cs    # 單一執行個體、開機自動啟動（HKCU Run）、觸發收集器、打開事故頁（唯二啟動程式的地方）
 │       ├── Drawing.cs、Theme.cs  # 圓環、服務圖示、額度條；顏色與系統外觀
 │       ├── NativeMethods.cs     # Win32 P/Invoke
 │       └── DebugTools.cs        # 只在 Debug：示範資料與截圖
@@ -41,7 +42,7 @@ windows/
 │   └── UsageCore.Tests/         # xUnit：golden 比對（和 Swift 共用 ../fixtures/logic）與單元測試；HistoryReaderTests 以收集器的
 │                                #   程式建立 history.sqlite3（make_history_db.py，需要 Python 3）
 └── tools/
-    ├── check-no-network.py      # 靜態檢查：不連網、不碰密鑰、只有一處啟動程式、Release 不含 Debug 字串
+    ├── check-no-network.py      # 靜態檢查：不連網、不碰密鑰、只有 SystemServices.cs 啟動程式、事故頁是唯一的網址例外、Release 不含 Debug 字串
     ├── measure-perf.ps1         # 效能量測
     └── make-ico.py              # 產生 Assets/AppIcon.ico
 ```
@@ -173,5 +174,6 @@ CI 看不到滑鼠、焦點與多螢幕的行為，在 x64 桌機（Windows 11�
 - [ ] AI 狀態：設定裡連接 Claude Code 與 Codex（Codex 再執行 `/hooks` 信任）；要求權限時圓環亮琥珀色外框、膠囊第二行寫「需要你」，20 秒後有通知（沒有按鈕）；
   完成後有綠色勾勾徽章，打開面板後消失；App 結束時 AI 照常、`agent\inbox\` 是空的；移除後設定檔回到原樣（備份在旁邊）；
   App 資料夾移動後狀態變成「需要修好」；`aum-hook.exe` 冷、熱啟動各 100 次的時間寫進報告；把 `aum-hook.exe` 改名後 Claude Code 照常（`onFailure: continue`），Codex 的行為寫進報告
-- [ ] 不連網：防火牆封鎖 `AIUsageMonitor.exe` 對外連線後一切正常
+- [ ] 不連網：防火牆封鎖 `AIUsageMonitor.exe` 對外連線後一切正常；Process Monitor 只在點事故那行時看到一次 ShellExecute（瀏覽器），沒有 TCP/UDP
+- [ ] 事故連結：有事故時面板那行右邊有 ↗，點了（或 Tab 到那行按 Enter）用預設瀏覽器打開事故頁；把 `usage.json` 裡事故的 `url` 改成其他網域或 `http://` 後，那行只剩文字、沒有 ↗、點了不會開
 - [ ] 效能：`measure-perf.ps1`（上面）的閒置 CPU ≤ 0.1%
