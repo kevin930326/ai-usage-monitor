@@ -1,0 +1,105 @@
+{
+  "page": {
+    "id": "01FAKEPAGE0000000000000000",
+    "name": "OpenAI",
+    "url": "https://status.openai.com"
+  },
+  "incidents": [
+    {
+      "id": "01K8QZ3M4V7T2N9XWEB6C5RDHA",
+      "name": "ChatGPT unavailable for some users",
+      "status": "investigating",
+      "impact": "major",
+      "created_at": "2026-10-29T06:00:00.000Z",
+      "started_at": "2026-10-29T05:58:00.000Z",
+      "resolved_at": null,
+      "shortlink": "https://status.openai.com/incidents/01K8QZ3M4V7T2N9XWEB6C5RDHA",
+      "incident_updates": [
+        {
+          "body": "We are investigating."
+        }
+      ],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-29T06:00:00.000Z"
+    },
+    {
+      "id": "01K8QZ8F2J6P0S4YXKC1MGTB7E",
+      "name": "Elevated errors for ChatGPT login",
+      "status": "identified",
+      "impact": "minor",
+      "created_at": "2026-10-29T06:10:00.000Z",
+      "started_at": "2026-10-29T06:08:00.000Z",
+      "resolved_at": null,
+      "shortlink": "https://status.openai.com/incidents/01K8QZ8F2J6P0S4YXKC1MGTB7E",
+      "incident_updates": [
+        {
+          "body": "A fix is being rolled out."
+        }
+      ],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-29T06:10:00.000Z"
+    },
+    {
+      "id": "01K8R03W9D5H8Q2ZNV6YAEJXCF",
+      "name": "ChatGPT connectors degraded",
+      "status": "monitoring",
+      "impact": "minor",
+      "created_at": "2026-10-29T06:20:00.000Z",
+      "started_at": "2026-10-29T06:20:00.000Z",
+      "resolved_at": null,
+      "shortlink": "https://status.openai.com/incidents/01K8R03W9D5H8Q2ZNV6YAEJXCF",
+      "incident_updates": [],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-29T06:20:00.000Z"
+    },
+    {
+      "id": "01K8R0C7T1G4K9M3PBW5RXQZ2N",
+      "name": "Degraded performance in ChatGPT and Codex",
+      "status": "investigating",
+      "impact": "major",
+      "created_at": "2026-10-29T06:30:00.000Z",
+      "started_at": "2026-10-29T06:29:00.000Z",
+      "resolved_at": null,
+      "shortlink": "https://status.openai.com/incidents/01K8R0C7T1G4K9M3PBW5RXQZ2N",
+      "incident_updates": [
+        {
+          "body": "Investigating."
+        }
+      ],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-29T06:30:00.000Z"
+    },
+    {
+      "id": "01K8R0N2S8F6J0V7HYD4CKMPWT",
+      "name": "Increased latency in ChatGPT and the API",
+      "status": "identified",
+      "impact": "minor",
+      "created_at": "2026-10-29T06:40:00.000Z",
+      "started_at": "2026-10-29T06:40:00.000Z",
+      "resolved_at": null,
+      "shortlink": "https://status.openai.com/incidents/01K8R0N2S8F6J0V7HYD4CKMPWT",
+      "incident_updates": [],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-29T06:40:00.000Z"
+    },
+    {
+      "id": "01K8M4X6B3E9R1Q5ZTGJNW0VKC",
+      "name": "Codex tasks failing",
+      "status": "resolved",
+      "impact": "major",
+      "created_at": "2026-10-28T20:00:00.000Z",
+      "started_at": "2026-10-28T20:00:00.000Z",
+      "resolved_at": "2026-10-28T21:00:00.000Z",
+      "shortlink": "https://status.openai.com/incidents/01K8M4X6B3E9R1Q5ZTGJNW0VKC",
+      "incident_updates": [],
+      "components": [],
+      "page_id": "01FAKEPAGE0000000000000000",
+      "updated_at": "2026-10-28T20:00:00.000Z"
+    }
+  ]
+}

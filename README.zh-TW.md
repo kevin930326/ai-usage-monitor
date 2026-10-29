@@ -315,6 +315,7 @@ Debug 版本的示範模式、截圖工具與環境變數覆寫（`AUM_*`）都�
 - 手錶的設定只在手錶 App 開啟、且 iPhone 在附近時同步。在 iPhone 改了網址或密鑰後，要打開一次手錶 App 才會套用。
 - Mac 選單列 App 不開沙盒（需要讀取 `~/Library/Application Support`），以 Sign to Run Locally 簽署、未開 Hardened Runtime。它不連網，也不讀任何 token 或對話紀錄。
 - Token 統計只算這台 Mac 的 Claude Code 與 Codex CLI；網頁、手機 App、其他電腦與雲端 session 不在內（面板標「這台 Mac」）。
+- **WSL 裡的 AI 不會被偵測**：在 Windows 的 WSL（或虛擬機、容器）裡執行的 Claude Code、Codex 用的是 Linux 那側的設定檔與對話紀錄。設定裡的「連接」只改 Windows（或 Mac）本身的設定檔，App 也不去 WSL 裡偵測，所以 WSL 裡的 AI 不會出現在瀏海、圓環的 AI 狀態，預設也不算進 Token 統計；額度不受影響（額度以帳號計算）。見 [ADR-0019](docs/adr/0019-windows-agent-state-and-sync.md) 第 1 節。
 - Spotlight：資料夾 `~/Library/Application Support/AIUsageMonitor`（`usage.json`、`history.sqlite3`）只有數字，但不需要被搜尋。建置資料夾（`build/`、`~/Library/Caches/AIUsageMonitor/DerivedData`）由各腳本放 `.metadata_never_index`，新版 macOS 不一定採用這個檔案；要確實排除，在「系統設定 → Spotlight → 搜尋隱私權」（或「Spotlight 隱私權」）加入 repo 的 `build/` 與上面兩個資料夾。
 
 ## 免責聲明
