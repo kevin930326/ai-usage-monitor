@@ -250,7 +250,8 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
 /// <remarks>TurnStart：這一回合開始工作的時間（從不在跑的狀態進入工作中時記下；完成後用來算跑了多久）</remarks>
 /// <remarks>
 /// 背景工作（ADR-0017 第 7 節）：Pid 是 AI 程序（0 是不知道，不偵測）；Baseline 是回合開始時已經有的子孫程序（排序過；null 是還沒拍）；
-/// WantsBaseline 要 App 拍基準；CheckAt 下一次看的時間；Background／BackgroundSince 背景執行中與進入的時間
+/// WantsBaseline 要 App 拍基準；CheckAt 下一次看的時間；Pending／PendingSince 上一次看到、不在基準裡的子孫程序（候選，排序過）與第一次出現的時間；
+/// Background 連續兩次都看到同一個候選（背景執行中，Fable F-09）；AwakeSince 背景工作結束的時間，睡覺倒數另外的起點（Fable F-11）
 /// </remarks>
 public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentState Stored, AgentNeed? Need, long Since, long Last,
                                   long? TurnStart = null)
@@ -259,13 +260,18 @@ public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentS
     public AgentProcess[]? Baseline { get; init; }
     public bool WantsBaseline { get; init; }
     public long? CheckAt { get; init; }
+    public AgentProcess[] Pending { get; init; } = [];
+    public long? PendingSince { get; init; }
     public bool Background { get; init; }
-    public long? BackgroundSince { get; init; }
+    public long? AwakeSince { get; init; }
+
+    /// <summary>醒著倒數的起點</summary>
+    public long IdleFrom => Math.Max(Since, AwakeSince ?? Since);
 
     public AgentState State(long now, long idleAfter)
     {
         if (Background && Stored is AgentState.Done or AgentState.Waiting) return AgentState.Background;
-        return Stored == AgentState.Waiting && now - Since >= idleAfter ? AgentState.Idle : Stored;
+        return Stored == AgentState.Waiting && now - IdleFrom >= idleAfter ? AgentState.Idle : Stored;
     }
 }
 
@@ -284,7 +290,7 @@ public sealed class AgentSessions(long idleAfter)
     /// <summary>背景執行中每隔多久再看一次</summary>
     public const long BackgroundEvery = 20_000;
     /// <summary>背景執行中最多多久：之後剩下的程序當成常駐的（併進基準）</summary>
-    public const long BackgroundMax = 60 * 60_000;
+    public const long BackgroundMax = 30 * 60_000;
     /// <summary>基準最多記幾個程序</summary>
     public const int MaxProcesses = 256;
 
@@ -313,16 +319,17 @@ public sealed class AgentSessions(long idleAfter)
             : new AgentSession(message.Ai, message.Session, message.Folder, AgentState.Waiting, null, now, now);
         if (message.Folder.Length > 0) session = session with { Folder = message.Folder };
         // 換了程序（例如 resume 到另一個終端機）：舊的基準不適用
-        if (message.Pid > 0 && !message.Sub && message.Pid != session.Pid) session = session with { Pid = message.Pid, Baseline = null };
+        if (message.Pid > 0 && !message.Sub && message.Pid != session.Pid) session = session with { Pid = message.Pid, Baseline = null, Pending = [], PendingSince = null };
         session = session with { Last = now };
         var next = Transition(session.Stored, message.Event, message.Need, message.Sub);
-        if (next is { } n && (n.State != session.Stored || n.Need != session.Need))
+        var changed = next is { } c && (c.State != session.Stored || c.Need != session.Need);
+        if (next is { } n && changed)
         {
             var wasRunning = session.Stored is AgentState.Working or AgentState.NeedsYou;
             if (n.State == AgentState.Working && !wasRunning) session = session with { TurnStart = now };
             session = session with { Stored = n.State, Need = n.Need, Since = now };
         }
-        session = TrackBackground(session, message.Event, message.Sub, now);
+        session = TrackBackground(session, message.Event, message.Sub, changed, now);
         if (index >= 0)
         {
             sessions[index] = session;
@@ -339,19 +346,18 @@ public sealed class AgentSessions(long idleAfter)
         return true;
     }
 
-    /// <summary>背景工作的記錄（同 Swift 的 trackBackground）：回合開始拍基準；主回合 Stop 後 3 秒看一次；回到工作中、需要你、出錯時不看</summary>
-    private static AgentSession TrackBackground(AgentSession s, AgentHookEvent e, bool sub, long now)
+    /// <summary>背景工作的記錄（同 Swift 的 trackBackground）：回合開始拍基準（候選不併進去）；每一次主回合 Stop 後 3 秒看一次
+    /// （Stop→Stop 也重排，Fable F-07）；其他改變狀態的事件都不看、不顯示背景（Fable F-13）。候選與它的起始時間跨回合保留</summary>
+    private static AgentSession TrackBackground(AgentSession s, AgentHookEvent e, bool sub, bool changed, long now)
     {
         if (e == AgentHookEvent.UserPromptSubmit) s = s with { Baseline = null, WantsBaseline = s.Pid > 0 };
         if (s.Stored == AgentState.Done && e == AgentHookEvent.Stop && !sub)
         {
-            s = s with { Background = false, BackgroundSince = null };
             if (s.Pid <= 0) return s with { CheckAt = null };
             // 沒有基準（App 在回合中途才啟動）：現在才拍，這一回合不判斷
             return s.Baseline is null ? s with { WantsBaseline = true, CheckAt = null } : s with { CheckAt = now + BackgroundFirstCheck };
         }
-        if (s.Stored is AgentState.Done or AgentState.Waiting) return s;
-        return s with { Background = false, BackgroundSince = null, CheckAt = null };
+        return changed ? s with { Background = false, CheckAt = null } : s;
     }
 
     /// <summary>
@@ -436,7 +442,9 @@ public sealed class AgentSessions(long idleAfter)
     {
         var i = sessions.FindIndex(s => s.Ai == ai && s.Id == id && s.Pid == pid);
         if (i < 0 || !sessions[i].WantsBaseline) return;
-        sessions[i] = sessions[i] with { WantsBaseline = false, Baseline = Limit(processes ?? []) };
+        // 上一回合留下、還在跑的候選不算常駐（Fable F-06）
+        var pending = sessions[i].Pending;
+        sessions[i] = sessions[i] with { WantsBaseline = false, Baseline = Limit((processes ?? []).Where(p => Array.BinarySearch(pending, p) < 0)) };
     }
 
     /// <summary>到時間要看背景工作的工作階段</summary>
@@ -447,8 +455,8 @@ public sealed class AgentSessions(long idleAfter)
     public long? NextBackgroundCheck => sessions.Where(s => s.Pid > 0 && s.CheckAt is not null).Select(s => s.CheckAt).Min();
 
     /// <summary>
-    /// 看了 AI 程序底下的子孫程序（null 是 AI 程序已經不在）。扣掉基準還有剩就是背景執行中；都結束了離開，等你的睡覺倒數從這一刻
-    /// 重新起算。超過 60 分鐘把剩下的併進基準。回傳是否有改變
+    /// 看了 AI 程序底下的子孫程序（null 是 AI 程序已經不在）。扣掉基準還有剩的是候選：和上一次的候選有重疊就是背景執行中，第一次看到的
+    /// 20 秒後再確認。沒有候選了就離開，睡覺倒數從這一刻重新起算。候選出現超過 30 分鐘把剩下的併進基準。回傳是否有改變
     /// </summary>
     public bool Observe(AgentKind ai, string id, int pid, IReadOnlyCollection<AgentProcess>? processes, long now)
     {
@@ -457,20 +465,22 @@ public sealed class AgentSessions(long idleAfter)
         var before = sessions[i];
         var s = before;
         var baseline = s.Baseline ?? [];
-        var fresh = processes is null ? [] : processes.Where(p => Array.BinarySearch(baseline, p) < 0).ToArray();
-        if (processes is null || fresh.Length == 0 || (s.BackgroundSince is { } since && now - since >= BackgroundMax))
+        var fresh = processes is null ? [] : Limit(processes.Where(p => Array.BinarySearch(baseline, p) < 0));
+        if (processes is null || fresh.Length == 0 || (s.PendingSince is { } since && now - since >= BackgroundMax))
         {
             if (fresh.Length > 0) s = s with { Baseline = Limit([.. baseline, .. fresh]) };
-            if (s.Background && s.Stored == AgentState.Waiting) s = s with { Since = now };
-            s = s with { Background = false, BackgroundSince = null, CheckAt = null };
+            if (s.Background) s = s with { AwakeSince = now };
+            s = s with { Background = false, Pending = [], PendingSince = null, CheckAt = null };
         }
         else
         {
-            if (!s.Background) s = s with { Background = true, BackgroundSince = now };
-            s = s with { CheckAt = now + BackgroundEvery };
+            var pending = s.Pending;
+            var confirmed = fresh.Any(p => Array.BinarySearch(pending, p) >= 0);
+            s = s with { Pending = fresh, PendingSince = s.PendingSince ?? now, Background = confirmed, CheckAt = now + BackgroundEvery };
         }
         sessions[i] = s;
-        return s.Background != before.Background || s.CheckAt != before.CheckAt || s.Since != before.Since
+        return s.Background != before.Background || s.CheckAt != before.CheckAt || s.AwakeSince != before.AwakeSince
+            || s.PendingSince != before.PendingSince || !s.Pending.SequenceEqual(before.Pending)
             || !(s.Baseline ?? []).SequenceEqual(before.Baseline ?? []);
     }
 
@@ -535,7 +545,7 @@ public sealed class AgentSessions(long idleAfter)
                 foreach (var s in mine)
                 {
                     working |= s.Stored == AgentState.Working;
-                    active |= s.Stored is AgentState.Working or AgentState.NeedsYou || s.Background || now - s.Since < IdleAfter;
+                    active |= s.Stored is AgentState.Working or AgentState.NeedsYou || s.Background || now - s.IdleFrom < IdleAfter;
                 }
             }
             else if (fallback.TryGetValue(ai, out var probe))

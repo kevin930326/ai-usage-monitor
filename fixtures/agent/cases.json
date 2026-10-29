@@ -2204,10 +2204,6 @@
      "e": "activity"
     },
     {
-     "t": 63000,
-     "e": "summary"
-    },
-    {
      "t": 83000,
      "e": "procs",
      "procs": [
@@ -2228,6 +2224,14 @@
        70000
       ]
      ]
+    },
+    {
+     "t": 83000,
+     "e": "activity"
+    },
+    {
+     "t": 83000,
+     "e": "summary"
     },
     {
      "t": 90000,
@@ -2259,6 +2263,7 @@
   },
   {
    "name": "background-ends-unseen-returns-done",
+   "idle_after_ms": 1200000,
    "events": [
     {
      "t": 1000,
@@ -2339,8 +2344,34 @@
       [
        601,
        1
+      ],
+      [
+       700,
+       50000
       ]
      ]
+    },
+    {
+     "t": 103000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 1302999,
+     "e": "activity"
+    },
+    {
+     "t": 1303000,
+     "e": "activity"
     }
    ]
   },
@@ -2702,11 +2733,25 @@
        1
       ]
      ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       2
+      ],
+      [
+       601,
+       1
+      ]
+     ]
     }
    ]
   },
   {
-   "name": "background-max-60-minutes-absorbs",
+   "name": "background-max-30-minutes-absorbs",
    "events": [
     {
      "t": 1000,
@@ -2761,178 +2806,6 @@
     {
      "t": 63000,
      "e": "procs",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ],
-      [
-       700,
-       50000
-      ]
-     ]
-    },
-    {
-     "t": 3663000,
-     "e": "procs",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ],
-      [
-       700,
-       50000
-      ]
-     ]
-    },
-    {
-     "t": 3664000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "UserPromptSubmit",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 3664100,
-     "e": "baseline",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ],
-      [
-       700,
-       50000
-      ]
-     ]
-    },
-    {
-     "t": 3665000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "Stop",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 3668000,
-     "e": "procs",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ],
-      [
-       700,
-       50000
-      ]
-     ]
-    }
-   ]
-  },
-  {
-   "name": "background-new-turn-clears",
-   "events": [
-    {
-     "t": 1000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "SessionStart",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 2000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "UserPromptSubmit",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 2100,
-     "e": "baseline",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ]
-     ]
-    },
-    {
-     "t": 3000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "PreToolUse",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 60000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "Stop",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 63000,
-     "e": "procs",
-     "procs": [
-      [
-       600,
-       1
-      ],
-      [
-       601,
-       1
-      ],
-      [
-       700,
-       50000
-      ]
-     ]
-    },
-    {
-     "t": 70000,
-     "e": "msg",
-     "ai": "claude",
-     "ev": "UserPromptSubmit",
-     "sid": "a1b2c3d4e5f60718",
-     "dir": "proj",
-     "pid": 500
-    },
-    {
-     "t": 70100,
-     "e": "baseline",
      "procs": [
       [
        600,
@@ -2963,6 +2836,237 @@
       [
        700,
        50000
+      ]
+     ]
+    },
+    {
+     "t": 1863000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 1864000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 1864100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 1865000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 1868000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "background-new-turn-keeps-leftover",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 90000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 90100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 95000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 98000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 118000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
       ]
      ]
     }
@@ -3105,7 +3209,25 @@
      ]
     },
     {
-     "t": 64000,
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 84000,
      "e": "msg",
      "ai": "claude",
      "ev": "StopFailure",
@@ -3114,7 +3236,7 @@
      "pid": 500
     },
     {
-     "t": 83000,
+     "t": 103000,
      "e": "procs",
      "procs": [
       [
@@ -3268,6 +3390,438 @@
       "codex"
      ],
      "since": 9000
+    }
+   ]
+  },
+  {
+   "name": "background-slow-stop-hook-not-counted",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "background-new-candidate-needs-confirming",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       702,
+       80000
+      ]
+     ]
+    },
+    {
+     "t": 103000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       702,
+       80000
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "background-stop-again-keeps-it",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 90000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 93000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "background-interrupt-clears",
+   "events": [
+    {
+     "t": 1000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "SessionStart",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "UserPromptSubmit",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 2100,
+     "e": "baseline",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ]
+     ]
+    },
+    {
+     "t": 3000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "PreToolUse",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 60000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Stop",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 63000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 83000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
+    },
+    {
+     "t": 90000,
+     "e": "msg",
+     "ai": "claude",
+     "ev": "Interrupt",
+     "sid": "a1b2c3d4e5f60718",
+     "dir": "proj",
+     "pid": 500
+    },
+    {
+     "t": 103000,
+     "e": "procs",
+     "procs": [
+      [
+       600,
+       1
+      ],
+      [
+       601,
+       1
+      ],
+      [
+       700,
+       50000
+      ]
+     ]
     }
    ]
   }

@@ -274,14 +274,21 @@ public struct AgentSession: Sendable, Equatable {
     public var wantsBaseline = false
     /// 下一次看背景工作的時間；nil 是不看
     public var checkAt: Int64? = nil
-    /// 回合結束後 AI 程序底下還有回合中新產生的子孫程序（背景執行中）
+    /// 上一次看到、不在基準裡的子孫程序（候選）。新回合開始時不併進基準（Fable F-06）
+    public var pending: Set<AgentProcess> = []
+    /// 候選第一次出現的時間；30 分鐘上限從這裡起算
+    public var pendingSince: Int64? = nil
+    /// 回合結束後連續兩次都看到同一個候選（背景執行中；只看一次的多半是其他 App 跑得久的 Stop hook，Fable F-09）
     public var background = false
-    /// 進入背景執行中的時間
-    public var backgroundSince: Int64? = nil
+    /// 睡覺倒數另外的起點：背景工作結束的時間（不動 `since`，通知與跨裝置的時間照舊，Fable F-11）
+    public var awakeSince: Int64? = nil
+
+    /// 醒著倒數的起點
+    public var idleFrom: Int64 { max(since, awakeSince ?? since) }
 
     public func state(at now: Int64, idleAfter: Int64) -> AgentState {
         if background, stored == .done || stored == .waiting { return .background }
-        return stored == .waiting && now - since >= idleAfter ? .idle : stored
+        return stored == .waiting && now - idleFrom >= idleAfter ? .idle : stored
     }
 }
 
@@ -296,10 +303,10 @@ public struct AgentSessions: Sendable, Equatable {
     public static let maxSessions = 32
     /// 主回合 Stop 後多久第一次看背景工作（hook 自己與其他 App 的 Stop hook 大多已經結束）
     public static let backgroundFirstCheck: Int64 = 3_000
-    /// 背景執行中每隔多久再看一次
+    /// 背景執行中（與確認候選）每隔多久再看一次
     public static let backgroundEvery: Int64 = 20_000
     /// 背景執行中最多多久：之後剩下的程序當成常駐的（併進基準），角色才不會永遠不睡
-    public static let backgroundMax: Int64 = 60 * 60_000
+    public static let backgroundMax: Int64 = 30 * 60_000
     /// 基準最多記幾個程序
     public static let maxProcesses = 256
 
@@ -338,17 +345,20 @@ public struct AgentSessions: Sendable, Equatable {
             // 換了程序（例如 resume 到另一個終端機）：舊的基準不適用
             session.pid = message.pid
             session.baseline = nil
+            session.pending = []
+            session.pendingSince = nil
         }
         session.last = now
         let next = Self.transition(from: session.stored, event: message.event, need: message.need, sub: message.sub)
-        if let next, next.state != session.stored || next.need != session.need {
+        let changed = next.map { $0.state != session.stored || $0.need != session.need } ?? false
+        if let next, changed {
             let wasRunning = session.stored == .working || session.stored == .needsYou
             if next.state == .working && !wasRunning { session.turnStart = now }
             session.stored = next.state
             session.need = next.need
             session.since = now
         }
-        Self.trackBackground(&session, event: message.event, sub: message.sub, at: now)
+        Self.trackBackground(&session, event: message.event, sub: message.sub, changed: changed, at: now)
         if let index {
             sessions[index] = session
         } else {
@@ -361,16 +371,14 @@ public struct AgentSessions: Sendable, Equatable {
         return true
     }
 
-    /// 背景工作的記錄（ADR-0017 第 7 節）：回合開始拍基準；主回合 Stop 後 3 秒看一次；回到工作中、需要你、出錯、等你（中斷、新開始）時不看
-    static func trackBackground(_ session: inout AgentSession, event: AgentHookEvent, sub: Bool, at now: Int64) {
+    /// 背景工作的記錄（ADR-0017 第 7 節）：回合開始拍基準（候選不併進去）；每一次主回合 Stop 後 3 秒看一次（Stop→Stop 也重排，Fable F-07）；
+    /// 其他改變狀態的事件（工作中、需要你、出錯、中斷、新開始）都不看、不顯示背景（Fable F-13）。候選與它的起始時間跨回合保留
+    static func trackBackground(_ session: inout AgentSession, event: AgentHookEvent, sub: Bool, changed: Bool, at now: Int64) {
         if event == .userPromptSubmit {
             session.baseline = nil
             session.wantsBaseline = session.pid > 0
         }
-        switch session.stored {
-        case .done where event == .stop && !sub:
-            session.background = false
-            session.backgroundSince = nil
+        if event == .stop && !sub && session.stored == .done {
             guard session.pid > 0 else { session.checkAt = nil; return }
             if session.baseline == nil {
                 // App 在回合中途才啟動、或沒收到回合開始：現在才拍基準，這一回合不判斷（寧可漏報）
@@ -379,11 +387,8 @@ public struct AgentSessions: Sendable, Equatable {
             } else {
                 session.checkAt = now + AgentSessions.backgroundFirstCheck
             }
-        case .done, .waiting:
-            break
-        default:
+        } else if changed {
             session.background = false
-            session.backgroundSince = nil
             session.checkAt = nil
         }
     }
@@ -470,7 +475,8 @@ public struct AgentSessions: Sendable, Equatable {
     public mutating func setBaseline(ai: AgentKind, id: String, pid: Int32, processes: Set<AgentProcess>?) {
         guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }), sessions[i].wantsBaseline else { return }
         sessions[i].wantsBaseline = false
-        sessions[i].baseline = Set((processes ?? []).sorted().prefix(Self.maxProcesses))
+        // 上一回合留下、還在跑的候選不算常駐（Fable F-06）
+        sessions[i].baseline = Set((processes ?? []).subtracting(sessions[i].pending).sorted().prefix(Self.maxProcesses))
     }
 
     /// 到時間要看背景工作的工作階段
@@ -483,8 +489,8 @@ public struct AgentSessions: Sendable, Equatable {
         sessions.compactMap { $0.pid > 0 ? $0.checkAt : nil }.min()
     }
 
-    /// 看了 AI 程序底下的子孫程序（nil 是 AI 程序已經不在）。扣掉基準還有剩就是背景執行中；都結束了離開，
-    /// 等你的睡覺倒數從這一刻重新起算。超過 60 分鐘把剩下的併進基準。回傳是否有改變
+    /// 看了 AI 程序底下的子孫程序（nil 是 AI 程序已經不在）。扣掉基準還有剩的是候選：和上一次的候選有重疊就是背景執行中，
+    /// 第一次看到的 20 秒後再確認。沒有候選了就離開，睡覺倒數從這一刻重新起算。候選出現超過 30 分鐘把剩下的併進基準。回傳是否有改變
     @discardableResult
     public mutating func observe(ai: AgentKind, id: String, pid: Int32, processes: Set<AgentProcess>?, at now: Int64) -> Bool {
         guard let i = sessions.firstIndex(where: { $0.ai == ai && $0.id == id && $0.pid == pid }),
@@ -492,19 +498,20 @@ public struct AgentSessions: Sendable, Equatable {
         let before = sessions[i]
         var s = sessions[i]
         let fresh = processes.map { $0.subtracting(s.baseline ?? []) } ?? []
-        if processes == nil || fresh.isEmpty || s.backgroundSince.map({ now - $0 >= Self.backgroundMax }) == true {
+        if processes == nil || fresh.isEmpty || s.pendingSince.map({ now - $0 >= Self.backgroundMax }) == true {
             if processes != nil, !fresh.isEmpty {
                 s.baseline = Set((s.baseline ?? []).union(fresh).sorted().prefix(Self.maxProcesses))
             }
-            if s.background, s.stored == .waiting { s.since = now }
+            if s.background { s.awakeSince = now }
             s.background = false
-            s.backgroundSince = nil
+            s.pending = []
+            s.pendingSince = nil
             s.checkAt = nil
         } else {
-            if !s.background {
-                s.background = true
-                s.backgroundSince = now
-            }
+            let confirmed = !fresh.isDisjoint(with: s.pending)
+            s.pendingSince = s.pendingSince ?? now
+            s.pending = Set(fresh.sorted().prefix(Self.maxProcesses))
+            s.background = confirmed
             s.checkAt = now + Self.backgroundEvery
         }
         sessions[i] = s
@@ -572,7 +579,7 @@ public struct AgentSessions: Sendable, Equatable {
                 for session in mine {
                     working = working || session.stored == .working
                     active = active || session.stored == .working || session.stored == .needsYou || session.background
-                        || now - session.since < idleAfter
+                        || now - session.idleFrom < idleAfter
                 }
             } else if let probe = fallback[ai] {
                 working = working || probe.working

@@ -66,6 +66,7 @@ public struct MascotDirector: Sendable {
     public mutating func setAgentIdle(_ idle: Bool, at time: Int) { apply { $0.setAgentIdle(idle, at: time) } }
     public mutating func silence(at time: Int) { apply { $0.silence(at: time) } }
     public mutating func setNeedsYou(_ needsYou: Bool, at time: Int) { apply { $0.setNeedsYou(needsYou, at: time) } }
+    public mutating func setBackground(_ background: Bool, at time: Int) { apply { $0.setBackground(background, at: time) } }
     /// AI 完成一個回合（靜音、勿擾時 `react` 為 false，不揮手也不鼓）
     public mutating func cheer(at time: Int, react: Bool = true) { apply { $0.cheer(at: time, react: react) } }
 

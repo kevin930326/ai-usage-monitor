@@ -51,7 +51,7 @@ import Testing
         let message = try #require(await received.value)
         #expect(message == AgentHookMessage(ai: .claude, event: .userPromptSubmit, need: nil,
                                             session: AgentSocket.sessionHash("sess-1", salt: salt),
-                                            time: 1_761_650_000_000, folder: "alpha"))
+                                            time: 1_761_650_000_000, folder: "alpha", pid: AgentProcessTree.aiProcess()))
         #expect(message.session != "sess-1" && AgentHookMessage.isSessionHash(message.session))
     }
 

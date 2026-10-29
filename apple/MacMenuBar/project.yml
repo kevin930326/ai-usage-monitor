@@ -33,6 +33,9 @@ targets:
       # 角色外觀（ADR-0021），Windows 之後共用
       - path: ../../shared/mascot-looks.json
         buildPhase: resources
+      # 切回 AI 的程式就算看過（ADR-0017 第 8 節），和 Windows 共用
+      - path: ../../shared/agent-hosts.json
+        buildPhase: resources
     dependencies:
       - package: UsageKit
         product: UsageKit

@@ -5,14 +5,16 @@ import Foundation
 public enum MascotThinking {
     /// 每多亮一顆的目標間隔（參考頁 260 毫秒）
     public static let targetStepMs = 260.0
+    /// 背景執行中（ADR-0017 第 7 節）：一半的速度
+    public static let slowStepMs = 520.0
 
     /// 一輪 `loop` 毫秒裡每一步的長度：一輪走整數次「0 → 1 → 2 → 3 顆」，最接近目標間隔
-    public static func stepMs(loop: Double) -> Double {
-        loop / (max(1, (loop / (targetStepMs * 4)).rounded()) * 4)
+    public static func stepMs(loop: Double, target: Double = targetStepMs) -> Double {
+        loop / (max(1, (loop / (target * 4)).rounded()) * 4)
     }
 
     /// 第 `t` 毫秒亮了幾顆（0…3）
-    public static func dots(at t: Int, loop: Double) -> Int {
-        Int((Double(t).truncatingRemainder(dividingBy: loop) / stepMs(loop: loop)).rounded(.down)) % 4
+    public static func dots(at t: Int, loop: Double, target: Double = targetStepMs) -> Int {
+        Int((Double(t).truncatingRemainder(dividingBy: loop) / stepMs(loop: loop, target: target)).rounded(.down)) % 4
     }
 }
