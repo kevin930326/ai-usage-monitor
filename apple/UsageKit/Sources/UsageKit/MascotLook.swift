@@ -12,6 +12,8 @@ public struct MascotLook: Decodable, Equatable, Identifiable, Sendable {
         case led, pixel, neon, wire, ascii
 
         public var isEffect: Bool { self != .solid && self != .linear }
+        /// 格子類特效（LED 點陣、8-bit 像素、ASCII）：18 pt 的選單列圖示上格子太粗、表情分不出來，改畫主色三階的實心球（ADR-0021 第 5 節）
+        public var isGrid: Bool { self == .led || self == .pixel || self == .ascii }
         /// 會隨時間變化的特效（像素是靜態的格子，不用重畫）
         public var animates: Bool { self == .led || self == .neon || self == .wire || self == .ascii }
     }
