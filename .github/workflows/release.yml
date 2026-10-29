@@ -175,14 +175,15 @@ jobs:
             --title "AI 用量 $TAG" --notes "草稿：確認檔案、SHA256SUMS 與 SHA256SUMS-windows 後再按發布。安裝方式見 README；第一次發布照 docs/release-checklist.md。"
 
   # 刪除這次執行的 workflow artifact（ADR-0013 第 7 節）：推 tag 時在草稿建立之後（建置或建立草稿失敗也刪），
-  # pull_request 時上傳一個假的 artifact 再刪，確認權限與 API 呼叫會成功（fork 的 PR 沒有寫入權限，不跑）。
+  # pull_request 時上傳一個假的 artifact 再刪，確認權限與 API 呼叫會成功（fork 與 Dependabot 的 PR 拿不到寫入權限，不跑）。
   # workflow_dispatch 的產出就是 artifact（給人下載），不刪
   delete-artifacts:
     name: 刪除這次的 artifact
     if: >-
       always() && (
         (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+         github.actor != 'dependabot[bot]'))
     needs: [mac, windows, draft-release]
     runs-on: ubuntu-latest
     permissions:
