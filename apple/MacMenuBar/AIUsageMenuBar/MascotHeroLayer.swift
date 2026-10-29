@@ -120,6 +120,9 @@ final class MascotHeroLayerView: NSView {
         link?.preferredFrameRateRange = CAFrameRateRange(minimum: fps / 2, maximum: fps, preferred: fps)
         // 馬上畫第一格：和瀏海畫布藏起角色在同一次更新裡送出，不會空一格
         lastDraw = controller.time()
+        #if DEBUG
+        frames = (0, lastDraw)
+        #endif
         // 位置由瀏海的視窗（`layoutCanvas`）放；大小先定好，第一格的圖層才放得對
         setFrameSize(box.size)
         prepare()

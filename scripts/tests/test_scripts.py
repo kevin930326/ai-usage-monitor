@@ -892,6 +892,12 @@ class NotchPerfSummaryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, (name, result.stdout))
             self.assertIn("❌ 看滑鼠時真的照頻率重畫", result.stdout)
 
+    def test_gaze_frames_dipping_during_blinks_pass(self):
+        # 眨眼時由 SwiftUI 畫、圖層那一秒少幾格：只要大部分的秒數夠，照樣通過（Codex 第二輪 C-01）
+        blinks = [(t, n - 20 if t % 4 == 0 else n, side) for t, n, side in self.FRAMES]
+        result = self.run_summary(self.full(), frames=blinks)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
     def test_gaze_open_over_gate_fails(self):
         # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗
         busy = [(t, 2.5 if 262 <= t < 275 else cpu, rss) for t, cpu, rss in self.full()]

@@ -72,18 +72,19 @@ gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
 gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，跟著螢幕更新率）"], by_name["展開、游標停下後（2～10 秒）"]
 # 看滑鼠時實際每秒畫了幾格：收合每秒 30 格、展開跟著螢幕（至少 60）；不到八成就是螢幕關著或鎖著，CPU 不準。
-# 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數，取最少的那一筆
-# （只有一筆、中途停掉重畫都會被抓到，Codex C-02）
+# 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數（只有一筆、中途停掉重畫都會被抓到，
+# Codex C-02），取中位數：眨眼的約 0.3 秒改由 SwiftUI 畫、不算在圖層的格數裡，那一秒會少幾格（Codex 第二輪 C-01）
 def slowest_fps(a, b, side):
     got = sorted((t, n) for t, n, s in frames if a - 1 <= t < b + 1 and s == side)
     times = [a] + [t for t, _ in got] + [b]
     inside = [n for t, n in got if a <= t < b]
     if not inside or max(y - x for x, y in zip(times, times[1:])) > 1.6:
         return 0
-    return min(inside)
+    inside.sort()
+    return inside[len(inside) // 2]
 fps_collapsed, fps_open = slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
 print()
-print(f"看滑鼠時實際每秒畫的格數（最少的一秒）：收合 {fps_collapsed}、展開 {fps_open}")
+print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}、展開 {fps_open}")
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
