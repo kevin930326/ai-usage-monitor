@@ -21,7 +21,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
 {
     /// <summary>角色的身體（球）半徑占圓底半徑的比例</summary>
     public const double HeroFill = 0.62;
-    /// <summary>收合時 AI 工作中或睡著：思考泡泡與 z 在角色右上方，角色縮小並往左下移，才放得進圓底</summary>
+    /// <summary>收合時 AI 工作中、背景執行中或睡著：思考泡泡與 z 在角色右上方，角色縮小並往左下移，才放得進圓底</summary>
     private const double BusyFill = 0.44;
     private static readonly Vector BusyShift = new(-0.14, 0.10);
     /// <summary>膠囊與圓底的顏色：不透明（同 Mac 瀏海的卡片色），只有圓角外透明</summary>
@@ -65,7 +65,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         var cfg = controller.Config.Hero;
         var p = Math.Clamp(progress, 0, 1);
         double ax = Lerp(cfg.Mini.X, cfg.Card.X, p), ay = Lerp(cfg.Mini.Y, cfg.Card.Y, p), ar = Lerp(cfg.Mini.Radius, cfg.Card.Radius, p);
-        var busy = !still && director.Mode is MascotMode.Work or MascotMode.Sleep ? 1 - p : 0;
+        var busy = !still && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think ? 1 - p : 0;
         var heroCenter = center + BusyShift * (r * busy);
         var k = Lerp(HeroFill, BusyFill, busy) * r / ar;
         mapping = (heroCenter, k, ax, ay);

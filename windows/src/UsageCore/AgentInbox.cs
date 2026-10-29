@@ -55,9 +55,10 @@ public static class AgentInbox
         now.UtcTicks.ToString("D20", CultureInfo.InvariantCulture) + "-" + random + ".json";
 
     /// <summary>
-    /// hook 端：把事件寫進 inbox。資料夾名稱一律不寫；沒有鹽（App 沒跑過）、inbox 已滿或任何錯誤都安靜地回傳 false
+    /// hook 端：把事件寫進 inbox。資料夾名稱一律不寫；pid 是 AI 程序（背景工作偵測用，0 是不知道；處理完檔案就刪，ADR-0019 第 1 節）。
+    /// 沒有鹽（App 沒跑過）、inbox 已滿或任何錯誤都安靜地回傳 false
     /// </summary>
-    public static bool Write(string home, AgentKind ai, byte[] input, DateTimeOffset now)
+    public static bool Write(string home, AgentKind ai, byte[] input, DateTimeOffset now, int pid = 0)
     {
         try
         {
@@ -65,7 +66,7 @@ public static class AgentInbox
             var inbox = InboxDirectory(home);
             if (!Directory.Exists(inbox)) return false;
             if (Directory.EnumerateFiles(inbox).Take(MaxFiles).Count() >= MaxFiles) return false;
-            var message = new AgentHookMessage(ai, e.Event, e.Need, SessionHash(e.SessionId, salt), now.ToUnixTimeMilliseconds(), "", e.Sub);
+            var message = new AgentHookMessage(ai, e.Event, e.Need, SessionHash(e.SessionId, salt), now.ToUnixTimeMilliseconds(), "", e.Sub, Math.Max(pid, 0));
             var name = FileName(now, Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4)));
             var temp = Path.Combine(inbox, "." + name + ".tmp");
             File.WriteAllBytes(temp, message.Encoded());

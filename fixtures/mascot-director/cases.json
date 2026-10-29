@@ -350,6 +350,34 @@
           "step": 100
         }
       ]
+    },
+    {
+      "name": "think-collapsed-pose",
+      "note": "收合時背景執行中：平常的迷你角色、臉朝正前方；回到工作中再回到背景執行中",
+      "events": [
+        {
+          "t": 0,
+          "e": "background",
+          "on": true
+        },
+        {
+          "t": 1500,
+          "e": "working",
+          "on": true
+        },
+        {
+          "t": 3000,
+          "e": "working",
+          "on": false
+        }
+      ],
+      "samples": [
+        {
+          "from": 0,
+          "to": 4500,
+          "step": 250
+        }
+      ]
     }
   ]
 }

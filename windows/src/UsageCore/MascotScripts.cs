@@ -108,6 +108,8 @@ public sealed class MascotScripts(MascotConfig config)
         MascotMode.Sleep => CollapsedPose.With(D((P.Pitch, Config.Poses.Sleep.Pitch * 0.45), (P.Dash, 1), (P.Follow, 0))),
         MascotMode.Raise => CollapsedPose.With(RaiseHands),
         MascotMode.Work => CollapsedPose.With(D((P.Pitch, Config.Poses.Work.Pitch), (P.Follow, 0))),
+        // 背景執行中：平常的迷你角色、臉朝正前方不看游標；思考泡泡與呼吸由 App 的收合循環另外畫
+        MascotMode.Think => CollapsedPose.With(D((P.Follow, 0))),
         _ => CollapsedPose,
     };
 

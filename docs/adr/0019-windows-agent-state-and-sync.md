@@ -46,7 +46,7 @@ ADR-0017 讓 Mac 用 hook 知道 Claude Code 與 Codex 的確切狀態。使用�
 **傳送**（ADR-0017「hook 寫檔、App 監看資料夾」原本不採用；Windows 例外，因為 ADR-0015 不准用 socket 與 named pipe，F-03）：
 
 - hook 把一個事件寫成一個檔案到 `%LOCALAPPDATA%\AIUsageMonitor\agent\inbox\`（`AI_USAGE_MONITOR_HOME` 優先），檔名 `<UTC 時間 ns，20 位補零>-<8 位隨機>.json`，
-  先寫暫存檔再改名（原子）。內容只有 ADR-0017 的訊息格式：`v, ai, ev, need, sub, sid, t`，`dir` 一律是空字串（Windows 上不顯示資料夾名稱）；單檔 ≤ 1 KB。
+  先寫暫存檔再改名（原子）。內容只有 ADR-0017 的訊息格式：`v, ai, ev, need, sub, sid, t`，`dir` 一律是空字串（Windows 上不顯示資料夾名稱），以及 AI 程序的 `pid`（2026-10-29，ADR-0017 第 7 節；hook 以 `NtQueryInformationProcess` 取父 PID、父程序是 shell 時往上一層；PID 不敏感，檔案處理完立刻刪、結束時清空，Fable F-01）；單檔 ≤ 1 KB。
   `sid` 是工作階段 ID 加鹽的雜湊，鹽在 `agent\salt`（App 第一次啟動時建立，32 位元組隨機，只有使用者自己可讀）。
 - inbox 已有 256 個檔時 hook 不再寫（App 沒在處理，不讓檔案堆積）。
 - 寫完觸發具名事件 `Local\io.github.kevin930326.AIUsageMonitor.Windows.agent`。App 等這個事件（不輪詢），每分鐘也掃一次作為退路；

@@ -40,7 +40,7 @@ public enum MascotGesture { Circle, Shake, Hover }
 
 /// <summary>模式和動畫是兩回事：動畫播完回到目前模式的姿勢。模式由 AI 的狀態決定（工作中優先於睡覺），不看滑鼠</summary>
 /// <summary>Raise：有 AI 需要你（舉手）；優先於工作中與睡覺</summary>
-public enum MascotMode { None, Sleep, Work, Raise }
+public enum MascotMode { None, Sleep, Work, Raise, Think }
 
 /// <summary>短反應可以被連點 5 下打斷，長動畫中的點擊不計次</summary>
 public enum MascotAnimationKind { Tap, Long, Hold }
@@ -156,12 +156,13 @@ public sealed class MascotMachine
     public bool IsAgentIdle { get; private set; }
     /// <summary>有 AI 需要你（要權限、問你問題）：舉手，優先於工作中與睡覺</summary>
     public bool IsNeedsYou { get; private set; }
+    public bool IsBackground { get; private set; }
 
     /// <summary>
     /// 臉跟著游標轉（ADR-0016 第 6 節，2026-10-29 使用者決定）：展開時一律追；收合時醒著沒事（待命、舉手）照舊追，
     /// AI 工作中不追（低頭敲鍵盤的動畫才不會被打斷）、睡著不追。和 Swift 的 followsPointer 相同，fixtures/mascot 的 golden 比對
     /// </summary>
-    public bool FollowsPointer => IsOpen || (Mode != MascotMode.Work && Mode != MascotMode.Sleep);
+    public bool FollowsPointer => IsOpen || (Mode != MascotMode.Work && Mode != MascotMode.Sleep && Mode != MascotMode.Think);
 
     public bool IsIntro => IntroUntil is not null;
     public bool IsBusy => Playing is not null || RestUntil is not null;
@@ -359,6 +360,14 @@ public sealed class MascotMachine
         UpdateMode();
     }
 
+    /// <summary>背景執行中（ADR-0017 第 7 節）：回合結束了、AI 底下還有程序在跑。優先於睡覺，工作中與需要你優先於它</summary>
+    public void SetBackground(bool background, long time)
+    {
+        Begin(time);
+        IsBackground = background;
+        UpdateMode();
+    }
+
     /// <summary>需要你：舉手立即生效（同工作中，動畫播放中不打斷，播完接到舉手的姿勢）</summary>
     public void SetNeedsYou(bool needsYou, long time)
     {
@@ -378,7 +387,8 @@ public sealed class MascotMachine
     }
 
     private void UpdateMode() => SetMode(IsNeedsYou ? MascotMode.Raise
-                                         : IsWorking ? MascotMode.Work : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
+                                         : IsWorking ? MascotMode.Work
+                                         : IsBackground ? MascotMode.Think : IsAgentIdle ? MascotMode.Sleep : MascotMode.None);
 
     /// <summary>額度狀態（0 正常、1 偏高、2 用完或出錯）：表情立即換，提醒動畫排隊；收著時改成瀏海鼓一下；
     /// 回到正常只換表情，排隊中的提醒也丟掉。react 為 false（靜音、勿擾）時只換表情、不播也不鼓</summary>

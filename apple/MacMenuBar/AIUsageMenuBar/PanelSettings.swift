@@ -350,7 +350,7 @@ final class PanelSettings {
     /// 只有使用者選過才存進 UserDefaults，所以改過的人不受影響
     static let defaultSleepMinutes = 20
 
-    /// Claude 與 Codex 都閒置超過幾分鐘角色就睡（預設 5）
+    /// Claude 與 Codex 都閒置超過幾分鐘角色就睡（預設 20，ADR-0017 第 4 節）
     var mascotSleepMinutes: Int {
         didSet {
             defaults.set(mascotSleepMinutes, forKey: Key.mascotSleepMinutes)

@@ -7,7 +7,7 @@ namespace AIUsageMonitor.Hook;
 
 /// <summary>
 /// <c>aum-hook.exe &lt;claude|codex&gt;</c>，事件 JSON 從標準輸入傳入（ADR-0019 第 1 節）。
-/// 只挑事件、種類、加鹽雜湊後的工作階段 ID 與時間寫成 inbox 的一個小檔，再叫醒 App；資料夾名稱與其餘欄位一律不寫。
+/// 只挑事件、種類、加鹽雜湊後的工作階段 ID、時間與 AI 程序的 PID 寫成 inbox 的一個小檔，再叫醒 App；資料夾名稱與其餘欄位一律不寫。
 /// 標準輸出與標準錯誤不印任何東西；任何錯誤都以 0 結束、不擋 AI；App 沒在跑時立刻結束；不連網路。
 /// </summary>
 internal static class Program
@@ -37,7 +37,7 @@ internal static class Program
         if (!Mutex.TryOpenExisting(Prefix, out var mutex)) return;
         mutex.Dispose();
         if (ReadInput() is not { } input) return;
-        if (!AgentInbox.Write(Home(), ai, input, DateTimeOffset.UtcNow)) return;
+        if (!AgentInbox.Write(Home(), ai, input, DateTimeOffset.UtcNow, AgentProcessTree.AiProcess())) return;
         if (EventWaitHandle.TryOpenExisting(Prefix + ".agent", out var wake))
         {
             using (wake) wake.Set();

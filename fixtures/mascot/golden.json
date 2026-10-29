@@ -747,6 +747,49 @@
         "100 mode raise"
       ],
       "name" : "follow-collapsed-needs-you-follows"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "think",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode think"
+      ],
+      "name" : "think-collapsed-does-not-follow"
+    },
+    {
+      "final" : {
+        "follow" : false,
+        "mode" : "sleep",
+        "open" : false,
+        "status" : 0
+      },
+      "log" : [
+        "0 mode sleep",
+        "100 mode think",
+        "200 mode work",
+        "300 mode think",
+        "400 mode raise",
+        "500 mode think",
+        "600 mode sleep"
+      ],
+      "name" : "think-priority"
+    },
+    {
+      "final" : {
+        "follow" : true,
+        "mode" : "think",
+        "open" : true,
+        "status" : 0
+      },
+      "log" : [
+        "0 open quick",
+        "100 mode think"
+      ],
+      "name" : "think-open-follows"
     }
   ]
 }

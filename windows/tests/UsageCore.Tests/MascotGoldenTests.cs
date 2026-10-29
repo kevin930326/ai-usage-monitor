@@ -38,6 +38,7 @@ public class MascotGoldenTests
                 case "silence": machine.Silence(t); break;
                 case "advance": machine.Advance(t); break;
                 case "needs": machine.SetNeedsYou(e["on"]?.GetValue<bool>() ?? false, t); break;
+                case "background": machine.SetBackground(e["on"]?.GetValue<bool>() ?? false, t); break;
                 case "cheer": machine.Cheer(t, e["react"]?.GetValue<bool>() ?? true); break;
                 default: throw new InvalidOperationException($"未知的事件 {e["e"]}");
             }

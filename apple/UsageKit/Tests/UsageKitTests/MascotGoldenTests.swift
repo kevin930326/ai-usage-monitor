@@ -71,6 +71,7 @@ import Testing
             case "status": machine.setStatus(event.level ?? 0, at: event.t, react: event.react ?? true)
             case "silence": machine.silence(at: event.t)
             case "needs": machine.setNeedsYou(event.on ?? false, at: event.t)
+            case "background": machine.setBackground(event.on ?? false, at: event.t)
             case "cheer": machine.cheer(at: event.t, react: event.react ?? true)
             case "advance": machine.advance(to: event.t)
             default: Issue.record("未知的事件 \(event.e)（\(testCase.name)）")
