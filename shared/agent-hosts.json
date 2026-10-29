@@ -1,0 +1,13 @@
+{
+  "_comment": "切回 AI 的程式就算看過（ADR-0017 第 8 節）：前景程式是這些宿主之一時，這台電腦上它代表的 AI 的「完成未看」標成已看。mac 是 bundle ID，windows 是執行檔名稱（不分大小寫）。終端機與編輯器裡可能跑任何一個 AI，兩個都算。只比對程式識別，不讀視窗標題或內容。新增宿主只改這份檔案。",
+  "hosts": [
+    { "name": "Claude", "ais": ["claude"], "mac": ["com.anthropic.claudefordesktop"], "windows": ["claude.exe"] },
+    { "name": "Codex", "ais": ["codex"], "mac": ["com.openai.codex"], "windows": ["codex.exe"] },
+    { "name": "終端機", "ais": ["claude", "codex"],
+      "mac": ["com.apple.Terminal", "com.googlecode.iterm2", "com.mitchellh.ghostty", "dev.warp.Warp-Stable", "com.github.wez.wezterm"],
+      "windows": ["windowsterminal.exe", "openconsole.exe", "conhost.exe", "powershell.exe", "pwsh.exe", "cmd.exe", "wezterm-gui.exe"] },
+    { "name": "編輯器", "ais": ["claude", "codex"],
+      "mac": ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf"],
+      "windows": ["code.exe", "code - insiders.exe", "cursor.exe", "windsurf.exe"] }
+  ]
+}

@@ -455,6 +455,48 @@
       "result" : [
         "nil"
       ]
+    },
+    {
+      "name" : "with-pid",
+      "result" : [
+        "{\"v\":1,\"ai\":\"claude\",\"ev\":\"Stop\",\"need\":\"\",\"sub\":false,\"sid\":\"0123456789abcdef\",\"t\":1761650000000,\"dir\":\"my-project\",\"pid\":4242}"
+      ]
+    },
+    {
+      "name" : "pid-zero-rejected",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "pid-negative-rejected",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "pid-float-rejected",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "pid-string-rejected",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "pid-too-large-rejected",
+      "result" : [
+        "nil"
+      ]
+    },
+    {
+      "name" : "pid-before-dir-rejected",
+      "result" : [
+        "nil"
+      ]
     }
   ],
   "remote" : [
@@ -903,6 +945,175 @@
         "3000 seen → top=codex/cccc [codex/cccc/proj:waiting@3000]",
         "4000 summary {\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"waiting\",\"sessions\":1,\"since\":3000}]}",
         "64000 summary {\"v\":1,\"ais\":[{\"ai\":\"codex\",\"state\":\"idle\",\"sessions\":1,\"since\":3000}]}"
+      ]
+    },
+    {
+      "name" : "background-after-stop-then-ends",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "63000 activity working=false idle=false",
+        "63000 summary {\"v\":1,\"ais\":[{\"ai\":\"claude\",\"state\":\"working\",\"sessions\":1,\"since\":60000}]}",
+        "83000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@103000] next=103000",
+        "90000 seen → top=claude/a1b2 [claude/a1b2/proj:background@90000 check@103000]",
+        "103000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:waiting@103000] next=none",
+        "1302999 activity working=false idle=false",
+        "1303000 activity working=false idle=true"
+      ]
+    },
+    {
+      "name" : "background-ends-unseen-returns-done",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "83000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@60000] next=none"
+      ]
+    },
+    {
+      "name" : "background-resident-children-not-counted",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@60000] next=none",
+        "63000 activity working=false idle=false"
+      ]
+    },
+    {
+      "name" : "background-checks-only-when-due",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "62000 procs checked=0 → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000] next=63000",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000"
+      ]
+    },
+    {
+      "name" : "background-without-baseline-not-judged",
+      "result" : [
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000] baseline? claude/a1b2",
+        "60100 baseline → top=claude/a1b2 [claude/a1b2/proj:done@60000]",
+        "63000 procs checked=0 → top=claude/a1b2 [claude/a1b2/proj:done@60000] next=none"
+      ]
+    },
+    {
+      "name" : "background-ai-process-gone",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "83000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@60000] next=none"
+      ]
+    },
+    {
+      "name" : "background-pid-reused-counts-as-new",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000"
+      ]
+    },
+    {
+      "name" : "background-max-60-minutes-absorbs",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "3663000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@60000] next=none",
+        "3664000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@3664000] baseline? claude/a1b2",
+        "3664100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@3664000]",
+        "3665000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@3665000 check@3668000]",
+        "3668000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:done@3665000] next=none"
+      ]
+    },
+    {
+      "name" : "background-new-turn-clears",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "70000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@70000] baseline? claude/a1b2",
+        "70100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@70000]",
+        "83000 procs checked=0 → top=claude/a1b2 [claude/a1b2/proj:working@70000] next=none"
+      ]
+    },
+    {
+      "name" : "background-subagent-stop-ignored",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "50000 claude SubagentStop[sub] → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]"
+      ]
+    },
+    {
+      "name" : "background-needs-you-and-error-override",
+      "result" : [
+        "1000 claude SessionStart → top=claude/a1b2 [claude/a1b2/proj:waiting@1000]",
+        "2000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@2000] baseline? claude/a1b2",
+        "2100 baseline → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "3000 claude PreToolUse → top=claude/a1b2 [claude/a1b2/proj:working@2000]",
+        "60000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@60000 check@63000]",
+        "63000 procs checked=1 → top=claude/a1b2 [claude/a1b2/proj:background@60000 check@83000] next=83000",
+        "64000 claude StopFailure → top=claude/a1b2 [claude/a1b2/proj:error@64000]",
+        "83000 procs checked=0 → top=claude/a1b2 [claude/a1b2/proj:error@64000] next=none"
+      ]
+    },
+    {
+      "name" : "host-switch-after-done-marks-seen",
+      "result" : [
+        "1000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@1000]",
+        "2000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@2000]",
+        "1000 codex UserPromptSubmit → top=codex/0011 [codex/0011/proj:working@1000, claude/a1b2/proj:done@2000]",
+        "2000 codex Stop → top=claude/a1b2 [claude/a1b2/proj:done@2000, codex/0011/proj:done@2000]",
+        "5000 fg claude → top=codex/0011 [codex/0011/proj:done@2000, claude/a1b2/proj:waiting@5000] next=none",
+        "6000 fg claude+codex → top=claude/a1b2 [claude/a1b2/proj:waiting@5000, codex/0011/proj:waiting@6000] next=none"
+      ]
+    },
+    {
+      "name" : "host-already-front-needs-dwell",
+      "result" : [
+        "1000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:working@1000]",
+        "10000 claude Stop → top=claude/a1b2 [claude/a1b2/proj:done@10000]",
+        "10000 fg claude (no change) → top=claude/a1b2 [claude/a1b2/proj:done@10000] next=13000",
+        "12999 fg claude (no change) → top=claude/a1b2 [claude/a1b2/proj:done@10000] next=13000",
+        "13000 fg claude → top=claude/a1b2 [claude/a1b2/proj:waiting@13000] next=none"
+      ]
+    },
+    {
+      "name" : "host-switch-keeps-needs-you-and-error",
+      "result" : [
+        "1000 claude PermissionRequest(permission) → top=claude/a1b2 [claude/a1b2/proj:needsYou(permission)@1000]",
+        "1000 claude UserPromptSubmit → top=claude/a1b2 [claude/a1b2/proj:needsYou(permission)@1000, claude/0011/proj:working@1000]",
+        "2000 claude StopFailure → top=claude/a1b2 [claude/a1b2/proj:needsYou(permission)@1000, claude/0011/proj:error@2000]",
+        "9000 fg claude+codex (no change) → top=claude/a1b2 [claude/a1b2/proj:needsYou(permission)@1000, claude/0011/proj:error@2000] next=none"
       ]
     }
   ]

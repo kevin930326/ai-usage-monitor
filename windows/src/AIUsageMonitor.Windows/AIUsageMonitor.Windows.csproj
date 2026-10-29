@@ -31,6 +31,7 @@
     <!-- 角色的共用設定（和 Mac 讀同一份）：嵌在執行檔裡，不另外放檔案 -->
     <EmbeddedResource Include="..\..\..\shared\mascot-anim.json" LogicalName="mascot-anim.json" />
     <EmbeddedResource Include="..\..\..\shared\mascot-looks.json" LogicalName="mascot-looks.json" />
+    <EmbeddedResource Include="..\..\..\shared\agent-hosts.json" LogicalName="agent-hosts.json" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\AppIcon.ico" />

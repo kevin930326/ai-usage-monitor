@@ -23,8 +23,17 @@ public enum AgentHookEvent
     Notification, Stop, StopFailure, SubagentStart, SubagentStop, PreCompact, PostCompact, Interrupt,
 }
 
-/// <summary>工作階段的狀態；彙總時取最高的（需要你 > 出錯 > 工作中 > 完成未看 > 等你 > 閒置）</summary>
-public enum AgentState { Idle, Waiting, Done, Working, Error, NeedsYou }
+/// <summary>
+/// 工作階段的狀態；彙總時取最高的（需要你 > 出錯 > 工作中 > 背景執行中 > 完成未看 > 等你 > 閒置），順序就是優先級。
+/// 背景執行中（ADR-0017 第 7 節）不是存的狀態：完成未看或等你、AI 程序底下還有回合中新產生的子孫程序時顯示成它
+/// </summary>
+public enum AgentState { Idle, Waiting, Done, Background, Working, Error, NeedsYou }
+
+/// <summary>一個程序的識別：PID 加開始時間（Windows 是建立時間），PID 被重用時開始時間不同（ADR-0017 第 7 節）</summary>
+public readonly record struct AgentProcess(int Pid, long Start) : IComparable<AgentProcess>
+{
+    public int CompareTo(AgentProcess other) => Pid != other.Pid ? Pid.CompareTo(other.Pid) : Start.CompareTo(other.Start);
+}
 
 public static class AgentNames
 {
@@ -160,10 +169,11 @@ public sealed record AgentHookInput(AgentHookEvent Event, AgentNeed? Need, strin
 
 /// <summary>
 /// hook 經 socket 送給 App 的一行 JSON：
-/// {"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project"}
+/// {"v":1,"ai":"claude","ev":"Stop","need":"","sub":false,"sid":"0123456789abcdef","t":1761650000000,"dir":"my-project","pid":4242}。
+/// pid（AI 程序的 PID，ADR-0017 第 7 節）只有知道時才寫（大於 0）
 /// </summary>
 public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentNeed? Need, string Session, long Time, string Folder,
-                                      bool Sub = false)
+                                      bool Sub = false, int Pid = 0)
 {
     public const int Version = 1;
     /// <summary>一行最多多少位元組（App 讀超過就丟掉）</summary>
@@ -177,7 +187,8 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
         var text = $"{{\"v\":{Version},\"ai\":{Quote(AgentNames.Name(Ai))},\"ev\":{Quote(AgentNames.Name(Event))}," +
                    $"\"need\":{Quote(Need is { } n ? AgentNames.Name(n) : "")},\"sub\":{(Sub ? "true" : "false")}," +
                    $"\"sid\":{Quote(Session)}," +
-                   $"\"t\":{Time.ToString(CultureInfo.InvariantCulture)},\"dir\":{Quote(Folder)}}}";
+                   $"\"t\":{Time.ToString(CultureInfo.InvariantCulture)},\"dir\":{Quote(Folder)}" +
+                   (Pid > 0 ? $",\"pid\":{Pid.ToString(CultureInfo.InvariantCulture)}" : "") + "}";
         return Encoding.UTF8.GetBytes(text);
     }
 
@@ -189,7 +200,7 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
     {
         if (data.Length > MaxLength) return null;
         var o = AgentNames.Object(data);
-        if (o is null || o.Count != Keys.Length || !Keys.All(o.ContainsKey)) return null;
+        if (o is null || !Keys.All(o.ContainsKey) || o.Count != Keys.Length + (o.ContainsKey("pid") ? 1 : 0)) return null;
         if (o["v"] is not JsonValue v || v.GetValueKind() != JsonValueKind.Number || !v.TryGetValue<int>(out var version)
             || version != Version) return null;
         var ai = AgentNames.Kind(AgentNames.Text(o["ai"]));
@@ -209,7 +220,12 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
             need = AgentNames.Need(needText);
             if (need is null) return null;
         }
-        var message = new AgentHookMessage(ai.Value, e.Value, need, session, time, folder, sub);
+        var pid = 0;
+        if (o.ContainsKey("pid"))
+        {
+            if (o["pid"] is not JsonValue p || p.GetValueKind() != JsonValueKind.Number || !p.TryGetValue<int>(out pid) || pid <= 0) return null;
+        }
+        var message = new AgentHookMessage(ai.Value, e.Value, need, session, time, folder, sub, pid);
         return message.Encoded().AsSpan().SequenceEqual(data) ? message : null;
     }
 
@@ -232,11 +248,25 @@ public sealed record AgentHookMessage(AgentKind Ai, AgentHookEvent Event, AgentN
 
 /// <summary>一個工作階段。Stored 是存的狀態（閒置由「等你」加上時間算出，見 State）</summary>
 /// <remarks>TurnStart：這一回合開始工作的時間（從不在跑的狀態進入工作中時記下；完成後用來算跑了多久）</remarks>
+/// <remarks>
+/// 背景工作（ADR-0017 第 7 節）：Pid 是 AI 程序（0 是不知道，不偵測）；Baseline 是回合開始時已經有的子孫程序（排序過；null 是還沒拍）；
+/// WantsBaseline 要 App 拍基準；CheckAt 下一次看的時間；Background／BackgroundSince 背景執行中與進入的時間
+/// </remarks>
 public sealed record AgentSession(AgentKind Ai, string Id, string Folder, AgentState Stored, AgentNeed? Need, long Since, long Last,
                                   long? TurnStart = null)
 {
-    public AgentState State(long now, long idleAfter) =>
-        Stored == AgentState.Waiting && now - Since >= idleAfter ? AgentState.Idle : Stored;
+    public int Pid { get; init; }
+    public AgentProcess[]? Baseline { get; init; }
+    public bool WantsBaseline { get; init; }
+    public long? CheckAt { get; init; }
+    public bool Background { get; init; }
+    public long? BackgroundSince { get; init; }
+
+    public AgentState State(long now, long idleAfter)
+    {
+        if (Background && Stored is AgentState.Done or AgentState.Waiting) return AgentState.Background;
+        return Stored == AgentState.Waiting && now - Since >= idleAfter ? AgentState.Idle : Stored;
+    }
 }
 
 public sealed class AgentSessions(long idleAfter)
@@ -249,6 +279,14 @@ public sealed class AgentSessions(long idleAfter)
     public const long ForgetAfter = 12 * 3_600_000;
     /// <summary>同時最多記幾個工作階段（假事件塞爆時丟掉最久沒事件的）</summary>
     public const int MaxSessions = 32;
+    /// <summary>主回合 Stop 後多久第一次看背景工作</summary>
+    public const long BackgroundFirstCheck = 3_000;
+    /// <summary>背景執行中每隔多久再看一次</summary>
+    public const long BackgroundEvery = 20_000;
+    /// <summary>背景執行中最多多久：之後剩下的程序當成常駐的（併進基準）</summary>
+    public const long BackgroundMax = 60 * 60_000;
+    /// <summary>基準最多記幾個程序</summary>
+    public const int MaxProcesses = 256;
 
     private readonly List<AgentSession> sessions = [];
     /// <summary>每個工作階段（含已結束的）最後一個事件在 hook 端的時間：較晚讀完的舊事件丟掉（Codex C-02）</summary>
@@ -274,6 +312,8 @@ public sealed class AgentSessions(long idleAfter)
             ? sessions[index]
             : new AgentSession(message.Ai, message.Session, message.Folder, AgentState.Waiting, null, now, now);
         if (message.Folder.Length > 0) session = session with { Folder = message.Folder };
+        // 換了程序（例如 resume 到另一個終端機）：舊的基準不適用
+        if (message.Pid > 0 && !message.Sub && message.Pid != session.Pid) session = session with { Pid = message.Pid, Baseline = null };
         session = session with { Last = now };
         var next = Transition(session.Stored, message.Event, message.Need, message.Sub);
         if (next is { } n && (n.State != session.Stored || n.Need != session.Need))
@@ -282,6 +322,7 @@ public sealed class AgentSessions(long idleAfter)
             if (n.State == AgentState.Working && !wasRunning) session = session with { TurnStart = now };
             session = session with { Stored = n.State, Need = n.Need, Since = now };
         }
+        session = TrackBackground(session, message.Event, message.Sub, now);
         if (index >= 0)
         {
             sessions[index] = session;
@@ -296,6 +337,21 @@ public sealed class AgentSessions(long idleAfter)
             sessions.RemoveAt(oldest);
         }
         return true;
+    }
+
+    /// <summary>背景工作的記錄（同 Swift 的 trackBackground）：回合開始拍基準；主回合 Stop 後 3 秒看一次；回到工作中、需要你、出錯時不看</summary>
+    private static AgentSession TrackBackground(AgentSession s, AgentHookEvent e, bool sub, long now)
+    {
+        if (e == AgentHookEvent.UserPromptSubmit) s = s with { Baseline = null, WantsBaseline = s.Pid > 0 };
+        if (s.Stored == AgentState.Done && e == AgentHookEvent.Stop && !sub)
+        {
+            s = s with { Background = false, BackgroundSince = null };
+            if (s.Pid <= 0) return s with { CheckAt = null };
+            // 沒有基準（App 在回合中途才啟動）：現在才拍，這一回合不判斷
+            return s.Baseline is null ? s with { WantsBaseline = true, CheckAt = null } : s with { CheckAt = now + BackgroundFirstCheck };
+        }
+        if (s.Stored is AgentState.Done or AgentState.Waiting) return s;
+        return s with { Background = false, BackgroundSince = null, CheckAt = null };
     }
 
     /// <summary>
@@ -344,6 +400,82 @@ public sealed class AgentSessions(long idleAfter)
         return changed;
     }
 
+    /// <summary>
+    /// 切回 AI 的程式（ADR-0017 第 8 節）：這些 AI 的「完成未看」在完成之後才切過來的、或完成後在前景停留滿 dwell 的，變成等你；
+    /// 需要你與出錯不動。回傳是否有改變
+    /// </summary>
+    public bool MarkSeenByHost(IReadOnlySet<AgentKind> ais, long foregroundSince, long now, long dwell = AgentHosts.DwellMs)
+    {
+        var changed = false;
+        for (var i = 0; i < sessions.Count; i++)
+        {
+            var s = sessions[i];
+            if (s.Stored != AgentState.Done || !ais.Contains(s.Ai) || (s.Since >= foregroundSince && now - s.Since < dwell)) continue;
+            sessions[i] = s with { Stored = AgentState.Waiting, Need = null, Since = now };
+            changed = true;
+        }
+        return changed;
+    }
+
+    /// <summary>宿主程式一直在前景時，下一次要看「完成後停留滿 3 秒」的時間；沒有就是 null</summary>
+    public long? NextHostCheck(IReadOnlySet<AgentKind> ais, long foregroundSince, long now, long dwell = AgentHosts.DwellMs)
+    {
+        long? next = null;
+        foreach (var s in sessions)
+            if (s.Stored == AgentState.Done && ais.Contains(s.Ai) && s.Since >= foregroundSince && s.Since + dwell > now)
+                next = Math.Min(next ?? long.MaxValue, s.Since + dwell);
+        return next;
+    }
+
+    /// <summary>要拍基準的工作階段</summary>
+    public List<(AgentKind Ai, string Id, int Pid)> BaselineRequests() =>
+        [.. sessions.Where(s => s.WantsBaseline && s.Pid > 0).Select(s => (s.Ai, s.Id, s.Pid))];
+
+    /// <summary>拍好的基準（processes 是 AI 程序底下所有子孫程序；null 是 AI 程序已經不在）</summary>
+    public void SetBaseline(AgentKind ai, string id, int pid, IReadOnlyCollection<AgentProcess>? processes)
+    {
+        var i = sessions.FindIndex(s => s.Ai == ai && s.Id == id && s.Pid == pid);
+        if (i < 0 || !sessions[i].WantsBaseline) return;
+        sessions[i] = sessions[i] with { WantsBaseline = false, Baseline = Limit(processes ?? []) };
+    }
+
+    /// <summary>到時間要看背景工作的工作階段</summary>
+    public List<(AgentKind Ai, string Id, int Pid)> BackgroundChecks(long now) =>
+        [.. sessions.Where(s => s.Pid > 0 && s.CheckAt is { } at && at <= now).Select(s => (s.Ai, s.Id, s.Pid))];
+
+    /// <summary>下一次要看背景工作的時間；沒有就是 null，App 不排計時器</summary>
+    public long? NextBackgroundCheck => sessions.Where(s => s.Pid > 0 && s.CheckAt is not null).Select(s => s.CheckAt).Min();
+
+    /// <summary>
+    /// 看了 AI 程序底下的子孫程序（null 是 AI 程序已經不在）。扣掉基準還有剩就是背景執行中；都結束了離開，等你的睡覺倒數從這一刻
+    /// 重新起算。超過 60 分鐘把剩下的併進基準。回傳是否有改變
+    /// </summary>
+    public bool Observe(AgentKind ai, string id, int pid, IReadOnlyCollection<AgentProcess>? processes, long now)
+    {
+        var i = sessions.FindIndex(s => s.Ai == ai && s.Id == id && s.Pid == pid);
+        if (i < 0 || sessions[i].CheckAt is null) return false;
+        var before = sessions[i];
+        var s = before;
+        var baseline = s.Baseline ?? [];
+        var fresh = processes is null ? [] : processes.Where(p => Array.BinarySearch(baseline, p) < 0).ToArray();
+        if (processes is null || fresh.Length == 0 || (s.BackgroundSince is { } since && now - since >= BackgroundMax))
+        {
+            if (fresh.Length > 0) s = s with { Baseline = Limit([.. baseline, .. fresh]) };
+            if (s.Background && s.Stored == AgentState.Waiting) s = s with { Since = now };
+            s = s with { Background = false, BackgroundSince = null, CheckAt = null };
+        }
+        else
+        {
+            if (!s.Background) s = s with { Background = true, BackgroundSince = now };
+            s = s with { CheckAt = now + BackgroundEvery };
+        }
+        sessions[i] = s;
+        return s.Background != before.Background || s.CheckAt != before.CheckAt || s.Since != before.Since
+            || !(s.Baseline ?? []).SequenceEqual(before.Baseline ?? []);
+    }
+
+    private static AgentProcess[] Limit(IEnumerable<AgentProcess> processes) => [.. processes.Distinct().Order().Take(MaxProcesses)];
+
     /// <summary>時間經過：工作中或需要你太久沒事件變等你、太久沒事件的移除。回傳是否有改變</summary>
     public bool Expire(long now)
     {
@@ -389,7 +521,7 @@ public sealed class AgentSessions(long idleAfter)
 
     /// <summary>
     /// 角色的工作中與睡覺：有 hook 工作階段的 AI 照 hook 的狀態，其他 AI 照紀錄檔的修改時間（fallback）。
-    /// 只有「工作中」算工作；所有 AI 都閒置才睡覺。需要你算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡
+    /// 只有「工作中」算工作；所有 AI 都閒置才睡覺。需要你、背景執行中算醒著；完成未看、出錯、等你進入後超過睡覺時間就可以睡
     /// （未看的標記保留；Fable F-06）。
     /// </summary>
     public (bool Working, bool Idle) Activity(long now, IReadOnlyDictionary<AgentKind, (bool Working, bool Active)> fallback)
@@ -403,7 +535,7 @@ public sealed class AgentSessions(long idleAfter)
                 foreach (var s in mine)
                 {
                     working |= s.Stored == AgentState.Working;
-                    active |= s.Stored is AgentState.Working or AgentState.NeedsYou || now - s.Since < IdleAfter;
+                    active |= s.Stored is AgentState.Working or AgentState.NeedsYou || s.Background || now - s.Since < IdleAfter;
                 }
             }
             else if (fallback.TryGetValue(ai, out var probe))

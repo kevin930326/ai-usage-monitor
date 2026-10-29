@@ -20,7 +20,9 @@ public enum AgentSummary {
             let state = top.state(at: now, idleAfter: sessions.idleAfter)
             // 同一個狀態有幾個工作階段時取最早進入的：哪一個最近有事件不影響彙總，不會每個工具事件就改一次（Fable F-01）
             let since = mine.filter { $0.state(at: now, idleAfter: sessions.idleAfter) == state }.map(\.since).min() ?? top.since
-            return "{\"ai\":\"\(ai.rawValue)\",\"state\":\"\(state.rawValue)\",\"sessions\":\(mine.count),\"since\":\(since)}"
+            // 背景執行中寫成工作中（ADR-0017 第 7 節）：中繼與舊版 App 不用改格式
+            let shared = state == .background ? AgentState.working : state
+            return "{\"ai\":\"\(ai.rawValue)\",\"state\":\"\(shared.rawValue)\",\"sessions\":\(mine.count),\"since\":\(since)}"
         }
         return Data("{\"v\":\(version),\"ais\":[\(rows.joined(separator: ","))]}".utf8)
     }
@@ -58,6 +60,7 @@ public struct RemoteAgent: Sendable, Equatable {
         case .needsYou: "需要你"
         case .error: "出錯了"
         case .working: "工作中"
+        case .background: "背景執行中"
         case .done: "完成了"
         case .waiting: "等你"
         case .idle: "閒置"

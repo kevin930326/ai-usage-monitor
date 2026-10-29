@@ -46,6 +46,13 @@ import Testing
         var sub: Bool?
         /// hook 端的時間（預設同 t）：模擬較早的事件較晚讀完
         var sent: Int64?
+        /// AI 程序的 PID（msg）
+        var pid: Int32?
+        /// 程序清單（baseline、procs）：[[pid, start], …]；procs 為 null 是 AI 程序已經不在
+        var procs: [[Int64]]?
+        /// 前景宿主代表的 AI 與開始在前景的時間（fg）
+        var ais: [String]?
+        var since: Int64?
     }
 
     struct Output: Codable, Equatable {
@@ -74,7 +81,8 @@ import Testing
     static func describe(_ sessions: AgentSessions, at now: Int64) -> String {
         let list = sessions.ordered(at: now).map { s in
             let state = s.state(at: now, idleAfter: sessions.idleAfter)
-            return "\(s.ai.rawValue)/\(s.id.prefix(4))/\(s.folder):\(state.rawValue)\(s.need.map { "(\($0.rawValue))" } ?? "")@\(s.since)"
+            let bg = s.checkAt.map { " check@\($0)" } ?? ""
+            return "\(s.ai.rawValue)/\(s.id.prefix(4))/\(s.folder):\(state.rawValue)\(s.need.map { "(\($0.rawValue))" } ?? "")@\(s.since)\(bg)"
         }
         let top = sessions.top(at: now).map { "\($0.ai.rawValue)/\($0.id.prefix(4))" } ?? "none"
         return "top=\(top) [\(list.joined(separator: ", "))]"
@@ -88,10 +96,30 @@ import Testing
             case "msg":
                 let message = AgentHookMessage(ai: AgentKind(rawValue: event.ai!)!, event: AgentHookEvent(rawValue: event.ev!)!,
                                                need: event.need.flatMap(AgentNeed.init(rawValue:)), session: event.sid!,
-                                               time: event.sent ?? event.t, folder: event.dir ?? "", sub: event.sub ?? false)
+                                               time: event.sent ?? event.t, folder: event.dir ?? "", sub: event.sub ?? false,
+                                               pid: event.pid ?? 0)
                 let applied = sessions.apply(message, at: event.t)
+                let wants = sessions.baselineRequests.map { "\($0.ai.rawValue)/\($0.id.prefix(4))" }
                 log.append("\(event.t) \(event.ai!) \(event.ev!)\(event.need.map { $0.isEmpty ? "" : "(\($0))" } ?? "")"
-                           + "\(event.sub == true ? "[sub]" : "")\(applied ? "" : " (stale)") → \(describe(sessions, at: event.t))")
+                           + "\(event.sub == true ? "[sub]" : "")\(applied ? "" : " (stale)") → \(describe(sessions, at: event.t))"
+                           + (wants.isEmpty ? "" : " baseline? \(wants.joined(separator: ","))"))
+            case "baseline":
+                for request in sessions.baselineRequests {
+                    sessions.setBaseline(ai: request.ai, id: request.id, pid: request.pid, processes: Self.processes(event.procs))
+                }
+                log.append("\(event.t) baseline → \(describe(sessions, at: event.t))")
+            case "procs":
+                let due = sessions.backgroundChecks(at: event.t)
+                for check in due {
+                    sessions.observe(ai: check.ai, id: check.id, pid: check.pid, processes: Self.processes(event.procs), at: event.t)
+                }
+                let next = sessions.nextBackgroundCheck.map(String.init) ?? "none"
+                log.append("\(event.t) procs checked=\(due.count) → \(describe(sessions, at: event.t)) next=\(next)")
+            case "fg":
+                let ais = Set((event.ais ?? []).compactMap(AgentKind.init(rawValue:)))
+                let changed = sessions.markSeenByHost(ais, foregroundSince: event.since ?? event.t, at: event.t)
+                let next = sessions.nextHostCheck(ais, foregroundSince: event.since ?? event.t, after: event.t).map(String.init) ?? "none"
+                log.append("\(event.t) fg \((event.ais ?? []).joined(separator: "+"))\(changed ? "" : " (no change)") → \(describe(sessions, at: event.t)) next=\(next)")
             case "activity":
                 let (working, idle) = sessions.activity(at: event.t, fallback: [:])
                 log.append("\(event.t) activity working=\(working) idle=\(idle)")
@@ -115,6 +143,10 @@ import Testing
             }
         }
         return Named(name: testCase.name, result: log)
+    }
+
+    static func processes(_ list: [[Int64]]?) -> Set<AgentProcess>? {
+        list.map { Set($0.map { AgentProcess(pid: Int32($0[0]), start: $0[1]) }) }
     }
 
     static func remote(_ testCase: RemoteCase) -> Named {
@@ -279,5 +311,21 @@ import Testing
         }
         #expect(!AgentHookEvent.installed(for: .codex).contains(.notification), "Codex 沒有 Notification 事件")
         #expect(!AgentHookEvent.installed(for: .claude).contains(.interrupt), "Claude Code 沒有 Interrupt 事件")
+    }
+}
+
+/// 切回 AI 的程式（ADR-0017 第 8 節）：shared/agent-hosts.json 能讀、終端機代表兩個 AI、格式不對時沒有宿主
+@Suite struct AgentHostsTests {
+    @Test func readsTheSharedList() throws {
+        let url = FixtureTests.folder.deletingLastPathComponent().appendingPathComponent("shared/agent-hosts.json")
+        let hosts = AgentHosts.decode(try Data(contentsOf: url))
+        #expect(hosts.ais(bundleID: "com.anthropic.claudefordesktop") == [.claude])
+        #expect(hosts.ais(bundleID: "com.openai.codex") == [.codex])
+        #expect(hosts.ais(bundleID: "com.apple.Terminal") == [.claude, .codex])
+        #expect(hosts.ais(bundleID: "COM.MICROSOFT.VSCODE") == [.claude, .codex])
+        #expect(hosts.ais(bundleID: "com.apple.Safari").isEmpty)
+        #expect(hosts.ais(bundleID: nil).isEmpty)
+        #expect(hosts.windows["windowsterminal.exe"] == [.claude, .codex])
+        #expect(AgentHosts.decode(Data("{}".utf8)) == AgentHosts())
     }
 }

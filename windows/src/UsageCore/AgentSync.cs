@@ -31,7 +31,9 @@ public static class AgentSummary
             var state = top.State(now, sessions.IdleAfter);
             // 同一個狀態有幾個工作階段時取最早進入的：哪一個最近有事件不影響彙總（Fable F-01）
             var since = mine.Where(s => s.State(now, sessions.IdleAfter) == state).Min(s => s.Since);
-            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(state)}\"," +
+            // 背景執行中寫成工作中（ADR-0017 第 7 節）：中繼與舊版 App 不用改格式
+            var shared = state == AgentState.Background ? AgentState.Working : state;
+            rows.Add($"{{\"ai\":\"{AgentNames.Name(ai)}\",\"state\":\"{AgentNames.Name(shared)}\"," +
                      $"\"sessions\":{mine.Count.ToString(CultureInfo.InvariantCulture)},\"since\":{since.ToString(CultureInfo.InvariantCulture)}}}");
         }
         return Encoding.UTF8.GetBytes($"{{\"v\":{Version},\"ais\":[{string.Join(",", rows)}]}}");
@@ -50,6 +52,7 @@ public sealed record RemoteAgent(string Device, AgentKind Ai, AgentState State, 
         AgentState.NeedsYou => "需要你",
         AgentState.Error => "出錯了",
         AgentState.Working => "工作中",
+        AgentState.Background => "背景執行中",
         AgentState.Done => "完成了",
         AgentState.Waiting => "等你",
         _ => "閒置",

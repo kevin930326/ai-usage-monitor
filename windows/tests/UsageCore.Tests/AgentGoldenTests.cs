@@ -35,7 +35,8 @@ public class AgentGoldenTests
     {
         var list = sessions.Ordered(now).Select(s =>
             $"{AgentNames.Name(s.Ai)}/{s.Id[..4]}/{s.Folder}:{AgentNames.Name(s.State(now, sessions.IdleAfter))}" +
-            $"{(s.Need is { } n ? $"({AgentNames.Name(n)})" : "")}@{s.Since}");
+            $"{(s.Need is { } n ? $"({AgentNames.Name(n)})" : "")}@{s.Since}" +
+            (s.CheckAt is { } at ? $" check@{at.ToString(CultureInfo.InvariantCulture)}" : ""));
         var top = sessions.Top(now) is { } t ? $"{AgentNames.Name(t.Ai)}/{t.Id[..4]}" : "none";
         return $"top={top} [{string.Join(", ", list)}]";
     }
@@ -56,8 +57,30 @@ public class AgentGoldenTests
                     var sub = e["sub"]?.GetValue<bool>() ?? false;
                     var sent = e["sent"]?.GetValue<long>() ?? t;
                     var applied = sessions.Apply(new AgentHookMessage(AgentNames.Kind(ai)!.Value, AgentNames.Event(ev)!.Value, AgentNames.Need(need),
-                                                                      e["sid"]!.GetValue<string>(), sent, e["dir"]?.GetValue<string>() ?? "", sub), t);
-                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")}{(sub ? "[sub]" : "")}{(applied ? "" : " (stale)")} → {Describe(sessions, t)}");
+                                                                      e["sid"]!.GetValue<string>(), sent, e["dir"]?.GetValue<string>() ?? "", sub,
+                                                                      e["pid"]?.GetValue<int>() ?? 0), t);
+                    var wants = sessions.BaselineRequests().Select(r => $"{AgentNames.Name(r.Ai)}/{r.Id[..4]}").ToList();
+                    log.Add($"{t} {ai} {ev}{(need.Length > 0 ? $"({need})" : "")}{(sub ? "[sub]" : "")}{(applied ? "" : " (stale)")} → {Describe(sessions, t)}" +
+                            (wants.Count > 0 ? $" baseline? {string.Join(",", wants)}" : ""));
+                    break;
+                case "baseline":
+                    foreach (var r in sessions.BaselineRequests()) sessions.SetBaseline(r.Ai, r.Id, r.Pid, Processes(e["procs"]));
+                    log.Add($"{t} baseline → {Describe(sessions, t)}");
+                    break;
+                case "procs":
+                    var due = sessions.BackgroundChecks(t);
+                    foreach (var c in due) sessions.Observe(c.Ai, c.Id, c.Pid, Processes(e["procs"]), t);
+                    var nextCheck = sessions.NextBackgroundCheck;
+                    log.Add($"{t} procs checked={due.Count} → {Describe(sessions, t)} next={(nextCheck is { } nc ? nc.ToString(CultureInfo.InvariantCulture) : "none")}");
+                    break;
+                case "fg":
+                    var names = e["ais"]!.AsArray().Select(a => a!.GetValue<string>()).ToList();
+                    var ais = names.Select(AgentNames.Kind).OfType<AgentKind>().ToHashSet();
+                    var fgSince = e["since"]?.GetValue<long>() ?? t;
+                    var seenByHost = sessions.MarkSeenByHost(ais, fgSince, t);
+                    var hostNext = sessions.NextHostCheck(ais, fgSince, t);
+                    log.Add($"{t} fg {string.Join("+", names)}{(seenByHost ? "" : " (no change)")} → {Describe(sessions, t)} " +
+                            $"next={(hostNext is { } hn ? hn.ToString(CultureInfo.InvariantCulture) : "none")}");
                     break;
                 case "activity":
                     var (working, idle) = sessions.Activity(t, new Dictionary<AgentKind, (bool, bool)>());
@@ -89,6 +112,9 @@ public class AgentGoldenTests
         return [.. log];
     }
 
+    private static List<AgentProcess>? Processes(JsonNode? list) =>
+        list is JsonArray array ? [.. array.Select(p => new AgentProcess(p![0]!.GetValue<int>(), p[1]!.GetValue<long>()))] : null;
+
     private static void Compare(string section, Func<JsonNode, string[]> run)
     {
         var cases = Cases()[section]!.AsArray();
@@ -112,6 +138,20 @@ public class AgentGoldenTests
     public void RemoteMatchesGolden() => Compare("remote", c =>
         [.. RemoteAgents.Parse(Encoding.UTF8.GetBytes(c["raw"]!.GetValue<string>()), c["local_now"]!.GetValue<long>())
             .Select(r => $"{r.Device}|{AgentNames.Name(r.Ai)}|{AgentNames.Name(r.State)}|{r.Sessions}|{r.Text}")]);
+
+    /// <summary>切回 AI 的程式（ADR-0017 第 8 節）：shared/agent-hosts.json 能讀、不分大小寫、終端機代表兩個 AI</summary>
+    [Fact]
+    public void HostsReadTheSharedList()
+    {
+        var hosts = AgentHosts.Decode(File.ReadAllText(Path.Combine(LogicGoldenTests.RepoRoot, "shared", "agent-hosts.json")));
+        Assert.Equal([AgentKind.Claude], hosts.Ais("Claude.exe").Order());
+        Assert.Equal([AgentKind.Codex], hosts.Ais("codex.exe").Order());
+        Assert.Equal([AgentKind.Claude, AgentKind.Codex], hosts.Ais("WindowsTerminal.exe").Order());
+        Assert.Equal([AgentKind.Claude, AgentKind.Codex], hosts.Ais("POWERSHELL.EXE").Order());
+        Assert.Empty(hosts.Ais("msedge.exe"));
+        Assert.Empty(hosts.Ais(null));
+        Assert.Empty(AgentHosts.Decode("{").Ais("cmd.exe"));
+    }
 
     [Fact]
     public void EncodedMessageRoundTrips()
