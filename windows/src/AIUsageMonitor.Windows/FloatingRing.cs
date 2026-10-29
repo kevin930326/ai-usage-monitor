@@ -198,14 +198,15 @@ internal static class FloatingRingRenderer
         var body = Math.Clamp(progress / BodyFadeIn, 0, 1);
         // 收合時的頭：陰影、琥珀色外圈與脈動繞著它
         var headRing = face.HeroPlacement(center, r, 0) is { } place ? new EllipseGeometry(place.Center, place.Radius + 3, place.Radius + 3) : shape;
-        if (body < 1 && face.HeroPlacement(center, r, progress) is { } hero)
+        // 角色一律在膠囊左端（往左展開時從圓環移過去），兩行在角色右邊
+        var slot = RingShape.MascotSlot(s.Direction, s.RingDip);
+        // 陰影跟著角色移動（Codex C-01：往左展開時不傳 slot 會留在圓環的位置）
+        if (body < 1 && face.HeroPlacement(center, r, progress, slot) is { } hero)
         {
             dc.PushOpacity(1 - body);
             dc.DrawEllipse(HeroShadow, null, hero.Center + new Vector(0, hero.Radius * 0.18), hero.Radius * 1.45, hero.Radius * 1.45);
             dc.Pop();
         }
-        // 角色一律在膠囊左端（往左展開時從圓環移過去），兩行在角色右邊
-        var slot = RingShape.MascotSlot(s.Direction, s.RingDip);
         if (progress > 0)
         {
             dc.PushOpacity(body);
