@@ -8,7 +8,7 @@ See how much of your **Claude** and **Codex** usage limits (5-hour / weekly) is 
 
 > The apps' interface is in Traditional Chinese; in this README, UI labels are quoted in Chinese with an English gloss the first time they appear. The detailed documentation linked below (`docs/`, ADRs, component READMEs) is in Traditional Chinese.
 
-> The currently released version is [0.5.0](CHANGELOG.md#050---2026-10-21) (source only). The later Mac panel and token statistics (v1.5–v1.8), iPhone widgets, and the appearance setting, one-step install, setup wizard and iPhone pairing (v1.9) are on `main` but **not yet released**; see Unreleased in the [CHANGELOG](CHANGELOG.md) and the [milestones](docs/03-development-workflow.md#1-里程碑). Features marked "unreleased" in the table below must be installed from source.
+> The current version is [1.0.0](CHANGELOG.md#100---2026-10-29): the Mac `.dmg` and one-line installer, the Windows collector's one-line installer and the Windows desktop app's zip are on [Releases](https://github.com/kevin930326/ai-usage-monitor/releases). See [Installation](#installation) to install, and the [CHANGELOG](CHANGELOG.md) for what changed in each version.
 
 <!-- 同一排的圖以寬度算成等高（SOURCES.tsv 的尺寸 × 寬度）；用 width 不用 height，窄螢幕時換行而不是壓扁 -->
 <p align="center">
@@ -29,6 +29,18 @@ See how much of your **Claude** and **Codex** usage limits (5-hour / weekly) is 
   <img src="docs/images/watch-app.png" width="159" alt="Apple Watch app: the lowest remaining limit and a progress bar for each limit">
 </p>
 
+The notch and character (Mac): move the pointer to the notch to expand it (top); otherwise it stays beside the notch (bottom).
+
+<p align="center">
+  <img src="docs/images/mac-notch.png" width="580" alt="The expanded Mac notch panel: the character with its level and streak on the left, the remaining limits and reset times for Claude and Codex on the right">
+</p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/mac-notch-collapsed-dark.png">
+    <img src="docs/images/mac-notch-collapsed-light.png" width="580" alt="The collapsed notch: a mini character on the left, a ring and percentage for the lowest remaining limit on the right">
+  </picture>
+</p>
+
 <details>
 <summary>See the full Mac panel (upcoming resets, this week's limit trend, limit consumption, token statistics, service status)</summary>
 
@@ -47,10 +59,12 @@ All screenshots use demo data (the Debug build's `AUM_DEMO` / `scripts/make-demo
 
 | Platform | Features |
 |---|---|
-| iPhone | Live Activity on the Lock Screen and in the Dynamic Island (the lowest remaining limit, a progress bar for each limit, reset countdowns, and an 「更新」 ("Refresh") button on the card); the Shortcuts action 「重新啟動用量監看」 ("Restart usage monitoring") keeps the card on screen all day; Home Screen widgets (small / medium / large) and Lock Screen widgets (circular / rectangular / inline) (unreleased); stale data turns gray and 「已重置」 ("Reset") is shown after a reset; switch between showing used or remaining %; appearance setting (System, Light, Dark; applies only to the app) and pairing by scanning a QR code on the Mac (unreleased); the Codex section on the main screen shows the number of reset credits (重置次數卷) and the earliest expiry date (unreleased; requires redeploying the relay) |
+| iPhone | Live Activity on the Lock Screen and in the Dynamic Island (the lowest remaining limit, a progress bar for each limit, reset countdowns, and an 「更新」 ("Refresh") button on the card); the Shortcuts action 「重新啟動用量監看」 ("Restart usage monitoring") keeps the card on screen all day; Home Screen widgets (small / medium / large) and Lock Screen widgets (circular / rectangular / inline); stale data turns gray and 「已重置」 ("Reset") is shown after a reset; switch between showing used or remaining %; appearance setting (System, Light, Dark; applies only to the app) and pairing by scanning a QR code on the Mac; the Codex section on the main screen shows the number of reset credits (重置次數卷) and the earliest expiry date (requires redeploying the relay) |
 | Apple Watch | Watch app and watch face complications (circular, rectangular, inline); the Smart Stack shows the iPhone's Live Activity; settings are sent over from the iPhone, so nothing needs to be typed on the watch |
-| Mac menu bar | The menu bar icon (two rings) shows the lowest remaining limit; card-style panel: which service to use next, each limit with an 「照目前速度」 ("at the current pace") forecast, upcoming resets (an 8-hour timeline and which weekday the weekly limit will last until), this week's limit trend, a limit consumption heatmap, token statistics for this Mac (this week, best single day, longest task, streak, activity heatmap; with or without cache reads), service status (distinguishes "service outage" from "limit used up"); a full statistics window; the number of Codex reset credits and their expiry dates (hover to list each one); notifications (below 20% left, using too fast, limit reset, a reset credit expiring within 3 days; 「剩不到 20%」 ("below 20%") and 「重置卷快到期」 ("reset credit expiring soon") are on by default, the others off); a right-click menu and a global keyboard shortcut; cards can be reordered, collapsed and hidden; appearance setting (System, Light, Dark); a setup wizard on first launch. The panel from v1.5 onward and all of these features are unreleased |
-| Collector | Every 5 minutes, runs Claude Code's `/usage` and Codex CLI's `app-server` to get usage limits, writes a local snapshot, limit history and token statistics, and uploads a compact snapshot to your own relay. Run either by the app's built-in background collector (unreleased) or by the launchd job installed with `install-launchd.sh`; the two never run at the same time |
+| Mac menu bar | The menu bar icon (two rings) shows the lowest remaining limit; card-style panel: which service to use next, each limit with an 「照目前速度」 ("at the current pace") forecast, upcoming resets (an 8-hour timeline and which weekday the weekly limit will last until), this week's limit trend, a limit consumption heatmap, token statistics for this Mac (this week, best single day, longest task, streak, activity heatmap; with or without cache reads), service status (distinguishes "service outage" from "limit used up"); a full statistics window; the number of Codex reset credits and their expiry dates (hover to list each one); notifications (below 20% left, using too fast, limit reset, a reset credit expiring within 3 days; 「剩不到 20%」 ("below 20%") and 「重置卷快到期」 ("reset credit expiring soon") are on by default, the others off); a right-click menu and a global keyboard shortcut; cards can be reordered, collapsed and hidden; appearance setting (System, Light, Dark); a setup wizard on first launch |
+| Mac notch and character | Move the pointer to the notch and it expands into a panel: a character (Claude or Codex) on the left and both services' limits on the right; when collapsed, a mini character and a ring for the lowest remaining limit sit beside the notch. The character's face follows your limits and service status; it types while an AI is running, falls asleep when idle for a while, reacts to clicks, pinches and circling, and levels up with your daily tokens. Screens without a notch get one drawn in the middle of the menu bar |
+| Windows PC | The collector counts this PC's tokens; the desktop app's floating icon is either the two rings or the character (the same one as in the Mac notch); click it to open the card panel |
+| Collector | Every 5 minutes, runs Claude Code's `/usage` and Codex CLI's `app-server` to get usage limits, writes a local snapshot, limit history and token statistics, and uploads a compact snapshot to your own relay. Run either by the app's built-in background collector or by the launchd job installed with `install-launchd.sh`; the two never run at the same time |
 
 Token statistics: the panel's statistics card switches between All, Claude and Codex, and between including and excluding 「含快取讀取」 ("including cache reads"; off by default — cache reads are conversation context the AI reads again, and usually make up most of the total) (left); the 「完整統計」 ("Full Statistics") window shows a whole year, each model, and time of day (right).
 
@@ -137,17 +151,15 @@ First sign in to the services you want to monitor (at least one): for Claude, ru
 
 ### 0. Mac only
 
-> No version containing the `.dmg` and `install.sh` has been released yet (v0.5.0 on Releases is source only), so the "Download and install" option and the one-line command below will work only after the next release; until then, use "Install from source" at the end.
-
 **Download and install** (no terminal, no need to install Python yourself): download `AIUsageMenuBar-<version>.dmg` from [Releases](https://github.com/kevin930326/ai-usage-monitor/releases), drag 「AI 用量」 ("AI Usage") into Applications, and on first launch go to System Settings › Privacy & Security and click Open Anyway (the app is ad-hoc signed and not notarized by Apple; see [ADR-0013](docs/adr/0013-download-and-install.md)).
 
-Or use a one-line command (it verifies the SHA-256, installs into Applications and opens the app, without running into Gatekeeper's Open Anyway). The command points to a fixed version; replace `X.Y.Z` with a version number from [Releases](https://github.com/kevin930326/ai-usage-monitor/releases):
+Or use a one-line command (it verifies the SHA-256, installs into Applications and opens the app, without running into Gatekeeper's Open Anyway). The command points to a fixed version (1.0.0 below; for later versions, replace `1.0.0` with a version number from [Releases](https://github.com/kevin930326/ai-usage-monitor/releases)):
 
 ```bash
-curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh | bash
+curl -fsSL https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.sh | bash
 ```
 
-To look before you run it: `curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.sh`, read `install.sh`, then `bash install.sh`. install.sh has the SHA-256 of that version's zip hard-coded; it compares it after downloading and stops on a mismatch. It comes from the same Release as the zip, so it protects integrity during download and caching, but it **cannot** protect against the Release itself being replaced ([ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)).
+To look before you run it: `curl -fsSLO https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.sh`, read `install.sh`, then `bash install.sh`. install.sh has the SHA-256 of that version's zip hard-coded; it compares it after downloading and stops on a mismatch. It comes from the same Release as the zip, so it protects integrity during download and caching, but it **cannot** protect against the Release itself being replaced ([ADR-0013](docs/adr/0013-download-and-install.md#1-mac-app-的發布格式)).
 
 On first launch a **setup wizard** appears; each step shows ✅ or what needs to be done, with a 「複製」 ("Copy") button when a command is needed. The app has a built-in collector (Python is embedded) that collects in the background every 5 minutes; you can open the wizard again later from 「設定 › 一般 › 重新執行設定精靈」 ("Settings › General › Run Setup Wizard Again").
 
@@ -215,16 +227,19 @@ To keep the Lock Screen card on screen all day, set up the Shortcuts automation 
 The Windows collector computes token statistics for Claude Code and Codex CLI on that PC (by default it does not collect usage limits and does not upload). Open PowerShell (no administrator rights needed):
 
 ```powershell
-irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 | iex
+irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.ps1 | iex
 ```
 
-Again, replace `X.Y.Z` with a version number from Releases. To look first: `irm https://github.com/kevin930326/ai-usage-monitor/releases/download/vX.Y.Z/install.ps1 -OutFile install.ps1`, read it, then run it. The SHA-256 check protects the same things as on the Mac.
+For later versions, replace the version number in the same way. To look first: `irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/install.ps1 -OutFile install.ps1`, read it, then run it. The SHA-256 check protects the same things as on the Mac.
 
 If Python is missing, it asks whether to install it with winget; downloaded files are installed only after their SHA-256 is verified. For details, options and limitations see [docs/windows.md](docs/windows.md). To see the total across all computers in the Mac panel, set up tier 2 separately: see [docs/tier2-setup.md](docs/tier2-setup.md).
 
-> Status: the one-line command will work only after the first release; until then, install from source as described in [docs/windows.md](docs/windows.md).
+**Viewing usage limits on the PC (Windows desktop app)**: install the collector with `-WithQuota` ([docs/windows.md](docs/windows.md)) so the app has limit data. The same two rings as in the Mac menu bar, or the character, appear on the desktop (draggable, snap to screen edges, hidden in full screen); click to open the card panel. The app reads only the local `usage.json` and does not access the network. Pick one way to install:
 
-**Viewing usage limits on the PC (Windows desktop app)**: after installing the collector with `install-task.ps1 -WithQuota`, run `scripts\install-windows-app.ps1` from the repo. The same two rings as in the Mac menu bar appear on the desktop (draggable, snap to screen edges, hidden in full screen); click them to open the card panel. The app reads only the local `usage.json` and does not access the network. For details and the real-device checklist see [windows/README.md](windows/README.md) (ADR-0015, currently phase 1).
+- **Download the zip** (no .NET needed): from [Releases](https://github.com/kevin930326/ai-usage-monitor/releases), download `AIUsageMonitor-windows-x64-1.0.0.zip` for your architecture (`-arm64-` for ARM64), compare it with `SHA256SUMS-windows` using `Get-FileHash <zip> -Algorithm SHA256`, extract it to a fixed location and open `AIUsageMonitor.exe`. It has no code signature, so the first launch shows SmartScreen; click More info → Run anyway.
+- **Install with the repo's script** (verifies the SHA-256 for you; run it again to update): in the repo folder, run `powershell -ExecutionPolicy Bypass -File scripts\install-windows-app.ps1 -FromRelease`. Without `-FromRelease` it builds from source with the .NET 10 SDK.
+
+For details and the real-device checklist see [windows/README.md](windows/README.md) (ADR-0015).
 
 ### Uninstall
 

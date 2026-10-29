@@ -3,6 +3,7 @@
 #
 #   scripts/update-readme-images.sh                       # Mac、iPhone、手錶
 #   README_IMAGES_PLATFORMS=mac scripts/update-readme-images.sh   # 只更新 Mac 的
+#   README_IMAGES_WIN_DIR=<資料夾> README_IMAGES_PLATFORMS=win scripts/update-readme-images.sh   # Windows 的
 #
 # - 與 scripts/snapshots.sh 相同的固定時間、時區、語系與假資料（scripts/make-demo-history.py，暫存資料夾），不讀真實資料。
 # - Mac：Debug 版以 ImageRenderer 輸出（AUM_RENDER_DIR），統計切換的 GIF 是 AUM_RENDER_ANIMS=stats-tour。
@@ -10,6 +11,8 @@
 #   App 主畫面與設定畫面（AUM_DEMO_ACTION=settings：設定畫面一律顯示示範網址與假密鑰，不顯示模擬器裡存的設定）是模擬器截圖，
 #   暫時切換模擬器的外觀與狀態列，結束後還原。
 #   Live Activity 卡片與小工具不放：ImageRenderer 把 ProgressView 畫成黃色佔位符。手錶：模擬器截圖（示範模式）。
+# - Windows：Mac 上畫不出 WPF，改用 CI「Windows App」工作的 artifact windows-screens（Debug 版 --render、固定時間與假資料）；
+#   下載解壓後以 README_IMAGES_WIN_DIR 指定，來源寫成 win:<artifact 裡的相對路徑>。沒給時不更新 Windows 的圖。
 # - README_IMAGES_MAC_APP／README_IMAGES_IOS_APP／README_IMAGES_WATCH_APP：已建置的 Debug 版 .app；沒給就自己建置到 build/readme-images。
 # - SOURCES.tsv 第 5 欄「後製」（可省略）：crop=<y>:<高>（裁切，原圖像素）、frame=<圓角半徑>（圓角與細邊框，縮放後的像素），
 #   由 scripts/readme-image-post.swift 處理，順序固定為裁切 → 縮放（第 4 欄）→ 加框。
@@ -22,7 +25,7 @@ source "$ROOT/scripts/ios-render-launch.sh"
 IMAGES=$ROOT/docs/images
 SOURCES=$IMAGES/SOURCES.tsv
 OUT=${README_IMAGES_OUT:-$ROOT/build/readme-images}
-PLATFORMS=${README_IMAGES_PLATFORMS:-mac ios watch}
+PLATFORMS=${README_IMAGES_PLATFORMS:-mac ios watch${README_IMAGES_WIN_DIR:+ win}}
 RENDER_NOW=2026-10-21T04:00:00Z
 export TZ=Asia/Taipei
 LANG_ARGS=(-AppleLanguages "(zh-Hant-TW)" -AppleLocale zh_TW)
@@ -174,6 +177,12 @@ render_watch() {
   xcrun simctl terminate "$udid" "$WATCH_BUNDLE" 2>/dev/null || true
   echo "手錶："
   place watch-screen "$WORK/watch"
+}
+
+render_win() {
+  local dir=${README_IMAGES_WIN_DIR:?README_IMAGES_WIN_DIR 要指定 CI 的 windows-screens artifact 解壓後的資料夾}
+  echo "Windows："
+  place win "$dir"
 }
 
 for platform in $PLATFORMS; do "render_$platform"; done
