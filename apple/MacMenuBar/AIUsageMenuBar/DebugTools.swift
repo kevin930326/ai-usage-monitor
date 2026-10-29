@@ -208,7 +208,11 @@ enum DebugTools {
             (close + 153, "notch-reopen-3", { mascot.pointerEntered() }),
             (close + 160, "agent-raise-open", { AgentMonitor.shared.debugApply(.permissionRequest, need: .permission) }),
             (close + 175, "agent-lower-open", { AgentMonitor.shared.debugApply(.postToolUse) }),
-            (close + 180, "exit", { exit(0) }),
+            // 背景執行中（ADR-0017 第 7 節）：收著時呼吸加慢速思考泡泡（Core Animation 循環，每秒 8 格）
+            (close + 178, "notch-close-3", { mascot.closeNow() }),
+            (close + 180, "collapsed-think", { mascot.mutate { $0.setBackground(true, at: mascot.time()) } }),
+            (close + 200, "think-end", { mascot.mutate { $0.setBackground(false, at: mascot.time()) } }),
+            (close + 202, "exit", { exit(0) }),
         ])
     }
 
