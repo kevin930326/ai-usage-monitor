@@ -191,6 +191,7 @@ CI 看不到滑鼠、焦點與多螢幕的行為，在 x64 桌機（Windows 11�
 - [ ] AI 狀態：設定裡連接 Claude Code 與 Codex（Codex 再執行 `/hooks` 信任）；要求權限時圓環亮琥珀色外框、膠囊第二行寫「需要你」，20 秒後有通知（沒有按鈕）；
   完成後有綠色勾勾徽章，打開面板後消失；App 結束時 AI 照常、`agent\inbox\` 是空的；移除後設定檔回到原樣（備份在旁邊）；
   App 資料夾移動後狀態變成「需要修好」；`aum-hook.exe` 冷、熱啟動各 100 次的時間寫進報告；把 `aum-hook.exe` 改名後 Claude Code 照常（`onFailure: continue`），Codex 的行為寫進報告
+- [ ] 跳回工作階段（ADR-0017 第 10 節）：Windows Terminal 兩個分頁、傳統 cmd 視窗、VS Code 整合終端機、Claude App 各跑一個 AI；展開膠囊點 AI 那一列，那個程式到前面（最小化的會還原；Windows Terminal 不切分頁）；滑鼠移上去游標變手指；點氣球通知時跳到那一則的工作階段（帶不到前面時工作列按鈕閃）；系統管理員的終端機記下結果；AI 結束後再點，那一列顯示「找不到這個工作階段的視窗」2 秒；日誌只有 `agent jump: window／flash／no host`
 - [ ] 不連網：防火牆封鎖 `AIUsageMonitor.exe` 對外連線後一切正常；Process Monitor 只在點事故那行時看到一次 ShellExecute（瀏覽器），沒有 TCP/UDP
 - [ ] 事故連結：有事故時面板那行右邊有 ↗，點了（或 Tab 到那行按 Enter）用預設瀏覽器打開事故頁；把 `usage.json` 裡事故的 `url` 改成其他網域或 `http://` 後，那行只剩文字、沒有 ↗、點了不會開
 - [ ] 效能：`measure-perf.ps1`（上面）的閒置 CPU ≤ 0.1%

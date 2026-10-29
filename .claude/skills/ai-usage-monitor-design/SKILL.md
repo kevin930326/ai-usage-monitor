@@ -236,4 +236,5 @@ Windows App（`windows/`，ADR-0015）的懸浮圓環與面板沿用本節的圓
 - 角色動畫：完整／簡單（使用者確認的定義：身體不動、只有眼睛眨與看滑鼠，不要加回「狀態改變時動一下」；不播過場、反應、光環，不偵測手勢，面板展開不回彈）／關閉（完全靜止、展開待著也不重畫）；三種都用表情（眼睛的形狀）顯示額度；「減少動態效果」時完整當成簡單，設定頁會明確寫出「目前以簡單顯示」。
 - 選單列「角色」「角色＋%」：靜止的迷你角色（不動），畫顯示的額度所屬服務的角色（百分比與角色同一個服務），沒有狀態點；眼睛形狀跟著狀態變，不只靠顏色：正常是膠囊、剩不到 20% 縮成小圓點、用完是 ×、過期轉灰並閉上眼睛。
 - 效能：`scripts/measure-notch-perf.sh`（展開待著 ≤ 4%、收合後 1 分鐘 ≤ 0.3%、收合時游標一直移動 ≤ 4%、游標停住或睡著 ≤ 0.3%、重複開關 RSS ≤ +5 MB）。
+- **點工作階段跳回去**（ADR-0017 第 10 節）：「AI 工作階段」清單這台電腦的列可以點（`NotchJumpRow`：滑鼠移上去底色變亮、`NSCursor.pointingHand`，VoiceOver 動作「切到這個工作階段」）；其他電腦的列不顯示可點的樣子，點了在那一列原地顯示「在<電腦名稱>上」。找不到宿主時那一列換成「找不到這個工作階段的視窗」2 秒（同時播報），暫時的、不進截圖基準。Info.plist 的 `NSAppleEventsUsageDescription` 是「自動化」詢問的說明，改字要同步 ADR；AppleScript 只送 Terminal、iTerm2，腳本寫死、tty 以參數傳入，不要改成拼字串。
 - 截圖：`DebugMascot` 以 ImageRenderer 產生 `notch-collapsed`、`notch-intro`、`notch-expressions`、`notch-menubar-light/dark`、`notch-menu-light/dark`、`notch-agents`、`notch-forecast`、`notch-level`、`notch-looks-collapsed`、`notch-looks-expanded`、`notch-collapsed-motion`（收合循環的分格）與 `fullpanel-light/dark`，列在 `scripts/snapshots.sh` 的基準裡；不截整個螢幕。
