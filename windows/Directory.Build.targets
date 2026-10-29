@@ -1,0 +1,10 @@
+<Project>
+  <!-- windows/ 底下所有專案共用（ADR-0015 第 1 節「角色的繪製」）：
+       SkiaSharp 的原生檔套件在 runtimes/<rid>/native/ 帶了 libSkiaSharp.pdb（約 90 MB），不複製到輸出與發行檔 -->
+  <Target Name="AumRemoveNativePdb" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
+</Project>
