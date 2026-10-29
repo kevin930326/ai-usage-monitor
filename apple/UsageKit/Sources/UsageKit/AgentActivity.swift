@@ -29,9 +29,10 @@ public struct AgentActivity: Equatable, Sendable {
     /// 其他電腦的工作中、需要你對角色的效力：中繼收到後 20 分鐘（本機的收集器停了、`agent-remote.json` 不再更新時不一直想，Fable G-07）
     public static let remoteEffect: Int64 = 20 * 60_000
 
-    /// 遠端出錯在這台看過的記號（裝置名稱、AI、進入出錯的時間）：`since` 改了才再顯示（Fable G-06）。只在記憶體，不寫檔、不上傳
+    /// 遠端出錯在這台看過的記號（裝置名稱、AI、進入出錯的時間）：`since` 改了才再顯示（Fable G-06）。只在記憶體，不寫檔、不上傳。
+    /// 用中繼時鐘的原始 `since`：換算成本機的會隨每次下載的時間差變，重新下載後又會難過（Codex C-01）
     public static func errorKey(_ agent: RemoteAgent) -> String {
-        "\(agent.device)|\(agent.ai.rawValue)|\(agent.since.map(String.init) ?? "-")"
+        "\(agent.device)|\(agent.ai.rawValue)|\(agent.relaySince.map(String.init) ?? "-")"
     }
 
     /// `remote` 是 `RemoteAgents.parse(_, all: true)` 的結果（含等你、閒置）；`idleAfter` 是本機的睡覺分鐘數（ms）。

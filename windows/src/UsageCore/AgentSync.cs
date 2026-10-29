@@ -49,6 +49,8 @@ public sealed record RemoteAgent(string Device, AgentKind Ai, AgentState State, 
     /// <summary>進入這個狀態的時間、中繼收到的時間（換算成本機時間，ms；ADR-0019「角色合併所有電腦」，同 Swift）</summary>
     public long? Since { get; init; }
     public long Updated { get; init; }
+    /// <summary>中繼時鐘的原始 since（不換算）：看過的出錯用它認（換算會隨每次下載的時間差變動，Codex C-01）</summary>
+    public long? RelaySince { get; init; }
     /// <summary>清單裡列不列（等你、閒置不列，只給角色算醒著）</summary>
     public bool IsListed { get; init; } = true;
 
@@ -117,7 +119,7 @@ public static class RemoteAgents
                     // 中繼的時間換成本機：中繼的 now 對到本機的 fetched_at
                     list.Add(new RemoteAgent(name, ai, state, (int)sessions)
                     {
-                        Since = since is { } at ? fetched + at - now : null, Updated = fetched + updated - now, IsListed = listed,
+                        Since = since is { } at ? fetched + at - now : null, Updated = fetched + updated - now, RelaySince = since, IsListed = listed,
                     });
                 }
             }

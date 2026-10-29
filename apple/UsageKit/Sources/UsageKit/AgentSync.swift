@@ -44,11 +44,13 @@ public struct RemoteAgent: Sendable, Equatable {
     /// 進入這個狀態的時間、中繼收到的時間（換算成本機時間，ms；同一個中繼時鐘，ADR-0019「角色合併所有電腦」）
     public var since: Int64?
     public var updated: Int64
+    /// 中繼時鐘的原始 `since`（不換算）：看過的出錯用它認（換算會隨每次下載的時間差變動，Codex C-01）
+    public var relaySince: Int64?
     /// 清單裡列不列（等你、閒置不列，只給角色算醒著）
     public var isListed: Bool
 
     public init(device: String, ai: AgentKind, state: AgentState, sessions: Int, id: String? = nil, expiresAt: Int64 = .max,
-                since: Int64? = nil, updated: Int64 = 0, isListed: Bool = true) {
+                since: Int64? = nil, updated: Int64 = 0, relaySince: Int64? = nil, isListed: Bool = true) {
         self.device = device
         self.ai = ai
         self.state = state
@@ -57,6 +59,7 @@ public struct RemoteAgent: Sendable, Equatable {
         self.expiresAt = expiresAt
         self.since = since
         self.updated = updated
+        self.relaySince = relaySince
         self.isListed = isListed
     }
 
@@ -127,7 +130,7 @@ public enum RemoteAgents {
                 // 中繼的時間換成本機：中繼的 now 對到本機的 fetched_at
                 list.append(RemoteAgent(device: clean, ai: ai, state: state, sessions: Int(sessions), id: "\(index)/\(ai.rawValue)",
                                         expiresAt: expires, since: since.map { fetched + $0 - now }, updated: fetched + updated - now,
-                                        isListed: listed))
+                                        relaySince: since, isListed: listed))
             }
         }
         return list.sorted { a, b in

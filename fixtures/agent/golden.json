@@ -85,6 +85,12 @@
       ]
     },
     {
+      "name" : "remote-error-seen-stays-hidden-after-refetch",
+      "result" : [
+        "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=0 idle=0 mood=none"
+      ]
+    },
+    {
       "name" : "remote-error-again-later-shows",
       "result" : [
         "working=0 background=0 needsYou=0 remoteWorking=0 remoteError=1 idle=0 mood=error"

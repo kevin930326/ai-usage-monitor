@@ -15,9 +15,12 @@ public sealed record AgentActivity(bool Working, bool Background, bool NeedsYou,
     /// <summary>其他電腦的工作中、需要你對角色的效力：中繼收到後 20 分鐘（Fable G-07）</summary>
     public const long RemoteEffect = 20 * 60_000;
 
-    /// <summary>遠端出錯在這台看過的記號（裝置名稱、AI、進入出錯的時間）：since 改了才再顯示（Fable G-06）。只在記憶體</summary>
+    /// <summary>
+    /// 遠端出錯在這台看過的記號（裝置名稱、AI、進入出錯的時間）：since 改了才再顯示（Fable G-06）。只在記憶體。
+    /// 用中繼時鐘的原始 since：換算成本機的會隨每次下載的時間差變，重新下載後又會難過（Codex C-01）
+    /// </summary>
     public static string ErrorKey(RemoteAgent agent) =>
-        $"{agent.Device}|{AgentNames.Name(agent.Ai)}|{(agent.Since is { } s ? s.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")}";
+        $"{agent.Device}|{AgentNames.Name(agent.Ai)}|{(agent.RelaySince is { } s ? s.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")}";
 
     /// <summary>
     /// remote 是 <c>RemoteAgents.Parse(_, _, all: true)</c> 的結果（含等你、閒置）；idleAfter 是本機的睡覺分鐘數（ms）。

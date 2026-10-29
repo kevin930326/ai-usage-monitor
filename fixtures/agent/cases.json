@@ -4264,6 +4264,19 @@
    "seen_from": "{\"v\": 1, \"fetched_at\": 1761699995000, \"now\": 1761699995000, \"devices\": [{\"name\": \"桌機\", \"ais\": [{\"ai\": \"claude\", \"state\": \"error\", \"sessions\": 1, \"since\": 1761699875000}], \"updated_at\": 1761699935000}]}"
   },
   {
+   "name": "remote-error-seen-stays-hidden-after-refetch",
+   "local_now": 1761700000000,
+   "idle_after_ms": 1200000,
+   "local": {
+    "working": false,
+    "idle": true,
+    "needs_you": false,
+    "background": false
+   },
+   "raw": "{\"v\": 1, \"fetched_at\": 1761699995000, \"now\": 1761699995000, \"devices\": [{\"name\": \"桌機\", \"ais\": [{\"ai\": \"claude\", \"state\": \"error\", \"sessions\": 1, \"since\": 1761699875000}], \"updated_at\": 1761699935000}]}",
+   "seen_from": "{\"v\": 1, \"fetched_at\": 1761699940000, \"now\": 1761699939200, \"devices\": [{\"name\": \"桌機\", \"ais\": [{\"ai\": \"claude\", \"state\": \"error\", \"sessions\": 1, \"since\": 1761699875000}], \"updated_at\": 1761699935000}]}"
+  },
+  {
    "name": "remote-error-again-later-shows",
    "local_now": 1761700000000,
    "idle_after_ms": 1200000,
