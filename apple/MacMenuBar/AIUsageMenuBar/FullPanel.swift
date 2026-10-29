@@ -8,8 +8,8 @@ import SwiftUI
 final class FullPanelController {
     static let shared = FullPanelController()
 
-    /// 瀏海分頁與右鍵選單的圖示：往下展開（不用 `rectangle.portrait.and.arrow.forward`，那是系統的「登出」符號，看起來像「離開」）
-    static let symbol = "rectangle.expand.vertical"
+    /// 瀏海分頁與右鍵選單的圖示：一張列表卡（不用 `rectangle.portrait.and.arrow.forward`，那是系統的「登出」符號，看起來像「離開」）
+    static let symbol = "list.bullet.rectangle"
     static let openTitle = "打開完整面板"
     /// 滑鼠提示與 VoiceOver：「打開完整面板（⌥⌘U）」；快捷鍵清除時不帶括號
     static var openHelp: String {

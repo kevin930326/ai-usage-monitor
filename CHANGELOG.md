@@ -9,6 +9,7 @@
 - 切回 AI 的程式就算看過（ADR-0017 第 8 節）：完成之後切到 Claude App、Codex App、終端機或編輯器（`shared/agent-hosts.json`），或完成時已在前景並停留 3 秒，那些 AI 的「完成未看」變成等你；需要你與出錯不清。只比對 bundle ID／執行檔名稱，不讀視窗標題
 
 ### Changed
+- 瀏海展開後的分頁圖示：「總覽」從房子改成角色的臉（自訂 SF Symbol `notch.face`，圓框加兩顆膠囊眼，隨字重縮放、跟著文字顏色，`scripts/make-face-symbol.py` 產生）、「完整面板」改成 `list.bullet.rectangle`（右鍵選單同一項一起換）、「歷史」改成 `chart.line.uptrend.xyaxis`；順序、滑鼠提示與 VoiceOver 不變
 - 角色睡覺的預設從 5 分鐘改成 20 分鐘（選項加 20）；改過的人不受影響
 - 其他電腦的「完成了」「出錯」進入超過 30 分鐘就不顯示（ADR-0017 第 9 節）：心跳每 10 分鐘重傳，原本永遠不會過期
 
