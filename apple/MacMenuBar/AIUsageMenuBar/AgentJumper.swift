@@ -22,7 +22,7 @@ enum AgentJumper {
             return
         }
         let pid = session.pid
-        let start = monitor.pidStart(pid)
+        let start = monitor.pidStart(ai: ai, session: id, pid: pid)
         let hosts = monitor.hostList
         Task.detached(priority: .userInitiated) {
             let target = Self.resolve(pid: pid, start: start, hosts: hosts)

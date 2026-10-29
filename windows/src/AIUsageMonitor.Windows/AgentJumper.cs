@@ -24,7 +24,7 @@ internal static class AgentJumper
             done(false);
             return;
         }
-        var start = agents.PidStart(pid);
+        var start = agents.PidStart(ai, session, pid);
         var hosts = agents.Hosts;
         Task.Run(() => Find(pid, start, hosts)).ContinueWith(task => dispatcher.BeginInvoke(() =>
         {
