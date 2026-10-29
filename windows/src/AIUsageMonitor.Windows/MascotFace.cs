@@ -40,6 +40,19 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     /// <summary>上一次畫角色時角色的中心（視窗座標，DIP；含展開的進度、往左展開的移動與推回工作區的距離）；還沒畫過時 null</summary>
     public Point? HeroCenter => mapping?.Center;
 
+    /// <summary>
+    /// 角色的中心與身體半徑（視窗座標，DIP）：收合時沒有圓底，陰影、需要你的琥珀色外圈與脈動都繞著它畫（icons 第 6 部分）。
+    /// 和 <see cref="DrawHero"/> 同一套位置（工作中、睡著時縮小並往左下移）
+    /// </summary>
+    public (Point Center, double Radius)? HeroPlacement(Point center, double r, double progress, double slot = 0)
+    {
+        if (controller.Director is not { } director) return null;
+        var p = Math.Clamp(progress, 0, 1);
+        var busy = director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think ? 1 - p : 0;
+        // 身體在畫布上的半徑乘上縮放 k（DrawHero）剛好是 fill × r
+        return (center + new Vector(slot * p, 0) + BusyShift * (r * busy), Lerp(HeroFill, BusyFill, busy) * r);
+    }
+
     /// <summary>樣式「角色＋%」：收合時圓底下方另外寫剩餘 %</summary>
     public bool ShowsPercent { get; set; }
 
