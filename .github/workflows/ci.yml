@@ -333,6 +333,20 @@ jobs:
           name: snapshots
           path: build/snapshots/
           if-no-files-found: ignore
+      # 瀏海與角色的 CPU（ADR-0016 第 6 節）：只記錄、不擋（runner 是虛擬機，數字和實機不同；
+      # 「看滑鼠時真的照頻率重畫」那一列說明這次的格數可不可信）。報表放在 Summary 與 artifact
+      - name: Notch performance (record only)
+        if: matrix.project == 'MacMenuBar'
+        continue-on-error: true
+        run: |
+          scripts/measure-notch-perf.sh "$RUNNER_TEMP/dd/Build/Products/Debug/AIUsageMenuBar.app" build/perf-notch || true
+          [ -f build/perf-notch/summary.md ] && cat build/perf-notch/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - if: matrix.project == 'MacMenuBar' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-notch-perf
+          path: build/perf-notch/
+          if-no-files-found: ignore
       # Mac 沒有擴充（桌面小工具已移除）
       - name: Extension is embedded
         if: matrix.appex != ''
