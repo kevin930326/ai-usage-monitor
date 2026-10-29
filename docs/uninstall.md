@@ -84,7 +84,7 @@ cd .. && scripts/setup-iphone.sh --pair-only qr   # 用新的讀取密鑰重新�
 
 移除工作排程 `\AIUsageMonitor\Collector` 與 `%LOCALAPPDATA%\AIUsageMonitor\app`；`%LOCALAPPDATA%\AIUsageMonitor` 裡的 history.sqlite3、config.json、collector.log（與它的 `.repeats.json`）保留，不需要時自行刪除。從 repo 安裝的用 `collector\windows\uninstall-task.ps1`（見 [windows.md](windows.md#移除)）。用 winget 裝的 Python 不會被移除（`winget uninstall Python.Python.3.13`）。
 
-Windows 桌面 App（`scripts\install-windows-app.ps1` 安裝的）：在 repo 執行 `scripts\install-windows-app.ps1 -Uninstall`，結束 App、移除開機自動啟動（`HKCU\…\Run` 的 `AIUsageMonitor`）與 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`；設定 `windows-app.json` 保留。用 winget 裝的 .NET SDK 不會被移除（`winget uninstall Microsoft.DotNet.SDK.10`）。
+Windows 桌面 App（`scripts\install-windows-app.ps1` 安裝的）：在 repo 執行 `scripts\install-windows-app.ps1 -Uninstall`，結束 App、移除開機自動啟動（`HKCU\…\Run` 的 `AIUsageMonitor`）、開始功能表的「AI Usage Monitor」捷徑與 `%LOCALAPPDATA%\AIUsageMonitor\WindowsApp`；設定 `windows-app.json` 保留。用 winget 裝的 .NET SDK 不會被移除（`winget uninstall Microsoft.DotNet.SDK.10`）。
 
 ## 會留下什麼
 

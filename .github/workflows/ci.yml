@@ -414,16 +414,23 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $app = Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\WindowsApp'
           $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'AI Usage Monitor.lnk'
           & .\scripts\install-windows-app.ps1 -NoStart
           if (-not (Test-Path "$app\AIUsageMonitor.exe")) { throw 'not installed' }
+          # 開始功能表捷徑：指到安裝資料夾裡的 exe
+          if (-not (Test-Path $lnk)) { throw 'start menu shortcut missing' }
+          $shell = New-Object -ComObject WScript.Shell
+          if ($shell.CreateShortcut($lnk).TargetPath -ne "$app\AIUsageMonitor.exe") { throw 'shortcut target wrong' }
           if ((Get-ItemProperty $run).AIUsageMonitor -ne "`"$app\AIUsageMonitor.exe`"") { throw 'autostart missing' }
           # 設定關掉開機自動啟動後再跑一次（更新）：依設定移除登錄值，舊版改名 WindowsApp.old
           Set-Content (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\windows-app.json') '{"launch_at_login": false}' -Encoding UTF8
           & .\scripts\install-windows-app.ps1 -NoStart
           if ((Get-ItemProperty $run).PSObject.Properties.Name -contains 'AIUsageMonitor') { throw 'autostart should be off' }
           if (-not (Test-Path "$app.old\AIUsageMonitor.exe")) { throw 'old version not kept' }
+          if (-not (Test-Path $lnk)) { throw 'shortcut should stay after update' }
           & .\scripts\install-windows-app.ps1 -Uninstall
           if (Test-Path $app) { throw 'not removed' }
+          if (Test-Path $lnk) { throw 'shortcut not removed' }
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'AIUsageMonitor\windows-app.json'))) { throw 'settings should be kept' }
       - name: install-windows-app.ps1 -FromRelease (fake release, SHA-256)
         shell: powershell
@@ -443,6 +450,8 @@ jobs:
           Set-Content (Join-Path $rel 'SHA256SUMS-windows') "$hash  AIUsageMonitor-windows-x64-0.0.1.zip"
           & .\scripts\install-windows-app.ps1 -FromRelease -Version 0.0.1 -ReleaseDir $rel -NoStart
           if (-not (Test-Path "$app\AIUsageMonitor.exe")) { throw 'not installed from release' }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Programs')) 'AI Usage Monitor.lnk'
+          if (-not (Test-Path $lnk)) { throw 'start menu shortcut missing (release)' }
           $before = (Get-Item "$app\AIUsageMonitor.exe").LastWriteTimeUtc
           # 檔案被改過（SHA-256 不一致）：要停，而且不動已安裝的版本
           Add-Content $zip 'tampered'

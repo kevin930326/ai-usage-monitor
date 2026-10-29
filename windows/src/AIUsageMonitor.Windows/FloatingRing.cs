@@ -107,11 +107,11 @@ internal static class FloatingRingRenderer
     }
 
     /// <summary>展開後的兩行：額度（或 AI 的狀態）</summary>
-    private static void DrawRows(DrawingContext dc, FloatingScene s, Geometry shape, Point center, double rowsOpacity, Palette p)
+    private static void DrawRows(DrawingContext dc, FloatingScene s, Geometry shape, Point center, double rowsOpacity, Palette p, DipRect? at = null)
     {
         // 沒有額度資料（還沒有 usage.json、服務都失敗）時仍寫出 AI 的狀態（Codex C-05）
         if (rowsOpacity <= 0 || (s.Details.Rows.Count == 0 && s.Content.Agent is null)) return;
-        var info = RingShape.Info(s.Direction, s.Dock, s.RingDip);
+        var info = at ?? RingShape.Info(s.Direction, s.Dock, s.RingDip);
         var area = new Rect(center.X + info.Left, center.Y + info.Top, info.Width, info.Height);
         dc.PushClip(shape);
         dc.PushOpacity(rowsOpacity);
@@ -135,6 +135,10 @@ internal static class FloatingRingRenderer
     private static readonly Pen MascotEdge = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromArgb(40, 255, 255, 255))), 1));
     private static readonly Pen AmberPen = Frozen(new Pen(Frozen(new SolidColorBrush(MascotFace.Amber)), 3));
     private static readonly Palette MascotPalette = new(true);
+    private static readonly Brush TabShadow = Frozen(new RadialGradientBrush(new GradientStopCollection
+    {
+        new GradientStop(Color.FromArgb(90, 0, 0, 0), 0), new GradientStop(Color.FromArgb(40, 0, 0, 0), 0.55), new GradientStop(Color.FromArgb(0, 0, 0, 0), 1),
+    }));
 
     private static T Frozen<T>(T freezable) where T : Freezable
     {
@@ -154,13 +158,17 @@ internal static class FloatingRingRenderer
         var needsYou = s.Content.Agent?.State == AgentState.NeedsYou;
         if (s.Reveal <= 0 && s.TabVisible is { } visible)
         {
+            // 從螢幕邊緣探出頭：沒有圓底，邊緣那側一團柔和的陰影；需要你時頭的外圈琥珀色
             dc.PushClip(new RectangleGeometry(visible));
-            var tab = new EllipseGeometry(s.TabCenter, r, r);
-            dc.DrawGeometry(MascotBody, MascotEdge, tab);
-            dc.PushClip(tab);
+            dc.DrawEllipse(TabShadow, null, s.TabCenter, r * 0.95, r * 0.95);
             face.DrawTab(dc, s.Content, s.TabCenter, r, visible, MascotPalette, new RingFaceOptions(false, s.PixelsPerDip));
-            dc.Pop();
-            if (needsYou) dc.DrawGeometry(null, AmberPen, new EllipseGeometry(s.TabCenter, r - 1.5, r - 1.5));
+            if (needsYou)
+            {
+                var inward = visible.Left + visible.Width / 2 > s.TabCenter.X ? 1 : -1;
+                var head = MascotFace.HeroFill * r;
+                var at = new Point(s.TabCenter.X + inward * head * (2 * MascotFace.TabShown - 1), s.TabCenter.Y);
+                dc.DrawEllipse(null, AmberPen, at, head + 3, head + 3);
+            }
             dc.Pop();
             return;
         }
@@ -180,9 +188,11 @@ internal static class FloatingRingRenderer
         dc.DrawGeometry(MascotBody, MascotEdge, shape);
         dc.PushClip(shape);
         if (progress > 0) face.DrawRipple(dc, rect, s.PixelsPerDip);
-        face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect);
+        // 角色一律在膠囊左端（往左展開時從圓環移過去），兩行在角色右邊
+        var slot = RingShape.MascotSlot(s.Direction, s.RingDip);
+        face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect, slot: slot);
         dc.Pop();
-        if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center, r, s.PixelsPerDip);
+        if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center + new Vector(slot * progress, 0), r, s.PixelsPerDip);
         if (progress <= 0 && face.ShowsPercent && s.Content.Provider.Length > 0) DrawPercent(dc, s.Content, center, r, s.PixelsPerDip);
         if (needsYou) dc.DrawGeometry(null, AmberPen, Inset(shape, center, r));
         else if (controller.PulseAt is { } pulse && progress <= 0)
@@ -191,7 +201,7 @@ internal static class FloatingRingRenderer
             if (opacity > 0) dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), 255, 255, 255)), 3), Inset(shape, center, r));
         }
         var rows = controller.Director?.Content(t).Opacity ?? 0;
-        DrawRows(dc, s, shape, center, progress > 0 ? rows : 0, MascotPalette);
+        DrawRows(dc, s, shape, center, progress > 0 ? rows : 0, MascotPalette, RingShape.MascotInfo(s.Direction, s.RingDip));
     }
 
     /// <summary>「角色＋%」：圓底下緣的剩餘 %（剩不到 20% 紅色）</summary>

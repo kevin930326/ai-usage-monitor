@@ -252,11 +252,15 @@ public sealed class MascotDirector
         return (gazeTarget.Yaw + (gazeFrom.Yaw - gazeTarget.Yaw) * k, gazeTarget.Pitch + (gazeFrom.Pitch - gazeTarget.Pitch) * k);
     }
 
-    /// <summary>眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊、表情沒有換掉膠囊眼）</summary>
-    public double Blink(long time)
+    /// <summary>
+    /// 眨眼：每 3.3～4.8 秒一次，只在平常狀態（沒有動畫、不是過場、沒睡覺、眼睛是膠囊、表情沒有換掉膠囊眼）。
+    /// <paramref name="tab"/>：Windows 貼邊的標籤（收合也眨眼，睡覺、工作中不眨）
+    /// </summary>
+    public double Blink(long time, bool tab = false)
     {
         var face = MoodAt(time);
-        if (!(Machine.IsOpen && !IsIntro && (IsStill || (Machine.Playing is null && Mode != MascotMode.Sleep)) && Eyes(time) == MascotEyes.Pill
+        if (tab && Mode is MascotMode.Sleep or MascotMode.Work) return 0;
+        if (!((Machine.IsOpen || tab) && !IsIntro && (IsStill || (Machine.Playing is null && Mode != MascotMode.Sleep)) && Eyes(time) == MascotEyes.Pill
               && face.Eyes() is null && face.Lid() < 1 && Pose(time)[MascotProp.Dash] < 0.1)) return 0;
         var b = Config.Hero.Blink;
         var period = (b.MinGapMs + b.MaxGapMs) / 2;

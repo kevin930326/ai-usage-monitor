@@ -214,7 +214,7 @@ internal static class DebugTools
             var dark = wallpaper == "dark";
             void Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
                       RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
-                      RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null)
+                      RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null, double scale = Scale)
             {
                 var settings = new AppSettings { MascotProvider = provider, MascotLook = look, MascotFollowPointer = false };
                 var controller = new MascotController(settings, null, null, Dispatcher.CurrentDispatcher);
@@ -222,7 +222,7 @@ internal static class DebugTools
                 var face = new MascotFace(controller) { ShowsPercent = style == RingStyle.MascotPercent };
                 var content = Content(scenario).WithAgent(agent);
                 Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"),
-                     Desk(dark, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face), failures);
+                     Desk(dark, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale), failures);
                 controller.Dispose();
             }
             Action<MascotDirector> Open(bool intro = false) => d => d.Open(0, intro);
@@ -241,12 +241,34 @@ internal static class DebugTools
             Shot("collapsed-led", 3000, _ => { }, look: "X9");
             Shot("expand-right", 3000, Open(), expand: 1, level: 7);
             Shot("expand-left", 3000, Open(), scenario: "too_fast", direction: RingExpandDirection.Left, expand: 1);
-            Shot("expand-down", 3000, Open(), scenario: "critical", direction: RingExpandDirection.Down, dock: RingDock.Left, expand: 1);
+            // 貼邊時也是膠囊，朝螢幕內側展開；貼右邊時角色從邊緣移到膠囊左端
+            Shot("expand-dock-left", 3000, Open(), scenario: "critical", direction: RingExpandDirection.Right, dock: RingDock.Left, expand: 1, level: 7);
+            Shot("expand-dock-right", 3000, Open(), scenario: "critical", direction: RingExpandDirection.Left, dock: RingDock.Right, expand: 1, level: 7);
             Shot("expand-work", 3000, d => { d.Open(0, false); d.SetWorking(true, 0); }, expand: 1);
             Shot("expand-agent", 3000, Open(), expand: 1, agent: AgentStates[0].Agent);
             Shot("intro", 1500, Open(intro: true), expand: 1);
-            Shot("dock-tab", 3000, _ => { }, direction: RingExpandDirection.Down, dock: RingDock.Left, reveal: 0);
-            Shot("dock-tab-right", 3000, _ => { }, direction: RingExpandDirection.Down, dock: RingDock.Right, reveal: 0);
+            // 第一次打開的過場：往右、往左、貼左右邊緣，0.3／1.2／2.6／3.9 秒；縮放 125%、150%、200%（實機 DPI）
+            foreach (var (tag, direction, dock) in new[] { ("right", RingExpandDirection.Right, RingDock.None), ("left", RingExpandDirection.Left, RingDock.None),
+                                                           ("dock-left", RingExpandDirection.Right, RingDock.Left), ("dock-right", RingExpandDirection.Left, RingDock.Right) })
+            {
+                foreach (var ms in new[] { 300, 1200, 2600, 3900 })
+                {
+                    Shot($"intro-{tag}-{ms}", ms, Open(intro: true), direction: direction, dock: dock, expand: 1);
+                }
+            }
+            foreach (var dpi in new[] { 125, 150, 200 })
+            {
+                Shot($"intro-left-1200-dpi{dpi}", 1200, Open(intro: true), direction: RingExpandDirection.Left, expand: 1, scale: dpi / 100.0);
+            }
+            // 貼邊的標籤：醒著（看向螢幕內側）、工作中、睡著、需要你，左右各一
+            foreach (var (side, dock) in new[] { ("", RingDock.Left), ("-right", RingDock.Right) })
+            {
+                var toward = dock == RingDock.Left ? RingExpandDirection.Right : RingExpandDirection.Left;
+                Shot($"dock-tab{side}", 3000, _ => { }, direction: toward, dock: dock, reveal: 0);
+                Shot($"dock-tab-work{side}", 3300, d => d.SetWorking(true, 0), direction: toward, dock: dock, reveal: 0);
+                Shot($"dock-tab-sleep{side}", 3300, d => d.SetAgentIdle(true, 0), direction: toward, dock: dock, reveal: 0);
+                Shot($"dock-tab-needs-you{side}", 3000, d => d.SetNeedsYou(true, 0), direction: toward, dock: dock, reveal: 0, agent: AgentStates[0].Agent);
+            }
         }
     }
 
@@ -263,7 +285,7 @@ internal static class DebugTools
     /// </summary>
     private static BitmapSource Desk(bool darkWallpaper, Palette palette, RingContent content, RingDetails details,
                                      RingExpandDirection direction, RingDock dock, double expand, bool ticks, double reveal = 1,
-                                     IRingFace? face = null)
+                                     IRingFace? face = null, double scale = Scale)
     {
         const double margin = 20;
         var r = RingShape.DiscRadius(RingSizeDip);
@@ -288,14 +310,14 @@ internal static class DebugTools
         Rect? visible = dock == RingDock.None ? null
             : new Rect(dock == RingDock.Left ? 0 : width - RingSizeDip / 2, center.Y - RingSizeDip / 2, RingSizeDip / 2, RingSizeDip);
         var scene = new FloatingScene(content, details, palette, face ?? GlassRingFace.Shared, ticks, RingSizeDip, direction, dock,
-                                      center, tabCenter, visible, reveal, expand, Scale);
+                                      center, tabCenter, visible, reveal, expand, scale);
         var visual = new DrawingVisual();
         using (var dc = visual.RenderOpen())
         {
             Wallpaper(dc, width, height, darkWallpaper);
             FloatingRingRenderer.Draw(dc, scene);
         }
-        return Bitmap(visual, width, height);
+        return Bitmap(visual, width, height, scale: scale);
     }
 
     private static void Wallpaper(DrawingContext dc, double width, double height, bool dark)
@@ -348,11 +370,11 @@ internal static class DebugTools
         return bitmap;
     }
 
-    private static BitmapSource Bitmap(Visual visual, double width, double height, Brush? background = null)
+    private static BitmapSource Bitmap(Visual visual, double width, double height, Brush? background = null, double scale = Scale)
     {
-        var pixelsW = (int)Math.Ceiling(width * Scale);
-        var pixelsH = (int)Math.Ceiling(height * Scale);
-        var bitmap = new RenderTargetBitmap(pixelsW, pixelsH, 96 * Scale, 96 * Scale, PixelFormats.Pbgra32);
+        var pixelsW = (int)Math.Ceiling(width * scale);
+        var pixelsH = (int)Math.Ceiling(height * scale);
+        var bitmap = new RenderTargetBitmap(pixelsW, pixelsH, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         if (background is not null)
         {
             var back = new DrawingVisual();

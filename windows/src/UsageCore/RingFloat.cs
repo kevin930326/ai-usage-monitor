@@ -71,6 +71,20 @@ public static class RingShape
         }
     }
 
+    /// <summary>
+    /// 角色樣式展開後角色的中心（以圓環中心為原點的 x；ADR-0015 第 6 節、G1）：一律在膠囊左端的半圓。往右展開就是圓環本身；
+    /// 往左展開在膠囊左端，角色從圓環連續移過去
+    /// </summary>
+    public static double MascotSlot(RingExpandDirection direction, double ringDip) =>
+        direction == RingExpandDirection.Left ? Shape(direction, RingDock.None, ringDip).Left + CapsuleHeight(ringDip) / 2 : 0;
+
+    /// <summary>角色樣式的兩行資訊：角色右邊、垂直置中</summary>
+    public static DipRect MascotInfo(RingExpandDirection direction, double ringDip)
+    {
+        var left = MascotSlot(direction, ringDip) + DiscRadius(ringDip) + Gap;
+        return new DipRect(left, -RowsHeight / 2, left + InfoWidth, RowsHeight / 2);
+    }
+
     /// <summary>兩行資訊的位置</summary>
     public static DipRect Info(RingExpandDirection direction, RingDock dock, double ringDip)
     {
@@ -112,11 +126,13 @@ public static class RingFloatLayout
 
     /// <summary>
     /// 貼在左右邊緣時往下展開（下面放不下就往上）；其他位置在螢幕右半邊往左、左半邊往右。
+    /// <paramref name="capsule"/>（角色樣式）：貼邊時也是膠囊，朝畫面內側左右展開（角色在左、兩行在右，不留空白）
     /// </summary>
-    public static RingExpandDirection Direction(PixelRect ring, MonitorInfo monitor, double ringDip)
+    public static RingExpandDirection Direction(PixelRect ring, MonitorInfo monitor, double ringDip, bool capsule = false)
     {
         var dock = DockOf(ring, monitor);
         var work = monitor.WorkArea;
+        if (dock != RingDock.None && capsule) return dock == RingDock.Left ? RingExpandDirection.Right : RingExpandDirection.Left;
         if (dock != RingDock.None)
         {
             var below = RingShape.Shape(RingExpandDirection.Down, dock, ringDip).Inflate(RingShape.Inset).Bottom * monitor.Scale;

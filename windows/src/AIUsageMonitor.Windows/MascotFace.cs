@@ -43,13 +43,35 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     public void Draw(DrawingContext dc, RingContent content, Point center, double radius, Palette palette, RingFaceOptions options) =>
         DrawHero(dc, center, radius, 0, options.PixelsPerDip);
 
-    /// <summary>貼邊的標籤：露出半個頭加眼睛（靜態一格，不輪播、不看滑鼠）</summary>
+    /// <summary>貼邊時露出頭的比例</summary>
+    public const double TabShown = 0.6;
+    /// <summary>貼邊時臉往螢幕內側轉（yaw）</summary>
+    public const double TabYaw = 0.5;
+
+    /// <summary>
+    /// 貼邊的標籤（從螢幕邊緣探出頭）：center 是螢幕邊緣上的點。露出約 60% 的頭、臉朝螢幕內側；醒著時照常眨眼（不看滑鼠），
+    /// 工作中、睡著照收合的一輪（貼右邊時左右翻過來，泡泡與 z 往螢幕內側）
+    /// </summary>
     public void DrawTab(DrawingContext dc, RingContent content, Point center, double radius, Rect visible, Palette palette, RingFaceOptions options)
     {
-        // 角色往畫面內側移一點，兩隻眼睛都露出來
+        if (controller.Director is not { } director) return;
         var inward = visible.Left + visible.Width / 2 > center.X ? 1 : -1;
-        var heroCenter = new Point(center.X + inward * radius * HeroFill * 0.45, center.Y);
-        DrawHero(dc, heroCenter, radius, 0, options.PixelsPerDip, still: true);
+        var heroCenter = new Point(center.X + inward * radius * HeroFill * (2 * TabShown - 1), center.Y);
+        if (controller.Loop is not null)
+        {
+            if (inward < 0) dc.PushTransform(new ScaleTransform(-1, 1, heroCenter.X, 0));
+            DrawHero(dc, heroCenter, radius, 0, options.PixelsPerDip);
+            if (inward < 0) dc.Pop();
+            return;
+        }
+        var cfg = controller.Config.Hero;
+        var k = HeroFill * radius / cfg.Mini.Radius;
+        var half = radius * 1.15;
+        var area = new Rect(heroCenter.X - half, heroCenter.Y - half, half * 2, half * 2);
+        var t = controller.Time();
+        var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
+            gaze: (inward * TabYaw, 0)) with { Blink = controller.Motion.MovesEyes() ? director.Blink(t, tab: true) : 0 };
+        dc.DrawImage(hero.Render(area, options.PixelsPerDip, canvas => Paint(canvas, frame, options.PixelsPerDip, heroCenter - area.TopLeft, k, cfg.Mini.X, cfg.Mini.Y)), area);
     }
 
     /// <summary>畫布座標的那一刻（停止時畫停住的那一刻）</summary>
@@ -57,16 +79,18 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
 
     /// <summary>
     /// 角色畫在 center、圓底半徑 r；progress 是展開的進度（0 收合、1 展開）。展開時畫在整個膠囊 bounds 裡
-    /// （過場中角色在膠囊中間，離圓底很遠）
+    /// （過場中角色在膠囊中間，離圓底很遠）。slot：展開後角色卡的位置與 center 的距離（往左展開時角色移到膠囊左端，
+    /// 過場與漣漪也以那裡為準，才在膠囊裡）
     /// </summary>
-    public void DrawHero(DrawingContext dc, Point center, double r, double progress, double ppd, bool still = false, Rect? bounds = null)
+    public void DrawHero(DrawingContext dc, Point center, double r, double progress, double ppd, bool still = false, Rect? bounds = null,
+                         double slot = 0)
     {
         if (controller.Director is not { } director) return;
         var cfg = controller.Config.Hero;
         var p = Math.Clamp(progress, 0, 1);
         double ax = Lerp(cfg.Mini.X, cfg.Card.X, p), ay = Lerp(cfg.Mini.Y, cfg.Card.Y, p), ar = Lerp(cfg.Mini.Radius, cfg.Card.Radius, p);
         var busy = !still && director.Mode is MascotMode.Work or MascotMode.Sleep or MascotMode.Think ? 1 - p : 0;
-        var heroCenter = center + BusyShift * (r * busy);
+        var heroCenter = center + new Vector(slot * p, 0) + BusyShift * (r * busy);
         var k = Lerp(HeroFill, BusyFill, busy) * r / ar;
         mapping = (heroCenter, k, ax, ay);
         // 收合時跳一下、揮手會超出圓底：畫的範圍是圓底的 2.3 倍

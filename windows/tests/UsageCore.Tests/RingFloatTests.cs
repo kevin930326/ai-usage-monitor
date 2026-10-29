@@ -40,6 +40,41 @@ public class RingFloatLayoutTests
     }
 
     [Fact]
+    public void DockedMascotExpandsAsACapsuleTowardTheInside()
+    {
+        var margin = (int)Math.Round(RingPlacement.SnapMargin * Screen.Scale);
+        var left = Ring(margin, 300);
+        var right = Ring(1920 - margin - Size, 300);
+        Assert.Equal(RingExpandDirection.Right, RingFloatLayout.Direction(left, Screen, Dip, capsule: true));
+        Assert.Equal(RingExpandDirection.Left, RingFloatLayout.Direction(right, Screen, Dip, capsule: true));
+        // 貼在左下角也一樣（膠囊和圓環一樣高，不必往上）
+        Assert.Equal(RingExpandDirection.Right, RingFloatLayout.Direction(Ring(margin, 1032 - margin - Size), Screen, Dip, capsule: true));
+        foreach (var ring in new[] { left, right })
+        {
+            var direction = RingFloatLayout.Direction(ring, Screen, Dip, capsule: true);
+            Assert.True(Screen.WorkArea.Contains(RingFloatLayout.Expanded(ring, direction, Screen, Dip)));
+        }
+    }
+
+    [Fact]
+    public void MascotSitsAtTheLeftEndWithRowsBesideIt()
+    {
+        var r = RingShape.DiscRadius(Dip);
+        Assert.Equal(0, RingShape.MascotSlot(RingExpandDirection.Right, Dip));
+        foreach (var direction in new[] { RingExpandDirection.Right, RingExpandDirection.Left })
+        {
+            var shape = RingShape.Shape(direction, RingDock.None, Dip);
+            var slot = RingShape.MascotSlot(direction, Dip);
+            var info = RingShape.MascotInfo(direction, Dip);
+            // 角色在膠囊左端的半圓中心，兩行在角色右邊、垂直置中、不超出膠囊
+            Assert.Equal(shape.Left + shape.Height / 2, slot, 6);
+            Assert.Equal(slot + r + RingShape.Gap, info.Left, 6);
+            Assert.Equal(0, info.Top + info.Bottom, 6);
+            Assert.True(info.Right <= shape.Right - RingShape.EndPad + 1e-6);
+        }
+    }
+
+    [Fact]
     public void ExpandedStaysInsideTheWorkArea()
     {
         foreach (var (x, y) in new[] { (0, 0), (1920 - Size, 0), (0, 1032 - Size), (1920 - Size, 1032 - Size), (900, 500), (40, 2), (1700, 1000 - Size) })

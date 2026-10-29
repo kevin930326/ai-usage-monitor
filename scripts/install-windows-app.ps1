@@ -8,7 +8,8 @@
   3. 結束執行中的 App（具名事件；5 秒後仍在才結束安裝資料夾裡的那一個），換上新版（舊版改名 WindowsApp.old）。
   4. 開機自動啟動：目前使用者的 HKCU\Software\Microsoft\Windows\CurrentVersion\Run（值 AIUsageMonitor）。
      第一次安裝預設開啟，之後依 App 的設定（windows-app.json 的 launch_at_login）。
-  5. 啟動 App。
+  5. 開始功能表：目前使用者的 %APPDATA%\Microsoft\Windows\Start Menu\Programs\AI Usage Monitor.lnk（右鍵結束後從這裡再打開）。
+  6. 啟動 App。
   不需要系統管理員。App 不連網、不持有密鑰，只讀收集器寫的 usage.json（收集器要以 install-task.ps1 -WithQuota 安裝）。
 
   -FromRelease：不用 .NET SDK、不建置。從 GitHub Release 下載這台電腦架構的自含式 zip（AIUsageMonitor-windows-<x64|arm64>-<版本>.zip）
@@ -16,7 +17,7 @@
   不動目前安裝的版本。只有這個模式會連網（腳本本身，不是 App）。
 
 .PARAMETER Uninstall
-  結束 App、刪除開機自動啟動與安裝資料夾。設定檔 windows-app.json 與收集器的資料保留。
+  結束 App、刪除開機自動啟動、開始功能表捷徑與安裝資料夾。設定檔 windows-app.json 與收集器的資料保留。
 
 .PARAMETER NoStart
   安裝後不啟動（測試用）。
@@ -53,6 +54,7 @@ $Exe = Join-Path $AppDir 'AIUsageMonitor.exe'
 $Settings = Join-Path $DataDir 'windows-app.json'
 $RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $RunValue = 'AIUsageMonitor'
+$Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'AI Usage Monitor.lnk'
 $QuitEvent = 'Local\io.github.kevin930326.AIUsageMonitor.Windows.quit'
 $ReleaseRepo = 'kevin930326/ai-usage-monitor'
 
@@ -80,9 +82,30 @@ function Set-Autostart([bool]$Enabled) {
     }
 }
 
+# 開始功能表捷徑（目前使用者）：指到安裝資料夾裡的 exe，更新時重寫一次
+function Set-Shortcut([bool]$Enabled) {
+    if (-not $Enabled) {
+        Remove-Item -LiteralPath $Shortcut -Force -ErrorAction SilentlyContinue
+        return
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Shortcut) | Out-Null
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        $link = $shell.CreateShortcut($Shortcut)
+        $link.TargetPath = $Exe
+        $link.WorkingDirectory = $AppDir
+        $link.IconLocation = "$Exe,0"
+        $link.Description = 'AI Usage Monitor'
+        $link.Save()
+    } finally {
+        [Runtime.InteropServices.Marshal]::ReleaseComObject($shell) | Out-Null
+    }
+}
+
 if ($Uninstall) {
     Stop-App
     Set-Autostart $false
+    Set-Shortcut $false
     foreach ($dir in @($AppDir, $NewDir, $OldDir)) { if (Test-Path $dir) { Remove-Item -Recurse -Force $dir } }
     Write-Host "已移除 Windows App（設定 $Settings 與收集器的資料保留）。"
     return
@@ -199,9 +222,11 @@ if (Test-Path $Settings) {
     }
 }
 Set-Autostart $launch
+Set-Shortcut $true
 
 $what = if ($firstInstall) { '已安裝' } else { '已更新' }
 Write-Host "$what Windows App：$AppDir（開機自動啟動：$(if ($launch) { '開' } else { '關' })）"
+Write-Host '右鍵選單「結束」之後：從開始功能表的「AI Usage Monitor」再打開。'
 if (-not (Test-Path (Join-Path $DataDir 'usage.json'))) {
     Write-Host '還沒有額度資料：在 collector 資料夾執行 windows\install-task.ps1 -WithQuota，收集器 5 分鐘內寫出 usage.json。'
 }
