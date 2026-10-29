@@ -49,7 +49,7 @@ extension NotchView {
         let now = Int64(store.now.timeIntervalSince1970 * 1000)
         let sessions = monitor.sessions
         let rows = sessions.ordered(at: now).map { s in
-            NotchAgentRow(id: "\(s.ai.rawValue)/\(s.id)", ai: s.ai, folder: s.folder,
+            NotchAgentRow(id: "\(s.ai.rawValue)/\(s.id)", ai: s.ai, session: s.id, folder: s.folder,
                           state: s.state(at: now, idleAfter: sessions.idleAfter), need: s.need,
                           minutes: Int(max(0, now - s.since) / 60_000))
         }
@@ -60,7 +60,7 @@ extension NotchView {
                            agents: rows, remote: store.remoteAgents,
                            remoteNeedsYou: controller.activity?.needsYou == true && !rows.contains { $0.state == .needsYou },
                            staticRemote: !controller.motion.animatesBody && controller.activity?.thinksRemotely == true,
-                           level: MascotLevelStore.shared.level)
+                           level: MascotLevelStore.shared.level, jumpHint: controller.jumpHint)
     }
 
     /// 收合時瀏海的大小（脈動畫在這個外框上）
@@ -87,6 +87,8 @@ struct NotchExtras: Equatable {
     var staticRemote = false
     /// 角色等級（ADR-0020）；沒有任何活躍日時 nil
     var level: MascotLevel?
+    /// 點了跳不過去的那一列（ADR-0017 第 10 節）
+    var jumpHint: NotchJumpHint?
 
     var needsYou: Bool { remoteNeedsYou || agents.contains { $0.state == .needsYou } }
     /// 有東西可以列在「AI 工作階段」分頁
@@ -104,10 +106,39 @@ enum NotchPage: Equatable {
 struct NotchAgentRow: Equatable, Identifiable {
     var id: String
     var ai: AgentKind
+    /// 工作階段的識別（hook 算好的鹽雜湊）：點了跳回去用
+    var session = ""
     var folder: String
     var state: AgentState
     var need: AgentNeed?
     var minutes: Int
+}
+
+/// 點了跳不過去時，那一列暫時換成的文字（列的 id 是 AI／工作階段，其他電腦是 remote id）
+struct NotchJumpHint: Equatable {
+    var id: String
+    var text: String
+}
+
+/// 可以點的一列（ADR-0017 第 10 節）：滑鼠移上去底色變亮、游標變手指；VoiceOver 的動作「切到這個工作階段」。
+/// 底色畫在列外面一點（不改排版，截圖不變）
+struct NotchJumpRow<Content: View>: View {
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            content().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(hovered ? 0.07 : 0)).padding(.horizontal, -6).padding(.vertical, -2))
+        .onHover { inside in
+            hovered = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+        .accessibilityAction(named: "切到這個工作階段", action)
+    }
 }
 
 /// 需要你的琥珀色（同提醒光環「偏高」那組）
@@ -718,14 +749,15 @@ struct NotchContent: View {
         let hidden = extras.agents.count + extras.remote.count - shown.count - remote.count
         return VStack(alignment: .leading, spacing: 5) {
             ForEach(shown) { row in
+                NotchJumpRow(action: { MascotController.shared.jump(row) }) {
                 HStack(spacing: 8) {
                     Text(row.ai == .claude ? "Claude" : "Codex")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(UsageColors.provider(row.ai.rawValue))
                         .frame(width: 44, alignment: .leading)
-                    Text(row.folder.isEmpty ? "（沒有名稱）" : row.folder)
+                    Text(extras.jumpHint?.id == row.id ? extras.jumpHint?.text ?? "" : row.folder.isEmpty ? "（沒有名稱）" : row.folder)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
+                        .foregroundStyle(extras.jumpHint?.id == row.id ? Self.secondary : Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer(minLength: 4)
@@ -740,6 +772,7 @@ struct NotchContent: View {
                         .frame(minWidth: 40, alignment: .trailing)
                 }
                 .accessibilityElement(children: .combine)
+                }
             }
             ForEach(remote, id: \.id) { row in
                 HStack(spacing: 8) {
@@ -751,7 +784,7 @@ struct NotchContent: View {
                         .font(.system(size: 9))
                         .foregroundStyle(Self.secondary)
                         .accessibilityHidden(true)
-                    Text(row.device)
+                    Text(extras.jumpHint?.id == row.id ? extras.jumpHint?.text ?? "" : row.device)
                         .font(.system(size: 11))
                         .foregroundStyle(Color(red: 0xd6 / 255, green: 0xd6 / 255, blue: 0xe0 / 255))
                         .lineLimit(1)
@@ -769,6 +802,9 @@ struct NotchContent: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(row.text + (row.sessions > 1 ? "，\(row.sessions) 個工作階段" : ""))
+                // 其他電腦的不能跳：點了只提示在哪台（不顯示可以點的樣子）
+                .contentShape(Rectangle())
+                .onTapGesture { MascotController.shared.showJumpHint(row.id, "在\(row.device)上") }
             }
             if hidden > 0 {
                 Text("還有 \(hidden) 個")

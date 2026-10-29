@@ -308,6 +308,29 @@ final class MascotController {
         self.page = page
     }
 
+    /// 點了工作階段卻跳不過去（找不到視窗、在其他電腦）：那一列原地換成這句 2 秒（ADR-0017 第 10 節）
+    private(set) var jumpHint: NotchJumpHint?
+    @ObservationIgnored private var jumpHintTimer: Timer?
+
+    /// 點工作階段的一列：把它所在的程式帶到前面，找不到時在那一列提示
+    func jump(_ row: NotchAgentRow) {
+        AgentJumper.jump(ai: row.ai, id: row.session) { ok in
+            if !ok { MascotController.shared.showJumpHint(row.id, "找不到這個工作階段的視窗") }
+        }
+    }
+
+    func showJumpHint(_ id: String, _ text: String) {
+        jumpHint = NotchJumpHint(id: id, text: text)
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+        jumpHintTimer?.invalidate()
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in
+            MainActor.assumeIsolated { MascotController.shared.jumpHint = nil }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        jumpHintTimer = timer
+    }
+
     /// 動畫程度（設定與「減少動態效果」）
     var motion: MascotMotionLevel {
         MascotMotionLevel.effective(PanelSettings.shared.mascotMotion,

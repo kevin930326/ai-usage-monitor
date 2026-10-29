@@ -57,6 +57,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.developer-tools
+        # 點工作階段切到 Terminal／iTerm2 的分頁（ADR-0017 第 10 節）：只送這兩個 App、只比對 tty
+        NSAppleEventsUsageDescription: 切到 AI 工作階段所在的終端機分頁。只比對分頁的 tty，不讀內容。
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.kevin930326.AIUsageMenuBar

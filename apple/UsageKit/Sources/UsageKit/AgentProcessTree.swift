@@ -60,6 +60,20 @@ public enum AgentProcessTree {
         return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? info : nil
     }
 
+    /// 點工作階段跳回去（ADR-0017 第 10 節）：父 PID、開始時間、名稱與控制終端機（`/dev/ttysNNN`）。bundle ID 由 App 補上
+    /// （UsageKit 不用 AppKit）。別的使用者的程序（例如 Terminal 底下的 `login`）也讀得到這些欄位；程序不在時 nil
+    public static func jumpProcess(_ pid: Int32) -> AgentJump.Process? {
+        guard pid > 0, let info = info(pid) else { return nil }
+        var tty: String?
+        // e_tdev 是 NODEV（-1）時沒有控制終端機
+        if info.e_tdev != UInt32.max, let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) {
+            tty = "/dev/" + String(cString: name)
+        }
+        return AgentJump.Process(pid: pid, parent: Int32(info.pbi_ppid),
+                                 start: Int64(info.pbi_start_tvsec) * 1_000_000 + Int64(info.pbi_start_tvusec),
+                                 name: name(pid), tty: tty)
+    }
+
     /// 程序名稱（最多 16 字的執行檔名稱，不是命令列）
     static func name(_ pid: Int32) -> String {
         var buffer = [CChar](repeating: 0, count: 64)

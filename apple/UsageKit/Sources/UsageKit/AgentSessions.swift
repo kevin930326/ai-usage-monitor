@@ -637,6 +637,8 @@ public struct AgentNotice: Sendable, Equatable {
     public var need: AgentNeed?
     /// 同一次狀態只發一次：工作階段、種類與進入狀態的時間
     public var key: String
+    /// 工作階段的識別（hook 算好的鹽雜湊，不是 session ID 原文）：點通知跳回那個工作階段用（ADR-0017 第 10 節）
+    public var session = ""
 }
 
 public struct AgentNoticePolicy: Sendable, Equatable {
@@ -658,9 +660,9 @@ extension AgentSessions {
             let key = Self.noticeKey(s)
             switch s.stored {
             case .needsYou where now - s.since >= policy.needsYouAfter:
-                return AgentNotice(ai: s.ai, kind: .needsYou, need: s.need, key: key)
+                return AgentNotice(ai: s.ai, kind: .needsYou, need: s.need, key: key, session: s.id)
             case .done where s.turnStart.map { s.since - $0 >= policy.longTask } ?? false:
-                return AgentNotice(ai: s.ai, kind: .done, need: nil, key: key)
+                return AgentNotice(ai: s.ai, kind: .done, need: nil, key: key, session: s.id)
             default:
                 return nil
             }
