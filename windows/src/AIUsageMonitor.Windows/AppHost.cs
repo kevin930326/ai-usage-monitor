@@ -287,6 +287,8 @@ internal sealed class AppHost : IDisposable
         mascot.SetShown(ring is { IsVisible: true } && settings.RingStyle != RingStyle.Ring);
     }
 
+    private int fullscreenHides;
+
     private void ApplyRingVisibility()
     {
         if (ring is null) return;
@@ -294,7 +296,13 @@ internal sealed class AppHost : IDisposable
         if (hide)
         {
             ring.CollapseNow();
-            if (ring.IsVisible) ring.Hide();
+            if (ring.IsVisible)
+            {
+                ring.Hide();
+                // 只記發生了（實機「找不到圓環」時查原因），不記是哪個程式或視窗
+                AppLog.Write("ring hidden: full-screen window on the ring's monitor");
+                NativeMethods.SetProp(ring.Handle, RingWindow.HidesProp, ++fullscreenHides);
+            }
             panel?.SafeClose();
         }
         else if (!ring.IsVisible)
