@@ -6,7 +6,7 @@
 
 隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週）：iPhone 鎖定畫面的 Live Activity 與小工具、Apple Watch、Mac 選單列。Mac 面板另外顯示額度走勢、消耗熱力圖、這台 Mac 的 Token 統計與兩家服務的狀態。只用其中一個服務也可以。
 
-> 目前的版本是 [1.0.0](CHANGELOG.md#100---2026-10-29)：Mac 的 `.dmg`／一行指令、Windows 收集器的一行指令與 Windows 桌面 App 的 zip 都在 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases)。安裝見[安裝](#安裝)，各版本的變更見 [CHANGELOG](CHANGELOG.md)。
+> 目前的版本是 [1.0.0](CHANGELOG.md#100---2026-10-30)：Mac 的 `.dmg`／一行指令、Windows 收集器的一行指令與 Windows 桌面 App 的 zip 都在 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases)。安裝見[安裝](#安裝)，各版本的變更見 [CHANGELOG](CHANGELOG.md)。
 
 <!-- 同一排的圖以寬度算成等高（SOURCES.tsv 的尺寸 × 寬度）；用 width 不用 height，窄螢幕時換行而不是壓扁 -->
 <p align="center">
