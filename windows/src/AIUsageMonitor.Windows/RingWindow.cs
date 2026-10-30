@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -525,7 +525,7 @@ internal sealed class RingWindow : Window
     private void RedrawHero()
     {
         if (Mascot?.ShowsSameFrame(VisualTreeHelper.GetDpi(this).PixelsPerDip) == true) return;
-        if (Mascot?.Overlay is not null) overlay.InvalidateVisual();
+        if (Mascot?.Overlay is not null) return; // 實驗：展開看滑鼠時完全不重畫角色，量剩下的成本
         else Redraw();
     }
 
