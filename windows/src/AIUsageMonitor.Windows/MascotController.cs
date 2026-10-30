@@ -21,7 +21,7 @@ internal static class MascotRenderRates
     {
         MascotRenderRate.Breathing => 1000.0 / 10,
         MascotRenderRate.Gaze => 1000.0 / 30,
-        MascotRenderRate.GazeOpen => 1000.0 / 30,
+        MascotRenderRate.GazeOpen => 1000.0 / 20,
         MascotRenderRate.Effect => 1000.0 / 12,
         MascotRenderRate.Animating => 1000.0 / 60,
         _ => 1000.0 / 30,
