@@ -62,6 +62,13 @@ Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+[DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+/// 移到 (x, y) 並讀回：真的移到才算（工作階段收不到游標移動時兩者都會失敗，Codex C-01）
+public static bool MoveTo(int x, int y) {
+    POINT p;
+    return SetCursorPos(x, y) && GetCursorPos(out p) && Math.Abs(p.X - x) <= 1 && Math.Abs(p.Y - y) <= 1;
+}
 [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, ref bool value, uint ini);
 [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, IntPtr value, uint ini);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
@@ -125,13 +132,17 @@ try {
         }
     }
     # 游標一直移動（看滑鼠的高幀率，icons 第 4 部分）：以 (cx, cy) 為中心、半徑 radius 畫圓，每 16 毫秒移一次；
-    # 先移 2 秒（開始追之後），再一邊移一邊量 seconds 秒
+    # 先移 2 秒（開始追之後），再一邊移一邊量 seconds 秒。有一成以上沒移到（讀回的位置不對）就算沒量到：
+    # 游標沒在動時角色不重畫，CPU 會低得像達標（Codex C-01）
     function SampleMoving([int]$cx, [int]$cy, [int]$radius, [double]$seconds) {
+        $script:moveTries = 0
+        $script:moveMissed = 0
         function MoveFor([double]$s) {
             $clock = [Diagnostics.Stopwatch]::StartNew()
             while ($clock.Elapsed.TotalSeconds -lt $s) {
                 $a = $clock.Elapsed.TotalSeconds * 2.5
-                [void][AumPerf.Win]::SetCursorPos([int]($cx + $radius * [Math]::Cos($a)), [int]($cy + $radius * [Math]::Sin($a)))
+                $script:moveTries++
+                if (-not [AumPerf.Win]::MoveTo([int]($cx + $radius * [Math]::Cos($a)), [int]($cy + $radius * [Math]::Sin($a)))) { $script:moveMissed++ }
                 Start-Sleep -Milliseconds 16
             }
         }
@@ -142,7 +153,9 @@ try {
         MoveFor $seconds
         $app.Refresh()
         $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
-        [pscustomobject]@{ Cpu = [Math]::Round($cpu, 3); WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1) }
+        $moved = $script:moveMissed -le $script:moveTries / 10
+        [pscustomobject]@{ Cpu = if ($moved) { [Math]::Round($cpu, 3) } else { '未量到（游標沒移到）' }; Moved = $moved
+                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1) }
     }
     function PeakDuring([double]$seconds) {
         $max = 0
@@ -264,11 +277,15 @@ if ($null -ne $hoverOpen) {
     if ($afterHover.Cpu -gt $limits[2]) { $warnings += "after ring collapse: $($afterHover.Cpu)% > $($limits[2])%" }
     # 看滑鼠（icons 第 4 部分）：展開時游標一直移動 ≤ 2%、收合時 ≤ 1%、停下 1 分鐘後同閒置
     $lines += "| 展開、游標一直移動（看滑鼠） | $($gazeOpen.Cpu) | ≤ 2 | $($gazeOpen.WorkingSetMB) |"
-    $lines += "| 展開、游標停下後（2～10 秒） | $($gazeOpenStill.Cpu) | 記錄 | $($gazeOpenStill.WorkingSetMB) |"
+    $lines += "| 展開、游標停下後（2～10 秒） | $($gazeOpenStill.Cpu) | ≤ 1 | $($gazeOpenStill.WorkingSetMB) |"
     $lines += "| 收合、游標一直移動（看滑鼠） | $($gazeMoving.Cpu) | ≤ 1 | $($gazeMoving.WorkingSetMB) |"
     $lines += "| 收合、游標停下 1 分鐘後 | $($gazeStill.Cpu) | ≤ $($limits[0]) | $($gazeStill.WorkingSetMB) |"
-    if ($gazeOpen.Cpu -gt 2) { $warnings += "gaze expanded: $($gazeOpen.Cpu)% > 2%" }
-    if ($gazeMoving.Cpu -gt 1) { $warnings += "gaze collapsed: $($gazeMoving.Cpu)% > 1%" }
+    if (-not $gazeOpen.Moved) { $warnings += "gaze expanded: cursor moves did not land, not measured" }
+    elseif ($gazeOpen.Cpu -gt 2) { $warnings += "gaze expanded: $($gazeOpen.Cpu)% > 2%" }
+    # 展開時停下後高幀率要停（Codex C-02；ADR-0016 第 7 節）
+    if ($gazeOpenStill.Cpu -gt 1) { $warnings += "gaze expanded after stop: $($gazeOpenStill.Cpu)% > 1%" }
+    if (-not $gazeMoving.Moved) { $warnings += "gaze collapsed: cursor moves did not land, not measured" }
+    elseif ($gazeMoving.Cpu -gt 1) { $warnings += "gaze collapsed: $($gazeMoving.Cpu)% > 1%" }
     if ($gazeStill.Cpu -gt $limits[0]) { $warnings += "after gaze stopped: $($gazeStill.Cpu)% > $($limits[0])%" }
 }
 $lines += "| 角色收合、AI 工作中（每秒 12 格） | $working | 記錄（目標 ≤ 1） | — |"
