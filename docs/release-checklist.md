@@ -5,7 +5,7 @@
 
 ## 1. 發布前決定（第一次）
 
-- [ ] **artifact 提前公開（縮短，接受剩下的窗）**：`release.yml` 的 `delete-artifacts` job 在草稿建立後刪除這次執行的 artifact（失敗時也刪），artifact 只保留 1 天；pull_request 時以假的 artifact 乾跑。上傳到刪除之間（約十幾到幾十分鐘）artifact 仍可被下載，ADR-0013 第 7 節說明為什麼可以接受；確認接受後打勾。
+- [x] **artifact 提前公開（縮短，接受剩下的窗）**：`release.yml` 的 `delete-artifacts` job 在草稿建立後刪除這次執行的 artifact（失敗時也刪），artifact 只保留 1 天；pull_request 時以假的 artifact 乾跑。上傳到刪除之間（約十幾到幾十分鐘）artifact 仍可被下載，ADR-0013 第 7 節說明為什麼可以接受；確認接受後打勾。使用者已接受（2026-10-30）。
 - [ ] **Windows App 沒有程式碼簽章**：第一次打開會出現 SmartScreen「Windows 已保護您的電腦」，要按「其他資訊」→「仍要執行」。確認 README 的說明可以接受，或先取得簽章憑證（不在這份清單的範圍）。
 - [ ] **Windows App 階段 1 已在實機確認**（ADR-0015）：至少在一台 Windows 11（x64）上解壓、打開、看到懸浮圓環與通知區域圖示、讀到收集器的 `usage.json`。ARM64 沒有實機時，在發布說明寫明「未在實機驗證」。
 - [ ] **Mac App 的「強制打開」**：App 只有 ad-hoc 簽署（ADR-0013 第 1 節），第一次打開要在「系統設定 › 隱私權與安全性」按「強制打開」；README 的說明與實際畫面一致。

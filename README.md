@@ -8,7 +8,7 @@ See how much of your **Claude** and **Codex** usage limits (5-hour / weekly) is 
 
 > The apps' interface is in Traditional Chinese; in this README, UI labels are quoted in Chinese with an English gloss the first time they appear. The detailed documentation linked below (`docs/`, ADRs, component READMEs) is in Traditional Chinese.
 
-> The current version is [1.0.0](CHANGELOG.md#100---2026-10-29): the Mac `.dmg` and one-line installer, the Windows collector's one-line installer and the Windows desktop app's zip are on [Releases](https://github.com/kevin930326/ai-usage-monitor/releases). See [Installation](#installation) to install, and the [CHANGELOG](CHANGELOG.md) for what changed in each version.
+> The current version is [1.0.0](CHANGELOG.md#100---2026-10-30): the Mac `.dmg` and one-line installer, the Windows collector's one-line installer and the Windows desktop app's zip are on [Releases](https://github.com/kevin930326/ai-usage-monitor/releases). See [Installation](#installation) to install, and the [CHANGELOG](CHANGELOG.md) for what changed in each version.
 
 <!-- 同一排的圖以寬度算成等高（SOURCES.tsv 的尺寸 × 寬度）；用 width 不用 height，窄螢幕時換行而不是壓扁 -->
 <p align="center">
