@@ -125,7 +125,7 @@ internal sealed class MascotLookPicker : StackPanel
 
     /// <summary>
     /// 一格靜態預覽（透明底，同 Mac MascotLookPreview）：左邊展開時的角色（半徑 16），右下收合時的迷你角色（半徑 9）。
-    /// width、height 是 DIP；ppd 是每 DIP 的像素數
+    /// 版面以 72×52 為準，其他大小等比例縮放（右鍵選單的小預覽）。width、height 是 DIP；ppd 是每 DIP 的像素數
     /// </summary>
     public static BitmapSource Preview(MascotConfig config, MascotCharacter character, MascotLook? look, double width, double height, double ppd)
     {
@@ -134,10 +134,10 @@ internal sealed class MascotLookPicker : StackPanel
         using (var canvas = new SKCanvas(bitmap))
         {
             canvas.Clear(SKColors.Transparent);
-            canvas.Scale((float)ppd);
-            var painter = new MascotPainter(config) { CanvasWidth = width, PanelHeight = height };
+            canvas.Scale((float)(ppd * Math.Min(width / TileWidth, height / TileHeight)));
+            var painter = new MascotPainter(config) { CanvasWidth = TileWidth, PanelHeight = TileHeight };
             var pose = new MascotScripts(config).CardPose;
-            foreach (var (x, y, r) in new[] { (width * 0.38, height * 0.5, 16.0), (width - 13, height - 12, 9.0) })
+            foreach (var (x, y, r) in new[] { (TileWidth * 0.38, TileHeight * 0.5, 16.0), (TileWidth - 13, TileHeight - 12, 9.0) })
             {
                 var placed = pose.With(new Dictionary<MascotProp, double>
                 {

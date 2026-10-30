@@ -527,7 +527,7 @@ internal sealed class AppHost : IDisposable
                 IsChecked = settings.MascotLook == id,
                 Icon = new System.Windows.Controls.Image
                 {
-                    Source = MascotLookPicker.Preview(mascot.Config, mascot.Character, look, 36, 26, 2),
+                    Source = MascotLookPicker.Preview(mascot.Config, mascot.Character, look, 36, 26, 4),
                     Width = 36,
                     Height = 26,
                 },
