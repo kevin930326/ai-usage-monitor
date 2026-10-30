@@ -542,5 +542,12 @@ internal sealed class RingWindow : Window
             if (owner.stage.Width == 0) return;
             FloatingRingRenderer.Draw(dc, owner.Scene());
         }
+
+        /// <summary>
+        /// 滑鼠每移動一次 WPF 都做一次命中測試：預設會拿整張圖（漸層、文字、角色）的幾何去比，看滑鼠時就在吃 CPU（icons 第 4 部分第三版）。
+        /// 透明的地方 Windows 本來就讓滑鼠穿過（分層視窗照 alpha），這裡只要看在不在範圍內
+        /// </summary>
+        protected override HitTestResult? HitTestCore(PointHitTestParameters hit) =>
+            new Rect(RenderSize).Contains(hit.HitPoint) ? new PointHitTestResult(this, hit.HitPoint) : null;
     }
 }
