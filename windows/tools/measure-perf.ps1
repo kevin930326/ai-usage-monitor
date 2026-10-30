@@ -149,13 +149,26 @@ try {
         MoveFor 2
         $app.Refresh()
         $cpu0 = $app.TotalProcessorTime.TotalSeconds
+        # 各執行緒各用了多少（只記錄）：主執行緒（UI，最早開始的那一個）是滑鼠處理與重畫的邏輯，其他多半是 WPF 的繪圖執行緒
+        $threads0 = @{}
+        foreach ($th in $app.Threads) { try { $threads0[$th.Id] = $th.TotalProcessorTime.TotalSeconds } catch { } }
+        $mainId = try { ($app.Threads | Sort-Object { $_.StartTime } | Select-Object -First 1).Id } catch { $null }
         $t0 = [Diagnostics.Stopwatch]::StartNew()
         MoveFor $seconds
         $app.Refresh()
         $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
+        $perThread = foreach ($th in $app.Threads) {
+            try {
+                if ($threads0.ContainsKey($th.Id)) {
+                    $d = ($th.TotalProcessorTime.TotalSeconds - $threads0[$th.Id]) / $t0.Elapsed.TotalSeconds / $cores * 100
+                    [pscustomobject]@{ Name = if ($th.Id -eq $mainId) { '主執行緒' } else { "執行緒 $($th.Id)" }; Cpu = $d }
+                }
+            } catch { }
+        }
+        $threadNote = ($perThread | Sort-Object Cpu -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name) $([Math]::Round($_.Cpu, 2))%" }) -join '、'
         $moved = $script:moveMissed -le $script:moveTries / 10
         [pscustomobject]@{ Cpu = if ($moved) { [Math]::Round($cpu, 3) } else { '未量到（游標沒移到）' }; Moved = $moved
-                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1) }
+                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1); Threads = $threadNote }
     }
     function PeakDuring([double]$seconds) {
         $max = 0
@@ -294,6 +307,10 @@ if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
 if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
+if ($null -ne $hoverOpen) {
+    $lines += ''
+    $lines += "游標一直移動時各執行緒（前三，只記錄）：展開 $($gazeOpen.Threads)；收合 $($gazeMoving.Threads)"
+}
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
 $lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"
