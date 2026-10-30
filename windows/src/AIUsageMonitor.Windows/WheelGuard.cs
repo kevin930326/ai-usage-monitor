@@ -28,7 +28,7 @@ internal static class WheelGuard
         // 從外層再送一次（冒泡的 MouseWheel），外面的 ScrollViewer 才會捲動
         if (VisualTreeHelper.GetParent(box) is UIElement parent)
         {
-            parent.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = UIElement.MouseWheelEvent, Source = box });
+            parent.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = UIElement.MouseWheelEvent });
         }
     }
 }

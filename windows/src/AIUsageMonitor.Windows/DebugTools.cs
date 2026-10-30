@@ -413,6 +413,8 @@ internal static class DebugTools
         foreach (var box in boxes)
         {
             box.Focus();
+            // 取得焦點可能把它捲進畫面：版面更新後才記捲動的基準
+            window.UpdateLayout();
             var before = box.SelectedIndex;
             var offset = scroller.VerticalOffset;
             foreach (var delta in new[] { -120, -120, 120 })
