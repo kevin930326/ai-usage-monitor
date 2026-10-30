@@ -5,7 +5,7 @@
 #
 # 沒給 App 時自己建一份 -O 的 Debug 版（和安裝的 Release 版一樣最佳化，保留量測用的 #if DEBUG 開關；實機把關用這份，
 # ADR-0016 第 6 節）。給了 App 時用 PERF_BUILD 標明建置（例如 -Onone），報表第一行印出來，不是 -O 的不算把關。
-# PERF_SAMPLE=1 另取呼叫堆疊（sample 的輸出含本機的建置路徑：CI 用，實機的不要上傳）。
+# PERF_SAMPLE=1 另取呼叫堆疊（只留函式名稱與次數：載入映像的清單拿掉、絕對路徑只留檔名）。
 #
 # 以 Debug 版的 AUM_DEMO_NOTCH_PERF=1 啟動：顯示真的瀏海面板（不截圖），依固定時間表在 10 秒時展開（含約 4.7 秒的過場）、22 秒時睡著（AI 閒置）、
 # 32 秒時揮手、35～50 秒每 3 秒依序播點頭、歪頭、偷笑、東張西望、捏一下、表情（只記錄峰值）、55 秒時收合；
@@ -47,7 +47,15 @@ if [ "${PERF_SAMPLE:-}" = 1 ]; then
     for mark in gaze-move gaze-move-open; do
       until grep -q "perf-mark [0-9.]* $mark\$" "$OUT/app.log" 2>/dev/null; do kill -0 "$PID" 2>/dev/null || exit 0; sleep 0.5; done
       sleep 2
-      sample "$PID" 8 -file "$OUT/sample-$mark.txt" >/dev/null 2>&1 || true
+      raw=$(mktemp)
+      sample "$PID" 8 -file "$raw" >/dev/null 2>&1 || true
+      # 隱私底線：不留完整路徑。拿掉載入映像的清單，其他絕對路徑只留檔名（函式名稱與次數照留）
+      python3 - "$raw" "$OUT/sample-$mark.txt" <<'PY'
+import re, sys
+text = open(sys.argv[1], errors="replace").read().split("\nBinary Images:")[0]
+open(sys.argv[2], "w").write(re.sub(r"(?:~|/)[^\s()\[\]<>\"']*/([^\s()\[\]<>\"'/]+)", r"\1", text))
+PY
+      rm -f "$raw"
     done
   ) &
 fi
@@ -71,5 +79,7 @@ with open(out, "a") as f:
         time.sleep(max(0.0, start + n - time.time()))
 PY
 rm -rf "$HOME_DIR"
+# App 的紀錄會寫出暫存的假 HOME：artifact 只留檔名（隱私底線，同上面的 sample）
+sed -E -i '' 's#(~|/)[^[:space:]()<>"'"'"']*/([^[:space:]()<>"'"'"'/]+)#\2#g' "$OUT/app.log"
 
 python3 "$ROOT/scripts/notch-perf-summary.py" "$OUT/samples.tsv" "$OUT/app.log" | tee "$OUT/summary.md"
