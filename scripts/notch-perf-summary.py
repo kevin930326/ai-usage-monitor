@@ -84,8 +84,10 @@ gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，
 # 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數（只有一筆、中途停掉重畫都會被抓到，
 # Codex C-02），取中位數：眨眼的約 0.3 秒改由 SwiftUI 畫、不算在圖層的格數裡，那一秒會少幾格（Codex 第二輪 C-01）
 # 自動降幀：每一筆和那時要的格數比（至少八成）。展開要跟著螢幕（要的格數等於最快的一級，量的這段沒有降幀）才算通過，
-# 不是 App 自己說要幾格就算（Fable F-01）；收合的目標是最多 30 格，降幀照樣通過但列出來，要的格數不低於 12（特效在動時固定 12，F-09）
-FLOOR, DEFAULT = {"collapsed": 12, "open": 30}, {"collapsed": 30, "open": 60}
+# 不是 App 自己說要幾格就算（Fable F-01）；收合的目標是最多 30 格，降幀照樣通過但列出來，要的格數不低於 15；
+# 特效在動時固定 12（最快的一級也是 12）才允許 12（F-09、Codex 第三輪 C-02）
+FLOOR, DEFAULT = {"collapsed": 15, "open": 30}, {"collapsed": 30, "open": 60}
+EFFECT_FPS = 12
 def median(values):
     values = sorted(values)
     return values[len(values) // 2] if values else 0
@@ -95,10 +97,10 @@ def slowest_fps(a, b, side):
     inside = [(n, targets.get((t, side), DEFAULT[side]), tops.get((t, side), targets.get((t, side), DEFAULT[side])))
               for t, n in got if a <= t < b]
     if not inside or max(y - x for x, y in zip(times, times[1:])) > 1.6:
-        return 0, 0, 0, 0
+        return 0, 0, 0, 0, 0
     return (median(n for n, _, _ in inside), median(w for _, w, _ in inside), median(n / w for n, w, _ in inside),
-            min(w / top for _, w, top in inside))
-(fps_collapsed, want_collapsed, ratio_collapsed, _), (fps_open, want_open, ratio_open, open_share) = \
+            min(w / top for _, w, top in inside), median(top for _, _, top in inside))
+(fps_collapsed, want_collapsed, ratio_collapsed, _, top_collapsed), (fps_open, want_open, ratio_open, open_share, _) = \
     slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
 lowered_open = [c for c in rate_changes if c[1] == "open" and go <= c[0] < go + 15]
 build = os.environ.get("PERF_BUILD", "未標明")
@@ -130,8 +132,9 @@ checks = [
      and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
     # 看滑鼠的高幀率（icons 第 4 部分）：角色由 CoreGraphics 的圖層畫，展開跟著螢幕更新率、收合每秒 30 格。
     # 停下約 1 秒後高幀率要停：停了約 0.1%，沒停就和移動時差不多，所以門檻 1%（Codex C-02）
-    ("看滑鼠時真的照頻率重畫（每秒格數 ≥ 要的八成；展開沒有降幀、跟著螢幕；收合要的 ≥ 12）",
-     ratio_collapsed >= 0.8 and ratio_open >= 0.8 and want_collapsed >= FLOOR["collapsed"] and want_open >= FLOOR["open"]
+    ("看滑鼠時真的照頻率重畫（每秒格數 ≥ 要的八成；展開沒有降幀、跟著螢幕；收合要的 ≥ 15，特效在動時 12）",
+     ratio_collapsed >= 0.8 and ratio_open >= 0.8
+     and want_collapsed >= (EFFECT_FPS if 0 < top_collapsed <= EFFECT_FPS else FLOOR["collapsed"]) and want_open >= FLOOR["open"]
      and open_share >= 1 and not lowered_open),
     ("展開、游標一直移動 ≤ 2%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 2
      and avg(gaze_open_still, 1) <= 1),

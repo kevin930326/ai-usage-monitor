@@ -907,13 +907,16 @@ class NotchPerfSummaryTests(unittest.TestCase):
 
     def test_governed_frame_rate_is_checked_against_its_target(self):
         # 自動降幀（Fable F-01）：收合降到 20 照樣通過（目標是最多 30）；展開被降（要 30、最快 60）就失敗，不是 App 說要幾格就算；
-        # 低於要的八成、收合要的低於 12 也失敗；特效在動的收合 12 格不算失敗（F-09）
+        # 低於要的八成、收合要的低於 15 也失敗；特效在動的收合 12 格（最快也是 12）不算失敗（F-09）
         def frames(open_n, open_want, open_top, col_n, col_want, col_top=30):
             return [(t, col_n, f"collapsed 1 {col_want} {col_top}") if side == "collapsed" else (t, open_n, f"open 1 {open_want} {open_top}")
                     for t, _, side in self.FRAMES]
         cases = {"collapsed-lowered": (frames(60, 60, 60, 20, 20), 0), "open-lowered": (frames(30, 30, 60, 30, 30), 1),
                  "behind-target": (frames(60, 60, 60, 12, 20), 1), "collapsed-effects": (frames(60, 60, 60, 12, 12, 12), 0),
-                 "collapsed-too-low": (frames(60, 60, 60, 10, 10), 1)}
+                 "collapsed-too-low": (frames(60, 60, 60, 10, 10), 1),
+                 # 一般收合（最快 30）降到 12 不算特效，低於 15 就失敗；15 通過（Codex 第三輪 C-02）
+                 "collapsed-12-not-effects": (frames(60, 60, 60, 12, 12, 30), 1),
+                 "collapsed-15": (frames(60, 60, 60, 15, 15, 30), 0)}
         for name, (got, code) in cases.items():
             result = self.run_summary(self.full(), frames=got)
             self.assertEqual(result.returncode, code, (name, result.stdout))
