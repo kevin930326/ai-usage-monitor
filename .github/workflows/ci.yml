@@ -339,8 +339,15 @@ jobs:
         if: matrix.project == 'MacMenuBar'
         continue-on-error: true
         run: |
-          scripts/measure-notch-perf.sh "$RUNNER_TEMP/dd/Build/Products/Debug/AIUsageMenuBar.app" build/perf-notch || true
-          [ -f build/perf-notch/summary.md ] && cat build/perf-notch/summary.md >> "$GITHUB_STEP_SUMMARY"
+          # 量最佳化過的程式（和安裝的 Release 版一樣 -O；保留 Debug 的量測開關）；未最佳化的 Debug 版另外記一份對照，
+          # 呼叫堆疊也在那一次取（sample 會打斷被量的程式，-O 這一次的數字才不受影響；兩次都只記錄，CI 不擋）
+          (cd apple/MacMenuBar && xcodebuild -project AIUsageMenuBar.xcodeproj -scheme AIUsageMenuBar -configuration Debug \
+            -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd-opt" CODE_SIGNING_ALLOWED=NO SWIFT_OPTIMIZATION_LEVEL=-O \
+            build >"$RUNNER_TEMP/build-opt.log" 2>&1) || { tail -20 "$RUNNER_TEMP/build-opt.log"; exit 1; }
+          PERF_BUILD=-O scripts/measure-notch-perf.sh "$RUNNER_TEMP/dd-opt/Build/Products/Debug/AIUsageMenuBar.app" build/perf-notch || true
+          [ -f build/perf-notch/summary.md ] && { echo "### 最佳化建置（-O）"; cat build/perf-notch/summary.md; } >> "$GITHUB_STEP_SUMMARY"
+          PERF_BUILD=-Onone PERF_SAMPLE=1 scripts/measure-notch-perf.sh "$RUNNER_TEMP/dd/Build/Products/Debug/AIUsageMenuBar.app" build/perf-notch/debug-onone || true
+          [ -f build/perf-notch/debug-onone/summary.md ] && { echo "### 未最佳化（Debug -Onone，對照）"; cat build/perf-notch/debug-onone/summary.md; } >> "$GITHUB_STEP_SUMMARY"
       - if: matrix.project == 'MacMenuBar' && always()
         uses: actions/upload-artifact@v4
         with:

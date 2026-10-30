@@ -1,5 +1,6 @@
 import AppKit
 import CoreText
+import os
 import SwiftUI
 
 /// 角色畫在哪裡：SwiftUI 的 `GraphicsContext`（瀏海畫布、截圖、設定頁預覽），或直接用 CoreGraphics
@@ -132,7 +133,17 @@ struct MascotCGSurface: MascotSurface {
         try content(cg)
     }
 
+    /// `NSColor(Color)` 每次都要查色彩描述檔，看滑鼠時每格每一筆都轉一次很貴（CI 取樣，icons 第 4 部分第三版）：轉過的留著。
+    /// 透明度會跟著動畫變，所以設上限、滿了整個清掉
+    private static let colors = OSAllocatedUnfairLock(initialState: [Color: CGColor]())
+
     static func cgColor(_ color: Color) -> CGColor {
-        NSColor(color).cgColor
+        if let cached = colors.withLock({ $0[color] }) { return cached }
+        let converted = NSColor(color).cgColor
+        colors.withLock {
+            if $0.count >= 512 { $0.removeAll(keepingCapacity: true) }
+            $0[color] = converted
+        }
+        return converted
     }
 }

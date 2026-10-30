@@ -149,13 +149,26 @@ try {
         MoveFor 2
         $app.Refresh()
         $cpu0 = $app.TotalProcessorTime.TotalSeconds
+        # 各執行緒各用了多少（只記錄）：主執行緒（UI，最早開始的那一個）是滑鼠處理與重畫的邏輯，其他多半是 WPF 的繪圖執行緒
+        $threads0 = @{}
+        foreach ($th in $app.Threads) { try { $threads0[$th.Id] = $th.TotalProcessorTime.TotalSeconds } catch { } }
+        $mainId = try { ($app.Threads | Sort-Object { $_.StartTime } | Select-Object -First 1).Id } catch { $null }
         $t0 = [Diagnostics.Stopwatch]::StartNew()
         MoveFor $seconds
         $app.Refresh()
         $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
+        $perThread = foreach ($th in $app.Threads) {
+            try {
+                if ($threads0.ContainsKey($th.Id)) {
+                    $d = ($th.TotalProcessorTime.TotalSeconds - $threads0[$th.Id]) / $t0.Elapsed.TotalSeconds / $cores * 100
+                    [pscustomobject]@{ Name = if ($th.Id -eq $mainId) { '主執行緒' } else { "執行緒 $($th.Id)" }; Cpu = $d }
+                }
+            } catch { }
+        }
+        $threadNote = ($perThread | Sort-Object Cpu -Descending | Select-Object -First 3 | ForEach-Object { "$($_.Name) $([Math]::Round($_.Cpu, 2))%" }) -join '、'
         $moved = $script:moveMissed -le $script:moveTries / 10
         [pscustomobject]@{ Cpu = if ($moved) { [Math]::Round($cpu, 3) } else { '未量到（游標沒移到）' }; Moved = $moved
-                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1) }
+                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1); Threads = $threadNote }
     }
     function PeakDuring([double]$seconds) {
         $max = 0
@@ -200,6 +213,15 @@ try {
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r0)
         [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
         $hoverPeak = PeakDuring 1
+        # 只移一次沒展開時再移 2 px（真的滑鼠會連續送很多次移動）；報表記下需要第二次，用來追 CI 偶發的「沒展開」
+        $nudged = $false
+        $rq = New-Object AumPerf.Win+RECT
+        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$rq)
+        if (($rq.Right - $rq.Left) -eq ($r0.Right - $r0.Left)) {
+            $nudged = $true
+            [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2) + 2, [int](($r0.Top + $r0.Bottom) / 2) + 2)
+            $hoverPeak = [Math]::Max($hoverPeak, (PeakDuring 1))
+        }
         # 角色第一次展開有過場（約 4.7 秒）：播完再量待著
         Start-Sleep -Seconds 5
         $r1 = New-Object AumPerf.Win+RECT
@@ -221,9 +243,9 @@ try {
         $gazeStill = Sample 15
         $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
         if ($w1 -gt $w0 -and $w2 -eq $w0) {
-            $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）"
+            $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）$(if ($nudged) { '；第一次移動沒展開，再移 2 px 才展開' })"
         } else {
-            $hoverNote = "未量到：展開或收起沒有確認（視窗寬 $w0 → $w1 → $w2 px）"
+            $hoverNote = "未量到：展開或收起沒有確認（視窗寬 $w0 → $w1 → $w2 px$(if ($nudged) { '；再移 2 px 也沒展開' })）"
             $hoverOpen = $null
         }
     }
@@ -294,6 +316,10 @@ if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
 if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
+if ($null -ne $hoverOpen) {
+    $lines += ''
+    $lines += "游標一直移動時各執行緒（前三，只記錄）：展開 $($gazeOpen.Threads)；收合 $($gazeMoving.Threads)"
+}
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
 $lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"

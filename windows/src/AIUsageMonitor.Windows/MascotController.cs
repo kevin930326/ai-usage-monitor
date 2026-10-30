@@ -89,7 +89,7 @@ internal sealed class MascotController : IDisposable
         Painter = new MascotPainter(Config);
         frameTimer = Timer(dispatcher, DispatcherPriority.Render, () =>
         {
-            if (Rate == MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
+            if (Rate is MascotRenderRate.Gaze or MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
             else Changed?.Invoke();
         });
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
@@ -122,7 +122,8 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>畫面要重畫</summary>
     public event Action? Changed;
-    /// <summary>展開、只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話只重畫角色那一層（<see cref="MascotFace.Overlay"/>），不送 Changed</summary>
+    /// <summary>只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話由它決定重不重畫（展開時只重畫角色那一層 <see cref="MascotFace.Overlay"/>，
+    /// 看不出差別的格不畫 <see cref="MascotFace.ShowsSameFrame"/>），不送 Changed</summary>
     public event Action? FrameTick;
     /// <summary>要收合（保持展開取消、設定改變）</summary>
     public event Action? CloseRequested;
@@ -796,7 +797,8 @@ internal sealed class MascotController : IDisposable
         // 看滑鼠的高幀率期間一直算視線在轉：每一格都更新目標、和目標的差常常小於收斂門檻，不能因此停了又開（同 Mac，Codex C-01）
         var idleMoving = motion.MovesEyes() && (director.IsIdleMoving(now) || Tracking);
         var breathing = live && director.Mode == MascotMode.Sleep && !director.IsStill && director.Blink(now) == 0;
-        var gazeOnly = idleMoving && !breathing && director.Blink(now) == 0
+        // 看滑鼠的高幀率期間眨眼也照看滑鼠的畫法（展開時只重畫角色那一層），不切到整張重畫再切回來（同 Mac，icons 第 4 部分第三版）
+        var gazeOnly = idleMoving && !breathing && (director.Blink(now) == 0 || Tracking)
             && !(live && !director.IsStill && director.Mode == MascotMode.Work);
         var effects = motion.AnimatesEffects() && Look?.Style.Animates() == true
             && (director.Machine.IsOpen || animating || (director.Mode == MascotMode.Work && !director.IsStill));

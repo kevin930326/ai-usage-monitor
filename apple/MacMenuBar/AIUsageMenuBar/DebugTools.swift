@@ -54,6 +54,10 @@ enum DebugTools {
             // 看滑鼠時的角色圖層和瀏海畫布畫出來一樣（icons 第 4 部分）
             if name == "panel" || name == "hero-parity" { DebugHeroParity.run(to: url) }
             if name == "hero-parity" { exit(0) }
+            if name == "hero-bench" {
+                DebugHeroParity.bench(to: url)
+                exit(0)
+            }
             renderPanel(to: url, name: name)
             if name == "panel" {
                 renderMenuBarIcons(to: url)
@@ -284,9 +288,12 @@ enum DebugTools {
     }
 
     /// 量測中才記：看滑鼠時角色圖層這一秒實際畫了幾格（螢幕關閉、鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
-    static func perfFrames(_ count: Int, open: Bool) {
+    /// drawn 是其中真的重畫的（畫出來和上一格一樣的不重畫）；target 是這時候要的每秒格數（超標時自動降幀，`MascotFrameGovernor`）、
+    /// top 是這一側最快的一級（展開是螢幕的更新率）：報表看展開有沒有被降（Fable F-01）
+    static func perfFrames(_ count: Int, drawn: Int, target: Int, top: Int, open: Bool) {
         guard let perfStart else { return }
-        UsageStore.log(String(format: "perf-fps %.1f %d %@", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed"))
+        UsageStore.log(String(format: "perf-fps %.1f %d %@ %d %d %d", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed",
+                              drawn, target, top))
     }
 
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {

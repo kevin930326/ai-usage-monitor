@@ -3,6 +3,10 @@
 #
 #   scripts/measure-notch-perf.sh [Debug 版 AIUsageMenuBar.app] [輸出資料夾]
 #
+# 沒給 App 時自己建一份 -O 的 Debug 版（和安裝的 Release 版一樣最佳化，保留量測用的 #if DEBUG 開關；實機把關用這份，
+# ADR-0016 第 6 節）。給了 App 時用 PERF_BUILD 標明建置（例如 -Onone），報表第一行印出來，不是 -O 的不算把關。
+# PERF_SAMPLE=1 另取呼叫堆疊（只留函式名稱與次數，路徑一律拿掉：scripts/scrub-perf-log.py）。
+#
 # 以 Debug 版的 AUM_DEMO_NOTCH_PERF=1 啟動：顯示真的瀏海面板（不截圖），依固定時間表在 10 秒時展開（含約 4.7 秒的過場）、22 秒時睡著（AI 閒置）、
 # 32 秒時揮手、35～50 秒每 3 秒依序播點頭、歪頭、偷笑、東張西望、捏一下、表情（只記錄峰值）、55 秒時收合；
 # 收著時以假的游標位置量「睡著時游標移動」「游標一直移動」「游標停住」（不移動真的游標；扣掉 App 每分鐘一次的時鐘更新），
@@ -13,8 +17,20 @@
 # 門檻：展開待著（醒著、睡著）、展開時舉著手 ≤ 4%、展開時游標一直移動 ≤ 2%、停下後 ≤ 1%、收合時游標一直移動 ≤ 1%、收合後 60～90 秒、等你下指令的脈動、收著時舉著手與背景執行中 ≤ 0.3%、第二次收合後 RSS 不超過第一次收合後 +5 MB；任何一項未通過時以非零結束。
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-APP=${1:-$ROOT/build/verify/DerivedData/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app}
 OUT=${2:-$ROOT/build/perf-notch}
+if [ -n "${1:-}" ]; then
+  APP=$1
+  export PERF_BUILD=${PERF_BUILD:-未標明}
+else
+  DD=$ROOT/build/perf-notch-app
+  mkdir -p "$ROOT/build"
+  (cd "$ROOT/apple/MacMenuBar" && xcodegen generate --quiet)
+  xcodebuild -project "$ROOT/apple/MacMenuBar/AIUsageMenuBar.xcodeproj" -scheme AIUsageMenuBar -configuration Debug \
+    -destination 'platform=macOS' -derivedDataPath "$DD" SWIFT_OPTIMIZATION_LEVEL=-O build >"$DD.log" 2>&1 \
+    || { echo "建置失敗（$DD.log）"; exit 2; }
+  APP=$DD/Build/Products/Debug/AIUsageMenuBar.app
+  export PERF_BUILD=-O
+fi
 BIN="$APP/Contents/MacOS/AIUsageMenuBar"
 [ -x "$BIN" ] || { echo "找不到 ${BIN}（先建置 Debug 版）"; exit 2; }
 mkdir -p "$OUT"
@@ -25,13 +41,41 @@ python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" normal
 AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_TESTING=1 AUM_DEMO_NOTCH_PERF=1 "$BIN" 2>"$OUT/app.log" &
 PID=$!
 START=$(python3 -c 'import time; print(time.time())')
+# PERF_SAMPLE=1：游標一直移動的兩段各用 sample 取 8 秒的呼叫堆疊（找每格的 CPU 花在哪裡；只有假資料，CI 用）
+if [ "${PERF_SAMPLE:-}" = 1 ]; then
+  (
+    for mark in gaze-move gaze-move-open; do
+      until grep -q "perf-mark [0-9.]* $mark\$" "$OUT/app.log" 2>/dev/null; do kill -0 "$PID" 2>/dev/null || exit 0; sleep 0.5; done
+      sleep 2
+      raw=$(mktemp)
+      sample "$PID" 8 -file "$raw" >/dev/null 2>&1 || true
+      # 隱私底線：不留完整路徑（只留 Call graph 的函式名稱與次數，見 scrub-perf-log.py）
+      python3 "$ROOT/scripts/scrub-perf-log.py" sample "$raw" "$OUT/sample-$mark.txt"
+      rm -f "$raw"
+    done
+  ) &
+fi
 : > "$OUT/samples.tsv"
-while kill -0 "$PID" 2>/dev/null; do
-  NOW=$(python3 -c "import time; print(f'{time.time() - $START:.1f}')")
-  LINE=$(ps -o %cpu=,rss= -p "$PID" 2>/dev/null || true)
-  [ -n "$LINE" ] && echo "$NOW $LINE" >> "$OUT/samples.tsv"
-  sleep 1
-done
+# 每秒整點取一次（一個 python 跑到 App 結束）：以前每一輪都另開兩個 python，CI 上一輪超過 1 秒，2 秒的播放中只取到 1 筆
+python3 - "$PID" "$START" "$OUT/samples.tsv" <<'PY'
+import os, subprocess, sys, time
+pid, start, out = int(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
+n = 0
+with open(out, "a") as f:
+    while True:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        line = subprocess.run(["ps", "-o", "%cpu=,rss=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        if line:
+            f.write(f"{time.time() - start:.1f} {line}\n")
+            f.flush()
+        n += 1
+        time.sleep(max(0.0, start + n - time.time()))
+PY
 rm -rf "$HOME_DIR"
+# App 的紀錄會寫出暫存的假 HOME：artifact 不留路徑（隱私底線，同上面的 sample）
+python3 "$ROOT/scripts/scrub-perf-log.py" log "$OUT/app.log"
 
 python3 "$ROOT/scripts/notch-perf-summary.py" "$OUT/samples.tsv" "$OUT/app.log" | tee "$OUT/summary.md"

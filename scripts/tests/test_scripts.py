@@ -843,6 +843,39 @@ class LookPerfSummaryTests(unittest.TestCase):
         self.assertIn("缺取樣", result.stdout)
 
 
+class ScrubPerfLogTests(unittest.TestCase):
+    """scrub-perf-log.py：量測的 sample 與 app.log 存檔前不留任何路徑片段（隱私底線，Codex #170 第三輪 C-01）。"""
+    SCRIPT = ROOT / "scripts" / "scrub-perf-log.py"
+    SECRET = "/Users/假使用者/機密專案 (客戶甲)/build/AIUsageMenuBar.app/Contents/MacOS/AIUsageMenuBar"
+
+    def test_sample_keeps_only_the_call_graph_without_paths(self):
+        raw = (f"Analysis of sampling AIUsageMenuBar (pid 1)\nPath:            {self.SECRET}\n"
+               "Parent Process:  bash [2]\n\nCall graph:\n"
+               "    10 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n"
+               "    + 10 MascotHeroLayerView.prepare()  (in AIUsageMenuBar.debug.dylib) + 9  [0x1f]  "
+               "/Users/假使用者/機密專案 (客戶甲)/MascotHeroLayer.swift:200\n"
+               "    + 3 helper  (in libfoo) + 1  [0x2a]  ~/秘密 資料夾/x.c:1\n\n"
+               f"Binary Images:\n       0x1 - 0x2 AIUsageMenuBar (1.0) <UUID> {self.SECRET}\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "raw.txt", Path(tmp) / "out.txt"
+            src.write_text(raw)
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "sample", str(src), str(out)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = out.read_text()
+        for leak in ("/", "假使用者", "機密專案", "客戶甲", "秘密", "資料夾", "Binary Images", "Path:"):
+            self.assertNotIn(leak, text)
+        self.assertIn("10 MascotHeroLayerView.prepare()  (in AIUsageMenuBar.debug.dylib) + 9  [0x1f]", text)
+        self.assertIn("3 helper", text)
+
+    def test_log_lines_lose_paths_but_keep_perf_marks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "app.log"
+            log.write_text(f"home {self.SECRET}/usage.json\nperf-mark 10.0 notch-open\nperf-fps 74.5 30 collapsed 10 30 30\n")
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "log", str(log)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log.read_text(), "home\nperf-mark 10.0 notch-open\nperf-fps 74.5 30 collapsed 10 30 30\n")
+
+
 class NotchPerfSummaryTests(unittest.TestCase):
     """notch-perf-summary.py：門檻與缺少取樣都要讓報表失敗（ADR-0016 第 6 節、Codex C-07）。"""
     SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
@@ -897,6 +930,45 @@ class NotchPerfSummaryTests(unittest.TestCase):
         blinks = [(t, n - 20 if t % 4 == 0 else n, side) for t, n, side in self.FRAMES]
         result = self.run_summary(self.full(), frames=blinks)
         self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_drawn_frames_are_reported_but_ticks_gate_the_rate(self):
+        # 看不出差別的格不重畫（第 5 欄是真的重畫的格數）：照頻率更新的門檻看每秒更新幾次，重畫幾格只記錄
+        frames = [(t, n, f"{side} {n // 3} {n} {n}") for t, n, side in self.FRAMES]
+        result = self.run_summary(self.full(), frames=frames)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("其中真的重畫（看得出差別）的：收合 10、展開 20", result.stdout)
+
+    def test_governed_frame_rate_is_checked_against_its_target(self):
+        # 自動降幀（Fable F-01）：收合降到 20 照樣通過（目標是最多 30）；展開被降（要 30、最快 60）就失敗，不是 App 說要幾格就算；
+        # 低於要的八成、收合要的低於 15 也失敗；特效在動的收合 12 格（最快也是 12）不算失敗（F-09）
+        def frames(open_n, open_want, open_top, col_n, col_want, col_top=30):
+            return [(t, col_n, f"collapsed 1 {col_want} {col_top}") if side == "collapsed" else (t, open_n, f"open 1 {open_want} {open_top}")
+                    for t, _, side in self.FRAMES]
+        cases = {"collapsed-lowered": (frames(60, 60, 60, 20, 20), 0), "open-lowered": (frames(30, 30, 60, 30, 30), 1),
+                 "behind-target": (frames(60, 60, 60, 12, 20), 1), "collapsed-effects": (frames(60, 60, 60, 12, 12, 12), 0),
+                 "collapsed-too-low": (frames(60, 60, 60, 10, 10), 1),
+                 # 一般收合（最快 30）降到 12 不算特效，低於 15 就失敗；15 通過（Codex 第三輪 C-02）
+                 "collapsed-12-not-effects": (frames(60, 60, 60, 12, 12, 30), 1),
+                 "collapsed-15": (frames(60, 60, 60, 15, 15, 30), 0)}
+        for name, (got, code) in cases.items():
+            result = self.run_summary(self.full(), frames=got)
+            self.assertEqual(result.returncode, code, (name, result.stdout))
+
+    def test_rate_changes_are_listed_and_open_lowering_fails(self):
+        marks = dict(self.MARKS)
+        with tempfile.TemporaryDirectory() as tmp:
+            s, log = Path(tmp) / "samples.tsv", Path(tmp) / "app.log"
+            s.write_text("".join(f"{t} {cpu} {rss}\n" for t, cpu, rss in self.full()))
+            body = "".join(f"perf-mark {v} {k}\n" for k, v in marks.items())
+            body += "".join(f"perf-fps {t}.5 {n} {side} {n} {n} {n}\n" for t, n, side in self.FRAMES)
+            body += "perf-mark 76.0 gaze-rate collapsed 30 20 1.40\n"
+            log.write_text(body)
+            ok = subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log)], capture_output=True, text=True)
+            self.assertEqual(ok.returncode, 0, ok.stdout)
+            self.assertIn("自動降幀：收合 30→20（76 秒，前一段 1.40%）；展開 無", ok.stdout)
+            log.write_text(body + "perf-mark 266.0 gaze-rate open 60 30 2.30\n")
+            bad = subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log)], capture_output=True, text=True)
+            self.assertEqual(bad.returncode, 1, bad.stdout)
 
     def test_gaze_open_over_gate_fails(self):
         # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗

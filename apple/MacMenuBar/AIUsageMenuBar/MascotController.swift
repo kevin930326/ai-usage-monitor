@@ -777,6 +777,21 @@ final class MascotController {
         pollPointer()
     }
 
+    /// 角色圖層的 display link 在跑時改由它讀游標（`MascotHeroLayerView.tick`）：同一格不必叫醒兩次（CI 取樣，
+    /// 兩個 display link 的分派約占看滑鼠時 CPU 的一成五，icons 第 4 部分第三版）；圖層停掉時 `heroLinkStopped` 讓這邊的接回來
+    /// `covers`：圖層照看滑鼠的頻率在跑（收合時外觀的特效在動，圖層每秒只有 12 格，游標還是照每秒 30 次讀）
+    func heroLinkTick(covers: Bool) {
+        guard covers else { return heroLinkStopped() }
+        guard let gazeLink else { return }
+        if !gazeLink.isPaused { gazeLink.isPaused = true }
+        lastLinkPoll = time()
+        pollPointer()
+    }
+
+    func heroLinkStopped() {
+        if gazeLink?.isPaused == true { gazeLink?.isPaused = false }
+    }
+
     /// 角色的 Canvas 每一格讀的視線：高幀率期間的更新不經過 SwiftUI（`director` 的快照會是舊的）
     func liveGaze(at time: Int) -> (yaw: Double, pitch: Double)? {
         directorValue?.gaze(at: time)
@@ -900,8 +915,9 @@ final class MascotController {
         // （每次切換都會重排 SwiftUI）
         let idleMoving = motion.movesEyes && (director.isIdleMoving(at: now) || gazeLink != nil)
         let breathing = live && director.mode == .sleep && !director.isStill && director.blink(at: now) == 0
-        // 只有視線在轉（沒在眨眼、工作、睡覺）：低頻率
-        let gazeOnly = idleMoving && !breathing && director.blink(at: now) == 0
+        // 只有視線在轉（沒在工作、睡覺）：低頻率。眨眼平常由 SwiftUI 畫；看滑鼠的高幀率期間眨眼也畫在角色圖層上，
+        // 不切回 SwiftUI（以前每 3～5 秒眨一次就要整個瀏海排版兩次、SwiftUI 畫 0.3 秒，展開時的大頭，icons 第 4 部分第三版）
+        let gazeOnly = idleMoving && !breathing && (director.blink(at: now) == 0 || gazeLink != nil)
             && !(live && !director.isStill && director.mode == .work)
         // 外觀的特效（ADR-0021，ADR-0010 的例外）：展開時、或收合時 AI 工作中才動，每秒最多 12 次；
         // 收合閒置、睡著時停在靜態的一格

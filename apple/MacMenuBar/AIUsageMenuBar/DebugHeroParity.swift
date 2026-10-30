@@ -28,8 +28,8 @@ enum DebugHeroParity {
             let half = (r * 3.1 + 6).rounded(.up)
             let box = CGRect(x: pose[.x] - half, y: pose[.y] - half, width: half * 2, height: half * 2)
             func frame(_ character: MascotCharacter, look: MascotLook?, gaze: (Double, Double), mood: MascotMood = .normal,
-                       time: Int = 2000, thinking: Bool = false) -> MascotFrame {
-                MascotFrame(time: time, pose: d.pose(at: 2000), eyes: d.eyes(at: 2000), blink: 0, gazeYaw: gaze.0, gazePitch: gaze.1,
+                       time: Int = 2000, thinking: Bool = false, blink: Double = 0) -> MascotFrame {
+                MascotFrame(time: time, pose: d.pose(at: 2000), eyes: d.eyes(at: 2000), blink: blink, gazeYaw: gaze.0, gazePitch: gaze.1,
                             statusColor: 0, mood: mood, sleeping: false, thinkingDots: thinking ? 2 : nil, remoteBadge: thinking,
                             remoteBadgeAbove: open, effects: [], ripple: nil, character: character, look: look,
                             effectTime: look?.style.animates == true ? time : nil)
@@ -49,6 +49,22 @@ enum DebugHeroParity {
                 cases.append(("\(side)-look-\(look.id)", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400), box))
             }
             cases.append(("\(side)-remote", frame(.codex, look: nil, gaze: (0, 0), thinking: true), box))
+            // 看滑鼠時眨眼也畫在圖層上（第三版：不再切回 SwiftUI）
+            for blink in [0.35, 0.7, 1.0] {
+                for character in MascotCharacter.allCases {
+                    cases.append(("\(side)-\(character.rawValue)-blink\(blink)", frame(character, look: nil, gaze: (0.4, -0.2), blink: blink), box))
+                }
+            }
+            // 只有膠囊眼、眼皮沒全閉的表情會眨（`MascotDirector.blink`）；blink 0.3 比難過、生病的眼皮小，應該看不出變化
+            for mood in MascotMood.allCases where mood != .normal && mood.eyes == nil && mood.lid < 1 {
+                for blink in [0.3, 0.7] {
+                    cases.append(("\(side)-mood-\(mood.rawValue)-blink\(blink)", frame(.claude, look: nil, gaze: (0.3, -0.1), mood: mood, blink: blink), box))
+                }
+            }
+            // 外觀把眼睛畫在身體裡（LED、像素）時眨眼也要畫到：身體那張圖不含眨眼，靠這些外觀不拆層（Fable 眨眼審查 F-03）
+            for look in looks {
+                cases.append(("\(side)-look-\(look.id)-blink", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400, blink: 0.7), box))
+            }
             // 播完的提醒光環還留在陣列裡：要拆層，畫出來也要一樣（Codex 第五輪 C-01）
             var expired = frame(.claude, look: nil, gaze: (0.4, -0.2))
             expired.effects = [MascotEffect(kind: .ring(level: 1), start: 0, duration: 900)]
@@ -88,6 +104,59 @@ enum DebugHeroParity {
         lines.append("# \(cases.count - failed)/\(cases.count) ok")
         try? (lines.joined(separator: "\n") + "\n").write(to: dir.appendingPathComponent("hero-parity.tsv"), atomically: true, encoding: .utf8)
         UsageStore.log("hero parity: \(cases.count - failed)/\(cases.count) ok")
+    }
+
+    /// 量測用（`AUM_RENDER_NAME=hero-bench`）：看滑鼠的一格各段花多少 CPU（不需要螢幕），寫到 `hero-bench.tsv`
+    static func bench(to dir: URL) {
+        guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else { return }
+        func cpu() -> Double {
+            var t = timespec()
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t)
+            return Double(t.tv_sec) * 1e6 + Double(t.tv_nsec) / 1e3
+        }
+        var lines = ["step\tside\tus_per_frame"]
+        for open in [false, true] {
+            var d = MascotDirector(config: config, seed: 7, startTime: 0)
+            if open { d.open(at: 0, intro: false) }
+            d.advance(to: 2000)
+            let pose = d.pose(at: 2000)
+            let r = pose[.r] * pose[.sc]
+            let half = (r * 3.1 + 6).rounded(.up)
+            let box = CGRect(x: pose[.x] - half, y: pose[.y] - half, width: half * 2, height: half * 2)
+            let painter = MascotPainter(config: config)
+            let n = 600
+            func frame(_ i: Int) -> MascotFrame {
+                let t = 2000 + i * 16
+                return MascotFrame(time: t, pose: pose, eyes: d.eyes(at: t), blink: d.blink(at: t), gazeYaw: sin(Double(i) / 20) * 0.4,
+                                   gazePitch: 0.1, statusColor: d.statusColor(at: t), mood: d.mood(at: t), sleeping: false,
+                                   thinkingDots: nil, effects: [], ripple: nil, character: .claude, look: nil, effectTime: nil)
+            }
+            let side = open ? "open" : "collapsed"
+            var t0 = cpu()
+            for i in 0..<n { _ = frame(i) }
+            lines.append("frame\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            t0 = cpu()
+            for i in 0..<n { _ = d.pose(at: 2000 + i * 16) }
+            lines.append("pose\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            let f0 = frame(0)
+            let face = MascotHeroLayerView.faceBox(f0, at: painter.heroCenter(f0))
+            for (name, area, parts) in [("face", face, MascotPainter.Parts.face), ("whole", box, [.body, .face])] {
+                let w = Int(area.width * 2), h = Int(area.height * 2)
+                guard let cg = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                         space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { continue }
+                cg.translateBy(x: 0, y: CGFloat(h))
+                cg.scaleBy(x: 2, y: -2)
+                let frames = (0..<n).map(frame)
+                t0 = cpu()
+                for f in frames {
+                    cg.clear(CGRect(x: 0, y: 0, width: area.width, height: area.height))
+                    MascotHeroLayerView.paint(f, parts: parts, painter: painter, box: area, clip: nil, in: cg)
+                }
+                lines.append("\(name)\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            }
+        }
+        try? (lines.joined(separator: "\n") + "\n").write(to: dir.appendingPathComponent("hero-bench.tsv"), atomically: true, encoding: .utf8)
     }
 
     /// 和 `MascotHeroLayerView` 同一份畫法：身體只會平移時先畫身體、再畫臉（同兩層疊起來；臉只畫在同一塊 `faceBox` 裡，

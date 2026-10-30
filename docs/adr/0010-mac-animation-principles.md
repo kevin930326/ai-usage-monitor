@@ -47,7 +47,7 @@ FR-25 原本是「面板加入動態或 3D 視覺效果，只在面板開啟時�
 
 ### 3. 效能量測（NFR-10，每個動畫都要做）
 
-**方法**：`scripts/measure-panel-perf.sh`（報表與門檻在 `scripts/perf-summary.py`，有回歸測試）以 Debug 版執行 App（`AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1`，面板放在一般視窗，依固定時間表開啟、觸發每個動畫、關閉、再開關一次），用 `ps -o %cpu=,rss= -p <pid>` 每秒取樣。資料指向不會更新的假 `usage.json`，避免收集器寫檔的時刻混進取樣。Debug 版比 Release 慢，結果較保守。
+**方法**：`scripts/measure-panel-perf.sh`（報表與門檻在 `scripts/perf-summary.py`，有回歸測試）以 Debug 版執行 App（`AUM_DEMO_PANEL=1 AUM_DEMO_PERF=1`，面板放在一般視窗，依固定時間表開啟、觸發每個動畫、關閉、再開關一次），用 `ps -o %cpu=,rss= -p <pid>` 每秒取樣。資料指向不會更新的假 `usage.json`，避免收集器寫檔的時刻混進取樣。Debug 版比 Release 慢，結果較保守。例外：瀏海與角色看滑鼠的量測（`scripts/measure-notch-perf.sh`）量 `SWIFT_OPTIMIZATION_LEVEL=-O` 的 Debug 版，理由見 ADR-0016 第 6 節（未最佳化時 Swift 的部分慢約 50 倍，又會被自動降幀吸收）；面板的量測維持 Debug 版。
 
 | 階段 | 取樣 | 通過條件 |
 |---|---|---|
