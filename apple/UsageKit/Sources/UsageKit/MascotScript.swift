@@ -74,6 +74,12 @@ public struct MascotEffect: Sendable, Equatable {
     public var start: Int
     public var duration: Int
 
+    public init(kind: MascotEffectKind, start: Int, duration: Int) {
+        self.kind = kind
+        self.start = start
+        self.duration = duration
+    }
+
     public func progress(at time: Int) -> Double? {
         guard time >= start, time < start + duration else { return nil }
         return Double(time - start) / Double(duration)

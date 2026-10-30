@@ -49,6 +49,10 @@ enum DebugHeroParity {
                 cases.append(("\(side)-look-\(look.id)", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400), box))
             }
             cases.append(("\(side)-remote", frame(.codex, look: nil, gaze: (0, 0), thinking: true), box))
+            // 播完的提醒光環還留在陣列裡：要拆層，畫出來也要一樣（Codex 第五輪 C-01）
+            var expired = frame(.claude, look: nil, gaze: (0.4, -0.2))
+            expired.effects = [MascotEffect(kind: .ring(level: 1), start: 0, duration: 900)]
+            cases.append(("\(side)-expired-effect", expired, box))
         }
         var failed = 0
         for (name, frame, box) in cases {

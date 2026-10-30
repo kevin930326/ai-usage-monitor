@@ -101,7 +101,9 @@ struct MascotPainter {
         let faceless = frame.look.map { !$0.style.isGrid && $0.style != .wire } ?? true
         // 特效外觀在動（霓虹的呼吸）時身體每格都不一樣
         let frozen = frame.effectTime == nil || frame.look?.style.animates != true
-        return still && faceless && frozen && frame.effects.isEmpty
+        // 播完的特效還留在陣列裡（換腳本才清掉）：只看這一刻還在播的（Codex 第五輪 C-01）；轉暈的星星跟著時間轉
+        let effectsLive = frame.effects.contains { $0.progress(at: frame.time) != nil } || frame.eyes == .spiral
+        return still && faceless && frozen && !effectsLive
     }
 
     /// 角色這一格畫在哪裡（同 `drawHero` 的位置）
