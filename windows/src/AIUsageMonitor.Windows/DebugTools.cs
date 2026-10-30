@@ -425,6 +425,8 @@ internal static class DebugTools
                 box.RaiseEvent(preview);
                 var wheel = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = UIElement.MouseWheelEvent, Handled = preview.Handled };
                 box.RaiseEvent(wheel);
+                // ScrollViewer 每一格從版面算好的位置起算：不更新版面的話下、下、上會互相抵銷成 0
+                window.UpdateLayout();
             }
             window.UpdateLayout();
             var name = System.Windows.Automation.AutomationProperties.GetName(box);
