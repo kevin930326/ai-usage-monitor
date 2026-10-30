@@ -23,6 +23,7 @@ if [ -n "${1:-}" ]; then
   export PERF_BUILD=${PERF_BUILD:-未標明}
 else
   DD=$ROOT/build/perf-notch-app
+  mkdir -p "$ROOT/build"
   (cd "$ROOT/apple/MacMenuBar" && xcodegen generate --quiet)
   xcodebuild -project "$ROOT/apple/MacMenuBar/AIUsageMenuBar.xcodeproj" -scheme AIUsageMenuBar -configuration Debug \
     -destination 'platform=macOS' -derivedDataPath "$DD" SWIFT_OPTIMIZATION_LEVEL=-O build >"$DD.log" 2>&1 \
