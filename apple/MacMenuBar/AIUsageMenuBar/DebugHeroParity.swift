@@ -55,8 +55,15 @@ enum DebugHeroParity {
                     cases.append(("\(side)-\(character.rawValue)-blink\(blink)", frame(character, look: nil, gaze: (0.4, -0.2), blink: blink), box))
                 }
             }
-            for mood in MascotMood.allCases where mood != .normal {
-                cases.append(("\(side)-mood-\(mood.rawValue)-blink", frame(.claude, look: nil, gaze: (0.3, -0.1), mood: mood, blink: 0.6), box))
+            // 只有膠囊眼、眼皮沒全閉的表情會眨（`MascotDirector.blink`）；blink 0.3 比難過、生病的眼皮小，應該看不出變化
+            for mood in MascotMood.allCases where mood != .normal && mood.eyes == nil && mood.lid < 1 {
+                for blink in [0.3, 0.7] {
+                    cases.append(("\(side)-mood-\(mood.rawValue)-blink\(blink)", frame(.claude, look: nil, gaze: (0.3, -0.1), mood: mood, blink: blink), box))
+                }
+            }
+            // 外觀把眼睛畫在身體裡（LED、像素）時眨眼也要畫到：身體那張圖不含眨眼，靠這些外觀不拆層（Fable 眨眼審查 F-03）
+            for look in looks {
+                cases.append(("\(side)-look-\(look.id)-blink", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400, blink: 0.7), box))
             }
             // 播完的提醒光環還留在陣列裡：要拆層，畫出來也要一樣（Codex 第五輪 C-01）
             var expired = frame(.claude, look: nil, gaze: (0.4, -0.2))
