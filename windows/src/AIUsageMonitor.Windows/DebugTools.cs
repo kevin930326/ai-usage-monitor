@@ -413,12 +413,14 @@ internal static class DebugTools
         foreach (var box in boxes)
         {
             box.Focus();
+            if (!box.IsKeyboardFocusWithin) failures.Add($"combo wheel: {System.Windows.Automation.AutomationProperties.GetName(box)} could not take keyboard focus (the check would prove nothing)");
             // 取得焦點可能把它捲進畫面：版面更新後才記捲動的基準
             window.UpdateLayout();
             var before = box.SelectedIndex;
             var offset = scroller.VerticalOffset;
             foreach (var delta in new[] { -120, -120, 120 })
             {
+                // 同真的滾輪：先 Preview 再冒泡，兩者共用「已處理」。第一格時焦點在下拉選單上（點過它之後捲動頁面）
                 var preview = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = UIElement.PreviewMouseWheelEvent };
                 box.RaiseEvent(preview);
                 var wheel = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = UIElement.MouseWheelEvent, Handled = preview.Handled };
