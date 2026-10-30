@@ -12,6 +12,18 @@ public class RingFloatLayoutTests
     private static PixelRect Ring(int x, int y) => PixelRect.FromSize(x, y, Size, Size);
 
     [Fact]
+    public void PointsInsideARectIncludeTheTopLeftEdgeOnly()
+    {
+        // 滑鼠移上去的補判（icons 第 8 部分）用這個看游標在不在膠囊裡
+        var r = new PixelRect(10, 20, 30, 40);
+        Assert.True(r.Contains(10, 20));
+        Assert.True(r.Contains(29, 39));
+        Assert.False(r.Contains(30, 25));
+        Assert.False(r.Contains(15, 40));
+        Assert.False(r.Contains(9, 25));
+    }
+
+    [Fact]
     public void ExpandsTowardTheInnerSide()
     {
         Assert.Equal(RingExpandDirection.Left, RingFloatLayout.Direction(Ring(1500, 500), Screen, Dip));

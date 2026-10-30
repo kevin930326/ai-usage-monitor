@@ -118,6 +118,9 @@ public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom
     public bool Contains(PixelRect other) =>
         other.Left >= Left && other.Top >= Top && other.Right <= Right && other.Bottom <= Bottom;
 
+    /// <summary>點（實體像素）在裡面：左、上含，右、下不含</summary>
+    public bool Contains(int x, int y) => x >= Left && x < Right && y >= Top && y < Bottom;
+
     public bool Covers(PixelRect monitor) =>
         Left <= monitor.Left && Top <= monitor.Top && Right >= monitor.Right && Bottom >= monitor.Bottom;
 

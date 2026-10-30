@@ -57,6 +57,11 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
+    /// <summary>視窗屬性：展開與否給量測腳本讀（GetPropW，跨程序可讀；只是 0／1，不含任何資料）</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetProp(IntPtr hWnd, string name, IntPtr data);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool GetCursorPos(out POINT point);

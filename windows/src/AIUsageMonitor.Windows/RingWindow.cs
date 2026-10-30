@@ -13,7 +13,9 @@ namespace AIUsageMonitor.Windows;
 /// 桌面上的懸浮圓環（ADR-0015 第 6 節與「懸浮圓環設計」）：層疊視窗（逐像素透明）、最上層、不搶焦點（WS_EX_NOACTIVATE）、
 /// 不進 Alt+Tab（WS_EX_TOOLWINDOW）。不用 DragMove()（系統的移動迴圈會啟用視窗）：按下時捕捉滑鼠，移動超過系統的拖動距離才算拖動；
 /// 放開時沒拖動就是點一下。
-/// 滑鼠移上去時同一個視窗往畫面內側展開（展開或滑出的過程中視窗大小不變，只改畫的內容）；滑鼠離開 0.4 秒後收起。
+/// 滑鼠移上去時同一個視窗往畫面內側展開；滑鼠離開 0.4 秒後收起。視窗平常就是展開後的大小（透明的地方滑鼠穿過去），
+/// 展開、收合、滑出都只改畫的內容、不改視窗大小：層疊視窗改大小的那一刻沒有新內容可畫，會露出黑底與上一格的殘影、
+/// 角色也會跳過前幾格（icons 第 8 部分）。只有拖動時縮成圓環本身的大小。
 /// 貼在左右邊緣時（設定可關）收成半圓的小標籤，滑鼠移上去先滑出成完整圓環再展開。
 /// 圓環面怎麼畫由 <see cref="IRingFace"/> 決定；這裡只管位置、展開、貼邊與動畫。
 /// 閒置與收起後沒有計時器與動畫：收起的延遲是只跑一次的計時器，動畫結束時寫入最終值（不留 AnimationClock）。
@@ -187,6 +189,7 @@ internal sealed class RingWindow : Window
             old.Controller.CloseRequested -= CollapseNow;
             old.Controller.HeroOnScreen = null;
             old.Controller.ContainsPointer = null;
+            old.Controller.PointerPolled -= HoverProbe;
             old.Controller.SetDocked(false);
         }
         face = next;
@@ -203,6 +206,7 @@ internal sealed class RingWindow : Window
                     : (ring.Left + ring.Width / 2.0, ring.Top + ring.Height / 2.0, monitor.Scale)
                 : null;
             mascot.Controller.ContainsPointer = () => IsMouseOver;
+            mascot.Controller.PointerPolled += HoverProbe;
             mascot.Controller.SetDocked(Docked);
         }
         CollapseNow();
@@ -253,16 +257,72 @@ internal sealed class RingWindow : Window
 
     // ---------- 狀態 ----------
 
-    /// <summary>靜止：圓環在原位，或貼邊時的標籤；停掉所有動畫</summary>
+    /// <summary>靜止：圓環在原位，或貼邊時的標籤；停掉所有動畫。視窗放成展開後的大小（拖動中只放圓環本身）</summary>
     private void Rest()
     {
         transition++;
         if (hoverOpen) Mascot?.Controller.CloseNow();
-        hoverOpen = false;
+        SetOpen(false);
         collapseTimer.Stop();
         StopAnimation(ExpandProperty, 0);
         StopAnimation(RevealProperty, dock == RingDock.None ? 1 : 0);
-        Place(dock == RingDock.None || monitor is null ? ring : RingFloatLayout.Tab(ring, dock, monitor));
+        var resting = dock == RingDock.None || monitor is null ? ring : RingFloatLayout.Tab(ring, dock, monitor);
+        var target = dragging ? resting : Stage(resting);
+        if (target != stage) Place(target);
+        else Redraw();
+    }
+
+    /// <summary>展開會用到的整塊（實體像素）：展開的方向與推回工作區的距離也在這裡決定，展開時不必再改視窗大小</summary>
+    private PixelRect Stage(PixelRect resting)
+    {
+        if (monitor is null) return resting;
+        direction = RingFloatLayout.Direction(ring, monitor, ringDip, capsule: Mascot is not null);
+        var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, monitor, ringDip);
+        shift = new Vector(dx / monitor.Scale, dy / monitor.Scale);
+        return RingFloatLayout.Union(RingFloatLayout.Union(RingFloatLayout.Expanded(ring, direction, monitor, ringDip), ring), resting);
+    }
+
+    private void SetOpen(bool open)
+    {
+        hoverOpen = open;
+        if (handle != IntPtr.Zero) NativeMethods.SetProp(handle, ExpandedProp, open ? 1 : 0);
+    }
+
+    /// <summary>量測腳本讀的視窗屬性（展開中 1）：視窗大小不再隨展開改變，腳本靠這個知道有沒有展開</summary>
+    public const string ExpandedProp = "AIUsageMonitor.Expanded";
+    /// <summary>圓環本身的位置（實體像素的左、上、右、下）：視窗比圓環大，腳本靠這個把游標移到圓環上</summary>
+    private static readonly string[] RingProps = ["AIUsageMonitor.RingLeft", "AIUsageMonitor.RingTop", "AIUsageMonitor.RingRight", "AIUsageMonitor.RingBottom"];
+
+    /// <summary>
+    /// 低頻輪詢讀到的游標（實體像素，角色的 <see cref="MascotController.PointerPolled"/>）：補判滑鼠移上去與離開。
+    /// 只靠 MouseEnter 的話，程式移動游標、或層疊視窗那一刻沒收到 WM_MOUSEMOVE 時就不會展開；展開後游標不在膠囊上、
+    /// 而 WPF 也沒收到離開時照常 0.4 秒後收起
+    /// </summary>
+    private void HoverProbe(int x, int y)
+    {
+        if (monitor is null || pressed || dragging || !IsVisible) return;
+        if (!hoverOpen)
+        {
+            var hit = Docked
+                ? RingFloatLayout.Tab(ring, dock, monitor).Contains(x, y)
+                : InCircle(ring, x, y, 0.8);
+            if (hit) Open();
+            else if (!IsMouseOver) ignoreUntilLeave = false;
+            return;
+        }
+        if (IsMouseOver || KeepsOpen) return;
+        var over = RingFloatLayout.Union(RingFloatLayout.Expanded(ring, direction, monitor, ringDip), ring).Contains(x, y);
+        if (over) collapseTimer.Stop();
+        else if (!collapseTimer.IsEnabled) collapseTimer.Start();
+    }
+
+    /// <summary>點在圓（<paramref name="rect"/> 的內切圓，半徑乘 <paramref name="part"/>）裡</summary>
+    private static bool InCircle(PixelRect rect, int x, int y, double part)
+    {
+        var r = rect.Width / 2.0 * part;
+        var dx = x - (rect.Left + rect.Width / 2.0);
+        var dy = y - (rect.Top + rect.Height / 2.0);
+        return dx * dx + dy * dy <= r * r;
     }
 
     private void Open()
@@ -270,14 +330,10 @@ internal sealed class RingWindow : Window
         if (monitor is null || suppressed || pressed || ignoreUntilLeave || !IsVisible) return;
         collapseTimer.Stop();
         if (hoverOpen) return;
-        hoverOpen = true;
+        SetOpen(true);
         Mascot?.Controller.PointerEntered();
-        direction = RingFloatLayout.Direction(ring, monitor, ringDip, capsule: Mascot is not null);
-        var expanded = RingFloatLayout.Expanded(ring, direction, monitor, ringDip);
-        var (dx, dy) = RingFloatLayout.ExpandedShift(ring, direction, monitor, ringDip);
-        shift = new Vector(dx / monitor.Scale, dy / monitor.Scale);
-        var target = RingFloatLayout.Union(expanded, ring);
-        if (dock != RingDock.None) target = RingFloatLayout.Union(target, RingFloatLayout.Tab(ring, dock, monitor));
+        // 視窗平常就是這個大小（Rest）；拖動剛結束等情況不同時才改，改完先畫一次再開始動畫
+        var target = Stage(dock == RingDock.None ? ring : RingFloatLayout.Tab(ring, dock, monitor));
         if (target != stage) Place(target);
         var id = ++transition;
         if (dock != RingDock.None && Reveal < 1)
@@ -296,7 +352,7 @@ internal sealed class RingWindow : Window
     private void Collapse()
     {
         if (!hoverOpen || KeepsOpen) return;
-        hoverOpen = false;
+        SetOpen(false);
         Mascot?.Controller.CloseNow();
         var id = ++transition;
         Animate(ExpandProperty, 0, ExpandSeconds, () =>
@@ -343,6 +399,8 @@ internal sealed class RingWindow : Window
     private void Place(PixelRect rect)
     {
         stage = rect;
+        int[] edges = [ring.Left, ring.Top, ring.Right, ring.Bottom];
+        for (var i = 0; i < RingProps.Length; i++) NativeMethods.SetProp(Handle, RingProps[i], edges[i]);
         // 先移過去：跨到 DPI 不同的螢幕時 WPF 依 WM_DPICHANGED 改大小，之後再以新的 DPI 設 DIP 大小、對齊一次
         NativeMethods.PlaceWindow(Handle, rect);
         var scale = monitor?.Scale ?? VisualTreeHelper.GetDpi(this).DpiScaleX;
