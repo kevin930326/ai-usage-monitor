@@ -89,7 +89,7 @@ internal sealed class MascotController : IDisposable
         Painter = new MascotPainter(Config);
         frameTimer = Timer(dispatcher, DispatcherPriority.Render, () =>
         {
-            if (Rate == MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
+            if (Rate is MascotRenderRate.Gaze or MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
             else Changed?.Invoke();
         });
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
@@ -122,7 +122,8 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>畫面要重畫</summary>
     public event Action? Changed;
-    /// <summary>展開、只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話只重畫角色那一層（<see cref="MascotFace.Overlay"/>），不送 Changed</summary>
+    /// <summary>只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話由它決定重不重畫（展開時只重畫角色那一層 <see cref="MascotFace.Overlay"/>，
+    /// 看不出差別的格不畫 <see cref="MascotFace.ShowsSameFrame"/>），不送 Changed</summary>
     public event Action? FrameTick;
     /// <summary>要收合（保持展開取消、設定改變）</summary>
     public event Action? CloseRequested;

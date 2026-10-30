@@ -36,6 +36,10 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     private readonly Dictionary<object, List<BitmapSource>> loops = [];
     /// <summary>上一次畫角色時的對應（滑鼠的視窗座標換成畫布座標）</summary>
     private (Point Center, double K, double Ax, double Ay)? mapping;
+    /// <summary>上一次真的畫的角色（身體不會變時）：看滑鼠的一格和它看不出差別就不重畫（<see cref="ShowsSameFrame"/>）</summary>
+    private (MascotFrame Frame, double Bob, double Scale)? drawn;
+    /// <summary>視線、浮動差多少（裝置像素）以內算畫出來一樣（同 Mac MascotHeroLayerView.invisibleShift）</summary>
+    private const double InvisibleShift = 0.25;
 
     public MascotController Controller => controller;
 
@@ -81,6 +85,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     /// </summary>
     public void DrawTab(DrawingContext dc, RingContent content, Point center, double radius, Rect visible, Palette palette, RingFaceOptions options)
     {
+        drawn = null;
         if (controller.Director is not { } director) return;
         var inward = visible.Left + visible.Width / 2 > center.X ? 1 : -1;
         var heroCenter = new Point(center.X + inward * radius * HeroFill * (2 * TabShown - 1), center.Y);
@@ -150,8 +155,46 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         }
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null, staticRemote: controller.StaticRemote);
+        drawn = !still && controller.Loop is null && BodyIsRigid(frame) ? (frame, Bob(frame), k * ppd) : null;
         dc.DrawImage(slotUsed.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
     }
+
+    /// <summary>
+    /// 看滑鼠的一格（<see cref="MascotController.FrameTick"/>）和上一次畫的看不出差別：視線差不到 1/4 個裝置像素（半徑 × 角度差）、
+    /// 上下浮動也差不到 1/4 像素、其他都一樣（同 Mac，icons 第 4 部分第三版）。透明視窗每重畫一次整張都很貴，看不出差別的格就不畫
+    /// </summary>
+    public bool ShowsSameFrame()
+    {
+        if (drawn is not { } last || controller.Director is not { } director || controller.Loop is not null) return false;
+        var t = FrameTime();
+        var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
+            still: !controller.Motion.MovesEyes(), staticRemote: controller.StaticRemote);
+        var a = last.Frame;
+        if (!BodyIsRigid(frame) || !frame.Pose.Equals(a.Pose) || frame.Eyes != a.Eyes || frame.Mood != a.Mood || frame.Look?.Id != a.Look?.Id
+            || frame.Character != a.Character || frame.ThinkingDots != a.ThinkingDots || frame.RemoteBadge != a.RemoteBadge
+            || frame.RemoteBadgeAbove != a.RemoteBadgeAbove || frame.Sleeping != a.Sleeping || frame.Dozing != a.Dozing
+            || frame.DozeRise != a.DozeRise || frame.StatusColor != a.StatusColor || frame.Blink != a.Blink)
+            return false;
+        var px = frame.Pose[MascotProp.R] * frame.Pose[MascotProp.Sc] * last.Scale;
+        return Math.Abs(frame.GazeYaw - a.GazeYaw) * px < InvisibleShift && Math.Abs(frame.GazePitch - a.GazePitch) * px < InvisibleShift
+               && Math.Abs(Bob(frame) - last.Bob) * last.Scale < InvisibleShift;
+    }
+
+    /// <summary>身體只會跟著視線轉（同 Mac MascotPainter.bodyIsRigid）：沒有晃動、發抖、敲鍵盤、揮手、呼吸、手、鍵盤、繞圈、冷汗，
+    /// 外觀不是格子、線框或會動的特效，沒有在播的特效與轉暈的眼睛</summary>
+    private static bool BodyIsRigid(MascotFrame frame)
+    {
+        var h = frame.Pose;
+        MascotProp[] moving = [MascotProp.Sway, MascotProp.Shiver, MascotProp.Type, MascotProp.Wave, MascotProp.Breathe, MascotProp.Hands,
+                               MascotProp.Kb, MascotProp.Orbit];
+        if (moving.Any(p => Math.Abs(h[p]) >= 0.0001) || frame.Mood.Sweat() || frame.Ripple is not null) return false;
+        if (frame.Look is { } look && (look.Style.IsGrid() || look.Style == MascotLookStyle.Wire || (frame.EffectTime is not null && look.Style.Animates())))
+            return false;
+        return frame.Eyes != MascotEyes.Spiral && !frame.Effects.Any(e => e.Progress(frame.Time) is not null);
+    }
+
+    /// <summary>上下浮動（畫布座標，同 <see cref="MascotPainter"/> 的位置）</summary>
+    private static double Bob(MascotFrame frame) => Math.Sin(frame.Time / 480.0) * 1.4 * frame.Pose[MascotProp.R] / 40;
 
     /// <summary>origin：角色的錨點在畫的範圍裡的位置（DIP）</summary>
     private void Paint(SKCanvas canvas, MascotFrame frame, double ppd, Vector origin, double k, double ax, double ay)

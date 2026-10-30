@@ -514,9 +514,10 @@ internal sealed class RingWindow : Window
         overlay.InvalidateVisual();
     }
 
-    /// <summary>看滑鼠的一格：展開的膠囊已經畫過（角色由上面那一層畫）時只重畫那一層，否則整個重畫</summary>
+    /// <summary>看滑鼠的一格：和上一次畫的看不出差別就不畫；展開的膠囊已經畫過（角色由上面那一層畫）時只重畫那一層，否則整個重畫</summary>
     private void RedrawHero()
     {
+        if (Mascot?.ShowsSameFrame() == true) return;
         if (Mascot?.Overlay is not null) overlay.InvalidateVisual();
         else Redraw();
     }
