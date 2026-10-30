@@ -11,7 +11,10 @@
     - 再開關 5 次（暖機，只記錄）、再 10 次，比較這 10 次前後的記憶體（洩漏檢查）
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
     - 看滑鼠（icons 第 4 部分）：展開時游標在圖示裡一直移動 10 秒（≤ 2%）與停下後；收合時游標在圖示外一直移動 10 秒（≤ 1%）與停下 1 分鐘後
-      （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
+      （以圓環視窗的屬性 AIUsageMonitor.Expanded 確認展開與收起：視窗平常就是展開後的大小，icons 第 8 部分；
+      沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
+  座標一律用實體像素（腳本設成 per-monitor DPI aware）：縮放不是 100% 時，不 aware 的程序讀到與設定的游標位置會被系統換算，
+  移不到圓環上。報表列出每個螢幕的縮放與解析度。App 已經在執行時先停下來，提示先執行 AIUsageMonitor.exe --quit。
     - 角色（預設的圖示樣式，ADR-0015 第 7 節「角色」）：上面的「閒置」是收合、沒在動（含每秒 4 次讀游標），「展開、靜止」是展開待著；
       另外量收合時 AI 工作中（每 5 秒改一次假的紀錄檔，等收著時每 60 秒一次的檢查看到後取樣 30 秒）與收合睡著
       （紀錄檔改成 31 分鐘前，等下一次檢查後取樣 30 秒）。--isolated 時 AI 的設定資料夾在暫存資料夾的 .claude，不碰真的 ~/.claude
@@ -33,6 +36,14 @@ param(
     [switch]$Ci
 )
 $ErrorActionPreference = 'Stop'
+
+# App 是單一執行個體：已經在執行時新開的那個只把命令交給它就結束，量不到；先請使用者關掉
+$exeName = [IO.Path]::GetFileNameWithoutExtension($Exe)
+if (Get-Process -Name $exeName -ErrorAction SilentlyContinue) {
+    Write-Host "AI Usage Monitor 已經在執行。先執行下面這行關掉它，再重新量測："
+    Write-Host "  & `"$Exe`" --quit"
+    exit 2
+}
 
 $home2 = Join-Path ([IO.Path]::GetTempPath()) ('aum-perf-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $home2 | Out-Null
@@ -73,6 +84,44 @@ public static bool MoveTo(int x, int y) {
 [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, IntPtr value, uint ini);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr GetPropW(IntPtr hwnd, string name);
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+[DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
+/// 實體像素：先試整個程序，已經設過時至少這個執行緒（PowerShell 的指令在同一個執行緒上跑）
+/// 設不成（Windows 10 1607 以前沒有這些函式）時回傳 false，報表註明座標可能被系統換算
+public static bool PerMonitorAware() {
+    IntPtr v2 = new IntPtr(-4);
+    try {
+        return SetProcessDpiAwarenessContext(v2) || SetThreadDpiAwarenessContext(v2) != IntPtr.Zero;
+    } catch (EntryPointNotFoundException) {
+        return false;
+    }
+}
+public static bool Expanded(IntPtr hwnd) { return GetPropW(hwnd, "AIUsageMonitor.Expanded").ToInt64() == 1; }
+/// 圓環本身的位置（App 寫在視窗屬性上；舊版沒有時用整個視窗）
+public static RECT Ring(IntPtr hwnd) {
+    RECT r = new RECT();
+    r.Left = (int)GetPropW(hwnd, "AIUsageMonitor.RingLeft").ToInt64();
+    r.Top = (int)GetPropW(hwnd, "AIUsageMonitor.RingTop").ToInt64();
+    r.Right = (int)GetPropW(hwnd, "AIUsageMonitor.RingRight").ToInt64();
+    r.Bottom = (int)GetPropW(hwnd, "AIUsageMonitor.RingBottom").ToInt64();
+    if (r.Right <= r.Left) GetWindowRect(hwnd, out r);
+    return r;
+}
+public delegate bool MonitorProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
+[DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorProc proc, IntPtr data);
+[DllImport("shcore.dll")] public static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint x, out uint y);
+/// 每個螢幕：解析度（實體像素）與縮放
+public static string Monitors() {
+    var parts = new System.Collections.Generic.List<string>();
+    EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr m, IntPtr dc, ref RECT r, IntPtr d) => {
+        uint x, y;
+        var scale = GetDpiForMonitor(m, 0, out x, out y) == 0 ? (x * 100 / 96) + "%" : "?";
+        parts.Add((r.Right - r.Left) + "×" + (r.Bottom - r.Top) + "（縮放 " + scale + "）");
+        return true;
+    }, IntPtr.Zero);
+    return string.Join("、", parts);
+}
 public static IntPtr Find(int pid, string title) {
     IntPtr h = IntPtr.Zero;
     while ((h = FindWindowExW(IntPtr.Zero, h, null, title)) != IntPtr.Zero) {
@@ -98,6 +147,8 @@ $SpiSetClientAreaAnimation = 0x1043
 $animation = $false
 [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
 $animationBefore = $animation
+$perMonitor = [AumPerf.Win]::PerMonitorAware()
+
 if ($Ci -and -not $animation) {
     [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]1, 0)
     [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
@@ -209,19 +260,19 @@ try {
     $gazeOpen = $null; $gazeOpenStill = $null; $gazeMoving = $null; $gazeStill = $null
     $ring = [AumPerf.Win]::Find($app.Id, 'AI Usage Monitor Ring')
     if ($ring -ne [IntPtr]::Zero) {
-        $r0 = New-Object AumPerf.Win+RECT
-        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r0)
+        # r0 是圓環本身（視窗比它大，裡面透明）；r1 是整個視窗＝展開後的範圍
+        $r0 = [AumPerf.Win]::Ring($ring)
         [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
         $hoverPeak = PeakDuring 1
-        # 只移一次沒展開時再移 2 px（真的滑鼠會連續送很多次移動）；報表記下需要第二次，用來追 CI 偶發的「沒展開」
+        # 只移一次沒展開時再移 2 px（真的滑鼠會連續送很多次移動）；報表記下需要第二次。App 另外每秒 4 次讀游標補判，
+        # 所以多等一下仍沒展開才算沒量到
         $nudged = $false
-        $rq = New-Object AumPerf.Win+RECT
-        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$rq)
-        if (($rq.Right - $rq.Left) -eq ($r0.Right - $r0.Left)) {
+        if (-not [AumPerf.Win]::Expanded($ring)) {
             $nudged = $true
             [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2) + 2, [int](($r0.Top + $r0.Bottom) / 2) + 2)
             $hoverPeak = [Math]::Max($hoverPeak, (PeakDuring 1))
         }
+        $opened = [AumPerf.Win]::Expanded($ring)
         # 角色第一次展開有過場（約 4.7 秒）：播完再量待著
         Start-Sleep -Seconds 5
         $r1 = New-Object AumPerf.Win+RECT
@@ -233,19 +284,19 @@ try {
         $gazeOpenStill = Sample 8
         [void][AumPerf.Win]::SetCursorPos(5, 5)
         $collapsePeak = PeakDuring 1.5
-        $r2 = New-Object AumPerf.Win+RECT
-        [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r2)
+        Start-Sleep -Milliseconds 500
+        $closed = -not [AumPerf.Win]::Expanded($ring)
         Start-Sleep -Seconds 30
         $afterHover = Sample 30
         # 收合時游標在圖示外一直移動（離圖示約 300 px 畫圓；圖示通常在右下角，往左上才不會移出螢幕被夾住），停下 1 分鐘後再量
         $gazeMoving = SampleMoving ([int](($r0.Left + $r0.Right) / 2 - 300)) ([int](($r0.Top + $r0.Bottom) / 2 - 200)) 80 10
         Start-Sleep -Seconds 60
         $gazeStill = Sample 15
-        $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
-        if ($w1 -gt $w0 -and $w2 -eq $w0) {
-            $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）$(if ($nudged) { '；第一次移動沒展開，再移 2 px 才展開' })"
+        $where = "圓環 $($r0.Right - $r0.Left) px，展開範圍 $($r1.Right - $r1.Left)×$($r1.Bottom - $r1.Top) px"
+        if ($opened -and $closed) {
+            $hoverNote = "展開、收起都確認（$where）$(if ($nudged) { '；第一次移動沒展開，再移 2 px 才展開' })"
         } else {
-            $hoverNote = "未量到：展開或收起沒有確認（視窗寬 $w0 → $w1 → $w2 px$(if ($nudged) { '；再移 2 px 也沒展開' })）"
+            $hoverNote = "未量到：$(if (-not $opened) { '沒有展開' } else { '沒有收起' })（$where$(if ($nudged) { '；再移 2 px 也沒展開' })）"
             $hoverOpen = $null
         }
     }
@@ -323,6 +374,8 @@ if ($null -ne $hoverOpen) {
 if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
 $lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"
+$lines += ""
+$lines += "螢幕：$([AumPerf.Win]::Monitors())$(if (-not $perMonitor) { '（腳本未能設成各螢幕各自的 DPI，游標座標可能被系統換算）' })"
 $lines += ""
 $lines += "處理器 $cores 個；$([Environment]::OSVersion.VersionString)；$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
 $text = $lines -join "`n"

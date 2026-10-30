@@ -483,6 +483,7 @@ internal sealed class AppHost : IDisposable
         foreach (var mood in MascotMenu.Faces) faces.Items.Add(Item(mood.Title(), () => mascot.PlayFace(mood), animates));
         menu.Items.Add(actions);
         menu.Items.Add(faces);
+        if (mascot.Looks is { } looks) menu.Items.Add(LookMenu(looks));
         if (!animates)
         {
             menu.Items.Add(new MenuItem
@@ -511,6 +512,44 @@ internal sealed class AppHost : IDisposable
                 mascot.SetQuiet(new DateTimeOffset(MascotMoods.TomorrowMorning(DateTime.Now)))));
         }
         menu.Items.Add(new Separator());
+    }
+
+    /// <summary>「角色外觀 ›」：每個外觀附一格小預覽，依分組以分隔線隔開（icons 第 8 部分第 3 項）</summary>
+    private MenuItem LookMenu(MascotLooks looks)
+    {
+        var menu = new MenuItem { Header = "角色外觀" };
+        void Add(string header, string? id, MascotLook? look)
+        {
+            var item = new MenuItem
+            {
+                Header = header,
+                IsCheckable = true,
+                IsChecked = settings.MascotLook == id,
+                Icon = new System.Windows.Controls.Image
+                {
+                    Source = MascotLookPicker.Preview(mascot.Config, mascot.Character, look, 36, 26, 4),
+                    Width = 36,
+                    Height = 26,
+                },
+            };
+            item.Click += (_, _) =>
+            {
+                if (settings.MascotLook == id) return;
+                settings.MascotLook = id;
+                OnSettingsChanged();
+                settingsWindow?.LookChanged();
+            };
+            menu.Items.Add(item);
+        }
+        Add("跟著服務", null, null);
+        foreach (var group in looks.Groups)
+        {
+            var members = looks.Looks.Where(l => l.Group == group.Id).ToList();
+            if (members.Count == 0) continue;
+            menu.Items.Add(new Separator());
+            foreach (var look in members) Add($"{group.Name}・{look.Name}", look.Id, look);
+        }
+        return menu;
     }
 
     private void SetDisplayMode(DisplayMode mode)

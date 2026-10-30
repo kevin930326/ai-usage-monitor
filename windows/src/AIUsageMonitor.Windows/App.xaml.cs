@@ -22,6 +22,7 @@ public partial class App : Application
         base.OnStartup(e);
         var args = e.Args;
         DispatcherUnhandledException += OnUnhandled;
+        WheelGuard.Install();
 #if DEBUG
         if (DebugTools.TryRun(args, out var code))
         {

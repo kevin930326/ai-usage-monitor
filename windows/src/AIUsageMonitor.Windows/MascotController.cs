@@ -125,6 +125,8 @@ internal sealed class MascotController : IDisposable
     /// <summary>只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話由它決定重不重畫（展開時只重畫角色那一層 <see cref="MascotFace.Overlay"/>，
     /// 看不出差別的格不畫 <see cref="MascotFace.ShowsSameFrame"/>），不送 Changed</summary>
     public event Action? FrameTick;
+    /// <summary>低頻輪詢讀到的游標（實體像素）：圓環拿來補判滑鼠移上去／離開（只靠 MouseEnter 時，程式移動游標或漏掉一次事件就不會展開，icons 第 8 部分）</summary>
+    public event Action<int, int>? PointerPolled;
     /// <summary>要收合（保持展開取消、設定改變）</summary>
     public event Action? CloseRequested;
     /// <summary>展開了：讀一次等級（ADR-0020 第 4 節）</summary>
@@ -203,7 +205,7 @@ internal sealed class MascotController : IDisposable
         return reader.ReadToEnd();
     }
 
-    private static MascotConfig LoadConfig() => MascotConfig.Decode(Resource("mascot-anim.json"));
+    public static MascotConfig LoadConfig() => MascotConfig.Decode(Resource("mascot-anim.json"));
 
     public static MascotLooks? LoadLooks()
     {
@@ -704,6 +706,7 @@ internal sealed class MascotController : IDisposable
                 gazeDozing = true;
                 ScheduleGaze(1000);
             }
+            if (PointerPolled is { } dozing && NativeMethods.GetCursorPos(out var at)) dozing(at.X, at.Y);
             return;
         }
         if (gazeDozing)
@@ -719,6 +722,7 @@ internal sealed class MascotController : IDisposable
             EndTracking();
             return;
         }
+        PointerPolled?.Invoke(cursor.X, cursor.Y);
         var t = Time();
         if (director.Pose(t)[MascotProp.Follow] <= 0.01)
         {
