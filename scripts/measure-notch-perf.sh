@@ -5,7 +5,7 @@
 #
 # 沒給 App 時自己建一份 -O 的 Debug 版（和安裝的 Release 版一樣最佳化，保留量測用的 #if DEBUG 開關；實機把關用這份，
 # ADR-0016 第 6 節）。給了 App 時用 PERF_BUILD 標明建置（例如 -Onone），報表第一行印出來，不是 -O 的不算把關。
-# PERF_SAMPLE=1 另取呼叫堆疊（只留函式名稱與次數：載入映像的清單拿掉、絕對路徑只留檔名）。
+# PERF_SAMPLE=1 另取呼叫堆疊（只留函式名稱與次數，路徑一律拿掉：scripts/scrub-perf-log.py）。
 #
 # 以 Debug 版的 AUM_DEMO_NOTCH_PERF=1 啟動：顯示真的瀏海面板（不截圖），依固定時間表在 10 秒時展開（含約 4.7 秒的過場）、22 秒時睡著（AI 閒置）、
 # 32 秒時揮手、35～50 秒每 3 秒依序播點頭、歪頭、偷笑、東張西望、捏一下、表情（只記錄峰值）、55 秒時收合；
@@ -49,12 +49,8 @@ if [ "${PERF_SAMPLE:-}" = 1 ]; then
       sleep 2
       raw=$(mktemp)
       sample "$PID" 8 -file "$raw" >/dev/null 2>&1 || true
-      # 隱私底線：不留完整路徑。拿掉載入映像的清單，其他絕對路徑只留檔名（函式名稱與次數照留）
-      python3 - "$raw" "$OUT/sample-$mark.txt" <<'PY'
-import re, sys
-text = open(sys.argv[1], errors="replace").read().split("\nBinary Images:")[0]
-open(sys.argv[2], "w").write(re.sub(r"(?:~|/)[^\s()\[\]<>\"']*/([^\s()\[\]<>\"'/]+)", r"\1", text))
-PY
+      # 隱私底線：不留完整路徑（只留 Call graph 的函式名稱與次數，見 scrub-perf-log.py）
+      python3 "$ROOT/scripts/scrub-perf-log.py" sample "$raw" "$OUT/sample-$mark.txt"
       rm -f "$raw"
     done
   ) &
@@ -79,7 +75,7 @@ with open(out, "a") as f:
         time.sleep(max(0.0, start + n - time.time()))
 PY
 rm -rf "$HOME_DIR"
-# App 的紀錄會寫出暫存的假 HOME：artifact 只留檔名（隱私底線，同上面的 sample）
-sed -E -i '' 's#(~|/)[^[:space:]()<>"'"'"']*/([^[:space:]()<>"'"'"'/]+)#\2#g' "$OUT/app.log"
+# App 的紀錄會寫出暫存的假 HOME：artifact 不留路徑（隱私底線，同上面的 sample）
+python3 "$ROOT/scripts/scrub-perf-log.py" log "$OUT/app.log"
 
 python3 "$ROOT/scripts/notch-perf-summary.py" "$OUT/samples.tsv" "$OUT/app.log" | tee "$OUT/summary.md"

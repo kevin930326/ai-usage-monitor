@@ -843,6 +843,39 @@ class LookPerfSummaryTests(unittest.TestCase):
         self.assertIn("缺取樣", result.stdout)
 
 
+class ScrubPerfLogTests(unittest.TestCase):
+    """scrub-perf-log.py：量測的 sample 與 app.log 存檔前不留任何路徑片段（隱私底線，Codex #170 第三輪 C-01）。"""
+    SCRIPT = ROOT / "scripts" / "scrub-perf-log.py"
+    SECRET = "/Users/假使用者/機密專案 (客戶甲)/build/AIUsageMenuBar.app/Contents/MacOS/AIUsageMenuBar"
+
+    def test_sample_keeps_only_the_call_graph_without_paths(self):
+        raw = (f"Analysis of sampling AIUsageMenuBar (pid 1)\nPath:            {self.SECRET}\n"
+               "Parent Process:  bash [2]\n\nCall graph:\n"
+               "    10 Thread_1   DispatchQueue_1: com.apple.main-thread  (serial)\n"
+               "    + 10 MascotHeroLayerView.prepare()  (in AIUsageMenuBar.debug.dylib) + 9  [0x1f]  "
+               "/Users/假使用者/機密專案 (客戶甲)/MascotHeroLayer.swift:200\n"
+               "    + 3 helper  (in libfoo) + 1  [0x2a]  ~/秘密 資料夾/x.c:1\n\n"
+               f"Binary Images:\n       0x1 - 0x2 AIUsageMenuBar (1.0) <UUID> {self.SECRET}\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            src, out = Path(tmp) / "raw.txt", Path(tmp) / "out.txt"
+            src.write_text(raw)
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "sample", str(src), str(out)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = out.read_text()
+        for leak in ("/", "假使用者", "機密專案", "客戶甲", "秘密", "資料夾", "Binary Images", "Path:"):
+            self.assertNotIn(leak, text)
+        self.assertIn("10 MascotHeroLayerView.prepare()  (in AIUsageMenuBar.debug.dylib) + 9  [0x1f]", text)
+        self.assertIn("3 helper", text)
+
+    def test_log_lines_lose_paths_but_keep_perf_marks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "app.log"
+            log.write_text(f"home {self.SECRET}/usage.json\nperf-mark 10.0 notch-open\nperf-fps 74.5 30 collapsed 10 30 30\n")
+            result = subprocess.run([sys.executable, str(self.SCRIPT), "log", str(log)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log.read_text(), "home\nperf-mark 10.0 notch-open\nperf-fps 74.5 30 collapsed 10 30 30\n")
+
+
 class NotchPerfSummaryTests(unittest.TestCase):
     """notch-perf-summary.py：門檻與缺少取樣都要讓報表失敗（ADR-0016 第 6 節、Codex C-07）。"""
     SCRIPT = ROOT / "scripts" / "notch-perf-summary.py"
