@@ -37,6 +37,14 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# App 是單一執行個體：已經在執行時新開的那個只把命令交給它就結束，量不到；先請使用者關掉
+$exeName = [IO.Path]::GetFileNameWithoutExtension($Exe)
+if (Get-Process -Name $exeName -ErrorAction SilentlyContinue) {
+    Write-Host "AI Usage Monitor 已經在執行。先執行下面這行關掉它，再重新量測："
+    Write-Host "  & `"$Exe`" --quit"
+    exit 2
+}
+
 $home2 = Join-Path ([IO.Path]::GetTempPath()) ('aum-perf-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $home2 | Out-Null
 $now = [DateTime]::UtcNow
@@ -80,9 +88,14 @@ public static bool MoveTo(int x, int y) {
 [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
 [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr value);
 /// 實體像素：先試整個程序，已經設過時至少這個執行緒（PowerShell 的指令在同一個執行緒上跑）
-public static void PerMonitorAware() {
+/// 設不成（Windows 10 1607 以前沒有這些函式）時回傳 false，報表註明座標可能被系統換算
+public static bool PerMonitorAware() {
     IntPtr v2 = new IntPtr(-4);
-    if (!SetProcessDpiAwarenessContext(v2)) SetThreadDpiAwarenessContext(v2);
+    try {
+        return SetProcessDpiAwarenessContext(v2) || SetThreadDpiAwarenessContext(v2) != IntPtr.Zero;
+    } catch (EntryPointNotFoundException) {
+        return false;
+    }
 }
 public static bool Expanded(IntPtr hwnd) { return GetPropW(hwnd, "AIUsageMonitor.Expanded").ToInt64() == 1; }
 /// 圓環本身的位置（App 寫在視窗屬性上；舊版沒有時用整個視窗）
@@ -134,15 +147,8 @@ $SpiSetClientAreaAnimation = 0x1043
 $animation = $false
 [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
 $animationBefore = $animation
-[AumPerf.Win]::PerMonitorAware()
+$perMonitor = [AumPerf.Win]::PerMonitorAware()
 
-# App 是單一執行個體：已經在執行時新開的那個只把命令交給它就結束，量不到；先請使用者關掉
-$exeName = [IO.Path]::GetFileNameWithoutExtension($Exe)
-if (Get-Process -Name $exeName -ErrorAction SilentlyContinue) {
-    Write-Host "AI Usage Monitor 已經在執行。先執行下面這行關掉它，再重新量測："
-    Write-Host "  & `"$Exe`" --quit"
-    exit 2
-}
 if ($Ci -and -not $animation) {
     [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]1, 0)
     [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
@@ -369,7 +375,7 @@ if ($memGrowth -gt 5) { $warnings += "memory grew $memGrowth MB" }
 $lines += ''
 $lines += "系統動畫（用戶端區域動畫）：量測時$(if ($animation) { "開" } else { "關（角色以「簡單」量測）" })$(if ($animation -ne $animationBefore) { "（原本關，-Ci 暫時打開）" })"
 $lines += ""
-$lines += "螢幕：$([AumPerf.Win]::Monitors())"
+$lines += "螢幕：$([AumPerf.Win]::Monitors())$(if (-not $perMonitor) { '（腳本未能設成各螢幕各自的 DPI，游標座標可能被系統換算）' })"
 $lines += ""
 $lines += "處理器 $cores 個；$([Environment]::OSVersion.VersionString)；$((Get-CimInstance Win32_Processor | Select-Object -First 1).Name)"
 $text = $lines -join "`n"
