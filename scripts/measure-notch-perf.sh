@@ -36,12 +36,24 @@ if [ "${PERF_SAMPLE:-}" = 1 ]; then
   ) &
 fi
 : > "$OUT/samples.tsv"
-while kill -0 "$PID" 2>/dev/null; do
-  NOW=$(python3 -c "import time; print(f'{time.time() - $START:.1f}')")
-  LINE=$(ps -o %cpu=,rss= -p "$PID" 2>/dev/null || true)
-  [ -n "$LINE" ] && echo "$NOW $LINE" >> "$OUT/samples.tsv"
-  sleep 1
-done
+# 每秒整點取一次（一個 python 跑到 App 結束）：以前每一輪都另開兩個 python，CI 上一輪超過 1 秒，2 秒的播放中只取到 1 筆
+python3 - "$PID" "$START" "$OUT/samples.tsv" <<'PY'
+import os, subprocess, sys, time
+pid, start, out = int(sys.argv[1]), float(sys.argv[2]), sys.argv[3]
+n = 0
+with open(out, "a") as f:
+    while True:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            break
+        line = subprocess.run(["ps", "-o", "%cpu=,rss=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        if line:
+            f.write(f"{time.time() - start:.1f} {line}\n")
+            f.flush()
+        n += 1
+        time.sleep(max(0.0, start + n - time.time()))
+PY
 rm -rf "$HOME_DIR"
 
 python3 "$ROOT/scripts/notch-perf-summary.py" "$OUT/samples.tsv" "$OUT/app.log" | tee "$OUT/summary.md"
