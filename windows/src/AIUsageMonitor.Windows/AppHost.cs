@@ -352,15 +352,21 @@ internal sealed class AppHost : IDisposable
     }
 
     /// <summary>
-    /// 只在量測（--isolated）時：面板關閉後做一次完整的 GC，把 GC 之後還留著的 managed 記憶體（KB）寫在圓環視窗的屬性上。
-    /// 量測腳本比較開關前後的這個數字與私有記憶體，分辨真的洩漏和 GC 還沒回收（實機量到開關 10 次 +8～10 MB）
+    /// 面板關閉、App 閒下來後做一次完整的 GC：面板是整個 App 裡最大的一批物件（卡片、圖表、文字），關掉後就不用了，
+    /// 但常駐的 App 很少再配置記憶體、GC 不一定會跑，工作集會留著（實機開關 10 次 +8～10 MB，門檻 5 MB）。
+    /// 一般使用與量測都一樣做（Codex C-01：只在量測時做的話數字不代表平常）；一次幾毫秒，只在關面板時。
+    /// 量測（--isolated）時另把 GC 之後還留著的 managed 記憶體（KB）寫在圓環視窗的屬性上，分辨真的洩漏
     /// </summary>
-    private void ReportMemory()
+    private void CollectAfterPanel()
     {
+        if (panel is not null) return;
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        if (ring is not null) NativeMethods.SetProp(ring.Handle, "AIUsageMonitor.ManagedKB", (IntPtr)(GC.GetTotalMemory(false) / 1024));
+        if (AppMode.Isolated && ring is not null)
+        {
+            NativeMethods.SetProp(ring.Handle, "AIUsageMonitor.ManagedKB", (IntPtr)(GC.GetTotalMemory(false) / 1024));
+        }
     }
 
     private void OpenPanel(bool fromTray)
@@ -394,7 +400,7 @@ internal sealed class AppHost : IDisposable
             if (panel != window) return;
             panel = null;
             if (ring is not null) ring.Suppressed = false;
-            if (AppMode.Isolated) dispatcher.BeginInvoke(ReportMemory, DispatcherPriority.ApplicationIdle);
+            dispatcher.BeginInvoke(CollectAfterPanel, DispatcherPriority.ApplicationIdle);
         };
         panel = window;
         // 面板開著時圓環不展開（展開的膠囊會蓋到面板）

@@ -298,7 +298,7 @@ try {
         }
         Start-Sleep -Seconds 20
         $s = Sample 10
-        # App 在量測模式下每次關面板後做完整的 GC，記下 GC 之後的 managed 記憶體（KB）
+        # App 每次關面板、閒下來後做完整的 GC（一般使用也一樣）；量測模式另記下 GC 之後的 managed 記憶體（KB）
         $s | Add-Member -NotePropertyName ManagedMB -NotePropertyValue ([Math]::Round([AumPerf.Win]::Prop($ringAny, 'AIUsageMonitor.ManagedKB') / 1024.0, 1))
         $s
     }
