@@ -215,8 +215,8 @@ try {
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r2)
         Start-Sleep -Seconds 30
         $afterHover = Sample 30
-        # 收合時游標在圖示外一直移動（離圖示約 300 px 畫圓），停下 1 分鐘後再量
-        $gazeMoving = SampleMoving ([int](($r0.Left + $r0.Right) / 2 - 300)) ([int](($r0.Top + $r0.Bottom) / 2 + 200)) 80 10
+        # 收合時游標在圖示外一直移動（離圖示約 300 px 畫圓；圖示通常在右下角，往左上才不會移出螢幕被夾住），停下 1 分鐘後再量
+        $gazeMoving = SampleMoving ([int](($r0.Left + $r0.Right) / 2 - 300)) ([int](($r0.Top + $r0.Bottom) / 2 - 200)) 80 10
         Start-Sleep -Seconds 60
         $gazeStill = Sample 15
         $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left

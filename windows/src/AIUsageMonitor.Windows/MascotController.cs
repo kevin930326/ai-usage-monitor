@@ -93,7 +93,7 @@ internal sealed class MascotController : IDisposable
             else Changed?.Invoke();
         });
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
-        rateTimer = OneShot(dispatcher, () => Refresh());
+        rateTimer = OneShot(dispatcher, Refresh);
         gazeTimer = Timer(dispatcher, DispatcherPriority.Background, PollPointer);
         trackTimer = Timer(dispatcher, DispatcherPriority.Render, PollPointer);
         workTimer = Timer(dispatcher, DispatcherPriority.Background, CheckWorking);
@@ -345,13 +345,20 @@ internal sealed class MascotController : IDisposable
         var t = Time();
         var pose = director.Pose(t);
         var gesture = gestures.Move(x, y, t, pose[MascotProp.X], pose[MascotProp.Y], pose[MascotProp.R], CanDetect(director.Machine));
-        // 游標在視窗裡每動一次（約每 16 毫秒）都會來：沒有手勢、而且照計時器在重畫時不另外整張重繪
-        // （透明視窗每重繪一次都很貴；以前展開看滑鼠時 CI 量到 10～14%，和看滑鼠的頻率無關）
-        Mutate(d =>
+        // 游標在視窗裡每動一次（約每 16 毫秒）都會來：沒有手勢、而且照計時器在重畫時只往前推狀態機的時間（Move 只做這件事，
+        // 到期的轉換由 deadlineTimer 處理），不 Refresh、不另外整張重繪（同 Mac 的 pointerMoved；以前展開看滑鼠時 CI 量到 10～14%）
+        if (gesture is null && Rate.FollowsGaze())
         {
-            d.Move(t);
-            if (gesture is { } g) d.Gesture(g, t);
-        }, redraw: gesture is not null || !Rate.FollowsGaze());
+            director.Move(t);
+        }
+        else
+        {
+            Mutate(d =>
+            {
+                d.Move(t);
+                if (gesture is { } g) d.Gesture(g, t);
+            });
+        }
         hoverTimer.Stop();
         if (gestures.HoverDeadline is { } deadline) Start(hoverTimer, deadline - t);
     }
@@ -747,20 +754,18 @@ internal sealed class MascotController : IDisposable
 
     // ---------- 到期與重畫頻率 ----------
 
-    /// <summary>redraw = false：重畫頻率沒變時不馬上重繪（下一格的計時器會畫）</summary>
-    public void Mutate(Action<MascotDirector> body, bool redraw = true)
+    public void Mutate(Action<MascotDirector> body)
     {
         if (Director is not { } director) return;
         body(director);
-        Refresh(redraw);
+        Refresh();
         // 收合時工作結束、醒來：又要看游標了，馬上回到每秒 12 次
         if (gazeDozing && director.Machine.FollowsPointer) RestartGaze();
     }
 
     /// <summary>依狀態機的下一個到期時間排一次計時器（不輪詢）；並決定重畫頻率（同 Mac 的 refresh）</summary>
-    public void Refresh(bool redraw = true)
+    public void Refresh()
     {
-        var before = Rate;
         deadlineTimer.Stop();
         rateTimer.Stop();
         if (Director is not { } director || !shown)
@@ -824,7 +829,7 @@ internal sealed class MascotController : IDisposable
         if (pulsing) Start(rateTimer, PulseMs - (now - PulseAt!.Value) + 10);
         else if (live && rate is MascotRenderRate.Stopped or MascotRenderRate.Effect) Start(rateTimer, director.NextBlink(now) - now);
         else if (rate is not (MascotRenderRate.Stopped or MascotRenderRate.Effect)) Start(rateTimer, 250);
-        if (redraw || Rate != before || !Rate.FollowsGaze()) Changed?.Invoke();
+        Changed?.Invoke();
     }
 
     private void SetRate(MascotRenderRate rate, MascotCollapsedMotion? loop, object? key = null)
