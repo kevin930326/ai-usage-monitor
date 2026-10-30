@@ -797,7 +797,8 @@ internal sealed class MascotController : IDisposable
         // 看滑鼠的高幀率期間一直算視線在轉：每一格都更新目標、和目標的差常常小於收斂門檻，不能因此停了又開（同 Mac，Codex C-01）
         var idleMoving = motion.MovesEyes() && (director.IsIdleMoving(now) || Tracking);
         var breathing = live && director.Mode == MascotMode.Sleep && !director.IsStill && director.Blink(now) == 0;
-        var gazeOnly = idleMoving && !breathing && director.Blink(now) == 0
+        // 看滑鼠的高幀率期間眨眼也照看滑鼠的畫法（展開時只重畫角色那一層），不切到整張重畫再切回來（同 Mac，icons 第 4 部分第三版）
+        var gazeOnly = idleMoving && !breathing && (director.Blink(now) == 0 || Tracking)
             && !(live && !director.IsStill && director.Mode == MascotMode.Work);
         var effects = motion.AnimatesEffects() && Look?.Style.Animates() == true
             && (director.Machine.IsOpen || animating || (director.Mode == MascotMode.Work && !director.IsStill));

@@ -915,8 +915,9 @@ final class MascotController {
         // （每次切換都會重排 SwiftUI）
         let idleMoving = motion.movesEyes && (director.isIdleMoving(at: now) || gazeLink != nil)
         let breathing = live && director.mode == .sleep && !director.isStill && director.blink(at: now) == 0
-        // 只有視線在轉（沒在眨眼、工作、睡覺）：低頻率
-        let gazeOnly = idleMoving && !breathing && director.blink(at: now) == 0
+        // 只有視線在轉（沒在工作、睡覺）：低頻率。眨眼平常由 SwiftUI 畫；看滑鼠的高幀率期間眨眼也畫在角色圖層上，
+        // 不切回 SwiftUI（以前每 3～5 秒眨一次就要整個瀏海排版兩次、SwiftUI 畫 0.3 秒，展開時的大頭，icons 第 4 部分第三版）
+        let gazeOnly = idleMoving && !breathing && (director.blink(at: now) == 0 || gazeLink != nil)
             && !(live && !director.isStill && director.mode == .work)
         // 外觀的特效（ADR-0021，ADR-0010 的例外）：展開時、或收合時 AI 工作中才動，每秒最多 12 次；
         // 收合閒置、睡著時停在靜態的一格

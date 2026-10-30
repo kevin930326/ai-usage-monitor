@@ -28,8 +28,8 @@ enum DebugHeroParity {
             let half = (r * 3.1 + 6).rounded(.up)
             let box = CGRect(x: pose[.x] - half, y: pose[.y] - half, width: half * 2, height: half * 2)
             func frame(_ character: MascotCharacter, look: MascotLook?, gaze: (Double, Double), mood: MascotMood = .normal,
-                       time: Int = 2000, thinking: Bool = false) -> MascotFrame {
-                MascotFrame(time: time, pose: d.pose(at: 2000), eyes: d.eyes(at: 2000), blink: 0, gazeYaw: gaze.0, gazePitch: gaze.1,
+                       time: Int = 2000, thinking: Bool = false, blink: Double = 0) -> MascotFrame {
+                MascotFrame(time: time, pose: d.pose(at: 2000), eyes: d.eyes(at: 2000), blink: blink, gazeYaw: gaze.0, gazePitch: gaze.1,
                             statusColor: 0, mood: mood, sleeping: false, thinkingDots: thinking ? 2 : nil, remoteBadge: thinking,
                             remoteBadgeAbove: open, effects: [], ripple: nil, character: character, look: look,
                             effectTime: look?.style.animates == true ? time : nil)
@@ -49,6 +49,15 @@ enum DebugHeroParity {
                 cases.append(("\(side)-look-\(look.id)", frame(.claude, look: look, gaze: (0.3, -0.15), time: 2400), box))
             }
             cases.append(("\(side)-remote", frame(.codex, look: nil, gaze: (0, 0), thinking: true), box))
+            // 看滑鼠時眨眼也畫在圖層上（第三版：不再切回 SwiftUI）
+            for blink in [0.35, 0.7, 1.0] {
+                for character in MascotCharacter.allCases {
+                    cases.append(("\(side)-\(character.rawValue)-blink\(blink)", frame(character, look: nil, gaze: (0.4, -0.2), blink: blink), box))
+                }
+            }
+            for mood in MascotMood.allCases where mood != .normal {
+                cases.append(("\(side)-mood-\(mood.rawValue)-blink", frame(.claude, look: nil, gaze: (0.3, -0.1), mood: mood, blink: 0.6), box))
+            }
             // 播完的提醒光環還留在陣列裡：要拆層，畫出來也要一樣（Codex 第五輪 C-01）
             var expired = frame(.claude, look: nil, gaze: (0.4, -0.2))
             expired.effects = [MascotEffect(kind: .ring(level: 1), start: 0, duration: 900)]
