@@ -245,6 +245,10 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     public Point? ToCanvas(Point local) =>
         mapping is { } m ? new Point(m.Ax + (local.X - m.Center.X) / m.K, m.Ay + (local.Y - m.Center.Y) / m.K) : null;
 
+    /// <summary>畫布座標換成視窗座標（DIP，<see cref="ToCanvas"/> 的反向；截圖的逐格檢查用）；還沒畫過時 null</summary>
+    public Point? FromCanvas(Point canvas) =>
+        mapping is { } m ? new Point(m.Center.X + (canvas.X - m.Ax) * m.K, m.Center.Y + (canvas.Y - m.Ay) * m.K) : null;
+
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
     /// <summary>一塊重複使用的點陣圖：大小一樣時只覆寫像素</summary>
