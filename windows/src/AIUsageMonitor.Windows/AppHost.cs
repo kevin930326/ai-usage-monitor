@@ -351,6 +351,18 @@ internal sealed class AppHost : IDisposable
         OpenPanel(fromTray);
     }
 
+    /// <summary>
+    /// 只在量測（--isolated）時：面板關閉後做一次完整的 GC，把 GC 之後還留著的 managed 記憶體（KB）寫在圓環視窗的屬性上。
+    /// 量測腳本比較開關前後的這個數字與私有記憶體，分辨真的洩漏和 GC 還沒回收（實機量到開關 10 次 +8～10 MB）
+    /// </summary>
+    private void ReportMemory()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        if (ring is not null) NativeMethods.SetProp(ring.Handle, "AIUsageMonitor.ManagedKB", (IntPtr)(GC.GetTotalMemory(false) / 1024));
+    }
+
     private void OpenPanel(bool fromTray)
     {
         if (panel is not null)
@@ -382,6 +394,7 @@ internal sealed class AppHost : IDisposable
             if (panel != window) return;
             panel = null;
             if (ring is not null) ring.Suppressed = false;
+            if (AppMode.Isolated) dispatcher.BeginInvoke(ReportMemory, DispatcherPriority.ApplicationIdle);
         };
         panel = window;
         // 面板開著時圓環不展開（展開的膠囊會蓋到面板）
