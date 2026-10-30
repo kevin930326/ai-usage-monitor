@@ -214,18 +214,22 @@ internal static class DebugTools
         // 收合時沒有圓底（icons 第 6 部分）：收合的畫面另外放在花俏的桌布上
         foreach (var wallpaper in new[] { "light", "dark", "busy" })
         {
-            void Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
-                      RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
-                      RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null, double scale = Scale)
+            // 回傳角色畫在哪裡（視窗座標，DIP；逐格檢查展開是否連續用）
+            Point? Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
+                        RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
+                        RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null, double scale = Scale,
+                        bool save = true)
             {
                 var settings = new AppSettings { MascotProvider = provider, MascotLook = look, MascotFollowPointer = false };
                 var controller = new MascotController(settings, null, null, Dispatcher.CurrentDispatcher);
                 controller.Shot(time, setup, level, pulseAt);
                 var face = new MascotFace(controller) { ShowsPercent = style == RingStyle.MascotPercent };
                 var content = Content(scenario).WithAgent(agent);
-                Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"),
-                     Desk(wallpaper, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale), failures);
+                var image = Desk(wallpaper, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale);
+                if (save) Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"), image, failures);
+                var hero = face.HeroCenter;
                 controller.Dispose();
+                return hero;
             }
             Action<MascotDirector> Open(bool intro = false) => d => d.Open(0, intro);
             Shot("collapsed", 3000, _ => { });
@@ -273,6 +277,27 @@ internal static class DebugTools
             foreach (var dpi in new[] { 125, 150, 200 })
             {
                 Shot($"intro-left-1200-dpi{dpi}", 1200, Open(intro: true), direction: RingExpandDirection.Left, expand: 1, scale: dpi / 100.0);
+            }
+            // 滑鼠移上去的展開（不是第一次的過場）逐格，縮放 100／125／150%（icons 第 8 部分第 2 項）：往左展開時角色移得最遠，
+            // 每 20 ms（比 60 Hz 的一格稍長）一格，角色要從圓環連續移到膠囊左端：任兩格之間不能移超過全程的 35%（瞬移），
+            // 最後一格要到終點。每 80 ms 存一張逐格圖
+            if (wallpaper == "light")
+            {
+                foreach (var dpi in new[] { 100, 125, 150 })
+                {
+                    var path = new List<Point>();
+                    for (var ms = 0; ms <= 600; ms += 20)
+                    {
+                        if (Shot($"expand-frames-dpi{dpi}-{ms:000}", ms, Open(), direction: RingExpandDirection.Left, expand: 1, scale: dpi / 100.0,
+                                 save: ms % 80 == 0) is { } at) path.Add(at);
+                    }
+                    var travel = path.Count > 1 ? (path[^1] - path[0]).Length : 0;
+                    var jump = path.Zip(path.Skip(1), (a, b) => (b - a).Length).DefaultIfEmpty(0).Max();
+                    Console.WriteLine($"expand frames {dpi}%: {path.Count} frames, travel {travel:0.0} DIP, largest step {jump:0.0} DIP");
+                    if (path.Count < 31) failures.Add($"expand frames {dpi}%: mascot missing in {31 - path.Count} frame(s)");
+                    else if (travel < 1) failures.Add($"expand frames {dpi}%: mascot did not move to the capsule");
+                    else if (jump > travel * 0.35) failures.Add($"expand frames {dpi}%: mascot jumped {jump:0.0} of {travel:0.0} DIP in one frame");
+                }
             }
             // 貼邊的標籤：醒著（看向螢幕內側）、工作中、睡著、需要你，左右各一
             foreach (var (side, dock) in new[] { ("", RingDock.Left), ("-right", RingDock.Right) })
