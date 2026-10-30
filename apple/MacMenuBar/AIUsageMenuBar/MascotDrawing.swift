@@ -96,7 +96,8 @@ struct MascotPainter {
     /// 可以把身體畫成固定的圖、只重畫臉。鍵盤、前面的手與冷汗原本畫在眼睛上面，拆開後會被臉蓋住，所以也不拆（Fable G2-06）
     static func bodyIsRigid(_ frame: MascotFrame) -> Bool {
         let h = frame.pose
-        let still = [MascotProp.sway, .shiver, .type, .wave, .breathe, .hands, .kb].allSatisfy { abs(h[$0]) < 0.0001 }
+        // 繞圈（`orbit`）讓視線跟著時間轉，臉每格都不一樣（Fable F-06；Windows 也排除）
+        let still = [MascotProp.sway, .shiver, .type, .wave, .breathe, .hands, .kb, .orbit].allSatisfy { abs(h[$0]) < 0.0001 }
             && !frame.mood.sweat
         let faceless = frame.look.map { !$0.style.isGrid && $0.style != .wire } ?? true
         // 特效外觀在動（霓虹的呼吸）時身體每格都不一樣
