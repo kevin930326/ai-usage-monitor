@@ -214,7 +214,8 @@ internal static class DebugTools
         // 收合時沒有圓底（icons 第 6 部分）：收合的畫面另外放在花俏的桌布上
         foreach (var wallpaper in new[] { "light", "dark", "busy" })
         {
-            // 回傳角色畫在哪裡（視窗座標，DIP；逐格檢查展開是否連續用）
+            // 回傳角色身體（球）的中心畫在哪裡（視窗座標，DIP；逐格檢查展開是否連續用）：錨點再加上姿勢的位置，
+            // 姿勢或座標換算跳了也看得到（Codex C-01）
             Point? Shot(string name, long time, Action<MascotDirector> setup, string scenario = "normal", RingExpandDirection direction = RingExpandDirection.Right,
                         RingDock dock = RingDock.None, double expand = 0, double reveal = 1, string provider = "claude", string? look = null,
                         RingStyle style = RingStyle.Mascot, RingAgent? agent = null, int? level = null, long? pulseAt = null, double scale = Scale,
@@ -227,7 +228,8 @@ internal static class DebugTools
                 var content = Content(scenario).WithAgent(agent);
                 var image = Desk(wallpaper, palette, content, Details(scenario), direction, dock, expand, ticks: false, reveal, face, scale);
                 if (save) Save(Path.Combine(output, $"{name}-{wallpaper}-{theme}.png"), image, failures);
-                var hero = face.HeroCenter;
+                var pose = controller.Director?.Pose(time);
+                var hero = pose is null ? null : face.FromCanvas(new Point(pose[MascotProp.X], pose[MascotProp.Y]));
                 controller.Dispose();
                 return hero;
             }
@@ -280,7 +282,7 @@ internal static class DebugTools
             }
             // 滑鼠移上去的展開（不是第一次的過場）逐格，縮放 100／125／150%（icons 第 8 部分第 2 項）：往左展開時角色移得最遠，
             // 每 20 ms（比 60 Hz 的一格稍長）一格，角色要從圓環連續移到膠囊左端：任兩格之間不能移超過全程的 35%（瞬移），
-            // 最後一格要到終點。每 80 ms 存一張逐格圖
+            // 最後一格（600 ms）要在完全停好（3 秒）的位置 2 DIP 以內（Codex C-02）。每 80 ms 存一張逐格圖
             if (wallpaper == "light")
             {
                 foreach (var dpi in new[] { 100, 125, 150 })
@@ -291,12 +293,15 @@ internal static class DebugTools
                         if (Shot($"expand-frames-dpi{dpi}-{ms:000}", ms, Open(), direction: RingExpandDirection.Left, expand: 1, scale: dpi / 100.0,
                                  save: ms % 80 == 0) is { } at) path.Add(at);
                     }
-                    var travel = path.Count > 1 ? (path[^1] - path[0]).Length : 0;
+                    var settled = Shot($"expand-frames-dpi{dpi}-settled", 3000, Open(), direction: RingExpandDirection.Left, expand: 1, scale: dpi / 100.0, save: false);
+                    var travel = path.Count > 0 && settled is { } end ? (end - path[0]).Length : 0;
+                    var miss = path.Count > 0 && settled is { } goal ? (goal - path[^1]).Length : double.NaN;
                     var jump = path.Zip(path.Skip(1), (a, b) => (b - a).Length).DefaultIfEmpty(0).Max();
-                    Console.WriteLine($"expand frames {dpi}%: {path.Count} frames, travel {travel:0.0} DIP, largest step {jump:0.0} DIP");
-                    if (path.Count < 31) failures.Add($"expand frames {dpi}%: mascot missing in {31 - path.Count} frame(s)");
+                    Console.WriteLine($"expand frames {dpi}%: {path.Count} frames, travel {travel:0.0} DIP, largest step {jump:0.0} DIP, last frame {miss:0.0} DIP from the end");
+                    if (path.Count < 31 || settled is null) failures.Add($"expand frames {dpi}%: mascot missing in {31 - path.Count} frame(s) or the settled frame");
                     else if (travel < 1) failures.Add($"expand frames {dpi}%: mascot did not move to the capsule");
                     else if (jump > travel * 0.35) failures.Add($"expand frames {dpi}%: mascot jumped {jump:0.0} of {travel:0.0} DIP in one frame");
+                    else if (miss > 2) failures.Add($"expand frames {dpi}%: last frame stopped {miss:0.0} DIP short of the capsule's left end");
                 }
             }
             // 貼邊的標籤：醒著（看向螢幕內側）、工作中、睡著、需要你，左右各一
