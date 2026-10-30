@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -556,7 +556,5 @@ internal sealed class RingWindow : Window
         /// 透明的地方 Windows 本來就讓滑鼠穿過（分層視窗照 alpha），這裡只要看在不在範圍內。前提是 <see cref="Window.AllowsTransparency"/>：
         /// 改成不透明視窗的話要改回照圖的幾何判斷，不然整個矩形都會接到滑鼠（Fable F-10）
         /// </summary>
-        protected override HitTestResult? HitTestCore(PointHitTestParameters hit) =>
-            new Rect(RenderSize).Contains(hit.HitPoint) ? new PointHitTestResult(this, hit.HitPoint) : null;
     }
 }

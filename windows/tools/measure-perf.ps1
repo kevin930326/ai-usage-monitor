@@ -241,6 +241,21 @@ try {
         $gazeMoving = SampleMoving ([int](($r0.Left + $r0.Right) / 2 - 300)) ([int](($r0.Top + $r0.Bottom) / 2 - 200)) 80 10
         Start-Sleep -Seconds 60
         $gazeStill = Sample 15
+        # 實驗：滑鼠移上去重複 10 次，數只移一次游標就展開的次數
+        $hoverFirst = 0
+        for ($k = 0; $k -lt 10; $k++) {
+            [void][AumPerf.Win]::SetCursorPos(5, 5)
+            Start-Sleep -Seconds 3
+            [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2), [int](($r0.Top + $r0.Bottom) / 2))
+            Start-Sleep -Milliseconds 1200
+            $rk = New-Object AumPerf.Win+RECT
+            [void][AumPerf.Win]::GetWindowRect($ring, [ref]$rk)
+            if (($rk.Right - $rk.Left) -gt ($r0.Right - $r0.Left)) { $hoverFirst++ }
+            [void][AumPerf.Win]::SetCursorPos([int](($r0.Left + $r0.Right) / 2) + 2, [int](($r0.Top + $r0.Bottom) / 2) + 2)
+            Start-Sleep -Seconds 1
+        }
+        [void][AumPerf.Win]::SetCursorPos(5, 5)
+        Write-Host "hover-first-move: $hoverFirst/10"
         $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
         if ($w1 -gt $w0 -and $w2 -eq $w0) {
             $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）$(if ($nudged) { '；第一次移動沒展開，再移 2 px 才展開' })"
@@ -316,6 +331,7 @@ if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
 if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
+$lines += "實驗：只移一次就展開 $hoverFirst/10"
 if ($null -ne $hoverOpen) {
     $lines += ''
     $lines += "游標一直移動時各執行緒（前三，只記錄）：展開 $($gazeOpen.Threads)；收合 $($gazeMoving.Threads)"
