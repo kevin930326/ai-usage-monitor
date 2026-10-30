@@ -205,7 +205,7 @@ internal sealed class MascotController : IDisposable
         return reader.ReadToEnd();
     }
 
-    private static MascotConfig LoadConfig() => MascotConfig.Decode(Resource("mascot-anim.json"));
+    public static MascotConfig LoadConfig() => MascotConfig.Decode(Resource("mascot-anim.json"));
 
     public static MascotLooks? LoadLooks()
     {

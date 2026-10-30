@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Threading;
 using AIUsageMonitor.Core;
+using AIUsageMonitor.Mascot;
 
 namespace AIUsageMonitor.Windows;
 
@@ -39,6 +40,12 @@ internal sealed class SettingsWindow : Window
         };
     }
 
+    /// <summary>角色外觀在別處改了（右鍵選單）：預覽的選取框跟著換</summary>
+    public void LookChanged()
+    {
+        if (Content is ScrollViewer { Content: SettingsView view }) view.LookChanged();
+    }
+
     /// <summary>系統的深淺色或透明效果改變時（AppHost 收到 ImmersiveColorSet）：重新套用主題與背景</summary>
     public void RefreshLook() => ApplyTheme(settings.Appearance);
 
@@ -63,6 +70,7 @@ internal sealed class SettingsView : StackPanel
     private readonly Action changed;
     private readonly AgentHookInstaller hooks;
     private readonly StackPanel hookRows = new();
+    private readonly ContentControl lookHolder = new() { Focusable = false };
     private bool loading = true;
 
     public SettingsView(AppSettings settings, UsageSnapshot? snapshot, DateTimeOffset now, Action changed, AgentHookInstaller hooks)
@@ -100,17 +108,17 @@ internal sealed class SettingsView : StackPanel
         Section("角色");
         Row("圖示樣式", Choice([("角色", RingStyle.Mascot), ("圓環", RingStyle.Ring), ("角色＋%", RingStyle.MascotPercent)],
             settings.RingStyle, v => settings.RingStyle = v));
-        Row("角色", Choice([("Claude", "claude"), ("Codex", "codex")], settings.MascotProvider, v => settings.MascotProvider = v));
-        var looks = new List<(string, string?)> { ("跟著服務（Claude 珊瑚、Codex 青瓷）", null) };
-        if (MascotController.LoadLooks() is { } list)
+        Row("角色", Choice([("Claude", "claude"), ("Codex", "codex")], settings.MascotProvider, v =>
         {
-            foreach (var look in list.Looks)
-            {
-                var group = list.Groups.FirstOrDefault(g => g.Id == look.Group)?.Name;
-                looks.Add((group is null ? look.Name : $"{group}：{look.Name}", look.Id));
-            }
+            settings.MascotProvider = v;
+            ShowLooks(lookHolder);
+        }));
+        if (MascotController.LoadLooks() is not null)
+        {
+            Children.Add(new TextBlock { Text = "角色外觀", Margin = new Thickness(0, 8, 0, 2) });
+            ShowLooks(lookHolder);
+            Children.Add(lookHolder);
         }
-        Row("角色外觀", Choice(looks, settings.MascotLook, v => settings.MascotLook = v));
         Row("過場", Choice([("每次展開", MascotIntroChoice.Every), ("只有第一次", MascotIntroChoice.FirstOnly), ("關閉", MascotIntroChoice.Off)],
             settings.MascotIntro, v => settings.MascotIntro = v));
         Row("角色動畫", Choice([("完整", MascotMotionLevel.Full), ("簡單", MascotMotionLevel.Simple), ("關閉", MascotMotionLevel.Off)],
@@ -282,6 +290,25 @@ internal sealed class SettingsView : StackPanel
             Changed();
         };
         return box;
+    }
+
+    public void LookChanged()
+    {
+        if (lookHolder.Content is MascotLookPicker picker) picker.Selected = settings.MascotLook;
+    }
+
+    /// <summary>角色外觀的預覽（換了角色時重畫成那個角色）</summary>
+    private void ShowLooks(ContentControl holder)
+    {
+        if (MascotController.LoadLooks() is not { } list) return;
+        var character = settings.MascotProvider == "codex" ? MascotCharacter.Codex : MascotCharacter.Claude;
+        var picker = new MascotLookPicker(MascotController.LoadConfig(), list, character, settings.MascotLook, v =>
+        {
+            settings.MascotLook = v;
+            Changed();
+        });
+        System.Windows.Automation.AutomationProperties.SetName(picker, "角色外觀");
+        holder.Content = picker;
     }
 
     private CheckBox Check(string label, bool value, Action<bool> set)
