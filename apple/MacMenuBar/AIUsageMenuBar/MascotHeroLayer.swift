@@ -140,11 +140,15 @@ final class MascotHeroLayerView: NSView {
         guard let key = governorKey, var governor = Self.governors[key] else { return }
         let change = governor.observe(at: t, cpu: Self.processCPU)
         Self.governors[key] = governor
-        guard let change else { return }
-        fps = governor.fps
-        applyRate()
+        // 很久沒看滑鼠後 governor 自己重來（沒有 Change）：也要照它的格數（Codex C-01）
+        if fps != governor.fps {
+            fps = governor.fps
+            applyRate()
+        }
         #if DEBUG
-        DebugTools.perfMark(String(format: "gaze-rate %@ %d %d %.2f", open ? "open" : "collapsed", change.from, change.to, change.cpu))
+        if let change {
+            DebugTools.perfMark(String(format: "gaze-rate %@ %d %d %.2f", open ? "open" : "collapsed", change.from, change.to, change.cpu))
+        }
         #endif
     }
 
