@@ -306,3 +306,7 @@ foreach ($w in $warnings) { Write-Host "::warning::perf $w" }
 if ($memGrowth -gt 5) { exit 1 }
 # 桌機（不是 -Ci）上滑鼠移上去一定要量到；CI 的工作階段不一定送得到滑鼠移動
 if ($null -eq $hoverOpen -and -not $Ci) { Write-Host 'hover expansion was not measured'; exit 1 }
+# 看滑鼠的兩列也一樣：游標沒移到就沒量到，桌機上算失敗（CI 只標「未量到」，Codex 第五輪 C-02）
+if (-not $Ci -and (($null -ne $gazeOpen -and -not $gazeOpen.Moved) -or ($null -ne $gazeMoving -and -not $gazeMoving.Moved))) {
+    Write-Host 'gaze cursor moves were not measured'; exit 1
+}
