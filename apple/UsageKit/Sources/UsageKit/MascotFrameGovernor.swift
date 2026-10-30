@@ -28,7 +28,7 @@ public struct MascotFrameGovernor: Sendable {
     private var backoff = MascotFrameGovernor.firstRetry
 
     public static let windowMs = 2000
-    /// 停頓（眨眼時圖層停掉、由 SwiftUI 畫那一下）在這以內就接著算；更久就重新開始一段
+    /// 停頓（游標停下又動、暫時不看滑鼠，圖層停掉又開始）在這以內就接著算；更久就重新開始一段
     public static let gapMs = 1500
     public static let firstRetry = 10_000
     public static let maxRetry = 60_000

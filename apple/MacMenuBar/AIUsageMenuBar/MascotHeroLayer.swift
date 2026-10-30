@@ -180,7 +180,7 @@ final class MascotHeroLayerView: NSView {
         // 馬上畫第一格：和瀏海畫布藏起角色在同一次更新裡送出，不會空一格
         lastDraw = controller.time()
         #if DEBUG
-        // 眨眼那一下（約 0.3 秒）由 SwiftUI 畫、圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
+        // 游標停下又動、暫時不看滑鼠時圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
         if lastDraw - frames.last > 1500 { frames = (0, 0, lastDraw, lastDraw) }
         #endif
         // 位置由瀏海的視窗（`layoutCanvas`）放；大小先定好，第一格的圖層才放得對

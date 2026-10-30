@@ -30,7 +30,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     public static readonly Color Amber = Color.FromRgb(245, 190, 60);
 
     private readonly Slot hero = new();
-    /// <summary>展開時只有視線在轉：只畫角色周圍一塊（大小和整個膠囊不同，分開放才不會每次眨眼都重配點陣圖）</summary>
+    /// <summary>展開時只有視線在轉：只畫角色周圍一塊（大小和整個膠囊不同；看滑鼠（含眨眼）時只重畫這一層，不重配整張的點陣圖）</summary>
     private readonly Slot heroNear = new();
     private readonly Slot ripple = new();
     private readonly Dictionary<object, List<BitmapSource>> loops = [];
