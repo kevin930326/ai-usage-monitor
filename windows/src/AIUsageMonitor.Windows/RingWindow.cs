@@ -370,6 +370,13 @@ internal sealed class RingWindow : Window
                                  Reveal, Expand, VisualTreeHelper.GetDpi(this).PixelsPerDip) { Shift = shift };
     }
 
+    /// <summary>換了 DPI（換螢幕、改縮放）：整個重畫，角色不會停在舊 DPI 的點陣圖（Fable F-06）</summary>
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        Redraw();
+    }
+
     // ---------- 滑鼠 ----------
 
     protected override void OnMouseEnter(MouseEventArgs e)
@@ -517,7 +524,7 @@ internal sealed class RingWindow : Window
     /// <summary>看滑鼠的一格：和上一次畫的看不出差別就不畫；展開的膠囊已經畫過（角色由上面那一層畫）時只重畫那一層，否則整個重畫</summary>
     private void RedrawHero()
     {
-        if (Mascot?.ShowsSameFrame() == true) return;
+        if (Mascot?.ShowsSameFrame(VisualTreeHelper.GetDpi(this).PixelsPerDip) == true) return;
         if (Mascot?.Overlay is not null) overlay.InvalidateVisual();
         else Redraw();
     }
@@ -546,7 +553,8 @@ internal sealed class RingWindow : Window
 
         /// <summary>
         /// 滑鼠每移動一次 WPF 都做一次命中測試：預設會拿整張圖（漸層、文字、角色）的幾何去比，看滑鼠時就在吃 CPU（icons 第 4 部分第三版）。
-        /// 透明的地方 Windows 本來就讓滑鼠穿過（分層視窗照 alpha），這裡只要看在不在範圍內
+        /// 透明的地方 Windows 本來就讓滑鼠穿過（分層視窗照 alpha），這裡只要看在不在範圍內。前提是 <see cref="Window.AllowsTransparency"/>：
+        /// 改成不透明視窗的話要改回照圖的幾何判斷，不然整個矩形都會接到滑鼠（Fable F-10）
         /// </summary>
         protected override HitTestResult? HitTestCore(PointHitTestParameters hit) =>
             new Rect(RenderSize).Contains(hit.HitPoint) ? new PointHitTestResult(this, hit.HitPoint) : null;

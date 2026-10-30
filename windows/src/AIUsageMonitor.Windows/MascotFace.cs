@@ -37,7 +37,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     /// <summary>上一次畫角色時的對應（滑鼠的視窗座標換成畫布座標）</summary>
     private (Point Center, double K, double Ax, double Ay)? mapping;
     /// <summary>上一次真的畫的角色（身體不會變時）：看滑鼠的一格和它看不出差別就不重畫（<see cref="ShowsSameFrame"/>）</summary>
-    private (MascotFrame Frame, double Bob, double Scale)? drawn;
+    private (MascotFrame Frame, double Bob, double Scale, double Ppd)? drawn;
     /// <summary>視線、浮動差多少（裝置像素）以內算畫出來一樣（同 Mac MascotHeroLayerView.invisibleShift）</summary>
     private const double InvisibleShift = 0.25;
 
@@ -148,6 +148,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         var origin = heroCenter - area.TopLeft;
         if (!still && controller.Loop is { } loop && controller.LoopKey is { } key && p <= 0)
         {
+            drawn = null;
             var frames = LoopFrames(loop, key, area, ppd, origin, k, ax, ay);
             var index = (int)(controller.Time() % (long)Math.Max(loop.Length, 1) * loop.Fps / 1000) % frames.Count;
             dc.DrawImage(frames[index], area);
@@ -155,7 +156,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         }
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null, staticRemote: controller.StaticRemote);
-        drawn = !still && controller.Loop is null && BodyIsRigid(frame) ? (frame, Bob(frame), k * ppd) : null;
+        drawn = !still && controller.Loop is null && BodyIsRigid(frame) ? (frame, Bob(frame), k * ppd, ppd) : null;
         dc.DrawImage(slotUsed.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
     }
 
@@ -163,9 +164,10 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     /// 看滑鼠的一格（<see cref="MascotController.FrameTick"/>）和上一次畫的看不出差別：視線差不到 1/4 個裝置像素（半徑 × 角度差）、
     /// 上下浮動也差不到 1/4 像素、其他都一樣（同 Mac，icons 第 4 部分第三版）。透明視窗每重畫一次整張都很貴，看不出差別的格就不畫
     /// </summary>
-    public bool ShowsSameFrame()
+    /// <param name="ppd">視窗現在的每 DIP 像素數：換了 DPI 一定重畫（Fable F-06）</param>
+    public bool ShowsSameFrame(double ppd)
     {
-        if (drawn is not { } last || controller.Director is not { } director || controller.Loop is not null) return false;
+        if (drawn is not { } last || last.Ppd != ppd || controller.Director is not { } director || controller.Loop is not null) return false;
         var t = FrameTime();
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: !controller.Motion.MovesEyes(), staticRemote: controller.StaticRemote);
