@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -141,6 +142,7 @@ internal static class DebugTools
                      MascotLevel.From(levelDays, LocalCalendar.Key(today))), palette) { Background = palette.Solid }), failures);
             Save(Path.Combine(output, $"settings-{theme}.png"), SettingsShot(dark, now), failures);
         }
+        CheckComboWheel(now, failures);
         foreach (var f in failures) Console.Error.WriteLine(f);
         Console.WriteLine($"rendered to {output}; {failures.Count} problem(s)");
         return failures.Count == 0 ? 0 : 1;
@@ -383,6 +385,62 @@ internal static class DebugTools
     /// 設定視窗要套 Fluent 主題（視窗的 ThemeMode）：在畫面外顯示、不啟用，畫下內容後關閉。
     /// Fluent 主題的視窗背景是透明的（給 Mica），截圖改墊沒有 Mica 時的純色
     /// </summary>
+    /// <summary>
+    /// 設定頁捲動時滾輪停在下拉選單上：選項不能變、設定頁要捲動（<see cref="WheelGuard"/>，icons 第 8 部分）。
+    /// 照真的輸入的順序送：先 PreviewMouseWheel，沒被處理才在同一個元素送 MouseWheel
+    /// </summary>
+    private static void CheckComboWheel(DateTimeOffset now, List<string> failures)
+    {
+        var window = new SettingsWindow(new AppSettings(), UsageDecoder.Decode(DemoJson("normal", now)), now, () => { }, new AgentHookInstaller())
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000,
+            Top = -20000,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+        };
+        var scroller = (ScrollViewer)window.Content;
+        scroller.MaxHeight = 300;
+        window.Show();
+        window.UpdateLayout();
+        var boxes = Descendants<ComboBox>(scroller).ToList();
+        if (boxes.Count == 0)
+        {
+            failures.Add("combo wheel: no ComboBox in settings");
+            window.Close();
+            return;
+        }
+        foreach (var box in boxes)
+        {
+            box.Focus();
+            var before = box.SelectedIndex;
+            var offset = scroller.VerticalOffset;
+            foreach (var delta in new[] { -120, -120, 120 })
+            {
+                var preview = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = UIElement.PreviewMouseWheelEvent };
+                box.RaiseEvent(preview);
+                var wheel = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, delta) { RoutedEvent = UIElement.MouseWheelEvent, Handled = preview.Handled };
+                box.RaiseEvent(wheel);
+            }
+            window.UpdateLayout();
+            var name = System.Windows.Automation.AutomationProperties.GetName(box);
+            if (box.SelectedIndex != before) failures.Add($"combo wheel: {name} changed {before} -> {box.SelectedIndex}");
+            if (scroller.VerticalOffset <= offset && scroller.ScrollableHeight > offset) failures.Add($"combo wheel: {name} did not scroll the page");
+        }
+        Console.WriteLine($"combo wheel: checked {boxes.Count} ComboBox(es)");
+        window.Close();
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var inner in Descendants<T>(child)) yield return inner;
+        }
+    }
+
     private static BitmapSource SettingsShot(bool dark, DateTimeOffset now)
     {
         var settings = new AppSettings { Appearance = dark ? Appearance.Dark : Appearance.Light };
