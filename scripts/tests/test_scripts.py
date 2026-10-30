@@ -900,10 +900,22 @@ class NotchPerfSummaryTests(unittest.TestCase):
 
     def test_drawn_frames_are_reported_but_ticks_gate_the_rate(self):
         # 看不出差別的格不重畫（第 5 欄是真的重畫的格數）：照頻率更新的門檻看每秒更新幾次，重畫幾格只記錄
-        frames = [(t, n, f"{side} {n // 3}") for t, n, side in self.FRAMES]
+        frames = [(t, n, f"{side} {n // 3} {n}") for t, n, side in self.FRAMES]
         result = self.run_summary(self.full(), frames=frames)
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("其中真的重畫（看得出差別）的：收合 10、展開 20", result.stdout)
+
+    def test_governed_frame_rate_is_checked_against_its_target(self):
+        # 超標時自動降幀（展開 60 → 30、收合 30 → 20）：照要的格數算；低於要的八成，或要的格數低於下限（展開 30、收合 15）都失敗
+        def frames(open_n, open_want, col_n, col_want):
+            return [(t, col_n if side == "collapsed" else open_n,
+                     f"{side} 1 {col_want if side == 'collapsed' else open_want}") for t, _, side in self.FRAMES]
+        cases = {"governed": (frames(30, 30, 20, 20), 0), "behind-target": (frames(20, 30, 20, 20), 1),
+                 "open-below-floor": (frames(20, 20, 20, 20), 1), "collapsed-below-floor": (frames(30, 30, 12, 12), 1)}
+        for name, (got, code) in cases.items():
+            result = self.run_summary(self.full(), frames=got)
+            self.assertEqual(result.returncode, code, (name, result.stdout))
+        self.assertIn("收合 20（要 20）、展開 30（要 30）", self.run_summary(self.full(), frames=cases["governed"][0]).stdout)
 
     def test_gaze_open_over_gate_fails(self):
         # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗

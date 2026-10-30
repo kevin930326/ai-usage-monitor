@@ -91,14 +91,63 @@ final class MascotHeroLayerView: NSView {
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    /// 每秒幾格：展開跟著螢幕更新率、收合每秒 30 格；收合時外觀的特效在動則同特效最多 12 格（ADR-0021）
-    private var fps: Int {
-        let controller = MascotController.shared
-        guard let director = controller.director else { return 30 }
-        if director.machine.isOpen {
-            return min(window?.screen?.maximumFramesPerSecond ?? 60, Int((1 / MascotRenderRate.gazeOpen.interval).rounded()))
+    /// 每秒幾格（`start` 算好；每格都問螢幕的更新率很貴，CI 取樣）
+    private var fps = 30
+    /// 這一側（展開、收合）可以用的每秒格數，由快到慢：螢幕更新率的整數分之一。展開最多跟著螢幕（最多 120）、收合最多 30；
+    /// 超過 CPU 目標時往下降（`govern`），展開最少 30、收合最少 15。收合時外觀的特效在動則固定照特效最多 12 格（ADR-0021）
+    private var rates = [30]
+    /// 目前用 `rates` 的第幾個；記在這一側，下次開始看滑鼠時從上次降到的地方開始
+    private static var level: [Bool: Int] = [:]
+    private var open = false
+    /// 這一段看滑鼠的 CPU（整個 App）：起點的時間（毫秒）與用掉的 CPU 秒數；第一段含開始的那一格，不算
+    private var spent = (since: 0, cpu: 0.0, first: true)
+
+    /// 看滑鼠時 App 的 CPU 目標（TASK icons 第 4 部分：展開 ≤ 2%、收合 ≤ 1%）
+    static func budget(open: Bool) -> Double { open ? 2 : 1 }
+
+    private static func rates(open: Bool, screen: Int, effectsLive: Bool) -> [Int] {
+        if !open, effectsLive { return [Int((1 / MascotRenderRate.effect.interval).rounded())] }
+        let cap = open ? min(screen, Int((1 / MascotRenderRate.gazeOpen.interval).rounded())) : Int((1 / MascotRenderRate.gaze.interval).rounded())
+        let floor = open ? 30 : 15
+        let found = (1...16).compactMap { k -> Int? in
+            let r = Double(screen) / Double(k)
+            return r <= Double(cap) + 0.5 && r >= Double(floor) - 0.5 ? Int(r.rounded()) : nil
         }
-        return controller.effectsLive ? Int((1 / MascotRenderRate.effect.interval).rounded()) : Int((1 / MascotRenderRate.gaze.interval).rounded())
+        let distinct = found.reduce(into: [Int]()) { if !$0.contains($1) { $0.append($1) } }
+        return distinct.isEmpty ? [min(cap, screen)] : distinct
+    }
+
+    private static func processCPU() -> Double {
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1e6
+    }
+
+    private func applyRate() {
+        fps = rates[min(Self.level[open] ?? 0, rates.count - 1)]
+        let f = Float(fps)
+        let wanted = CAFrameRateRange(minimum: f / 2, maximum: f, preferred: f)
+        if link?.preferredFrameRateRange != wanted { link?.preferredFrameRateRange = wanted }
+    }
+
+    /// 超標就降幀（TASK icons 第 4 部分、ADR-0016 第 6 節）：每 2 秒看一次這段時間 App 用了多少 CPU，超過目標就換慢一級；
+    /// 快一級（照格數等比例估）也還在目標的四分之三以內才升回去。快的機器一直停在螢幕的更新率
+    private func govern(at t: Int) {
+        guard rates.count > 1, t - spent.since >= 2000 else { return }
+        let cpu = Self.processCPU()
+        defer { spent = (t, cpu, false) }
+        guard !spent.first else { return }
+        let pct = (cpu - spent.cpu) / (Double(t - spent.since) / 1000) * 100
+        let budget = Self.budget(open: open)
+        let level = min(Self.level[open] ?? 0, rates.count - 1)
+        if pct > budget, level + 1 < rates.count {
+            Self.level[open] = level + 1
+        } else if level > 0, pct * Double(rates[level - 1]) / Double(rates[level]) < budget * 0.75 {
+            Self.level[open] = level - 1
+        } else {
+            return
+        }
+        applyRate()
     }
 
     func start() {
@@ -124,10 +173,12 @@ final class MascotHeroLayerView: NSView {
             link.add(to: .main, forMode: .common)
             self.link = link
         }
-        let fps = Float(fps)
-        link?.preferredFrameRateRange = CAFrameRateRange(minimum: fps / 2, maximum: fps, preferred: fps)
+        open = director.machine.isOpen
+        rates = Self.rates(open: open, screen: window?.screen?.maximumFramesPerSecond ?? 60, effectsLive: controller.effectsLive)
+        applyRate()
         // 馬上畫第一格：和瀏海畫布藏起角色在同一次更新裡送出，不會空一格
         lastDraw = controller.time()
+        spent = (lastDraw, Self.processCPU(), true)
         #if DEBUG
         // 眨眼那一下（約 0.3 秒）由 SwiftUI 畫、圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
         if lastDraw - frames.last > 1500 { frames = (0, 0, lastDraw, lastDraw) }
@@ -152,6 +203,7 @@ final class MascotHeroLayerView: NSView {
     fileprivate func tick() {
         // `preferredFrameRateRange` 只是建議：多的自己跳過（留 3 毫秒的誤差）
         let t = MascotController.shared.time()
+        govern(at: t)
         guard t - lastDraw >= 1000 / fps - 3 else { return }
         lastDraw = t
         // 同一個 display link 也讀游標（不另開一個，icons 第 4 部分第三版）：先更新視線再畫
@@ -193,7 +245,7 @@ final class MascotHeroLayerView: NSView {
         frames.last = frame.time
         if frame.time - frames.since >= 1000 {
             let span = frame.time - frames.since
-            DebugTools.perfFrames(frames.count * 1000 / span, drawn: frames.drawn * 1000 / span, open: director.machine.isOpen)
+            DebugTools.perfFrames(frames.count * 1000 / span, drawn: frames.drawn * 1000 / span, target: fps, open: director.machine.isOpen)
             frames = (0, 0, frame.time, frame.time)
         }
         #endif

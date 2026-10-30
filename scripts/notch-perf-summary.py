@@ -14,6 +14,8 @@ ticks = [float(t) for t in re.findall(r"perf-mark ([\d.]+) minute-tick", log)]
 frames = [(float(m.group(1)), int(m.group(2)), m.group(3)) for m in re.finditer(r"perf-fps ([\d.]+) (\d+) (\w+)", log)]
 # 其中真的重畫的格數（畫出來和上一格看不出差別的不重畫；舊的紀錄沒有這一欄）
 drawn = [(float(m.group(1)), int(m.group(3)), m.group(2)) for m in re.finditer(r"perf-fps ([\d.]+) \d+ (\w+) (\d+)", log)]
+# 這時候要的每秒格數（超標時 App 自動降幀；舊的紀錄沒有這一欄，照收合 30、展開 60）
+targets = {(float(m.group(1)), m.group(2)): int(m.group(3)) for m in re.finditer(r"perf-fps ([\d.]+) \d+ (\w+) \d+ (\d+)", log)}
 def window(a, b): return [s for s in samples if a <= s[0] < b]
 def without_ticks(rows): return [s for s in rows if not any(t <= s[0] < t + 2 for t in ticks)]
 def avg(rows, i): return sum(r[i] for r in rows) / len(rows) if rows else float("nan")
@@ -73,20 +75,25 @@ raised, raised_open = by_name["收合、舉著手（扣掉每分鐘更新）"], 
 gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分鐘更新）"]
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
 gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，跟著螢幕更新率）"], by_name["展開、游標停下後（2～10 秒）"]
-# 看滑鼠時實際每秒畫了幾格：收合每秒 30 格、展開跟著螢幕（至少 60）；不到八成就是螢幕關著或鎖著，CPU 不準。
+# 看滑鼠時實際每秒畫了幾格：收合每秒 30 格、展開跟著螢幕（超標時自動降幀，見下）；不到要的八成就是螢幕關著或鎖著，CPU 不準。
 # 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數（只有一筆、中途停掉重畫都會被抓到，
 # Codex C-02），取中位數：眨眼的約 0.3 秒改由 SwiftUI 畫、不算在圖層的格數裡，那一秒會少幾格（Codex 第二輪 C-01）
+# 自動降幀：每一筆和那時要的格數比（至少八成），要的格數也不能低於下限（展開 30、收合 15，ADR-0016 第 6 節）
+FLOOR, DEFAULT = {"collapsed": 15, "open": 30}, {"collapsed": 30, "open": 60}
+def median(values):
+    values = sorted(values)
+    return values[len(values) // 2] if values else 0
 def slowest_fps(a, b, side):
     got = sorted((t, n) for t, n, s in frames if a - 1 <= t < b + 1 and s == side)
     times = [a] + [t for t, _ in got] + [b]
-    inside = [n for t, n in got if a <= t < b]
+    inside = [(n, targets.get((t, side), DEFAULT[side])) for t, n in got if a <= t < b]
     if not inside or max(y - x for x, y in zip(times, times[1:])) > 1.6:
-        return 0
-    inside.sort()
-    return inside[len(inside) // 2]
-fps_collapsed, fps_open = slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
+        return 0, 0, 0
+    return median(n for n, _ in inside), median(w for _, w in inside), median(n / w for n, w in inside)
+(fps_collapsed, want_collapsed, ratio_collapsed), (fps_open, want_open, ratio_open) = \
+    slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
 print()
-print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}、展開 {fps_open}")
+print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}（要 {want_collapsed}）、展開 {fps_open}（要 {want_open}）")
 if drawn:
     def median_drawn(a, b, side):
         got = sorted(n for t, n, s in drawn if a <= t < b and s == side)
@@ -108,7 +115,8 @@ checks = [
      and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
     # 看滑鼠的高幀率（icons 第 4 部分）：角色由 CoreGraphics 的圖層畫，展開跟著螢幕更新率、收合每秒 30 格。
     # 停下約 1 秒後高幀率要停：停了約 0.1%，沒停就和移動時差不多，所以門檻 1%（Codex C-02）
-    ("看滑鼠時真的照頻率重畫（收合 ≥ 24、展開 ≥ 48 格／秒）", fps_collapsed >= 24 and fps_open >= 48),
+    ("看滑鼠時真的照頻率重畫（每秒格數 ≥ 要的八成；要的格數展開 ≥ 30、收合 ≥ 15）",
+     ratio_collapsed >= 0.8 and ratio_open >= 0.8 and want_collapsed >= FLOOR["collapsed"] and want_open >= FLOOR["open"]),
     ("展開、游標一直移動 ≤ 2%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 2
      and avg(gaze_open_still, 1) <= 1),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
