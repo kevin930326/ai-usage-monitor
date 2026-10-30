@@ -90,6 +90,59 @@ enum DebugHeroParity {
         UsageStore.log("hero parity: \(cases.count - failed)/\(cases.count) ok")
     }
 
+    /// 量測用（`AUM_RENDER_NAME=hero-bench`）：看滑鼠的一格各段花多少 CPU（不需要螢幕），寫到 `hero-bench.tsv`
+    static func bench(to dir: URL) {
+        guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else { return }
+        func cpu() -> Double {
+            var t = timespec()
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t)
+            return Double(t.tv_sec) * 1e6 + Double(t.tv_nsec) / 1e3
+        }
+        var lines = ["step\tside\tus_per_frame"]
+        for open in [false, true] {
+            var d = MascotDirector(config: config, seed: 7, startTime: 0)
+            if open { d.open(at: 0, intro: false) }
+            d.advance(to: 2000)
+            let pose = d.pose(at: 2000)
+            let r = pose[.r] * pose[.sc]
+            let half = (r * 3.1 + 6).rounded(.up)
+            let box = CGRect(x: pose[.x] - half, y: pose[.y] - half, width: half * 2, height: half * 2)
+            let painter = MascotPainter(config: config)
+            let n = 600
+            func frame(_ i: Int) -> MascotFrame {
+                let t = 2000 + i * 16
+                return MascotFrame(time: t, pose: pose, eyes: d.eyes(at: t), blink: d.blink(at: t), gazeYaw: sin(Double(i) / 20) * 0.4,
+                                   gazePitch: 0.1, statusColor: d.statusColor(at: t), mood: d.mood(at: t), sleeping: false,
+                                   thinkingDots: nil, effects: [], ripple: nil, character: .claude, look: nil, effectTime: nil)
+            }
+            let side = open ? "open" : "collapsed"
+            var t0 = cpu()
+            for i in 0..<n { _ = frame(i) }
+            lines.append("frame\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            t0 = cpu()
+            for i in 0..<n { _ = d.pose(at: 2000 + i * 16) }
+            lines.append("pose\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            let f0 = frame(0)
+            let face = MascotHeroLayerView.faceBox(f0, at: painter.heroCenter(f0))
+            for (name, area, parts) in [("face", face, MascotPainter.Parts.face), ("whole", box, [.body, .face])] {
+                let w = Int(area.width * 2), h = Int(area.height * 2)
+                guard let cg = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                         space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { continue }
+                cg.translateBy(x: 0, y: CGFloat(h))
+                cg.scaleBy(x: 2, y: -2)
+                let frames = (0..<n).map(frame)
+                t0 = cpu()
+                for f in frames {
+                    cg.clear(CGRect(x: 0, y: 0, width: area.width, height: area.height))
+                    MascotHeroLayerView.paint(f, parts: parts, painter: painter, box: area, clip: nil, in: cg)
+                }
+                lines.append("\(name)\t\(side)\t\(String(format: "%.1f", (cpu() - t0) / Double(n)))")
+            }
+        }
+        try? (lines.joined(separator: "\n") + "\n").write(to: dir.appendingPathComponent("hero-bench.tsv"), atomically: true, encoding: .utf8)
+    }
+
     /// 和 `MascotHeroLayerView` 同一份畫法：身體只會平移時先畫身體、再畫臉（同兩層疊起來；臉只畫在同一塊 `faceBox` 裡，
     /// 裁掉東西的話比對會失敗，Codex C-03），否則整個一起畫
     static func coreGraphics(_ frame: MascotFrame, painter: MascotPainter, box: CGRect, scale: Double) -> CGImage? {

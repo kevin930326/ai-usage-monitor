@@ -54,6 +54,10 @@ enum DebugTools {
             // 看滑鼠時的角色圖層和瀏海畫布畫出來一樣（icons 第 4 部分）
             if name == "panel" || name == "hero-parity" { DebugHeroParity.run(to: url) }
             if name == "hero-parity" { exit(0) }
+            if name == "hero-bench" {
+                DebugHeroParity.bench(to: url)
+                exit(0)
+            }
             renderPanel(to: url, name: name)
             if name == "panel" {
                 renderMenuBarIcons(to: url)

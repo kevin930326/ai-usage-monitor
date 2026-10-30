@@ -25,6 +25,16 @@ python3 "$ROOT/scripts/make-demo-history.py" "$HOME_DIR" normal
 AI_USAGE_MONITOR_HOME="$HOME_DIR" AUM_TESTING=1 AUM_DEMO_NOTCH_PERF=1 "$BIN" 2>"$OUT/app.log" &
 PID=$!
 START=$(python3 -c 'import time; print(time.time())')
+# PERF_SAMPLE=1：游標一直移動的兩段各用 sample 取 8 秒的呼叫堆疊（找每格的 CPU 花在哪裡；只有假資料，CI 用）
+if [ "${PERF_SAMPLE:-}" = 1 ]; then
+  (
+    for mark in gaze-move gaze-move-open; do
+      until grep -q "perf-mark [0-9.]* $mark\$" "$OUT/app.log" 2>/dev/null; do kill -0 "$PID" 2>/dev/null || exit 0; sleep 0.5; done
+      sleep 2
+      sample "$PID" 8 -file "$OUT/sample-$mark.txt" >/dev/null 2>&1 || true
+    done
+  ) &
+fi
 : > "$OUT/samples.tsv"
 while kill -0 "$PID" 2>/dev/null; do
   NOW=$(python3 -c "import time; print(f'{time.time() - $START:.1f}')")
