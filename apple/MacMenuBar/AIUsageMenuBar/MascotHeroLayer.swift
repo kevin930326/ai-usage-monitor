@@ -93,29 +93,15 @@ final class MascotHeroLayerView: NSView {
 
     /// 每秒幾格（`start` 算好；每格都問螢幕的更新率很貴，CI 取樣）
     private var fps = 30
-    /// 這一側（展開、收合）可以用的每秒格數，由快到慢：螢幕更新率的整數分之一。展開最多跟著螢幕（最多 120）、收合最多 30；
-    /// 超過 CPU 目標時往下降（`govern`），展開最少 30、收合最少 15。收合時外觀的特效在動則固定照特效最多 12 格（ADR-0021）
-    private var rates = [30]
-    /// 目前用 `rates` 的第幾個；記在這一側，下次開始看滑鼠時從上次降到的地方開始
-    private static var level: [Bool: Int] = [:]
-    private var open = false
-    /// 這一段看滑鼠的 CPU（整個 App）：起點的時間（毫秒）與用掉的 CPU 秒數；第一段含開始的那一格，不算
-    private var spent = (since: 0, cpu: 0.0, first: true)
+    /// 這一側最快的格數（展開跟著螢幕、最多 120；收合 30）：量測報表看有沒有降幀
+    private var topRate = 30
+    /// 超標自動降幀（`MascotFrameGovernor`，ADR-0016 第 6 節）：依「展開／收合、螢幕更新率」各記一份，換螢幕不會沿用別的階梯
+    /// （Fable F-08）。收合時外觀的特效在動則固定照特效最多 12 格（ADR-0021），不降幀（nil）
+    private static var governors: [String: MascotFrameGovernor] = [:]
+    private var governorKey: String?
 
     /// 看滑鼠時 App 的 CPU 目標（TASK icons 第 4 部分：展開 ≤ 2%、收合 ≤ 1%）
     static func budget(open: Bool) -> Double { open ? 2 : 1 }
-
-    private static func rates(open: Bool, screen: Int, effectsLive: Bool) -> [Int] {
-        if !open, effectsLive { return [Int((1 / MascotRenderRate.effect.interval).rounded())] }
-        let cap = open ? min(screen, Int((1 / MascotRenderRate.gazeOpen.interval).rounded())) : Int((1 / MascotRenderRate.gaze.interval).rounded())
-        let floor = open ? 30 : 15
-        let found = (1...16).compactMap { k -> Int? in
-            let r = Double(screen) / Double(k)
-            return r <= Double(cap) + 0.5 && r >= Double(floor) - 0.5 ? Int(r.rounded()) : nil
-        }
-        let distinct = found.reduce(into: [Int]()) { if !$0.contains($1) { $0.append($1) } }
-        return distinct.isEmpty ? [min(cap, screen)] : distinct
-    }
 
     private static func processCPU() -> Double {
         var usage = rusage()
@@ -124,30 +110,42 @@ final class MascotHeroLayerView: NSView {
     }
 
     private func applyRate() {
-        fps = rates[min(Self.level[open] ?? 0, rates.count - 1)]
         let f = Float(fps)
         let wanted = CAFrameRateRange(minimum: f / 2, maximum: f, preferred: f)
         if link?.preferredFrameRateRange != wanted { link?.preferredFrameRateRange = wanted }
     }
 
-    /// 超標就降幀（TASK icons 第 4 部分、ADR-0016 第 6 節）：每 2 秒看一次這段時間 App 用了多少 CPU，超過目標就換慢一級；
-    /// 快一級（照格數等比例估）也還在目標的四分之三以內才升回去。快的機器一直停在螢幕的更新率
-    private func govern(at t: Int) {
-        guard rates.count > 1, t - spent.since >= 2000 else { return }
-        let cpu = Self.processCPU()
-        defer { spent = (t, cpu, false) }
-        guard !spent.first else { return }
-        let pct = (cpu - spent.cpu) / (Double(t - spent.since) / 1000) * 100
-        let budget = Self.budget(open: open)
-        let level = min(Self.level[open] ?? 0, rates.count - 1)
-        if pct > budget, level + 1 < rates.count {
-            Self.level[open] = level + 1
-        } else if level > 0, pct * Double(rates[level - 1]) / Double(rates[level]) < budget * 0.75 {
-            Self.level[open] = level - 1
-        } else {
+    /// 這一側要用的格數：最快的一級，超標時由 `MascotFrameGovernor` 往下降（展開最少 30、收合最少 15）
+    private func chooseRate(open: Bool, effectsLive: Bool) {
+        let screen = window?.screen?.maximumFramesPerSecond ?? 60
+        if !open, effectsLive {
+            governorKey = nil
+            fps = Int((1 / MascotRenderRate.effect.interval).rounded())
+            topRate = fps
             return
         }
+        let cap = Int((1 / (open ? MascotRenderRate.gazeOpen : .gaze).interval).rounded())
+        let rates = MascotFrameGovernor.rates(screen: screen, cap: cap, floor: open ? 30 : 15)
+        let key = "\(open ? "open" : "collapsed")-\(screen)"
+        if Self.governors[key]?.rates != rates {
+            Self.governors[key] = MascotFrameGovernor(rates: rates, budget: Self.budget(open: open))
+        }
+        governorKey = key
+        fps = Self.governors[key]?.fps ?? rates[0]
+        topRate = rates[0]
+    }
+
+    /// 每一格交給降幀的判斷；換了一級就改 display link 的頻率
+    private func govern(at t: Int, open: Bool) {
+        guard let key = governorKey, var governor = Self.governors[key] else { return }
+        let change = governor.observe(at: t, cpu: Self.processCPU)
+        Self.governors[key] = governor
+        guard let change else { return }
+        fps = governor.fps
         applyRate()
+        #if DEBUG
+        DebugTools.perfMark(String(format: "gaze-rate %@ %d %d %.2f", open ? "open" : "collapsed", change.from, change.to, change.cpu))
+        #endif
     }
 
     func start() {
@@ -173,12 +171,10 @@ final class MascotHeroLayerView: NSView {
             link.add(to: .main, forMode: .common)
             self.link = link
         }
-        open = director.machine.isOpen
-        rates = Self.rates(open: open, screen: window?.screen?.maximumFramesPerSecond ?? 60, effectsLive: controller.effectsLive)
+        chooseRate(open: director.machine.isOpen, effectsLive: controller.effectsLive)
         applyRate()
         // 馬上畫第一格：和瀏海畫布藏起角色在同一次更新裡送出，不會空一格
         lastDraw = controller.time()
-        spent = (lastDraw, Self.processCPU(), true)
         #if DEBUG
         // 眨眼那一下（約 0.3 秒）由 SwiftUI 畫、圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
         if lastDraw - frames.last > 1500 { frames = (0, 0, lastDraw, lastDraw) }
@@ -203,11 +199,11 @@ final class MascotHeroLayerView: NSView {
     fileprivate func tick() {
         // `preferredFrameRateRange` 只是建議：多的自己跳過（留 3 毫秒的誤差）
         let t = MascotController.shared.time()
-        govern(at: t)
+        let controller = MascotController.shared
+        govern(at: t, open: controller.director?.machine.isOpen == true)
         guard t - lastDraw >= 1000 / fps - 3 else { return }
         lastDraw = t
         // 同一個 display link 也讀游標（不另開一個，icons 第 4 部分第三版）：先更新視線再畫
-        let controller = MascotController.shared
         controller.heroLinkTick(covers: controller.director?.machine.isOpen == true || !controller.effectsLive)
         // 讀游標時停下來了（視線轉到位、游標停住）：圖層已經停掉
         guard link != nil else { return }
@@ -234,9 +230,11 @@ final class MascotHeroLayerView: NSView {
         // 畫出來和上一格看不出差別（差不到 1/4 個裝置像素）的就不重畫：每一格的 CPU 大多花在重畫與送出上（CI 取樣，
         // icons 第 4 部分第三版）。視線沒變、只有上下浮動的位置變了：兩層一起搬，不重畫；位置也幾乎沒變：連送出都省掉
         let scale = heroLayer.contentsScale, r = frame.pose[.r] * frame.pose[.sc] * scale
+        // 只搬不畫最多累積 1 個裝置像素：內容裡烘進去的瀏海裁切也跟著搬，搬多了邊會偏（Fable F-05）
         let sameFace = rigid && face.map {
             $0.key == key && $0.blink == frame.blink
                 && abs(frame.gazeYaw - $0.yaw) * r < Self.invisibleShift && abs(frame.gazePitch - $0.pitch) * r < Self.invisibleShift
+                && hypot(at.x - $0.at.x, at.y - $0.at.y) * scale < 1
         } == true
         let samePlace = sameFace && hypot(at.x - placedAt.x, at.y - placedAt.y) * scale < Self.invisibleShift
         #if DEBUG
@@ -245,7 +243,7 @@ final class MascotHeroLayerView: NSView {
         frames.last = frame.time
         if frame.time - frames.since >= 1000 {
             let span = frame.time - frames.since
-            DebugTools.perfFrames(frames.count * 1000 / span, drawn: frames.drawn * 1000 / span, target: fps, open: director.machine.isOpen)
+            DebugTools.perfFrames(frames.count * 1000 / span, drawn: frames.drawn * 1000 / span, target: fps, top: topRate, open: director.machine.isOpen)
             frames = (0, 0, frame.time, frame.time)
         }
         #endif
@@ -256,8 +254,9 @@ final class MascotHeroLayerView: NSView {
         defer { CATransaction.commit() }
         if sameFace, let body, let face {
             place(bodyLayer, at: bounds.offsetBy(dx: at.x - body.at.x, dy: at.y - body.at.y))
+            // `drawn`（重畫時的範圍）不動：Core Animation 自己要重畫時照原本的位置畫 `current`，再一起被搬過去
             place(heroLayer, at: Self.faceBox(frame, at: body.at).offsetBy(dx: -box.minX + at.x - face.at.x, dy: -box.minY + at.y - face.at.y)
-                .intersection(bounds))
+                .intersection(bounds), records: false)
             return
         }
         current = frame
@@ -290,8 +289,8 @@ final class MascotHeroLayerView: NSView {
     }
 
     /// 圖層放在 `rect`（y 往下）；這個 view 的 backing layer 沒有翻轉時（y 往上）換算
-    private func place(_ sublayer: CALayer, at rect: CGRect) {
-        if sublayer === heroLayer { drawn = rect }
+    private func place(_ sublayer: CALayer, at rect: CGRect, records: Bool = true) {
+        if sublayer === heroLayer, records { drawn = rect }
         let frame = layer?.isGeometryFlipped == true ? rect
             : CGRect(x: rect.minX, y: bounds.height - rect.maxY, width: rect.width, height: rect.height)
         if sublayer.frame != frame { sublayer.frame = frame }
