@@ -59,8 +59,10 @@ $usage = @"
     {"id": "weekly", "label": "每週", "used_pct": 22, "resets_at": "$(Iso 130)"}]}}}
 "@
 [IO.File]::WriteAllText((Join-Path $home2 'usage.json'), $usage, (New-Object Text.UTF8Encoding($false)))
-# 角色：睡覺的分鐘數設最長（30），閒置時是「醒著、沒在工作」；假的紀錄檔 2 分鐘前改過（不是工作中）
-[IO.File]::WriteAllText((Join-Path $home2 'windows-app.json'), '{"ring_style": "mascot", "mascot_sleep_minutes": 30}', (New-Object Text.UTF8Encoding($false)))
+# 角色：睡覺的分鐘數設最長（30），閒置時是「醒著、沒在工作」；假的紀錄檔 2 分鐘前改過（不是工作中）。
+# 全螢幕時隱藏關掉：量測量的是圓環本身，桌機上別的全螢幕視窗把它藏起來時整段都量不到（實機第 8 部分之後的回報）。
+# 前景視窗是否涵蓋整個螢幕另外記在報表裡
+[IO.File]::WriteAllText((Join-Path $home2 'windows-app.json'), '{"ring_style": "mascot", "mascot_sleep_minutes": 30, "hide_in_fullscreen": false}', (New-Object Text.UTF8Encoding($false)))
 $log = Join-Path $home2 '.claude\projects\demo\session.jsonl'
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
 [IO.File]::WriteAllText($log, '{}')
@@ -107,6 +109,34 @@ public static RECT Ring(IntPtr hwnd) {
     r.Bottom = (int)GetPropW(hwnd, "AIUsageMonitor.RingBottom").ToInt64();
     if (r.Right <= r.Left) GetWindowRect(hwnd, out r);
     return r;
+}
+/// App 寫在圓環視窗上的計數（重畫、展開、全螢幕隱藏的次數；沒有內容）
+public static long Prop(IntPtr hwnd, string name) { return GetPropW(hwnd, name).ToInt64(); }
+/// 找這個程序的圓環視窗，看不見的也算（Find 只找看得見的）
+public static IntPtr FindAny(int pid, string title) {
+    IntPtr h = IntPtr.Zero;
+    while ((h = FindWindowExW(IntPtr.Zero, h, null, title)) != IntPtr.Zero) {
+        uint owner; GetWindowThreadProcessId(h, out owner);
+        if (owner == pid) return h;
+    }
+    return IntPtr.Zero;
+}
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hwnd, System.Text.StringBuilder name, int size);
+[DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+[StructLayout(LayoutKind.Sequential)] public struct MONITORINFO { public int Size; public RECT Monitor; public RECT Work; public uint Flags; }
+[DllImport("user32.dll")] public static extern bool GetMonitorInfoW(IntPtr monitor, ref MONITORINFO info);
+/// 前景視窗涵蓋它所在的整個螢幕時回傳它的視窗類別（只有類別名稱，不讀標題或內容）；沒有時 null
+public static string ForegroundCovering() {
+    IntPtr fg = GetForegroundWindow();
+    if (fg == IntPtr.Zero) return null;
+    RECT r; if (!GetWindowRect(fg, out r)) return null;
+    MONITORINFO mi = new MONITORINFO(); mi.Size = Marshal.SizeOf(typeof(MONITORINFO));
+    if (!GetMonitorInfoW(MonitorFromWindow(fg, 2), ref mi)) return null;
+    if (r.Left > mi.Monitor.Left || r.Top > mi.Monitor.Top || r.Right < mi.Monitor.Right || r.Bottom < mi.Monitor.Bottom) return null;
+    var name = new System.Text.StringBuilder(256);
+    GetClassNameW(fg, name, name.Capacity);
+    return name.ToString();
 }
 public delegate bool MonitorProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
 [DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorProc proc, IntPtr data);
@@ -160,6 +190,8 @@ $app = $null
 try {
     $env:AI_USAGE_MONITOR_HOME = $home2
     # --isolated：不改開機自動啟動、不觸發收集器
+    # 游標先移到左上角：App 啟動時圓環剛好出現在游標下面的話會自己展開（讀游標的補判），閒置就量成展開
+    [void][AumPerf.Win]::SetCursorPos(5, 5)
     $app = Start-Process -FilePath $Exe -ArgumentList '--isolated' -PassThru
     Start-Sleep -Seconds 10
     if ($app.HasExited) { throw "App exited early (code $($app.ExitCode))" }
@@ -228,7 +260,18 @@ try {
         $max
     }
 
+    # 計數：閒置期間整張重畫、展開、被全螢幕隱藏了幾次（App 寫在圓環視窗的屬性上）
+    $ringAny = [AumPerf.Win]::FindAny($app.Id, 'AI Usage Monitor Ring')
+    function Counts {
+        if ($ringAny -eq [IntPtr]::Zero) { return @(0, 0, 0) }
+        @([AumPerf.Win]::Prop($ringAny, 'AIUsageMonitor.Renders'), [AumPerf.Win]::Prop($ringAny, 'AIUsageMonitor.Opens'),
+          [AumPerf.Win]::Prop($ringAny, 'AIUsageMonitor.FullscreenHides'))
+    }
+    $coverAtStart = [AumPerf.Win]::ForegroundCovering()
+    $c0 = Counts
     $idle = Sample 30
+    $c1 = Counts
+    $idleCounts = "閒置 30 秒：重畫 $($c1[0] - $c0[0]) 次、展開 $($c1[1] - $c0[1]) 次"
     Send '--show-panel' $true
     $peak = PeakDuring 2
     $open = Sample 10
@@ -259,6 +302,10 @@ try {
     $hoverPeak = $null; $hoverOpen = $null; $collapsePeak = $null; $afterHover = $null
     $gazeOpen = $null; $gazeOpenStill = $null; $gazeMoving = $null; $gazeStill = $null
     $ring = [AumPerf.Win]::Find($app.Id, 'AI Usage Monitor Ring')
+    $coverAtHover = [AumPerf.Win]::ForegroundCovering()
+    if ($ring -eq [IntPtr]::Zero) {
+        $hoverNote = if ($ringAny -eq [IntPtr]::Zero) { '未展開：找不到圓環視窗' } else { "未展開：圓環視窗看不見（全螢幕隱藏 $((Counts)[2]) 次）" }
+    }
     if ($ring -ne [IntPtr]::Zero) {
         # r0 是圓環本身（視窗比它大，裡面透明）；r1 是整個視窗＝展開後的範圍
         $r0 = [AumPerf.Win]::Ring($ring)
@@ -316,6 +363,8 @@ try {
     Start-Sleep -Seconds 70
     $sleeping = Sample 30
 
+    # App 結束後視窗屬性就沒了：先記下
+    $hidesTotal = (Counts)[2]
     Start-Process -FilePath $Exe -ArgumentList '--quit' -Wait | Out-Null
     Start-Sleep -Seconds 3
 } finally {
@@ -367,6 +416,12 @@ if ($working -gt 1) { $warnings += "mascot working: $working% > 1%" }
 if ($sleeping.Cpu -gt 1) { $warnings += "mascot sleeping: $($sleeping.Cpu)% > 1%" }
 $lines += ''
 $lines += "滑鼠移上去：$hoverNote"
+$lines += ''
+$lines += "$idleCounts；整段量測全螢幕隱藏 $hidesTotal 次（量測時「全螢幕時隱藏」關閉，應為 0）"
+$lines += "前景視窗涵蓋整個螢幕：開始時 $(if ($coverAtStart) { "是（類別 $coverAtStart）" } else { '否' })、滑鼠移上去前 $(if ($coverAtHover) { "是（類別 $coverAtHover）" } else { '否' })"
+# CPU 時間以 15.6 ms 為單位累計：量出 0 表示取樣期間不到一個單位，不是量錯
+$tick = [Math]::Round(15.625 / 1000 / 30 / $cores * 100, 4)
+$lines += "CPU 時間的最小單位：30 秒取樣約 $tick%、10 秒約 $([Math]::Round($tick * 3, 4))%；0 表示不到一個單位"
 if ($null -ne $hoverOpen) {
     $lines += ''
     $lines += "游標一直移動時各執行緒（前三，只記錄）：展開 $($gazeOpen.Threads)；收合 $($gazeMoving.Threads)"

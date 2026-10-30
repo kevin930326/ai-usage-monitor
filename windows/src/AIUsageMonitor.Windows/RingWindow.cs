@@ -303,6 +303,13 @@ internal sealed class RingWindow : Window
 
     /// <summary>量測腳本讀的視窗屬性（展開中 1）：視窗大小不再隨展開改變，腳本靠這個知道有沒有展開</summary>
     public const string ExpandedProp = "AIUsageMonitor.Expanded";
+    /// <summary>
+    /// 量測腳本讀的計數（只有次數，沒有內容）：整張重畫了幾次、展開了幾次、因為全螢幕隱藏了幾次。
+    /// 實機量到「閒置變貴」「找不到圓環」時，靠這些分辨是一直在重畫、自己展開了，還是被全螢幕偵測藏起來
+    /// </summary>
+    private const string RendersProp = "AIUsageMonitor.Renders", OpensProp = "AIUsageMonitor.Opens";
+    public const string HidesProp = "AIUsageMonitor.FullscreenHides";
+    private int renders, opens;
     /// <summary>圓環本身的位置（實體像素的左、上、右、下）：視窗比圓環大，腳本靠這個把游標移到圓環上</summary>
     private static readonly string[] RingProps = ["AIUsageMonitor.RingLeft", "AIUsageMonitor.RingTop", "AIUsageMonitor.RingRight", "AIUsageMonitor.RingBottom"];
 
@@ -342,6 +349,7 @@ internal sealed class RingWindow : Window
         collapseTimer.Stop();
         if (hoverOpen) return;
         SetOpen(true);
+        NativeMethods.SetProp(Handle, OpensProp, ++opens);
         Mascot?.Controller.PointerEntered();
         // 視窗平常就是這個大小（Rest）；換了螢幕、DPI 等情況不同時才改，改完先畫一次再開始動畫
         var target = Stage(dock == RingDock.None ? ring : RingFloatLayout.Tab(ring, dock, monitor));
@@ -624,6 +632,7 @@ internal sealed class RingWindow : Window
         protected override void OnRender(DrawingContext dc)
         {
             if (owner.stage.Width == 0) return;
+            NativeMethods.SetProp(owner.Handle, RendersProp, ++owner.renders);
             FloatingRingRenderer.Draw(dc, owner.Scene());
         }
 
