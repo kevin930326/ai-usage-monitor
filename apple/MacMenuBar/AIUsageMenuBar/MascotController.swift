@@ -777,6 +777,21 @@ final class MascotController {
         pollPointer()
     }
 
+    /// 角色圖層的 display link 在跑時改由它讀游標（`MascotHeroLayerView.tick`）：同一格不必叫醒兩次（CI 取樣，
+    /// 兩個 display link 的分派約占看滑鼠時 CPU 的一成五，icons 第 4 部分第三版）；圖層停掉時 `heroLinkStopped` 讓這邊的接回來
+    /// `covers`：圖層照看滑鼠的頻率在跑（收合時外觀的特效在動，圖層每秒只有 12 格，游標還是照每秒 30 次讀）
+    func heroLinkTick(covers: Bool) {
+        guard covers else { return heroLinkStopped() }
+        guard let gazeLink else { return }
+        if !gazeLink.isPaused { gazeLink.isPaused = true }
+        lastLinkPoll = time()
+        pollPointer()
+    }
+
+    func heroLinkStopped() {
+        if gazeLink?.isPaused == true { gazeLink?.isPaused = false }
+    }
+
     /// 角色的 Canvas 每一格讀的視線：高幀率期間的更新不經過 SwiftUI（`director` 的快照會是舊的）
     func liveGaze(at time: Int) -> (yaw: Double, pitch: Double)? {
         directorValue?.gaze(at: time)

@@ -17,7 +17,7 @@ final class MascotHeroLayerView: NSView {
     private var lastDraw = Int.min
     #if DEBUG
     /// 量測用：約每秒記一次這段時間平均每秒畫了幾格（`DebugTools.perfFrames`）；since 是這段的開始、last 是上一格
-    private var frames = (count: 0, since: 0, last: 0)
+    private var frames = (count: 0, drawn: 0, since: 0, last: 0)
     #endif
     /// 每一格畫在這個圖層自己的 backing store 上（`setNeedsDisplay` → `draw(in:)`）：不經過 NSView 的 draw
     /// （AppKit 會先錄成 display list 再重播），也不必每格把新的圖片送給 render server
@@ -33,6 +33,12 @@ final class MascotHeroLayerView: NSView {
     private var drawn = CGRect.zero
     /// 身體那張圖是依什麼畫的、畫的時候角色在哪裡；nil 是沒拆（整個角色每格重畫）
     private var body: (key: BodyKey, at: CGPoint)?
+    /// 上次重畫的臉（拆成兩層時）：視線只差不到 1/4 個像素、其他都一樣時這一格不重畫、不送出
+    private var face: (key: BodyKey, blink: Double, yaw: Double, pitch: Double, at: CGPoint)?
+    /// 上一次送出時角色的位置（畫布座標）
+    private var placedAt = CGPoint(x: -1e9, y: -1e9)
+    /// 視線差多少（裝置像素）以內算畫出來一樣：眼睛移動的距離約是半徑 × 角度差
+    static let invisibleShift = 0.25
 
     /// 身體的圖依這些畫：任何一個變了就重畫一張
     private struct BodyKey: Equatable {
@@ -110,6 +116,8 @@ final class MascotHeroLayerView: NSView {
         heroLayer.contentsScale = scale
         bodyLayer.contentsScale = scale
         body = nil
+        face = nil
+        placedAt = CGPoint(x: -1e9, y: -1e9)
         bodyLayer.contents = nil
         if link == nil {
             let link = displayLink(target: linkTarget, selector: #selector(LinkTarget.tick(_:)))
@@ -122,7 +130,7 @@ final class MascotHeroLayerView: NSView {
         lastDraw = controller.time()
         #if DEBUG
         // 眨眼那一下（約 0.3 秒）由 SwiftUI 畫、圖層停掉又開始：短暫的停頓接著算，紀錄才不會斷掉（Codex 第三輪 C-01）
-        if lastDraw - frames.last > 1500 { frames = (0, lastDraw, lastDraw) }
+        if lastDraw - frames.last > 1500 { frames = (0, 0, lastDraw, lastDraw) }
         #endif
         // 位置由瀏海的視窗（`layoutCanvas`）放；大小先定好，第一格的圖層才放得對
         setFrameSize(box.size)
@@ -133,9 +141,11 @@ final class MascotHeroLayerView: NSView {
     func stop() {
         link?.invalidate()
         link = nil
+        MascotController.shared.heroLinkStopped()
         isHidden = true
         bodyLayer.contents = nil
         body = nil
+        face = nil
         current = nil
     }
 
@@ -144,6 +154,11 @@ final class MascotHeroLayerView: NSView {
         let t = MascotController.shared.time()
         guard t - lastDraw >= 1000 / fps - 3 else { return }
         lastDraw = t
+        // 同一個 display link 也讀游標（不另開一個，icons 第 4 部分第三版）：先更新視線再畫
+        let controller = MascotController.shared
+        controller.heroLinkTick(covers: controller.director?.machine.isOpen == true || !controller.effectsLive)
+        // 讀游標時停下來了（視線轉到位、游標停住）：圖層已經停掉
+        guard link != nil else { return }
         prepare()
     }
 
@@ -160,20 +175,42 @@ final class MascotHeroLayerView: NSView {
                                  effectClock: { controller.effectTime(at: $0) }, motion: controller.motion,
                                  liveGaze: { controller.liveGaze(at: $0) }, heldPose: controller.heldPose)
         let frame = canvas.heroFrame(at: controller.time())
+        let mascot = MascotPainter(config: director.config)
+        let rigid = MascotPainter.bodyIsRigid(frame)
+        let key = BodyKey(frame)
+        let at = mascot.heroCenter(frame)
+        // 畫出來和上一格看不出差別（差不到 1/4 個裝置像素）的就不重畫：每一格的 CPU 大多花在重畫與送出上（CI 取樣，
+        // icons 第 4 部分第三版）。視線沒變、只有上下浮動的位置變了：兩層一起搬，不重畫；位置也幾乎沒變：連送出都省掉
+        let scale = heroLayer.contentsScale, r = frame.pose[.r] * frame.pose[.sc] * scale
+        let sameFace = rigid && face.map {
+            $0.key == key && $0.blink == frame.blink
+                && abs(frame.gazeYaw - $0.yaw) * r < Self.invisibleShift && abs(frame.gazePitch - $0.pitch) * r < Self.invisibleShift
+        } == true
+        let samePlace = sameFace && hypot(at.x - placedAt.x, at.y - placedAt.y) * scale < Self.invisibleShift
         #if DEBUG
         frames.count += 1
+        if !sameFace { frames.drawn += 1 }
         frames.last = frame.time
         if frame.time - frames.since >= 1000 {
-            DebugTools.perfFrames(frames.count * 1000 / (frame.time - frames.since), open: director.machine.isOpen)
-            frames = (0, frame.time, frame.time)
+            let span = frame.time - frames.since
+            DebugTools.perfFrames(frames.count * 1000 / span, drawn: frames.drawn * 1000 / span, open: director.machine.isOpen)
+            frames = (0, 0, frame.time, frame.time)
         }
         #endif
-        let mascot = MascotPainter(config: director.config)
-        current = frame
+        if samePlace { return }
+        placedAt = at
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        guard MascotPainter.bodyIsRigid(frame) else {
+        if sameFace, let body, let face {
+            place(bodyLayer, at: bounds.offsetBy(dx: at.x - body.at.x, dy: at.y - body.at.y))
+            place(heroLayer, at: Self.faceBox(frame, at: body.at).offsetBy(dx: -box.minX + at.x - face.at.x, dy: -box.minY + at.y - face.at.y)
+                .intersection(bounds))
+            return
+        }
+        current = frame
+        guard rigid else {
+            face = nil
             if body != nil {
                 body = nil
                 bodyLayer.contents = nil
@@ -182,8 +219,7 @@ final class MascotHeroLayerView: NSView {
             heroLayer.setNeedsDisplay()
             return
         }
-        let at = mascot.heroCenter(frame)
-        let key = BodyKey(frame)
+        face = (key, frame.blink, frame.gazeYaw, frame.gazePitch, at)
         if body?.key != key {
             bodyLayer.contents = Self.image(frame, parts: .body, painter: mascot, box: box, clip: clip, scale: bodyLayer.contentsScale)
             body = (key, at)

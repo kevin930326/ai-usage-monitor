@@ -288,9 +288,10 @@ enum DebugTools {
     }
 
     /// 量測中才記：看滑鼠時角色圖層這一秒實際畫了幾格（螢幕關閉、鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
-    static func perfFrames(_ count: Int, open: Bool) {
+    /// drawn 是其中真的重畫的（畫出來和上一格一樣的不重畫）
+    static func perfFrames(_ count: Int, drawn: Int, open: Bool) {
         guard let perfStart else { return }
-        UsageStore.log(String(format: "perf-fps %.1f %d %@", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed"))
+        UsageStore.log(String(format: "perf-fps %.1f %d %@ %d", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed", drawn))
     }
 
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {

@@ -898,6 +898,13 @@ class NotchPerfSummaryTests(unittest.TestCase):
         result = self.run_summary(self.full(), frames=blinks)
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_drawn_frames_are_reported_but_ticks_gate_the_rate(self):
+        # 看不出差別的格不重畫（第 5 欄是真的重畫的格數）：照頻率更新的門檻看每秒更新幾次，重畫幾格只記錄
+        frames = [(t, n, f"{side} {n // 3}") for t, n, side in self.FRAMES]
+        result = self.run_summary(self.full(), frames=frames)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("其中真的重畫（看得出差別）的：收合 10、展開 20", result.stdout)
+
     def test_gaze_open_over_gate_fails(self):
         # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗
         busy = [(t, 2.5 if 262 <= t < 275 else cpu, rss) for t, cpu, rss in self.full()]

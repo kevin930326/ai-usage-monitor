@@ -12,6 +12,8 @@ marks = {m.group(2): float(m.group(1)) for m in re.finditer(r"perf-mark ([\d.]+)
 ticks = [float(t) for t in re.findall(r"perf-mark ([\d.]+) minute-tick", log)]
 # 看滑鼠時角色圖層每一秒實際畫了幾格（螢幕關閉或鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
 frames = [(float(m.group(1)), int(m.group(2)), m.group(3)) for m in re.finditer(r"perf-fps ([\d.]+) (\d+) (\w+)", log)]
+# 其中真的重畫的格數（畫出來和上一格看不出差別的不重畫；舊的紀錄沒有這一欄）
+drawn = [(float(m.group(1)), int(m.group(3)), m.group(2)) for m in re.finditer(r"perf-fps ([\d.]+) \d+ (\w+) (\d+)", log)]
 def window(a, b): return [s for s in samples if a <= s[0] < b]
 def without_ticks(rows): return [s for s in rows if not any(t <= s[0] < t + 2 for t in ticks)]
 def avg(rows, i): return sum(r[i] for r in rows) / len(rows) if rows else float("nan")
@@ -85,6 +87,11 @@ def slowest_fps(a, b, side):
 fps_collapsed, fps_open = slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
 print()
 print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}、展開 {fps_open}")
+if drawn:
+    def median_drawn(a, b, side):
+        got = sorted(n for t, n, s in drawn if a <= t < b and s == side)
+        return got[len(got) // 2] if got else 0
+    print(f"其中真的重畫（看得出差別）的：收合 {median_drawn(g + 2, g + 15, 'collapsed')}、展開 {median_drawn(go + 2, go + 15, 'open')}")
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
