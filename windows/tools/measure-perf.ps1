@@ -136,7 +136,9 @@ public static string ForegroundCovering() {
     if (r.Left > mi.Monitor.Left || r.Top > mi.Monitor.Top || r.Right < mi.Monitor.Right || r.Bottom < mi.Monitor.Bottom) return null;
     var name = new System.Text.StringBuilder(256);
     GetClassNameW(fg, name, name.Capacity);
-    return name.ToString();
+    // 桌面（按 Win+D 之後）與工作列本來就涵蓋整個螢幕，不算
+    var c = name.ToString();
+    return c == "Progman" || c == "WorkerW" || c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd" ? null : c;
 }
 public delegate bool MonitorProc(IntPtr monitor, IntPtr dc, ref RECT rect, IntPtr data);
 [DllImport("user32.dll")] public static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorProc proc, IntPtr data);
@@ -178,6 +180,13 @@ $animation = $false
 [void][AumPerf.Win]::SystemParametersInfoW($SpiGetClientAreaAnimation, 0, [ref]$animation, 0)
 $animationBefore = $animation
 $perMonitor = [AumPerf.Win]::PerMonitorAware()
+
+# 前景視窗蓋住整個螢幕（F11、影片、遊戲）時量測會被干擾（圓環被藏起來、閒置變高；實機第 8 部分之後的回報）：先請使用者回到桌面
+if ($null -ne [AumPerf.Win]::ForegroundCovering() -and -not $Ci) {
+    Write-Host "有全螢幕的視窗在前景（類別 $([AumPerf.Win]::ForegroundCovering())），量測會被干擾。請先按 Win+D 回到桌面；15 秒後開始。"
+    Start-Sleep -Seconds 15
+    if ($null -ne [AumPerf.Win]::ForegroundCovering()) { Write-Host '仍有全螢幕的視窗在前景，照樣量測；報表會註明。' }
+}
 
 if ($Ci -and -not $animation) {
     [void][AumPerf.Win]::SystemParametersInfoW($SpiSetClientAreaAnimation, 0, [IntPtr]1, 0)
@@ -288,7 +297,10 @@ try {
             Start-Sleep -Seconds 2
         }
         Start-Sleep -Seconds 20
-        Sample 10
+        $s = Sample 10
+        # App 每次關面板、閒下來後做完整的 GC（一般使用也一樣）；量測模式另記下 GC 之後的 managed 記憶體（KB）
+        $s | Add-Member -NotePropertyName ManagedMB -NotePropertyValue ([Math]::Round([AumPerf.Win]::Prop($ringAny, 'AIUsageMonitor.ManagedKB') / 1024.0, 1))
+        $s
     }
     $memFirst = $after
     $warm = Cycles 5
@@ -296,6 +308,7 @@ try {
     $memWarmup = [Math]::Round($warm.WorkingSetMB - $memFirst.WorkingSetMB, 1)
     $memGrowth = [Math]::Round($last.WorkingSetMB - $warm.WorkingSetMB, 1)
     $privateGrowth = [Math]::Round($last.PrivateMB - $warm.PrivateMB, 1)
+    $managedGrowth = [Math]::Round($last.ManagedMB - $warm.ManagedMB, 1)
 
     # 滑鼠移上去展開、移開收起
     $hoverNote = '未展開（找不到圓環或滑鼠移動沒有送到）'
@@ -389,7 +402,7 @@ foreach ($r in $rows) {
     if ($null -ne $r[2] -and $r[1] -gt $r[2]) { $warnings += "$($r[0]): $($r[1])% > $($r[2])%" }
 }
 $lines += "| 面板開關 5 次（暖機）的記憶體增加 | — | 記錄 | $memWarmup |"
-$lines += "| 再開關 10 次的記憶體增加（工作集／私有） | — | ≤ +5 MB | $memGrowth／$privateGrowth |"
+$lines += "| 再開關 10 次的記憶體增加（工作集／私有／GC 後的 managed） | — | ≤ +5 MB | $memGrowth／$privateGrowth／$managedGrowth |"
 if ($null -ne $hoverOpen) {
     $lines += "| 圖示展開動畫中（最大值） | $hoverPeak | 記錄 | — |"
     $lines += "| 圖示展開待著（角色眨眼、看滑鼠） | $($hoverOpen.Cpu) | ≤ $($limits[1]) | $($hoverOpen.WorkingSetMB) |"
