@@ -852,13 +852,17 @@ class NotchPerfSummaryTests(unittest.TestCase):
              "agent-raise": 185, "agent-lower": 205, "agent-raise-open": 215, "agent-lower-open": 230,
              "collapsed-think": 235, "gaze-move-open": 260, "gaze-still-open": 275}
 
-    def run_summary(self, samples, marks=None, ticks=()):
+    # 看滑鼠時每秒畫的格數：收合 30、展開 60（螢幕關著時只有 1）
+    FRAMES = [(t, 30, "collapsed") for t in range(74, 88)] + [(t, 60, "open") for t in range(261, 276)]
+
+    def run_summary(self, samples, marks=None, ticks=(), frames=None):
         with tempfile.TemporaryDirectory() as tmp:
             s = Path(tmp) / "samples.tsv"
             log = Path(tmp) / "app.log"
             s.write_text("".join(f"{t} {cpu} {rss}\n" for t, cpu, rss in samples))
             log.write_text("".join(f"perf-mark {v} {k}\n" for k, v in (marks or self.MARKS).items())
-                           + "".join(f"perf-mark {t} minute-tick\n" for t in ticks))
+                           + "".join(f"perf-mark {t} minute-tick\n" for t in ticks)
+                           + "".join(f"perf-fps {t}.5 {n} {side}\n" for t, n, side in (self.FRAMES if frames is None else frames)))
             return subprocess.run([sys.executable, str(self.SCRIPT), str(s), str(log)], capture_output=True, text=True)
 
     @staticmethod
@@ -869,12 +873,44 @@ class NotchPerfSummaryTests(unittest.TestCase):
         result = self.run_summary(self.full())
         self.assertEqual(result.returncode, 0, result.stdout)
 
+    def test_gaze_without_frames_fails(self):
+        # 螢幕關著或鎖著時每秒只畫 1 格，CPU 低得不準：要失敗，不能當成通過
+        asleep = [(t, 1, side) for t, _, side in self.FRAMES]
+        result = self.run_summary(self.full(), frames=asleep)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 看滑鼠時真的照頻率重畫", result.stdout)
+
+    def test_gaze_frames_with_gaps_or_wrong_side_fail(self):
+        # 只有一筆、中途停掉、側別不符都不算照頻率重畫（Codex C-02）
+        cases = {
+            "only-one": [(75, 30, "collapsed"), (262, 60, "open")],
+            "stops-midway": [f for f in self.FRAMES if not 80 <= f[0] < 88],
+            "wrong-side": [(t, n, "open") for t, n, _ in self.FRAMES],
+        }
+        for name, frames in cases.items():
+            result = self.run_summary(self.full(), frames=frames)
+            self.assertEqual(result.returncode, 1, (name, result.stdout))
+            self.assertIn("❌ 看滑鼠時真的照頻率重畫", result.stdout)
+
+    def test_gaze_frames_dipping_during_blinks_pass(self):
+        # 眨眼時由 SwiftUI 畫、圖層那一秒少幾格：只要大部分的秒數夠，照樣通過（Codex 第二輪 C-01）
+        blinks = [(t, n - 20 if t % 4 == 0 else n, side) for t, n, side in self.FRAMES]
+        result = self.run_summary(self.full(), frames=blinks)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
     def test_gaze_open_over_gate_fails(self):
-        # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 8% 就失敗
-        busy = [(t, 9.0 if 262 <= t < 275 else cpu, rss) for t, cpu, rss in self.full()]
+        # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動超過 2% 就失敗
+        busy = [(t, 2.5 if 262 <= t < 275 else cpu, rss) for t, cpu, rss in self.full()]
         result = self.run_summary(busy)
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("❌ 展開、游標一直移動", result.stdout)
+
+    def test_gaze_collapsed_over_gate_fails(self):
+        # 收合時游標一直移動超過 1% 就失敗
+        busy = [(t, 1.5 if 75 <= t < 88 else cpu, rss) for t, cpu, rss in self.full()]
+        result = self.run_summary(busy)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("❌ 收合、游標一直移動", result.stdout)
 
     def test_gaze_open_tracking_that_never_stops_fails(self):
         # 停下後高幀率沒停（一直約 5%）就失敗（Codex C-02）

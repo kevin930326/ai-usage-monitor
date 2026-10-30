@@ -36,7 +36,8 @@ struct NotchView: View {
                                 motion: controller.motion,
                                 heroRate: rate == .idle || rate == .breathing || rate == .gaze || rate == .gazeOpen || rate == .effect ? rate : nil,
                                 heroClock: { controller.time($0) },
-                                liveGaze: { controller.liveGaze(at: $0) })
+                                liveGaze: { controller.liveGaze(at: $0) },
+                                heroOnLayer: controller.heroOnLayer)
                 }
                 .overlay { NotchPulse(active: controller.pulsing, shape: collapsedShape) }
             }
@@ -373,6 +374,10 @@ struct NotchCanvas: View {
     var heroClock: ((Date) -> Int)?
     /// 看滑鼠：每一格的最新視線（nil 時用 director 的）
     var liveGaze: ((Int) -> (yaw: Double, pitch: Double)?)?
+    /// 看滑鼠時角色交給 `MascotHeroLayerView`（CoreGraphics，每一格不經過 SwiftUI）：這裡只留停在 `time` 的光暈
+    var heroOnLayer = false
+    /// 姿勢固定時給它（`MascotController.heldPose`），不必每一格再算
+    var heldPose: MascotPose?
 
     var body: some View {
         let shape = director.panelShape(at: time)
@@ -428,7 +433,11 @@ struct NotchCanvas: View {
 
     @ViewBuilder
     private var hero: some View {
-        if let heroRate, let heroClock {
+        if heroOnLayer {
+            Canvas(rendersAsynchronously: false) { context, _ in
+                MascotPainter(config: director.config).drawGlow(frame(at: time), in: &context)
+            }
+        } else if let heroRate, let heroClock {
             // 收合時特效在動：連看滑鼠也最多每秒 12 次
             let interval = effectsLive && !director.machine.isOpen ? max(heroRate.interval, MascotRenderRate.effect.interval)
                 : heroRate.interval
@@ -490,6 +499,11 @@ struct NotchCanvas: View {
         }
     }
 
+    /// `MascotHeroLayerView` 畫的那一格（角色照 `time`、特效照特效的時鐘）
+    func heroFrame(at time: Int) -> MascotFrame {
+        frame(at: time, effectTime: effectTime(time))
+    }
+
     private func frame(at time: Int, effectTime: Int? = nil) -> MascotFrame {
         let still = !motion.movesEyes
         // 視線讀 controller 的最新值：看滑鼠的高幀率期間 director 的快照不會更新（不重排 SwiftUI，ADR-0016 第 6 節）
@@ -497,7 +511,7 @@ struct NotchCanvas: View {
         // 只有其他電腦在工作：泡泡旁畫小電腦；展開時、動畫「簡單」「關閉」時也看得出來（泡泡停在亮兩顆，不另外重畫；
         // 收合時的循環照時間亮，Fable G-11）
         let remote = director.machine.thinksRemotely || extras.staticRemote
-        return MascotFrame(time: time, pose: director.pose(at: time), eyes: director.eyes(at: time),
+        return MascotFrame(time: time, pose: heldPose ?? director.pose(at: time), eyes: director.eyes(at: time),
                            blink: still ? 0 : director.blink(at: time),
                            gazeYaw: gaze.yaw, gazePitch: gaze.pitch, statusColor: director.statusColor(at: time),
                            mood: director.mood(at: time),

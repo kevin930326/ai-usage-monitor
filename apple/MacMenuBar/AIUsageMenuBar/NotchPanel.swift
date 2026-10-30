@@ -66,6 +66,7 @@ final class NotchPanelController {
                     MainActor.assumeIsolated { NotchPanelController.shared.place() }
                 })
         }
+        // 新的面板：控制器還在看滑鼠的話（`heroOnLayer` 沒變、不會再通知）由 `place` 啟動角色的圖層
         place()
         panel?.orderFrontRegardless()
         MascotController.shared.panelVisibilityChanged()
@@ -73,6 +74,8 @@ final class NotchPanelController {
 
     private func hide() {
         MascotController.shared.closeNow()
+        // 收合時看滑鼠的圖層可能正在畫：先停掉它的 display link，之後的 heroLayerChanged 已經找不到這個面板（Codex C-01）
+        panel?.container.stopHeroLayer()
         panel?.orderOut(nil)
         panel = nil
         observers.forEach(NotificationCenter.default.removeObserver)
@@ -87,6 +90,8 @@ final class NotchPanelController {
         MascotController.shared.setLayout(layout)
         // 和控制器記錄的大小一致（收著時的提醒動畫也算展開中），之後的 setExpanded 才不會漏掉（Codex C-03）
         panel.place(on: screen, layout: layout, expanded: MascotController.shared.windowExpanded)
+        // 換了螢幕或解析度：看滑鼠的圖層重新取倍率、更新率與裁切的形狀（Fable G2-09）
+        heroLayerChanged()
     }
 
     static func targetScreen() -> NSScreen? {
@@ -110,6 +115,10 @@ final class NotchPanelController {
     /// 特效要不要由 Core Animation 循環播放（收合、只有特效在動）改變了
     func effectLoopChanged() {
         panel?.container.updateEffectLoop()
+    }
+
+    func heroLayerChanged() {
+        panel?.container.updateHeroLayer()
     }
 
     func setExpanded(_ expanded: Bool) {
@@ -182,6 +191,8 @@ final class NotchContainerView: NSView {
     /// 收合時 AI 工作中的特效：Core Animation 循環播放預先畫好的一輪（`MascotEffectLoop`）
     private let effectLoopView = PassThroughView()
     private var effectLoopBox = CGRect.zero
+    /// 看滑鼠時的角色（CoreGraphics，每一格不經過 SwiftUI）
+    private let heroLayerView = MascotHeroLayerView()
     private var tracking: NSTrackingArea?
 
     /// 收合、只有特效在動時播一輪；其他時候停掉並釋放圖片
@@ -208,6 +219,20 @@ final class NotchContainerView: NSView {
         if !controller.effectLoopPlaying { controller.effectLoopPlaying = true }
     }
 
+    func stopHeroLayer() {
+        heroLayerView.stop()
+    }
+
+    /// 只有視線在轉時由 `MascotHeroLayerView` 畫角色；其他時候停掉它的 display link
+    func updateHeroLayer() {
+        if MascotController.shared.heroOnLayer {
+            heroLayerView.start()
+            layoutCanvas()
+        } else {
+            heroLayerView.stop()
+        }
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
@@ -216,6 +241,7 @@ final class NotchContainerView: NSView {
         addSubview(effectHosting)
         effectLoopView.wantsLayer = true
         addSubview(effectLoopView)
+        addSubview(heroLayerView)
         layoutCanvas()
     }
 
@@ -229,6 +255,7 @@ final class NotchContainerView: NSView {
                                width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
         effectHosting.frame = hosting.frame
         effectLoopView.frame = effectLoopBox.offsetBy(dx: hosting.frame.minX, dy: hosting.frame.minY)
+        heroLayerView.frame = heroLayerView.box.offsetBy(dx: hosting.frame.minX, dy: hosting.frame.minY)
     }
 
     override func layout() {

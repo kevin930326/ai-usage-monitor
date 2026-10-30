@@ -182,6 +182,7 @@ internal static class FloatingRingRenderer
         var controller = face.Controller;
         var t = controller.Rate == MascotRenderRate.Stopped ? controller.StoppedAt : controller.Time();
         var needsYou = s.Content.Agent?.State == AgentState.NeedsYou;
+        face.Overlay = null;
         if (s.Reveal <= 0 && s.TabVisible is { } visible)
         {
             // 從螢幕邊緣探出頭：沒有圓底，邊緣那側一團柔和的陰影；需要你時頭的外圈琥珀色
@@ -230,14 +231,30 @@ internal static class FloatingRingRenderer
             dc.Pop();
             dc.PushClip(shape);
             face.DrawRipple(dc, rect, s.PixelsPerDip);
-            face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect, slot: slot);
+            if (!face.DefersHero(progress)) face.DrawHero(dc, center, r, progress, s.PixelsPerDip, bounds: rect, slot: slot);
             dc.Pop();
         }
         else
         {
             face.DrawHero(dc, center, r, 0, s.PixelsPerDip, bounds: rect, slot: slot);
         }
-        if (progress > 0 && controller.Level is { } level) DrawLevel(dc, level, center + new Vector(slot * progress, 0), r, s.PixelsPerDip);
+        var levelAt = center + new Vector(slot * progress, 0);
+        // 只有完全展開時才有上面那一層：展開中（彈簧還沒停）每一格都整個重畫
+        if (progress >= 1)
+        {
+            // 角色與畫在它上面的 Lv 放到另一層（疊放順序不變），看滑鼠時每一格只重畫那一層。兩層各自在畫的那一刻
+            // 看要不要由上面那層畫（重畫頻率只在 Refresh 改、改了兩層都重畫），誰先畫都不會少一格或多畫一個角色
+            var ppd = s.PixelsPerDip;
+            face.Overlay = o =>
+            {
+                if (!face.DefersHero(progress)) return;
+                o.PushClip(shape);
+                face.DrawHero(o, center, r, progress, ppd, bounds: rect, slot: slot);
+                o.Pop();
+                if (controller.Level is { } lv) DrawLevel(o, lv, levelAt, r, ppd);
+            };
+        }
+        if (progress > 0 && !face.DefersHero(progress) && controller.Level is { } level) DrawLevel(dc, level, levelAt, r, s.PixelsPerDip);
         if (progress <= 0 && face.ShowsPercent && s.Content.Provider.Length > 0) DrawPercent(dc, s.Content, center, r, s.PixelsPerDip);
         if (needsYou) dc.DrawGeometry(null, AmberPen, progress > 0 ? Inset(shape, center, r) : headRing);
         else if (controller.PulseAt is { } pulse && progress <= 0)

@@ -328,6 +328,8 @@ internal static class DebugTools
         {
             Wallpaper(dc, width, height, wallpaper);
             FloatingRingRenderer.Draw(dc, scene);
+            // 看滑鼠時角色在另一層（視窗裡疊在上面）：截圖照同樣的順序畫上去
+            if (scene.Face is MascotFace mascot) mascot.Overlay?.Invoke(dc);
         }
         return Bitmap(visual, width, height, scale: scale);
     }

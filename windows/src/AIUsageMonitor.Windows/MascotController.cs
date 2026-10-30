@@ -12,7 +12,7 @@ using AIUsageMonitor.Mascot;
 namespace AIUsageMonitor.Windows;
 
 /// <summary>重畫的頻率（同 Mac 的 MascotRenderRate，ADR-0015 第 7 節「角色」）</summary>
-/// <summary>Gaze：只有視線在轉、收合（每秒 15 次）；GazeOpen：展開（每秒 30 次）。游標每一格讀一次（ADR-0016 第 6 節）</summary>
+/// <summary>Gaze：只有視線在轉、收合；GazeOpen：展開。都是每秒 30 次（CI 上展開 60 格 4.2%；30 格與 20 格都是 2.2～2.6%，剩下的是處理滑鼠移動本身，再降幀只會不順）。游標每一格讀一次</summary>
 internal enum MascotRenderRate { Stopped, Effect, Breathing, Gaze, GazeOpen, Idle, Animating }
 
 internal static class MascotRenderRates
@@ -20,7 +20,7 @@ internal static class MascotRenderRates
     public static double IntervalMs(this MascotRenderRate rate) => rate switch
     {
         MascotRenderRate.Breathing => 1000.0 / 10,
-        MascotRenderRate.Gaze => 1000.0 / 15,
+        MascotRenderRate.Gaze => 1000.0 / 30,
         MascotRenderRate.GazeOpen => 1000.0 / 30,
         MascotRenderRate.Effect => 1000.0 / 12,
         MascotRenderRate.Animating => 1000.0 / 60,
@@ -53,7 +53,7 @@ internal sealed class MascotController : IDisposable
     private readonly DispatcherTimer deadlineTimer;
     private readonly DispatcherTimer rateTimer;
     private readonly DispatcherTimer gazeTimer;
-    /// <summary>游標在動時每一格讀一次游標（Render 優先權；展開每秒 30 次、收合 15 次，同 Mac）；停下約 1 秒、視線也轉到位後停掉
+    /// <summary>游標在動時每一格讀一次游標（Render 優先權；展開、收合都是每秒 30 次）；停下約 1 秒、視線也轉到位後停掉
     /// （check-no-network 禁止 CompositionTarget.Rendering，Fable F-24）</summary>
     private readonly DispatcherTimer trackTimer;
     private long lastPointerMove;
@@ -87,7 +87,11 @@ internal sealed class MascotController : IDisposable
         Config = LoadConfig();
         Looks = LoadLooks();
         Painter = new MascotPainter(Config);
-        frameTimer = Timer(dispatcher, DispatcherPriority.Render, () => Changed?.Invoke());
+        frameTimer = Timer(dispatcher, DispatcherPriority.Render, () =>
+        {
+            if (Rate == MascotRenderRate.GazeOpen && FrameTick is { } tick) tick();
+            else Changed?.Invoke();
+        });
         deadlineTimer = OneShot(dispatcher, () => Mutate(d => d.Advance(Time())));
         rateTimer = OneShot(dispatcher, Refresh);
         gazeTimer = Timer(dispatcher, DispatcherPriority.Background, PollPointer);
@@ -118,6 +122,8 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>畫面要重畫</summary>
     public event Action? Changed;
+    /// <summary>展開、只有視線在轉時的每一格（看滑鼠的高幀率）：有人接的話只重畫角色那一層（<see cref="MascotFace.Overlay"/>），不送 Changed</summary>
+    public event Action? FrameTick;
     /// <summary>要收合（保持展開取消、設定改變）</summary>
     public event Action? CloseRequested;
     /// <summary>展開了：讀一次等級（ADR-0020 第 4 節）</summary>
@@ -339,11 +345,20 @@ internal sealed class MascotController : IDisposable
         var t = Time();
         var pose = director.Pose(t);
         var gesture = gestures.Move(x, y, t, pose[MascotProp.X], pose[MascotProp.Y], pose[MascotProp.R], CanDetect(director.Machine));
-        Mutate(d =>
+        // 游標在視窗裡每動一次（約每 16 毫秒）都會來：沒有手勢、而且照計時器在重畫時只往前推狀態機的時間（Move 只做這件事，
+        // 到期的轉換由 deadlineTimer 處理），不 Refresh、不另外整張重繪（同 Mac 的 pointerMoved；以前展開看滑鼠時 CI 量到 10～14%）
+        if (gesture is null && Rate.FollowsGaze())
         {
-            d.Move(t);
-            if (gesture is { } g) d.Gesture(g, t);
-        });
+            director.Move(t);
+        }
+        else
+        {
+            Mutate(d =>
+            {
+                d.Move(t);
+                if (gesture is { } g) d.Gesture(g, t);
+            });
+        }
         hoverTimer.Stop();
         if (gestures.HoverDeadline is { } deadline) Start(hoverTimer, deadline - t);
     }
@@ -609,7 +624,7 @@ internal sealed class MascotController : IDisposable
 
     /// <summary>
     /// 游標沒在動時低頻輪詢：每秒約 12 次、停住 1 秒後 4 次；收合時工作中或睡著每秒 1 次（只看是否又該追游標）。
-    /// 看到游標移動就改成每一格讀一次（展開每秒 30 次、收合 15 次），停下約 1 秒、視線也轉到位後回到低頻輪詢
+    /// 看到游標移動就改成每一格讀一次（展開、收合都是每秒 30 次），停下約 1 秒、視線也轉到位後回到低頻輪詢
     /// （ADR-0016 第 6 節，ADR-0010 規則 1、4 的例外）
     /// </summary>
     private void RestartGaze()
@@ -638,6 +653,8 @@ internal sealed class MascotController : IDisposable
     private const double TrackingThreshold = 0.0005;
     /// <summary>游標停下多久、視線也轉到位後才停掉高幀率（Fable F-25）</summary>
     private const long TrackingLinger = 1000;
+    /// <summary>游標相對圖示移動不到這個距離（DIP）算沒動</summary>
+    private const double StillDistance = 0.5;
 
     private bool Tracking => trackTimer.IsEnabled;
 
@@ -711,7 +728,8 @@ internal sealed class MascotController : IDisposable
         // 游標相對圖示的位置（DIP）：游標沒動但圖示移動（拖動、展開）時也會重新對準
         var dx = (cursor.X - hero.X) / hero.Scale;
         var dy = (cursor.Y - hero.Y) / hero.Scale;
-        if (lastPointer is { } last && Math.Abs(last.X - dx) < 0.01 && Math.Abs(last.Y - dy) < 0.01)
+        // 不到半個 DIP 算沒動：圖示的位置在動畫收尾時還在一點一點地變，太嚴的話高幀率會停不下來（同 Mac，icons 第 4 部分）
+        if (lastPointer is { } last && Math.Abs(last.X - dx) < StillDistance && Math.Abs(last.Y - dy) < StillDistance)
         {
             if (Tracking)
             {

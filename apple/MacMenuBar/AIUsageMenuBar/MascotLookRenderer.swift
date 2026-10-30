@@ -65,23 +65,25 @@ enum MascotLookRenderer {
 
     /// 身體（不含光暈、手與另外畫的眼睛）。`time` 是特效的時間（毫秒）；nil 時畫靜態的一格（收合閒置、動畫簡單或關閉）。
     /// `solid` 由呼叫端用三階漸層畫（和服務色同一套，過場時從白色漸變）。
-    static func drawBody(_ look: MascotLook, radius R: Double, face: Face, time: Int?, in cg: CGContext) {
+    /// `glowScale`：CoreGraphics 的發光以像素計、不跟著座標縮放；直接畫在 Retina 的 context 上時給它的倍率
+    /// （SwiftUI 的 `withCGContext` 會自己換算，給 1）
+    static func drawBody(_ look: MascotLook, radius R: Double, face: Face, time: Int?, glowScale: Double = 1, in cg: CGContext) {
         switch look.style {
         case .solid: break
         case .linear: drawLinear(look, radius: R, in: cg)
         case .led, .pixel, .ascii: drawGrid(look, radius: R, face: face, time: time, in: cg)
-        case .wire: drawWire(look, radius: R, face: face, time: time, in: cg)
-        case .neon: drawNeon(look, radius: R, time: time, in: cg)
+        case .wire: drawWire(look, radius: R, face: face, time: time, glowScale: glowScale, in: cg)
+        case .neon: drawNeon(look, radius: R, time: time, glowScale: glowScale, in: cg)
         }
     }
 
     /// 手（半徑 `r`，中心 `center`）：線框、霓虹是發光的圓圈；直線漸層照身體；其他特效用主色的三階
-    static func drawHand(_ look: MascotLook, center: CGPoint, radius r: Double, in cg: CGContext) -> Bool {
+    static func drawHand(_ look: MascotLook, center: CGPoint, radius r: Double, glowScale: Double = 1, in cg: CGContext) -> Bool {
         switch look.style {
         case .neon, .wire:
             let color = cgColor(look.color ?? ink)
             cg.saveGState()
-            cg.setShadow(offset: .zero, blur: r * 0.9, color: color)
+            cg.setShadow(offset: .zero, blur: r * 0.9 * glowScale, color: color)
             cg.setStrokeColor(color)
             cg.setLineWidth(max(1, r * 0.2))
             cg.strokeEllipse(in: CGRect(x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r))
@@ -278,14 +280,14 @@ enum MascotLookRenderer {
 
     // MARK: - 線框球、霓虹
 
-    private static func drawWire(_ look: MascotLook, radius R: Double, face: Face, time: Int?, in cg: CGContext) {
+    private static func drawWire(_ look: MascotLook, radius R: Double, face: Face, time: Int?, glowScale: Double, in cg: CGContext) {
         guard let color = look.color else { return }
         let mini = isMini(R)
         let full = CGRect(x: -R, y: -R, width: 2 * R, height: 2 * R)
         cg.saveGState()
         cg.setFillColor(CGColor(srgbRed: 4 / 255, green: 14 / 255, blue: 30 / 255, alpha: 0.88))
         cg.fillEllipse(in: full)
-        cg.setShadow(offset: .zero, blur: mini ? R * 0.5 : R * 0.12, color: cgColor(color))
+        cg.setShadow(offset: .zero, blur: (mini ? R * 0.5 : R * 0.12) * glowScale, color: cgColor(color))
         // 所有線條畫在同一層，發光只算一次（每條線各算一次陰影很花 CPU）
         cg.beginTransparencyLayer(auxiliaryInfo: nil)
         cg.setLineWidth(max(1, R * 0.022))
@@ -312,7 +314,7 @@ enum MascotLookRenderer {
         cg.restoreGState()
     }
 
-    private static func drawNeon(_ look: MascotLook, radius R: Double, time: Int?, in cg: CGContext) {
+    private static func drawNeon(_ look: MascotLook, radius R: Double, time: Int?, glowScale: Double, in cg: CGContext) {
         guard let color = look.color else { return }
         // 呼吸：靜態時是最亮的一格
         let pulse = time.map { 0.75 + 0.25 * sin(Double($0) / 480) } ?? 1
@@ -320,7 +322,7 @@ enum MascotLookRenderer {
         cg.saveGState()
         cg.setFillColor(CGColor(srgbRed: 0x0B / 255, green: 0x07 / 255, blue: 0x10 / 255, alpha: 1))
         cg.fillEllipse(in: CGRect(x: -R, y: -R, width: 2 * R, height: 2 * R))
-        cg.setShadow(offset: .zero, blur: R * 0.45 * pulse, color: cgColor(color))
+        cg.setShadow(offset: .zero, blur: R * 0.45 * pulse * glowScale, color: cgColor(color))
         cg.setStrokeColor(cgColor(color))
         cg.setLineWidth(max(1.3, R * 0.07))
         cg.strokeEllipse(in: ring)

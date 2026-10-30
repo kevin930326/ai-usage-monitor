@@ -51,6 +51,9 @@ enum DebugTools {
             // 面板關著時不讀資料庫；截圖時沒有「打開面板」，所以先讀一次
             HistoryStore.shared.open()
             let name = env["AUM_RENDER_NAME"].flatMap { $0.isEmpty ? nil : $0 } ?? "panel"
+            // 看滑鼠時的角色圖層和瀏海畫布畫出來一樣（icons 第 4 部分）
+            if name == "panel" || name == "hero-parity" { DebugHeroParity.run(to: url) }
+            if name == "hero-parity" { exit(0) }
             renderPanel(to: url, name: name)
             if name == "panel" {
                 renderMenuBarIcons(to: url)
@@ -278,6 +281,12 @@ enum DebugTools {
     static func perfMark(_ name: String) {
         guard let perfStart else { return }
         UsageStore.log(String(format: "perf-mark %.1f %@", Date.now.timeIntervalSince(perfStart), name))
+    }
+
+    /// 量測中才記：看滑鼠時角色圖層這一秒實際畫了幾格（螢幕關閉、鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
+    static func perfFrames(_ count: Int, open: Bool) {
+        guard let perfStart else { return }
+        UsageStore.log(String(format: "perf-fps %.1f %d %@", Date.now.timeIntervalSince(perfStart), count, open ? "open" : "collapsed"))
     }
 
     private static func schedule(_ steps: [(TimeInterval, String, @MainActor () -> Void)]) {

@@ -10,6 +10,8 @@ log = open(sys.argv[2]).read()
 marks = {m.group(2): float(m.group(1)) for m in re.finditer(r"perf-mark ([\d.]+) (\S+)", log)}
 # App 每分鐘一次的時鐘更新（UsageStore.tick）：成本算在「收合後 60～90 秒」；看滑鼠的兩項要量的是不重畫，扣掉更新後 2 秒內的取樣
 ticks = [float(t) for t in re.findall(r"perf-mark ([\d.]+) minute-tick", log)]
+# 看滑鼠時角色圖層每一秒實際畫了幾格（螢幕關閉或鎖定時 display link 每秒只叫一次，CPU 會量成假的 0）
+frames = [(float(m.group(1)), int(m.group(2)), m.group(3)) for m in re.finditer(r"perf-fps ([\d.]+) (\d+) (\w+)", log)]
 def window(a, b): return [s for s in samples if a <= s[0] < b]
 def without_ticks(rows): return [s for s in rows if not any(t <= s[0] < t + 2 for t in ticks)]
 def avg(rows, i): return sum(r[i] for r in rows) / len(rows) if rows else float("nan")
@@ -53,7 +55,7 @@ rows = [
     # 背景執行中（ADR-0017 第 7 節）：收著時的循環交給 Core Animation，和收合靜止同一個門檻
     ("收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）", without_ticks(window(th + 3, th + 19)), "avg"),
     # 看滑鼠的高幀率（icons 第 4 部分）：展開時游標一直移動、停下後（停掉 display link、只剩眨眼）
-    ("展開、游標一直移動（看滑鼠，每秒 30 格）", window(go + 2, go + 15), "avg"),
+    ("展開、游標一直移動（看滑鼠，跟著螢幕更新率）", window(go + 2, go + 15), "avg"),
     ("展開、游標停下後（2～10 秒）", window(gso + 2, gso + 10), "avg"),
 ]
 print("| 階段 | 取樣數 | CPU%（平均或最大） | RSS（MB，最大） |")
@@ -68,7 +70,21 @@ pulsing = by_name["收合、等你下指令（每 7 秒脈動，扣掉每分鐘�
 raised, raised_open = by_name["收合、舉著手（扣掉每分鐘更新）"], by_name["展開、舉著手"]
 gaze_asleep = by_name["收合、睡著、游標移動（不重畫，扣掉每分鐘更新）"]
 gaze_moving, gaze_still = by_name["收合、醒著、游標一直移動（看滑鼠）"], by_name["收合、游標停住（停止重畫，扣掉每分鐘更新）"]
-gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，每秒 30 格）"], by_name["展開、游標停下後（2～10 秒）"]
+gaze_open, gaze_open_still = by_name["展開、游標一直移動（看滑鼠，跟著螢幕更新率）"], by_name["展開、游標停下後（2～10 秒）"]
+# 看滑鼠時實際每秒畫了幾格：收合每秒 30 格、展開跟著螢幕（至少 60）；不到八成就是螢幕關著或鎖著，CPU 不準。
+# 約每秒記一筆：窗口裡那一側（收合／展開）的紀錄前後相隔都不超過 1.6 秒才算數（只有一筆、中途停掉重畫都會被抓到，
+# Codex C-02），取中位數：眨眼的約 0.3 秒改由 SwiftUI 畫、不算在圖層的格數裡，那一秒會少幾格（Codex 第二輪 C-01）
+def slowest_fps(a, b, side):
+    got = sorted((t, n) for t, n, s in frames if a - 1 <= t < b + 1 and s == side)
+    times = [a] + [t for t, _ in got] + [b]
+    inside = [n for t, n in got if a <= t < b]
+    if not inside or max(y - x for x, y in zip(times, times[1:])) > 1.6:
+        return 0
+    inside.sort()
+    return inside[len(inside) // 2]
+fps_collapsed, fps_open = slowest_fps(g + 2, g + 15, "collapsed"), slowest_fps(go + 2, go + 15, "open")
+print()
+print(f"看滑鼠時實際每秒畫的格數（中位數）：收合 {fps_collapsed}、展開 {fps_open}")
 # 每個階段都要有取樣（ps 每秒一筆）：播放中至少 2 筆、平均的至少 4 筆，缺了就算失敗（Codex C-07）
 missing = [name for name, r, kind in rows if len(r) < (2 if kind == "peak" else 4)]
 checks = [
@@ -76,16 +92,17 @@ checks = [
     ("展開待著（醒著、睡著）≤ 4%", bool(awake) and bool(asleep) and avg(awake, 1) <= 4 and avg(asleep, 1) <= 4),
     ("收合後 1 分鐘 ≤ 0.3%", bool(closed) and avg(closed, 1) <= 0.3),
     # 看滑鼠：游標一直動時和展開待著同一個門檻；游標停住或睡著時和收合靜止同一個門檻
-    ("收合、游標一直移動 ≤ 4%", bool(gaze_moving) and avg(gaze_moving, 1) <= 4),
+    ("收合、游標一直移動 ≤ 1%", bool(gaze_moving) and avg(gaze_moving, 1) <= 1),
     ("收合、游標停住或睡著 ≤ 0.3%", bool(gaze_still) and bool(gaze_asleep) and avg(gaze_still, 1) <= 0.3 and avg(gaze_asleep, 1) <= 0.3),
     ("收合、等你下指令的脈動 ≤ 0.3%", bool(pulsing) and avg(pulsing, 1) <= 0.3),
     ("收合、舉著手 ≤ 0.3%；展開、舉著手 ≤ 4%", bool(raised) and bool(raised_open) and avg(raised, 1) <= 0.3
      and avg(raised_open, 1) <= 4),
     ("收合、背景執行中 ≤ 0.3%", bool(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"])
      and avg(by_name["收合、背景執行中（呼吸＋慢速泡泡，扣掉每分鐘更新）"], 1) <= 0.3),
-    # 看滑鼠的高幀率（icons 第 4 部分）：展開時每秒 30 格約 5%（SwiftUI 每一格約 0.25%）。停下約 1 秒後高幀率要停：
-    # 停了約 0.1%，沒停就和移動時一樣約 5%，所以門檻 1%（Codex C-02）
-    ("展開、游標一直移動 ≤ 8%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 8
+    # 看滑鼠的高幀率（icons 第 4 部分）：角色由 CoreGraphics 的圖層畫，展開跟著螢幕更新率、收合每秒 30 格。
+    # 停下約 1 秒後高幀率要停：停了約 0.1%，沒停就和移動時差不多，所以門檻 1%（Codex C-02）
+    ("看滑鼠時真的照頻率重畫（收合 ≥ 24、展開 ≥ 48 格／秒）", fps_collapsed >= 24 and fps_open >= 48),
+    ("展開、游標一直移動 ≤ 2%；停下後 ≤ 1%", bool(gaze_open) and bool(gaze_open_still) and avg(gaze_open, 1) <= 2
      and avg(gaze_open_still, 1) <= 1),
     ("第二次收合後 RSS ≤ 第一次收合後 +5 MB", bool(second) and bool(closed) and peak(second, 2) <= peak(closed, 2) + 5 * 1024),
 ]

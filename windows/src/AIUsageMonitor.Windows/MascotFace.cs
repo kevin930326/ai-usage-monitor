@@ -30,12 +30,23 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
     public static readonly Color Amber = Color.FromRgb(245, 190, 60);
 
     private readonly Slot hero = new();
+    /// <summary>展開時只有視線在轉：只畫角色周圍一塊（大小和整個膠囊不同，分開放才不會每次眨眼都重配點陣圖）</summary>
+    private readonly Slot heroNear = new();
     private readonly Slot ripple = new();
     private readonly Dictionary<object, List<BitmapSource>> loops = [];
     /// <summary>上一次畫角色時的對應（滑鼠的視窗座標換成畫布座標）</summary>
     private (Point Center, double K, double Ax, double Ay)? mapping;
 
     public MascotController Controller => controller;
+
+    /// <summary>
+    /// 展開、只有視線在轉時（看滑鼠的高幀率）角色與 Lv 改畫在圓環視窗的另一層：每一格只重畫這一層，膠囊、額度兩行的文字不必重建
+    /// （透明視窗每重繪一次整張都很貴）。展開時圓環畫一次就設好（<see cref="FloatingRingRenderer"/>，裡面再依 <see cref="DefersHero"/> 決定畫不畫），收合、貼邊時 null
+    /// </summary>
+    public Action<DrawingContext>? Overlay { get; set; }
+
+    /// <summary>這一格的角色要不要改畫在 <see cref="Overlay"/></summary>
+    public bool DefersHero(double progress) => progress >= 1 && controller.Rate == MascotRenderRate.GazeOpen;
 
     /// <summary>上一次畫角色時角色的中心（視窗座標，DIP；含展開的進度、往左展開的移動與推回工作區的距離）；還沒畫過時 null</summary>
     public Point? HeroCenter => mapping?.Center;
@@ -120,6 +131,15 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         // 收合時跳一下、揮手會超出圓底：畫的範圍是圓底的 2.3 倍
         var half = r * 1.15;
         var area = p > 0 && bounds is { } b ? b : new Rect(center.X - half, center.Y - half, half * 2, half * 2);
+        // 完全展開、只有視線在轉（看滑鼠的高幀率）：只畫角色周圍一塊（同 Mac，提醒光環最大 3 倍身體半徑），
+        // 不必每格把整個膠囊大小的點陣圖重畫、複製一次（ADR-0016 第 6 節「縮小重畫範圍」）
+        var slotUsed = hero;
+        if (p >= 1 && bounds is { } capsule && controller.Rate == MascotRenderRate.GazeOpen)
+        {
+            var reach = HeroFill * r * 3.1 + 6;
+            var near = Rect.Intersect(capsule, new Rect(heroCenter.X - reach, heroCenter.Y - reach, reach * 2, reach * 2));
+            if (!near.IsEmpty) (area, slotUsed) = (near, heroNear);
+        }
         var origin = heroCenter - area.TopLeft;
         if (!still && controller.Loop is { } loop && controller.LoopKey is { } key && p <= 0)
         {
@@ -130,7 +150,7 @@ internal sealed class MascotFace(MascotController controller) : IRingFace
         }
         var frame = MascotFrames.From(director, t, controller.Character, controller.Look, controller.EffectTime(t),
             still: still || !controller.Motion.MovesEyes(), gaze: still ? (0, 0) : null, staticRemote: controller.StaticRemote);
-        dc.DrawImage(hero.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
+        dc.DrawImage(slotUsed.Render(area, ppd, canvas => Paint(canvas, frame, ppd, origin, k, ax, ay)), area);
     }
 
     /// <summary>origin：角色的錨點在畫的範圍裡的位置（DIP）</summary>

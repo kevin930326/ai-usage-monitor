@@ -10,6 +10,7 @@
     - 關閉面板（--hide-panel）後等 60 秒，再取樣 30 秒
     - 再開關 5 次（暖機，只記錄）、再 10 次，比較這 10 次前後的記憶體（洩漏檢查）
     - 滑鼠移到圓環上（SetCursorPos）：展開動畫 1 秒記最大值、展開後靜止 5 秒；移開後收起動畫 1.5 秒記最大值，收起後 30 秒再取樣
+    - 看滑鼠（icons 第 4 部分）：展開時游標在圖示裡一直移動 10 秒（≤ 2%）與停下後；收合時游標在圖示外一直移動 10 秒（≤ 1%）與停下 1 分鐘後
       （以圓環視窗變寬、收起後回到原寬確認；沒確認到時不列這幾行。-Ci 時只記「未量到」，桌機上算量測失敗）
     - 角色（預設的圖示樣式，ADR-0015 第 7 節「角色」）：上面的「閒置」是收合、沒在動（含每秒 4 次讀游標），「展開、靜止」是展開待著；
       另外量收合時 AI 工作中（每 5 秒改一次假的紀錄檔，等收著時每 60 秒一次的檢查看到後取樣 30 秒）與收合睡著
@@ -61,6 +62,13 @@ Add-Type -Namespace AumPerf -Name Win -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+[DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT point);
+/// 移到 (x, y) 並讀回：真的移到才算（工作階段收不到游標移動時兩者都會失敗，Codex C-01）
+public static bool MoveTo(int x, int y) {
+    POINT p;
+    return SetCursorPos(x, y) && GetCursorPos(out p) && Math.Abs(p.X - x) <= 1 && Math.Abs(p.Y - y) <= 1;
+}
 [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, ref bool value, uint ini);
 [DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, IntPtr value, uint ini);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
@@ -123,6 +131,32 @@ try {
             Start-Sleep -Milliseconds 100
         }
     }
+    # 游標一直移動（看滑鼠的高幀率，icons 第 4 部分）：以 (cx, cy) 為中心、半徑 radius 畫圓，每 16 毫秒移一次；
+    # 先移 2 秒（開始追之後），再一邊移一邊量 seconds 秒。有一成以上沒移到（讀回的位置不對）就算沒量到：
+    # 游標沒在動時角色不重畫，CPU 會低得像達標（Codex C-01）
+    function SampleMoving([int]$cx, [int]$cy, [int]$radius, [double]$seconds) {
+        $script:moveTries = 0
+        $script:moveMissed = 0
+        function MoveFor([double]$s) {
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            while ($clock.Elapsed.TotalSeconds -lt $s) {
+                $a = $clock.Elapsed.TotalSeconds * 2.5
+                $script:moveTries++
+                if (-not [AumPerf.Win]::MoveTo([int]($cx + $radius * [Math]::Cos($a)), [int]($cy + $radius * [Math]::Sin($a)))) { $script:moveMissed++ }
+                Start-Sleep -Milliseconds 16
+            }
+        }
+        MoveFor 2
+        $app.Refresh()
+        $cpu0 = $app.TotalProcessorTime.TotalSeconds
+        $t0 = [Diagnostics.Stopwatch]::StartNew()
+        MoveFor $seconds
+        $app.Refresh()
+        $cpu = ($app.TotalProcessorTime.TotalSeconds - $cpu0) / $t0.Elapsed.TotalSeconds / $cores * 100
+        $moved = $script:moveMissed -le $script:moveTries / 10
+        [pscustomobject]@{ Cpu = if ($moved) { [Math]::Round($cpu, 3) } else { '未量到（游標沒移到）' }; Moved = $moved
+                           WorkingSetMB = [Math]::Round($app.WorkingSet64 / 1MB, 1) }
+    }
     function PeakDuring([double]$seconds) {
         $max = 0
         $n = [int]($seconds / 0.25)
@@ -159,6 +193,7 @@ try {
     # 滑鼠移上去展開、移開收起
     $hoverNote = '未展開（找不到圓環或滑鼠移動沒有送到）'
     $hoverPeak = $null; $hoverOpen = $null; $collapsePeak = $null; $afterHover = $null
+    $gazeOpen = $null; $gazeOpenStill = $null; $gazeMoving = $null; $gazeStill = $null
     $ring = [AumPerf.Win]::Find($app.Id, 'AI Usage Monitor Ring')
     if ($ring -ne [IntPtr]::Zero) {
         $r0 = New-Object AumPerf.Win+RECT
@@ -170,12 +205,20 @@ try {
         $r1 = New-Object AumPerf.Win+RECT
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r1)
         $hoverOpen = Sample 5
+        # 展開時游標在圖示裡一直移動（右半邊畫小圓，不離開圖示），停下後 2 秒再量
+        $gazeOpen = SampleMoving ([int]($r1.Left + ($r1.Right - $r1.Left) * 0.75)) ([int](($r1.Top + $r1.Bottom) / 2)) ([int][Math]::Max(4, ($r1.Bottom - $r1.Top) / 5)) 10
+        Start-Sleep -Seconds 2
+        $gazeOpenStill = Sample 8
         [void][AumPerf.Win]::SetCursorPos(5, 5)
         $collapsePeak = PeakDuring 1.5
         $r2 = New-Object AumPerf.Win+RECT
         [void][AumPerf.Win]::GetWindowRect($ring, [ref]$r2)
         Start-Sleep -Seconds 30
         $afterHover = Sample 30
+        # 收合時游標在圖示外一直移動（離圖示約 300 px 畫圓；圖示通常在右下角，往左上才不會移出螢幕被夾住），停下 1 分鐘後再量
+        $gazeMoving = SampleMoving ([int](($r0.Left + $r0.Right) / 2 - 300)) ([int](($r0.Top + $r0.Bottom) / 2 - 200)) 80 10
+        Start-Sleep -Seconds 60
+        $gazeStill = Sample 15
         $w0 = $r0.Right - $r0.Left; $w1 = $r1.Right - $r1.Left; $w2 = $r2.Right - $r2.Left
         if ($w1 -gt $w0 -and $w2 -eq $w0) {
             $hoverNote = "展開（視窗寬 $w0 → $w1 → 收起後 $w2 px）"
@@ -232,6 +275,18 @@ if ($null -ne $hoverOpen) {
     $lines += "| 收起後（30 秒後） | $($afterHover.Cpu) | ≤ $($limits[2]) | $($afterHover.WorkingSetMB) |"
     if ($hoverOpen.Cpu -gt $limits[1]) { $warnings += "ring expanded: $($hoverOpen.Cpu)% > $($limits[1])%" }
     if ($afterHover.Cpu -gt $limits[2]) { $warnings += "after ring collapse: $($afterHover.Cpu)% > $($limits[2])%" }
+    # 看滑鼠（icons 第 4 部分）：展開時游標一直移動 ≤ 2%、收合時 ≤ 1%、停下 1 分鐘後同閒置
+    $lines += "| 展開、游標一直移動（看滑鼠） | $($gazeOpen.Cpu) | ≤ 2 | $($gazeOpen.WorkingSetMB) |"
+    $lines += "| 展開、游標停下後（2～10 秒） | $($gazeOpenStill.Cpu) | ≤ 1 | $($gazeOpenStill.WorkingSetMB) |"
+    $lines += "| 收合、游標一直移動（看滑鼠） | $($gazeMoving.Cpu) | ≤ 1 | $($gazeMoving.WorkingSetMB) |"
+    $lines += "| 收合、游標停下 1 分鐘後 | $($gazeStill.Cpu) | ≤ $($limits[0]) | $($gazeStill.WorkingSetMB) |"
+    if (-not $gazeOpen.Moved) { $warnings += "gaze expanded: cursor moves did not land, not measured" }
+    elseif ($gazeOpen.Cpu -gt 2) { $warnings += "gaze expanded: $($gazeOpen.Cpu)% > 2%" }
+    # 展開時停下後高幀率要停（Codex C-02；ADR-0016 第 7 節）
+    if ($gazeOpenStill.Cpu -gt 1) { $warnings += "gaze expanded after stop: $($gazeOpenStill.Cpu)% > 1%" }
+    if (-not $gazeMoving.Moved) { $warnings += "gaze collapsed: cursor moves did not land, not measured" }
+    elseif ($gazeMoving.Cpu -gt 1) { $warnings += "gaze collapsed: $($gazeMoving.Cpu)% > 1%" }
+    if ($gazeStill.Cpu -gt $limits[0]) { $warnings += "after gaze stopped: $($gazeStill.Cpu)% > $($limits[0])%" }
 }
 $lines += "| 角色收合、AI 工作中（每秒 12 格） | $working | 記錄（目標 ≤ 1） | — |"
 $lines += "| 角色收合、睡著（每秒 4 格） | $($sleeping.Cpu) | 記錄（目標 ≤ 1） | $($sleeping.WorkingSetMB) |"
@@ -251,3 +306,7 @@ foreach ($w in $warnings) { Write-Host "::warning::perf $w" }
 if ($memGrowth -gt 5) { exit 1 }
 # 桌機（不是 -Ci）上滑鼠移上去一定要量到；CI 的工作階段不一定送得到滑鼠移動
 if ($null -eq $hoverOpen -and -not $Ci) { Write-Host 'hover expansion was not measured'; exit 1 }
+# 看滑鼠的兩列也一樣：游標沒移到就沒量到，桌機上算失敗（CI 只標「未量到」，Codex 第五輪 C-02）
+if (-not $Ci -and (($null -ne $gazeOpen -and -not $gazeOpen.Moved) -or ($null -ne $gazeMoving -and -not $gazeMoving.Moved))) {
+    Write-Host 'gaze cursor moves were not measured'; exit 1
+}
