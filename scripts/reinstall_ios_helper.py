@@ -18,8 +18,9 @@
         overdue              滿 <快到期天數> 或從未成功：不挑時間
   reinstall_ios_helper.py success <state.json> [描述檔到期時間]
       記錄成功（與描述檔到期時間）並清除失敗狀態。
-  reinstall_ios_helper.py failure <state.json> <小時>
-      記錄失敗；這一輪連續失敗達到指定小時且還沒通知過時印出 notify 與失敗時數（0 表示立刻通知）。
+  reinstall_ios_helper.py failure <state.json> <小時> [種類]
+      記錄失敗；這一輪連續失敗達到指定小時且這個種類還沒通知過時印出 notify 與失敗時數（0 表示立刻通知）。
+      種類預設 failure；簽署問題（signing）另外記錄，先前已通知過手機連不上等失敗時仍會通知要登入 Xcode。
   reinstall_ios_helper.py scheduled
       launchd 用：以子程序執行 reinstall-ios.sh --if-due 並回傳它的結束碼。
 
@@ -171,12 +172,12 @@ def cmd_success(path: str, expires: str | None = None) -> int:
     return 0
 
 
-def cmd_failure(path: str, hours: str) -> int:
+def cmd_failure(path: str, hours: str, kind: str = "failure") -> int:
     state = load(Path(path))
     state.setdefault("failing_since", now())
     failing_hours = (now() - state["failing_since"]) / 3600
-    if failing_hours >= float(hours) and not state.get("failure_notified"):
-        state["failure_notified"] = True
+    if failing_hours >= float(hours) and not state.get(f"{kind}_notified"):
+        state[f"{kind}_notified"] = True
         print(f"notify\t{failing_hours:.0f}")
     save(Path(path), state)
     return 0

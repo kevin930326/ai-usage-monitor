@@ -115,6 +115,15 @@ class ReinstallStateTest(unittest.TestCase):
         self.assertEqual(self.run_helper("failure", str(self.state), "0").stdout, "notify\t0\n")
         self.assertEqual(self.run_helper("failure", str(self.state), "0").stdout, "")
 
+    def test_signing_notifies_after_general_failure_was_notified(self):
+        # 手機連不上已通知過，之後 Xcode 被登出：登入提醒仍要立刻發一次，之後不重複，成功後重設
+        self.state.write_text(json.dumps({"failing_since": at("2026-11-05T12:00"), "failure_notified": True}))
+        self.assertEqual(self.run_helper("failure", str(self.state), "24").stdout, "")
+        self.assertTrue(self.run_helper("failure", str(self.state), "0", "signing").stdout.startswith("notify\t"))
+        self.assertEqual(self.run_helper("failure", str(self.state), "0", "signing").stdout, "")
+        self.run_helper("success", str(self.state), "1793990000")
+        self.assertEqual(self.run_helper("failure", str(self.state), "0", "signing").stdout, "notify\t0\n")
+
     def test_expiry_is_earliest_embedded_profile(self):
         # 描述檔是 CMS 簽章的 plist；以假的 security 指令直接印出檔案內容
         bin_dir = self.root / "bin"

@@ -59,16 +59,20 @@ config_get() {
 try: print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")
 except (FileNotFoundError, ValueError): print("")' "$CONFIG" "$1"
 }
-fail() {  # fail <結束碼> <訊息> [連續失敗幾小時後通知，預設 NOTIFY_AFTER_HOURS；0 表示立刻通知]
+fail() {  # fail <結束碼> <訊息>
     log "失敗：$2"
     local line
-    line=$("${HELPER[@]}" failure "$STATE" "${3:-$NOTIFY_AFTER_HOURS}")
+    line=$("${HELPER[@]}" failure "$STATE" "$NOTIFY_AFTER_HOURS")
     if [[ $line == notify* ]]; then
-        if [ "${3:-}" = 0 ]; then
-            notify "iPhone App 無法重新安裝：$2"
-        else
-            notify "iPhone App 已連續 ${line##*$'\t'} 小時無法重新安裝：$2"
-        fi
+        notify "iPhone App 已連續 ${line##*$'\t'} 小時無法重新安裝：$2"
+        log "已發送失敗通知"
+    fi
+    exit "$1"
+}
+fail_signing() {  # fail_signing <結束碼> <訊息>：簽署問題（Xcode 沒登入）立刻通知，與一般失敗分開去重
+    log "失敗：$2"
+    if [[ $("${HELPER[@]}" failure "$STATE" 0 signing) == notify* ]]; then
+        notify "iPhone App 無法重新安裝：$2"
         log "已發送失敗通知"
     fi
     exit "$1"
@@ -170,7 +174,7 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor -configurati
     -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" \
     -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >"$BUILD_LOG" 2>&1 || {
     # 沒登入時舊描述檔一過期就建置失敗，App 也已經打不開，立刻通知
-    grep -q 'error: No Accounts' "$BUILD_LOG" && fail 1 "$NO_ACCOUNT" 0
+    grep -q 'error: No Accounts' "$BUILD_LOG" && fail_signing 1 "$NO_ACCOUNT"
     fail 1 "建置失敗（見 $BUILD_LOG 結尾）"
 }
 APP="$DERIVED/Build/Products/Release-iphoneos/AIUsageMonitor.app"
@@ -181,9 +185,9 @@ EXPIRES=$(date -r "$EXPIRES_AT" '+%m/%d %H:%M')
 left_hours=$(( (EXPIRES_AT - $(date +%s)) / 3600 ))
 if [ "$left_hours" -lt "$MIN_PROFILE_HOURS" ]; then
     if grep -q 'No Accounts' "$BUILD_LOG"; then
-        fail 5 "${NO_ACCOUNT}（描述檔 ${EXPIRES} 到期）" 0
+        fail_signing 5 "${NO_ACCOUNT}（描述檔 ${EXPIRES} 到期）"
     fi
-    fail 5 "Xcode 沒有更新描述檔，${EXPIRES} 就到期，請確認 Xcode → Settings → Accounts 已登入 Apple ID" 0
+    fail_signing 5 "Xcode 沒有更新描述檔，${EXPIRES} 就到期，請確認 Xcode → Settings → Accounts 已登入 Apple ID"
 fi
 
 # 4. 透過網路安裝（手機要醒著、與 Mac 在同一個網路）
