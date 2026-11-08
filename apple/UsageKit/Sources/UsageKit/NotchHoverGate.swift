@@ -2,7 +2,7 @@ import Foundation
 
 /// 瀏海面板什麼時候因為滑鼠展開（ADR-0016 第 4 節）。收合動畫（含移出後等著收回的時間）與收著時的提醒動畫播放時，
 /// 視窗還是整張畫布：只看「游標進入視窗」的話，離瀏海還很遠就又展開。所以收著時只有游標從外面移進 `zone`
-/// （收合時的視窗範圍，畫布座標）才展開；在 `zone` 裡按 Esc 收合後原地動一下不會又打開。純邏輯、可以測。
+/// （看得到的瀏海，畫布座標）才展開；在 `zone` 裡按 Esc 收合後原地動一下不會又打開。純邏輯、可以測。
 public struct NotchHoverGate: Sendable {
     public enum Action: Equatable, Sendable {
         case none
