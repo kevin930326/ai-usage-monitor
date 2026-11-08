@@ -124,6 +124,7 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor \
 - 時段寫在 `scripts/reinstall-ios.sh` 的 `SHORTCUT_TIMES`，要與上面「捷徑：讓卡片整天顯示」的自動化時間相同；改了自動化時間要一起改。
 - 安裝成功時發 macOS 通知；同一輪連續失敗超過 1 天時再通知一次（不會每次重試都通知）。
 - 簽署使用 Xcode 已登入的 Apple ID（`xcodebuild -allowProvisioningUpdates`），腳本內沒有帳號或密碼。建置的是 Release（不含示範模式）。
+- 到期日看建置出的 App 實際嵌入的描述檔（`embedded.mobileprovision`），排程也從描述檔建立時算起。Xcode 沒有登入 Apple ID（例如更新 Xcode 後被登出）時會沿用快取裡快到期的描述檔：剩不到 24 小時就不安裝、結束碼 5，並立刻通知去 Xcode → Settings → Accounts 登入；描述檔已過期、建置出現 `No Accounts` 時也立刻通知。
 
 限制：
 
@@ -141,7 +142,7 @@ tail -n 20 ~/Library/Logs/AIUsageMonitor/reinstall.log        # 每次執行的�
 tail -n 50 ~/Library/Logs/AIUsageMonitor/reinstall-build.log  # 最近一次 xcodebuild 的完整輸出
 ```
 
-結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤。上次成功與失敗的時間記在 `~/Library/Application Support/AIUsageMonitor/reinstall-state.json`。
+結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤、5 描述檔快到期（Xcode 沒有更新描述檔）。上次成功與失敗的時間、描述檔的到期時間記在 `~/Library/Application Support/AIUsageMonitor/reinstall-state.json`。
 
 移除排程（不會刪除設定與日誌）：
 

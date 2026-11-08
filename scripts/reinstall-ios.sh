@@ -14,7 +14,8 @@
 # Team ID 與 iPhone UDID 存在 config.json（不進版控）：
 #   ~/Library/Application Support/AIUsageMonitor/config.json 的 development_team、iphone_udid
 #
-# 結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤（Team、多台手機）
+# 結束碼：0 成功或還不需要、1 建置失敗、2 找不到手機、3 安裝失敗、4 設定錯誤（Team、多台手機）、
+#         5 描述檔快到期（Xcode 沒有登入 Apple ID 時會沿用快取裡的舊描述檔）
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,6 +38,10 @@ SHORTCUT_TIMES="07:00,15:00,23:00"
 LEAD_MINUTES=25    # 時段從捷徑前 25 分鐘開始
 WINDOW_MINUTES=20  # 寬 20 分鐘，與檢查間隔相同，Mac 醒著時每個時段剛好檢查一次；留 5 分鐘給建置與安裝
 NOTIFY_AFTER_HOURS=24
+# 建置出的描述檔剩不到這麼多小時就不裝：代表 Xcode 沒有更新描述檔（通常是沒登入 Apple ID），
+# 裝上去也撐不久。Xcode 有登入時，即使舊描述檔還剩幾小時也會換成新的 7 天描述檔
+MIN_PROFILE_HOURS=24
+NO_ACCOUNT="Xcode 沒有登入 Apple ID，請到 Xcode → Settings → Accounts 登入"
 TITLE="AI 用量"
 BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
 
@@ -54,12 +59,16 @@ config_get() {
 try: print(json.load(open(sys.argv[1])).get(sys.argv[2]) or "")
 except (FileNotFoundError, ValueError): print("")' "$CONFIG" "$1"
 }
-fail() {  # fail <結束碼> <訊息>
+fail() {  # fail <結束碼> <訊息> [連續失敗幾小時後通知，預設 NOTIFY_AFTER_HOURS；0 表示立刻通知]
     log "失敗：$2"
     local line
-    line=$("${HELPER[@]}" failure "$STATE" "$NOTIFY_AFTER_HOURS")
+    line=$("${HELPER[@]}" failure "$STATE" "${3:-$NOTIFY_AFTER_HOURS}")
     if [[ $line == notify* ]]; then
-        notify "iPhone App 已連續 ${line##*$'\t'} 小時無法重新安裝：$2"
+        if [ "${3:-}" = 0 ]; then
+            notify "iPhone App 無法重新安裝：$2"
+        else
+            notify "iPhone App 已連續 ${line##*$'\t'} 小時無法重新安裝：$2"
+        fi
         log "已發送失敗通知"
     fi
     exit "$1"
@@ -159,19 +168,31 @@ DEVELOPMENT_TEAM="$TEAM" xcodegen generate --quiet >>"$BUILD_LOG" 2>&1 || fail 1
 log "建置中（完整輸出：${BUILD_LOG}）"
 xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor -configuration Release \
     -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED" \
-    -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >"$BUILD_LOG" 2>&1 \
-    || fail 1 "建置失敗（見 $BUILD_LOG 結尾）"
+    -allowProvisioningUpdates DEVELOPMENT_TEAM="$TEAM" build >"$BUILD_LOG" 2>&1 || {
+    # 沒登入時舊描述檔一過期就建置失敗，App 也已經打不開，立刻通知
+    grep -q 'error: No Accounts' "$BUILD_LOG" && fail 1 "$NO_ACCOUNT" 0
+    fail 1 "建置失敗（見 $BUILD_LOG 結尾）"
+}
 APP="$DERIVED/Build/Products/Release-iphoneos/AIUsageMonitor.app"
 [ -d "$APP" ] || fail 1 "找不到建置結果 $APP"
+# 簽署期限看實際嵌入的描述檔，不是安裝時間加 7 天
+EXPIRES_AT=$("${HELPER[@]}" expiry "$APP" 2>>"$LOG") || fail 1 "讀不到描述檔的到期時間"
+EXPIRES=$(date -r "$EXPIRES_AT" '+%m/%d %H:%M')
+left_hours=$(( (EXPIRES_AT - $(date +%s)) / 3600 ))
+if [ "$left_hours" -lt "$MIN_PROFILE_HOURS" ]; then
+    if grep -q 'No Accounts' "$BUILD_LOG"; then
+        fail 5 "${NO_ACCOUNT}（描述檔 ${EXPIRES} 到期）" 0
+    fi
+    fail 5 "Xcode 沒有更新描述檔，${EXPIRES} 就到期，請確認 Xcode → Settings → Accounts 已登入 Apple ID" 0
+fi
 
 # 4. 透過網路安裝（手機要醒著、與 Mac 在同一個網路）
 if ! xcrun devicectl device install app --device "$UDID" --timeout 300 "$APP" >>"$LOG" 2>&1; then
     fail 3 "安裝失敗：手機可能鎖定、休眠或不在同一個網路"
 fi
 
-"${HELPER[@]}" success "$STATE"
-EXPIRES=$(date -v+7d '+%m/%d')
-log "安裝成功，簽署約在 ${EXPIRES} 到期"
+"${HELPER[@]}" success "$STATE" "$EXPIRES_AT"
+log "安裝成功，簽署在 ${EXPIRES} 到期"
 
 # 5. 重新安裝會結束鎖定畫面的 Live Activity。
 #    捷徑前的時段：幾分鐘後的捷徑自動化會把卡片開回來，不打開 App 以免打擾。
@@ -179,13 +200,13 @@ log "安裝成功，簽署約在 ${EXPIRES} 到期"
 #    簽署已經更新，仍算成功，卡片等下一次捷徑自動化重開。
 if [ "$MODE" = window ]; then
     log "鎖定畫面卡片會由 ${NEXT_SHORTCUT} 的捷徑自動化開回來"
-    notify "已重新安裝 iPhone App（簽署約在 ${EXPIRES} 到期），鎖定畫面卡片會在 ${NEXT_SHORTCUT} 回來"
+    notify "已重新安裝 iPhone App（簽署在 ${EXPIRES} 到期），鎖定畫面卡片會在 ${NEXT_SHORTCUT} 回來"
 elif xcrun devicectl device process launch --device "$UDID" --terminate-existing --timeout 60 \
         "$BUNDLE_ID" -- --start-live-activity >>"$LOG" 2>&1; then
     log "已打開 App 並重開鎖定畫面卡片"
-    notify "已重新安裝 iPhone App，簽署約在 ${EXPIRES} 到期"
+    notify "已重新安裝 iPhone App，簽署在 ${EXPIRES} 到期"
 else
     log "無法打開 App（手機可能鎖定），鎖定畫面卡片要等捷徑自動化或手動打開 App 才會出現"
-    notify "已重新安裝 iPhone App（簽署約在 ${EXPIRES} 到期），但手機鎖定中，請打開 App 重開鎖定畫面卡片"
+    notify "已重新安裝 iPhone App（簽署在 ${EXPIRES} 到期），但手機鎖定中，請打開 App 重開鎖定畫面卡片"
 fi
 exit 0

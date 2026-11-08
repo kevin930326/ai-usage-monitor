@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import plistlib
 import subprocess
 import sys
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -32,9 +33,12 @@ class ReinstallPlanTest(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def plan(self, now: str, last_success: float | None) -> str:
+    def plan(self, now: str, last_success: float | None, profile_expires: float | None = None) -> str:
         if last_success is not None:
-            self.state.write_text(json.dumps({"last_success": last_success}))
+            state = {"last_success": last_success}
+            if profile_expires is not None:
+                state["profile_expires"] = profile_expires
+            self.state.write_text(json.dumps(state))
         env = {**os.environ, "TZ": TZ, "AUM_NOW": str(at(now))}
         out = subprocess.run([sys.executable, str(HELPER), "plan", str(self.state),
                               "6", "6.5", "07:00,15:00,23:00", "25", "20"],
@@ -71,6 +75,67 @@ class ReinstallPlanTest(unittest.TestCase):
                               "6", "6.5", "00:05", "25", "20"],
                              capture_output=True, text=True, env=env, check=True)
         self.assertEqual(out.stdout.strip(), "window\t00:05")
+
+    def test_counts_from_profile_creation_when_older(self):
+        # 11/06 15:30 裝成功，但 Xcode 沿用 10/31 00:49 建立的描述檔（11/07 00:49 到期）：
+        # 從描述檔建立時算，11/06 06:49 已滿 6 天、12:49 滿 6.5 天
+        last, expires = at("2026-11-06T15:30"), at("2026-11-07T00:49")
+        self.assertEqual(self.plan("2026-11-06T16:00", last, expires), "overdue")
+        self.assertEqual(self.plan("2026-11-06T16:00", last), "skip")
+
+    def test_newer_profile_does_not_delay(self):
+        # 描述檔比上次成功還新（手動用 Xcode 裝過）時仍從上次成功算
+        last = at("2026-10-21T12:00")
+        self.assertEqual(self.plan("2026-10-28T00:00", last, at("2026-10-30T00:00")), "overdue")
+
+
+class ReinstallStateTest(unittest.TestCase):
+    """描述檔到期時間與立刻通知（Xcode 沒有登入 Apple ID 時沿用快到期的描述檔）。"""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        self.state = self.root / "reinstall-state.json"
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def run_helper(self, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, str(HELPER), *args], capture_output=True, text=True,
+                              env={**os.environ, "AUM_NOW": str(at("2026-11-06T15:30")), **(env or {})})
+
+    def test_success_records_profile_expiry(self):
+        self.run_helper("success", str(self.state), "1793990000")
+        self.assertEqual(json.loads(self.state.read_text()),
+                         {"last_success": at("2026-11-06T15:30"), "profile_expires": 1793990000.0})
+        self.run_helper("success", str(self.state))
+        self.assertEqual(json.loads(self.state.read_text()), {"last_success": at("2026-11-06T15:30")})
+
+    def test_failure_zero_hours_notifies_once(self):
+        self.assertEqual(self.run_helper("failure", str(self.state), "0").stdout, "notify\t0\n")
+        self.assertEqual(self.run_helper("failure", str(self.state), "0").stdout, "")
+
+    def test_expiry_is_earliest_embedded_profile(self):
+        # 描述檔是 CMS 簽章的 plist；以假的 security 指令直接印出檔案內容
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "security"
+        fake.write_text('#!/bin/sh\n[ "$1 $2 $3" = "cms -D -i" ] && exec cat "$4"\nexit 1\n')
+        fake.chmod(0o755)
+        app = self.root / "AIUsageMonitor.app"
+        widget = app / "PlugIns" / "UsageWidget.appex"
+        widget.mkdir(parents=True)
+        for folder, expires in ((app, "2026-11-13T15:30"), (widget, "2026-11-07T00:49")):
+            # plist 的日期是 UTC，plistlib 寫入時不看 tzinfo，要先換成不帶時區的 UTC
+            date = datetime.fromisoformat(expires).replace(tzinfo=ZoneInfo(TZ)).astimezone(timezone.utc)
+            date = date.replace(tzinfo=None)
+            (folder / "embedded.mobileprovision").write_bytes(plistlib.dumps({"ExpirationDate": date}))
+        env = {"PATH": f"{bin_dir}:{os.environ['PATH']}"}
+        out = self.run_helper("expiry", str(app), env=env)
+        self.assertEqual(out.stdout.strip(), f"{at('2026-11-07T00:49'):.0f}")
+        (widget / "embedded.mobileprovision").unlink()
+        (widget / "embedded.mobileprovision").write_text("not a plist")
+        self.assertEqual(self.run_helper("expiry", str(app), env=env).returncode, 1)
 
 
 if __name__ == "__main__":
