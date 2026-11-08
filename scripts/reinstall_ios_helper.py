@@ -7,15 +7,25 @@
       偵測不到時改看鑰匙圈中 Apple Development 憑證的 OU。只有一個 Team 時印出，否則結束碼 1。
   reinstall_ios_helper.py iphones <devicectl-devices.json>
       印出實體 iPhone，每行「UDID<TAB>名稱<TAB>連線方式」。
+  reinstall_ios_helper.py expiry <App 路徑>
+      印出 App 與其中各個擴充功能的描述檔（embedded.mobileprovision）裡最早的到期時間（Unix 秒）。
+      Xcode 沒登入 Apple ID 時會沿用快取裡快到期的描述檔，裝上去的 App 撐不到 7 天，所以要看實際到期時間。
+  reinstall_ios_helper.py stale-profiles <Team ID> <Bundle ID> <小時>
+      印出 Xcode 快取中這個 Team 與 Bundle ID（含擴充功能 <Bundle ID>.*）的描述檔裡，剩不到指定小時就到期的檔案路徑。
+      以描述檔的 application-identifier 比對，不看名稱，名稱相近的其他 App 不會被列入。
+      Xcode 會沿用還沒過期的快取描述檔；重裝前刪掉它們，Xcode 才會拿新的 7 天描述檔。
+      環境變數 AUM_PROFILE_DIRS（以 : 分隔）可覆寫快取資料夾，測試用。
   reinstall_ios_helper.py plan <state.json> <天數> <快到期天數> <捷徑時間,...> <提前分鐘> <時段分鐘>
-      launchd 用：決定這次檢查要不要重新安裝，印出一行：
+      launchd 用：決定這次檢查要不要重新安裝，印出一行（天數從上次成功或描述檔建立時算起，取較早的；
+      描述檔建立時間以到期時間減 7 天估計）：
         skip                 還不需要，或不在捷徑前的時段
         window<TAB>HH:MM     滿 <天數>，且在捷徑 HH:MM 前 <提前分鐘> 起的 <時段分鐘> 內
         overdue              滿 <快到期天數> 或從未成功：不挑時間
-  reinstall_ios_helper.py success <state.json>
-      記錄成功並清除失敗狀態。
-  reinstall_ios_helper.py failure <state.json> <小時>
-      記錄失敗；這一輪連續失敗超過指定小時且還沒通知過時印出 notify 與失敗時數。
+  reinstall_ios_helper.py success <state.json> [描述檔到期時間]
+      記錄成功（與描述檔到期時間）並清除失敗狀態。
+  reinstall_ios_helper.py failure <state.json> <小時> [種類]
+      記錄失敗；這一輪連續失敗達到指定小時且這個種類還沒通知過時印出 notify 與失敗時數（0 表示立刻通知）。
+      種類預設 failure；簽署問題（signing）另外記錄，先前已通知過手機連不上等失敗時仍會通知要登入 Xcode。
   reinstall_ios_helper.py scheduled
       launchd 用：以子程序執行 reinstall-ios.sh --if-due 並回傳它的結束碼。
 
@@ -31,7 +41,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -90,6 +100,56 @@ def cmd_iphones(path: str) -> int:
     return 0
 
 
+# MARK: 描述檔
+
+PROFILE_DAYS = 7  # 免費 Apple ID（Personal Team）的描述檔效期
+
+
+def profile_expiry(path: Path) -> float:
+    out = subprocess.run(["security", "cms", "-D", "-i", str(path)], capture_output=True)
+    if out.returncode != 0:
+        raise ValueError(f"無法讀取 {path}")
+    # plistlib 讀出的是不帶時區的 UTC 時間
+    return plistlib.loads(out.stdout)["ExpirationDate"].replace(tzinfo=timezone.utc).timestamp()
+
+
+def cmd_expiry(app: str) -> int:
+    profiles = [Path(app) / "embedded.mobileprovision",
+                *sorted(Path(app).glob("PlugIns/*.appex/embedded.mobileprovision"))]
+    try:
+        print(f"{min(profile_expiry(p) for p in profiles):.0f}")
+    except (OSError, ValueError, KeyError, plistlib.InvalidFileException) as error:
+        print(f"讀不到描述檔的到期時間：{error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def profile_dirs() -> list[Path]:
+    if dirs := os.environ.get("AUM_PROFILE_DIRS"):
+        return [Path(d) for d in dirs.split(":")]
+    home = Path.home()
+    return [home / "Library/Developer/Xcode/UserData/Provisioning Profiles",
+            home / "Library/MobileDevice/Provisioning Profiles"]
+
+
+def cmd_stale_profiles(team: str, bundle_id: str, hours: str) -> int:
+    ours = f"{team}.{bundle_id}"
+    for folder in profile_dirs():
+        for path in sorted(folder.glob("*.mobileprovision")):
+            out = subprocess.run(["security", "cms", "-D", "-i", str(path)], capture_output=True)
+            try:
+                profile = plistlib.loads(out.stdout)
+            except plistlib.InvalidFileException:
+                continue
+            app_id = profile.get("Entitlements", {}).get("application-identifier", "")
+            expires = profile.get("ExpirationDate")
+            if not (app_id == ours or app_id.startswith(ours + ".")) or expires is None:
+                continue
+            if expires.replace(tzinfo=timezone.utc).timestamp() - now() < float(hours) * 3600:
+                print(path)
+    return 0
+
+
 # MARK: 重試狀態
 
 def load(path: Path) -> dict:
@@ -120,7 +180,10 @@ def shortcut_window(at: datetime, times: str, lead: float, width: float) -> str 
 
 
 def cmd_plan(path: str, days: str, overdue_days: str, times: str, lead: str, width: str) -> int:
-    last = load(Path(path)).get("last_success")
+    state = load(Path(path))
+    last = state.get("last_success")
+    if last is not None and state.get("profile_expires") is not None:
+        last = min(last, state["profile_expires"] - PROFILE_DAYS * 86400)
     age = None if last is None else now() - last
     if age is None or age >= float(overdue_days) * 86400:
         print("overdue")
@@ -132,17 +195,20 @@ def cmd_plan(path: str, days: str, overdue_days: str, times: str, lead: str, wid
     return 0
 
 
-def cmd_success(path: str) -> int:
-    save(Path(path), {"last_success": now()})
+def cmd_success(path: str, expires: str | None = None) -> int:
+    state = {"last_success": now()}
+    if expires:
+        state["profile_expires"] = float(expires)
+    save(Path(path), state)
     return 0
 
 
-def cmd_failure(path: str, hours: str) -> int:
+def cmd_failure(path: str, hours: str, kind: str = "failure") -> int:
     state = load(Path(path))
     state.setdefault("failing_since", now())
     failing_hours = (now() - state["failing_since"]) / 3600
-    if failing_hours > float(hours) and not state.get("failure_notified"):
-        state["failure_notified"] = True
+    if failing_hours >= float(hours) and not state.get(f"{kind}_notified"):
+        state[f"{kind}_notified"] = True
         print(f"notify\t{failing_hours:.0f}")
     save(Path(path), state)
     return 0
@@ -159,7 +225,8 @@ def cmd_scheduled() -> int:
                            env={**os.environ, "AUM_PYTHON": sys.executable})
 
 
-COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "plan": cmd_plan,
+COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "expiry": cmd_expiry,
+            "stale-profiles": cmd_stale_profiles, "plan": cmd_plan,
             "success": cmd_success, "failure": cmd_failure, "scheduled": cmd_scheduled}
 
 if __name__ == "__main__":
