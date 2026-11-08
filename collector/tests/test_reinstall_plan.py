@@ -155,18 +155,23 @@ class ReinstallStateTest(unittest.TestCase):
         cache = self.root / "profiles"
         cache.mkdir()
 
-        def write(file: str, name: str, expires: str) -> None:
+        def write(file: str, app_id: str, expires: str) -> None:
             date = datetime.fromisoformat(expires).replace(tzinfo=ZoneInfo(TZ)).astimezone(timezone.utc)
-            (cache / file).write_bytes(plistlib.dumps({"Name": name, "ExpirationDate": date.replace(tzinfo=None)}))
+            (cache / file).write_bytes(plistlib.dumps({
+                "Name": "iOS Team Provisioning Profile: " + app_id.split(".", 1)[1],
+                "Entitlements": {"application-identifier": app_id},
+                "ExpirationDate": date.replace(tzinfo=None)}))
 
-        prefix = "iOS Team Provisioning Profile: "
-        write("a.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor", "2026-11-07T00:49")
-        write("b.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor.UsageWidget", "2026-11-07T00:49")
-        write("c.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor", "2026-11-13T15:00")
-        write("d.mobileprovision", prefix + "com.example.Other", "2026-11-07T00:49")
+        app = "io.github.kevin930326.AIUsageMonitor"
+        write("a.mobileprovision", f"TEAM123456.{app}", "2026-11-07T00:49")
+        write("b.mobileprovision", f"TEAM123456.{app}.UsageWidget", "2026-11-07T00:49")
+        write("c.mobileprovision", f"TEAM123456.{app}", "2026-11-13T15:00")       # 還很新
+        write("d.mobileprovision", "TEAM123456.com.example.Other", "2026-11-07T00:49")
+        write("f.mobileprovision", f"TEAM123456.{app}Other", "2026-11-07T00:49")  # 名稱相近的其他 App
+        write("g.mobileprovision", f"OTHERTEAM1.{app}", "2026-11-07T00:49")       # 其他 Team
         (cache / "e.mobileprovision").write_text("not a plist")
         env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "AUM_PROFILE_DIRS": f"{cache}:{self.root / 'missing'}"}
-        out = self.run_helper("stale-profiles", "io.github.kevin930326.AIUsageMonitor", "144", env=env)
+        out = self.run_helper("stale-profiles", "TEAM123456", app, "144", env=env)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(out.stdout.splitlines(), [str(cache / "a.mobileprovision"), str(cache / "b.mobileprovision")])
 

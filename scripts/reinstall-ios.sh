@@ -174,7 +174,7 @@ cd "$REPO/apple/iOSApp" || fail 1 "找不到 apple/iOSApp"
 stale=0
 while IFS= read -r profile; do
     [ -n "$profile" ] && rm -f "$profile" && stale=$((stale + 1))
-done < <("${HELPER[@]}" stale-profiles "$BUNDLE_ID" "$REFRESH_PROFILE_HOURS" 2>>"$LOG")
+done < <("${HELPER[@]}" stale-profiles "$TEAM" "$BUNDLE_ID" "$REFRESH_PROFILE_HOURS" 2>>"$LOG")
 [ "$stale" -gt 0 ] && log "刪除 $stale 份快到期的快取描述檔，讓 Xcode 拿新的"
 DEVELOPMENT_TEAM="$TEAM" xcodegen generate --quiet >>"$BUILD_LOG" 2>&1 || fail 1 "xcodegen generate 失敗"
 log "建置中（完整輸出：${BUILD_LOG}）"
