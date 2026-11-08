@@ -101,12 +101,9 @@ struct NotchLayout: Equatable {
     }
     /// 收合時視窗的大小：瀏海加上提醒時鼓一下的空間
     var collapsedWindowSize: CGSize { CGSize(width: collapsedWidth + 44, height: collapsedHeight + 5) }
-    /// 收著時滑鼠移進這裡才展開（畫布座標）：和收合時的視窗一樣大。收合動畫與提醒動畫播放時視窗還是整張畫布，
-    /// 不能用「進入視窗」判斷，不然離瀏海還很遠就又展開
-    var hoverRect: CGRect {
-        let size = collapsedWindowSize
-        return CGRect(x: Self.center - size.width / 2, y: 0, width: size.width, height: size.height)
-    }
+    /// 收著時滑鼠移進這裡才展開（畫布座標）：就是看得到的瀏海，不含視窗左右各 22、下方 5 留給提醒鼓起的透明邊，
+    /// 不然從左右靠近會提早展開。收合動畫與提醒動畫播放時視窗還是整張畫布，也不能用「進入視窗」判斷
+    var hoverRect: CGRect { collapsedRect }
     var miniX: Double { Self.center - notchWidth / 2 - 30 }
     var miniY: Double { collapsedHeight / 2 }
     /// 迷你圓環的中心；百分比接在右邊，「100%」也留在面板內

@@ -4,11 +4,23 @@ import Testing
 
 /// 瀏海面板只有游標移進瀏海才展開（收合動畫、提醒動畫時視窗還是整張 580×190 的畫布）
 @Suite struct NotchHoverGateTests {
-    /// 收合時的視窗範圍：真實瀏海（寬 185＋120＋44）與假瀏海（250＋44），上緣置中
+    /// 看得到的瀏海（`NotchLayout.hoverRect`）：真實瀏海（寬 185＋120）與假瀏海（250），上緣置中
     static let zones = [
-        CGRect(x: 290 - 349.0 / 2, y: 0, width: 349, height: 37 + 5),
-        CGRect(x: 290 - 294.0 / 2, y: 0, width: 294, height: 32 + 5),
+        CGRect(x: 290 - 305.0 / 2, y: 0, width: 305, height: 37),
+        CGRect(x: 290 - 250.0 / 2, y: 0, width: 250, height: 32),
     ]
+
+    /// 沿著選單列從左右靠近：碰到瀏海邊緣才展開，視窗左右各 22 的透明邊不算
+    @Test(arguments: zones) func approachingFromSidesOpensOnlyAtNotchEdge(zone: CGRect) {
+        let left = zone.origin.x, right = zone.origin.x + zone.size.width
+        for (outside, inside) in [(left - 22, left - 1), (right + 21, right + 1)] {
+            var gate = NotchHoverGate(zone: zone)
+            #expect(gate.enter(at: CGPoint(x: outside, y: 10), isOpen: false) == .none)
+            #expect(gate.move(to: CGPoint(x: inside, y: 10), isOpen: false) == .none)
+            let edge = inside < left ? left : right - 1
+            #expect(gate.move(to: CGPoint(x: edge, y: 10), isOpen: false) == .open)
+        }
+    }
 
     /// 畫布裡、離瀏海還有一段距離（下半部、左右兩側）
     static let far = [CGPoint(x: 290, y: 150), CGPoint(x: 20, y: 10), CGPoint(x: 560, y: 60)]
