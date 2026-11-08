@@ -34,12 +34,13 @@ public struct MascotGestureDetector: Sendable {
     /// `canDetect` 為 false（收合、過場、播放中、按住、睡覺）時清掉累積，什麼都不觸發。
     public mutating func move(to point: CGPoint, at time: Int, center: CGPoint, radius: Double,
                               canDetect: Bool) -> MascotGesture? {
-        let dx = point.x - center.x, dy = point.y - center.y
+        // CGFloat 在手錶實機（arm64_32）是 Float，先換成 Double
+        let dx = Double(point.x - center.x), dy = Double(point.y - center.y)
         let distance = hypot(dx, dy)
         // 距離上一個事件幾格（60 Hz 一格；最多算 4 格，停很久再動不會一次衰減光）
         let frames = lastMoveTime.map { min(max(Double(time - $0) / Self.frameMs, 0.25), 4) } ?? 1
-        let moveX = lastX.map { point.x - $0 } ?? 0
-        lastX = point.x
+        let moveX = lastX.map { Double(point.x) - $0 } ?? 0
+        lastX = Double(point.x)
         lastMoveTime = time
         guard canDetect else {
             reset(keepingX: true)
@@ -128,6 +129,6 @@ public struct MascotGestureDetector: Sendable {
 
     /// 點擊是否落在角色上（半徑的 `tap_hit_radius` 倍）
     public func hits(_ point: CGPoint, center: CGPoint, radius: Double) -> Bool {
-        hypot(point.x - center.x, point.y - center.y) < radius * gestures.tapHitRadius
+        hypot(Double(point.x - center.x), Double(point.y - center.y)) < radius * gestures.tapHitRadius
     }
 }
