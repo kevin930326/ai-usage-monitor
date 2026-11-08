@@ -169,7 +169,7 @@ final class NotchPanel: NSPanel {
         targetScreen = screen
         let size: CGSize = expanded
             ? CGSize(width: NotchLayout.canvasWidth, height: NotchLayout.canvasHeight)
-            : CGSize(width: layout.collapsedWidth + 44, height: layout.collapsedHeight + 5)
+            : layout.collapsedWindowSize
         let frame = NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height,
                            width: size.width, height: size.height)
         setFrame(frame, display: true)
@@ -274,7 +274,7 @@ final class NotchContainerView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         if ignoresRealPointer { return }
-        MascotController.shared.pointerEntered()
+        MascotController.shared.pointerEntered(at: canvasPoint(event))
     }
 
     override func mouseExited(with event: NSEvent) {
