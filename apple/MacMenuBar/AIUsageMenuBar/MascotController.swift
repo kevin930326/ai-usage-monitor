@@ -99,6 +99,14 @@ struct NotchLayout: Equatable {
     var collapsedRect: CGRect {
         CGRect(x: Self.center - collapsedWidth / 2, y: 0, width: collapsedWidth, height: collapsedHeight)
     }
+    /// 收合時視窗的大小：瀏海加上提醒時鼓一下的空間
+    var collapsedWindowSize: CGSize { CGSize(width: collapsedWidth + 44, height: collapsedHeight + 5) }
+    /// 收著時滑鼠移進這裡才展開（畫布座標）：和收合時的視窗一樣大。收合動畫與提醒動畫播放時視窗還是整張畫布，
+    /// 不能用「進入視窗」判斷，不然離瀏海還很遠就又展開
+    var hoverRect: CGRect {
+        let size = collapsedWindowSize
+        return CGRect(x: Self.center - size.width / 2, y: 0, width: size.width, height: size.height)
+    }
     var miniX: Double { Self.center - notchWidth / 2 - 30 }
     var miniY: Double { collapsedHeight / 2 }
     /// 迷你圓環的中心；百分比接在右邊，「100%」也留在面板內
@@ -235,6 +243,7 @@ final class MascotController {
     func setLayout(_ layout: NotchLayout) {
         guard layout != self.layout || director == nil else { return }
         self.layout = layout
+        hoverGate = NotchHoverGate(zone: layout.hoverRect)
         // 展開中（含收合動畫）不重建，不然滑鼠還在面板裡卻縮回瀏海；收合後在 refresh 重建
         if !windowExpanded { rebuild() }
     }
@@ -262,6 +271,16 @@ final class MascotController {
 
     // MARK: - 事件
 
+    /// 收著時只有游標從外面移進瀏海（`layout.hoverRect`）才展開；換版面時跟著換
+    @ObservationIgnored private var hoverGate = NotchHoverGate(zone: NotchLayout.fake.hoverRect)
+
+    /// 滑鼠移入視窗（畫布座標）。展開中（含等著收回的 350 ms）回到面板上就取消收合；
+    /// 收著時視窗可能還是整張畫布（收合或提醒動畫），只有游標在瀏海上才展開
+    func pointerEntered(at point: CGPoint) {
+        guard let director else { return }
+        if hoverGate.enter(at: point, isOpen: director.machine.isOpen) != .none { pointerEntered() }
+    }
+
     /// 滑鼠移入瀏海：展開（依設定播過場）
     func pointerEntered() {
         closeTimer?.invalidate()
@@ -287,7 +306,9 @@ final class MascotController {
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
     func pointerExited() {
-        guard let config = baseConfig, !pinned, !menuOpen else { return }
+        hoverGate.exit()
+        // 收著時（移進收合中的大視窗卻沒碰到瀏海）沒有東西要收
+        guard let config = baseConfig, !pinned, !menuOpen, director?.machine.isOpen == true else { return }
         closeTimer?.invalidate()
         closeTimer = oneShot(after: config.panel.closeDelayMs) { $0.closeNow() }
     }
@@ -376,6 +397,7 @@ final class MascotController {
 
     /// 滑鼠在面板裡移動（畫布座標）：偵測繞圈／甩動／停留（只在這個視窗裡）。看滑鼠另外由 `pollPointer` 處理（整個螢幕）
     func pointerMoved(to point: CGPoint) {
+        if let isOpen = director?.machine.isOpen, hoverGate.move(to: point, isOpen: isOpen) == .open { pointerEntered() }
         guard let director else { return }
         let t = time()
         let pose = director.pose(at: t)
