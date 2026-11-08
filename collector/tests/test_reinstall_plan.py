@@ -146,6 +146,30 @@ class ReinstallStateTest(unittest.TestCase):
         (widget / "embedded.mobileprovision").write_text("not a plist")
         self.assertEqual(self.run_helper("expiry", str(app), env=env).returncode, 1)
 
+    def test_stale_profiles_lists_only_ours_expiring_soon(self):
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        fake = bin_dir / "security"
+        fake.write_text('#!/bin/sh\n[ "$1 $2 $3" = "cms -D -i" ] && exec cat "$4"\nexit 1\n')
+        fake.chmod(0o755)
+        cache = self.root / "profiles"
+        cache.mkdir()
+
+        def write(file: str, name: str, expires: str) -> None:
+            date = datetime.fromisoformat(expires).replace(tzinfo=ZoneInfo(TZ)).astimezone(timezone.utc)
+            (cache / file).write_bytes(plistlib.dumps({"Name": name, "ExpirationDate": date.replace(tzinfo=None)}))
+
+        prefix = "iOS Team Provisioning Profile: "
+        write("a.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor", "2026-11-07T00:49")
+        write("b.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor.UsageWidget", "2026-11-07T00:49")
+        write("c.mobileprovision", prefix + "io.github.kevin930326.AIUsageMonitor", "2026-11-13T15:00")
+        write("d.mobileprovision", prefix + "com.example.Other", "2026-11-07T00:49")
+        (cache / "e.mobileprovision").write_text("not a plist")
+        env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "AUM_PROFILE_DIRS": f"{cache}:{self.root / 'missing'}"}
+        out = self.run_helper("stale-profiles", "io.github.kevin930326.AIUsageMonitor", "144", env=env)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(out.stdout.splitlines(), [str(cache / "a.mobileprovision"), str(cache / "b.mobileprovision")])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -124,6 +124,7 @@ xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor \
 - 時段寫在 `scripts/reinstall-ios.sh` 的 `SHORTCUT_TIMES`，要與上面「捷徑：讓卡片整天顯示」的自動化時間相同；改了自動化時間要一起改。
 - 安裝成功時發 macOS 通知；同一輪連續失敗超過 1 天時再通知一次（不會每次重試都通知）。
 - 簽署使用 Xcode 已登入的 Apple ID（`xcodebuild -allowProvisioningUpdates`），腳本內沒有帳號或密碼。建置的是 Release（不含示範模式）。
+- 描述檔過期後，iOS 會撤銷對這個開發者的驗證，重裝後要到「設定 → 一般 → VPN 與裝置管理」再按一次「驗證」；趕在過期前重裝就不用（實測：舊描述檔還沒過期時，換上新的 7 天描述檔也能直接打開）。Xcode 會沿用還沒過期的快取描述檔，所以腳本建置前會刪掉 `~/Library/Developer/Xcode/UserData/Provisioning Profiles` 裡這個 App 剩不到 6 天的描述檔，讓 Xcode 拿新的。
 - 到期日看建置出的 App 實際嵌入的描述檔（`embedded.mobileprovision`），排程也從描述檔建立時算起。Xcode 沒有登入 Apple ID（例如更新 Xcode 後被登出）時會沿用快取裡快到期的描述檔：剩不到 24 小時就不安裝、結束碼 5，並立刻通知去 Xcode → Settings → Accounts 登入；描述檔已過期、建置出現 `No Accounts` 時也立刻通知。
 
 限制：

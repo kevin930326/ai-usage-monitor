@@ -10,6 +10,10 @@
   reinstall_ios_helper.py expiry <App 路徑>
       印出 App 與其中各個擴充功能的描述檔（embedded.mobileprovision）裡最早的到期時間（Unix 秒）。
       Xcode 沒登入 Apple ID 時會沿用快取裡快到期的描述檔，裝上去的 App 撐不到 7 天，所以要看實際到期時間。
+  reinstall_ios_helper.py stale-profiles <Bundle ID> <小時>
+      印出 Xcode 快取中這個 Bundle ID（含擴充功能）的描述檔裡，剩不到指定小時就到期的檔案路徑。
+      Xcode 會沿用還沒過期的快取描述檔；重裝前刪掉它們，Xcode 才會拿新的 7 天描述檔。
+      環境變數 AUM_PROFILE_DIRS（以 : 分隔）可覆寫快取資料夾，測試用。
   reinstall_ios_helper.py plan <state.json> <天數> <快到期天數> <捷徑時間,...> <提前分鐘> <時段分鐘>
       launchd 用：決定這次檢查要不要重新安裝，印出一行（天數從上次成功或描述檔建立時算起，取較早的；
       描述檔建立時間以到期時間減 7 天估計）：
@@ -119,6 +123,31 @@ def cmd_expiry(app: str) -> int:
     return 0
 
 
+def profile_dirs() -> list[Path]:
+    if dirs := os.environ.get("AUM_PROFILE_DIRS"):
+        return [Path(d) for d in dirs.split(":")]
+    home = Path.home()
+    return [home / "Library/Developer/Xcode/UserData/Provisioning Profiles",
+            home / "Library/MobileDevice/Provisioning Profiles"]
+
+
+def cmd_stale_profiles(bundle_id: str, hours: str) -> int:
+    for folder in profile_dirs():
+        for path in sorted(folder.glob("*.mobileprovision")):
+            out = subprocess.run(["security", "cms", "-D", "-i", str(path)], capture_output=True)
+            try:
+                profile = plistlib.loads(out.stdout)
+            except plistlib.InvalidFileException:
+                continue
+            name = profile.get("Name", "")
+            expires = profile.get("ExpirationDate")
+            if not name.startswith(f"iOS Team Provisioning Profile: {bundle_id}") or expires is None:
+                continue
+            if expires.replace(tzinfo=timezone.utc).timestamp() - now() < float(hours) * 3600:
+                print(path)
+    return 0
+
+
 # MARK: 重試狀態
 
 def load(path: Path) -> dict:
@@ -194,7 +223,8 @@ def cmd_scheduled() -> int:
                            env={**os.environ, "AUM_PYTHON": sys.executable})
 
 
-COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "expiry": cmd_expiry, "plan": cmd_plan,
+COMMANDS = {"team": cmd_team, "iphones": cmd_iphones, "expiry": cmd_expiry,
+            "stale-profiles": cmd_stale_profiles, "plan": cmd_plan,
             "success": cmd_success, "failure": cmd_failure, "scheduled": cmd_scheduled}
 
 if __name__ == "__main__":

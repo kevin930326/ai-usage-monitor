@@ -41,6 +41,9 @@ NOTIFY_AFTER_HOURS=24
 # 建置出的描述檔剩不到這麼多小時就不裝：代表 Xcode 沒有更新描述檔（通常是沒登入 Apple ID），
 # 裝上去也撐不久。Xcode 有登入時，即使舊描述檔還剩幾小時也會換成新的 7 天描述檔
 MIN_PROFILE_HOURS=24
+# Xcode 會沿用還沒過期的快取描述檔（剩 1 天也照用），重裝前刪掉剩不到 6 天的，讓 Xcode 拿新的 7 天描述檔。
+# 描述檔過期後 iOS 會撤銷驗證，要在設定 → 一般 → VPN 與裝置管理重新「驗證」；趕在過期前換新就不用
+REFRESH_PROFILE_HOURS=144
 NO_ACCOUNT="Xcode 沒有登入 Apple ID，請到 Xcode → Settings → Accounts 登入"
 TITLE="AI 用量"
 BUNDLE_ID="io.github.kevin930326.AIUsageMonitor"
@@ -168,6 +171,11 @@ log "iPhone：$(cut -f2 <<<"$DEVICE")，連線方式 $(cut -f3 <<<"$DEVICE")"
 
 # 3. 產生專案並建置（Release：不含示範模式與截圖工具）
 cd "$REPO/apple/iOSApp" || fail 1 "找不到 apple/iOSApp"
+stale=0
+while IFS= read -r profile; do
+    [ -n "$profile" ] && rm -f "$profile" && stale=$((stale + 1))
+done < <("${HELPER[@]}" stale-profiles "$BUNDLE_ID" "$REFRESH_PROFILE_HOURS" 2>>"$LOG")
+[ "$stale" -gt 0 ] && log "刪除 $stale 份快到期的快取描述檔，讓 Xcode 拿新的"
 DEVELOPMENT_TEAM="$TEAM" xcodegen generate --quiet >>"$BUILD_LOG" 2>&1 || fail 1 "xcodegen generate 失敗"
 log "建置中（完整輸出：${BUILD_LOG}）"
 xcodebuild -project AIUsageMonitor.xcodeproj -scheme AIUsageMonitor -configuration Release \
