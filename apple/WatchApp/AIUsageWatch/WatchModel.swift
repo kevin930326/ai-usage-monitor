@@ -48,6 +48,7 @@ final class WatchModel {
     }
 
     func refresh() async {
+        reloadMissingSettings()
         guard isConfigured else { return }
         isLoading = true
         defer { isLoading = false }
@@ -63,6 +64,12 @@ final class WatchModel {
             guard generation == settingsGeneration else { return }
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 啟動時沒讀到的設定再讀一次（`StoredSetting`）：開機後第一次解鎖前被系統在背景啟動時 Keychain 讀不到
+    private func reloadMissingSettings() {
+        relayURL = StoredSetting.reloaded(relayURL) { UserDefaults.standard.string(forKey: "relayURL") }
+        readToken = StoredSetting.reloaded(readToken) { KeychainStore.read("relay-read-token") }
     }
 
     /// iPhone 傳來的中繼設定（FR-30）。密鑰只存在 Keychain（sendMessage 不會被系統保存）。
