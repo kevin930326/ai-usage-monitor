@@ -84,6 +84,9 @@ for config in Debug Release; do
   run "mac-$config"   xcbuild MacMenuBar  AIUsageMenuBar AIUsageMenuBar "$config" "$MAC_DEST"
   run "watch-$config" xcbuild WatchApp    AIUsageWatch   AIUsageWatch   "$config" "$WATCH_DEST"
 done
+# 手錶實機是 arm64_32（CGFloat 是 Float），模擬器是 64 位元：只編模擬器抓不到型別錯誤，另外編一次實機（不簽署）
+run watch-device xcodebuild -project apple/WatchApp/AIUsageWatch.xcodeproj -scheme AIUsageWatch -configuration Release \
+  -destination 'generic/platform=watchOS' -derivedDataPath "$DD/WatchDevice" CODE_SIGNING_ALLOWED=NO build
 # 截圖比對：用上面建置好的 Debug 版產生截圖，和 apple/Snapshots/ 的基準比對（scripts/snapshots.sh）
 run snapshots         env SNAPSHOT_OUT="$OUT/snapshots" \
   SNAPSHOT_MAC_APP="$DD/MacMenuBar/Build/Products/Debug/AIUsageMenuBar.app" \
