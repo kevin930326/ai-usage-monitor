@@ -17,7 +17,7 @@ final class UsageModel {
     private(set) var relayURL: String {
         didSet { SharedStore.defaults.set(relayURL, forKey: UsageSource.relayURLKey) }
     }
-    /// 只在 `saveSettings` 存進 Keychain 成功後才改
+    /// 只在 `saveSettings` 存進 Keychain 成功後，或啟動時沒讀到、之後補讀到時才改（`reloadMissingSettings`）
     private(set) var readToken: String
     /// 已用／剩餘（FR-17），同時套用到 Live Activity。
     var displayMode: UsageDisplayMode {
@@ -63,6 +63,7 @@ final class UsageModel {
     }
 
     func refresh() async {
+        reloadMissingSettings()
         guard isConfigured else { return }
         isLoading = true
         defer { isLoading = false }
@@ -81,6 +82,13 @@ final class UsageModel {
         }
         // 卡片可能已被滑掉或超過 8 小時被系統結束
         liveActivityRunning = LiveActivityController.isRunning
+    }
+
+    /// 啟動時沒讀到的設定再讀一次（`StoredSetting`）：開機後第一次解鎖前被系統在背景啟動時，Keychain 與 App Group 都讀不到
+    private func reloadMissingSettings() {
+        let url = StoredSetting.reloaded(relayURL) { UsageSource.relayURL }
+        if url != relayURL { relayURL = url }
+        readToken = StoredSetting.reloaded(readToken) { UsageSource.readToken }
     }
 
     /// 設定畫面的「儲存」：兩個值都存好後才同步到手錶一次（FR-30）。
