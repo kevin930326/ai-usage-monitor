@@ -243,6 +243,7 @@ final class MascotController {
     func setLayout(_ layout: NotchLayout) {
         guard layout != self.layout || director == nil else { return }
         self.layout = layout
+        hoverGate = NotchHoverGate(zone: layout.hoverRect)
         // 展開中（含收合動畫）不重建，不然滑鼠還在面板裡卻縮回瀏海；收合後在 refresh 重建
         if !windowExpanded { rebuild() }
     }
@@ -270,21 +271,14 @@ final class MascotController {
 
     // MARK: - 事件
 
-    /// 游標在 `layout.hoverRect` 裡：收著時只有從外面移進來才展開（按 Esc 收合後原地動一下滑鼠不會又打開）
-    @ObservationIgnored private var pointerOnNotch = false
+    /// 收著時只有游標從外面移進瀏海（`layout.hoverRect`）才展開；換版面時跟著換
+    @ObservationIgnored private var hoverGate = NotchHoverGate(zone: NotchLayout.fake.hoverRect)
 
     /// 滑鼠移入視窗（畫布座標）。展開中（含等著收回的 350 ms）回到面板上就取消收合；
     /// 收著時視窗可能還是整張畫布（收合或提醒動畫），只有游標在瀏海上才展開
     func pointerEntered(at point: CGPoint) {
-        pointerOnNotch = false
-        if director?.machine.isOpen == true { pointerEntered() }
-        trackNotch(point)
-    }
-
-    private func trackNotch(_ point: CGPoint) {
-        let on = layout.hoverRect.contains(point)
-        defer { pointerOnNotch = on }
-        if on, !pointerOnNotch, director?.machine.isOpen == false { pointerEntered() }
+        guard let director else { return }
+        if hoverGate.enter(at: point, isOpen: director.machine.isOpen) != .none { pointerEntered() }
     }
 
     /// 滑鼠移入瀏海：展開（依設定播過場）
@@ -312,7 +306,7 @@ final class MascotController {
 
     /// 滑鼠移出：等 350 ms 再收回（保持展開、右鍵選單開著時不收）
     func pointerExited() {
-        pointerOnNotch = false
+        hoverGate.exit()
         // 收著時（移進收合中的大視窗卻沒碰到瀏海）沒有東西要收
         guard let config = baseConfig, !pinned, !menuOpen, director?.machine.isOpen == true else { return }
         closeTimer?.invalidate()
@@ -403,7 +397,7 @@ final class MascotController {
 
     /// 滑鼠在面板裡移動（畫布座標）：偵測繞圈／甩動／停留（只在這個視窗裡）。看滑鼠另外由 `pollPointer` 處理（整個螢幕）
     func pointerMoved(to point: CGPoint) {
-        trackNotch(point)
+        if let isOpen = director?.machine.isOpen, hoverGate.move(to: point, isOpen: isOpen) == .open { pointerEntered() }
         guard let director else { return }
         let t = time()
         let pose = director.pose(at: t)
