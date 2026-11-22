@@ -93,17 +93,19 @@ internal static class RingDrawing
     }
 }
 
-/// <summary>原創的服務圖示（設計 skill 第 2 節，viewBox 0 0 24 24）：Claude 八芒星、Codex 六瓣圓雲（中間鏤空 >_）。</summary>
+/// <summary>原創的服務圖示（設計 skill 第 2 節，viewBox 0 0 24 24）：Claude 八芒星、Codex 六瓣圓雲（中間鏤空 >_）、Gemini 雙子（兩個重疊的圓，透鏡鏤空）。</summary>
 internal static class ProviderIcons
 {
     public static readonly Geometry Claude = CreateClaude();
     public static readonly Geometry Codex = CreateCodex();
+    public static readonly Geometry Gemini = CreateGemini();
     public static readonly Geometry Other = Frozen(new EllipseGeometry(new Point(12, 12), 9, 9));
 
     public static Geometry For(string key) => key switch
     {
         "claude" => Claude,
         "codex" => Codex,
+        "gemini" => Gemini,
         _ => Other,
     };
 
@@ -127,6 +129,14 @@ internal static class ProviderIcons
             .GetWidenedPathGeometry(new Pen(Brushes.Black, 2.3) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round });
         // 鏤空處透出背景（不是畫上背景色）
         return Frozen(Geometry.Combine(cloud, prompt, GeometryCombineMode.Exclude, null));
+    }
+
+    private static Geometry CreateGemini()
+    {
+        // 兩個半徑 7 的圓，圓心 (8.5,12)、(15.5,12)；重疊的透鏡鏤空（Xor）
+        var left = new EllipseGeometry(new Point(8.5, 12), 7, 7);
+        var right = new EllipseGeometry(new Point(15.5, 12), 7, 7);
+        return Frozen(Geometry.Combine(left, right, GeometryCombineMode.Xor, null));
     }
 
     private static Geometry Frozen(Geometry g)

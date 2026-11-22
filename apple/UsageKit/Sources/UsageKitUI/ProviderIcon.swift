@@ -4,7 +4,7 @@
 import SwiftUI
 import UsageKit
 
-/// 服務圖示（原創，不是官方 logo）。兩個都定義在 24×24 的座標系，依框架大小等比縮放。
+/// 服務圖示（原創，不是官方 logo）。都定義在 24×24 的座標系，依框架大小等比縮放。
 /// 圖示是單一 `Shape`，以目前的 foregroundStyle 填色（template）：
 /// 套上服務識別色即為全彩，錶面單色／主題色模式下由系統替換顏色，鏤空處透出背景。
 public struct ProviderIcon: View {
@@ -19,6 +19,7 @@ public struct ProviderIcon: View {
             switch provider {
             case "claude": ClaudeIconShape()
             case "codex": CodexIconShape()
+            case "gemini": GeminiIconShape()
             default: Circle()
             }
         }
@@ -74,6 +75,22 @@ public struct CodexIconShape: Shape {
         prompt.addLine(to: CGPoint(x: 16.4, y: 15.2))
         let cutout = prompt.strokedPath(StrokeStyle(lineWidth: 2.3, lineCap: .round, lineJoin: .round))
         return cloud.subtracting(cutout)
+    }()
+
+    public init() {}
+
+    public func path(in rect: CGRect) -> Path {
+        Self.unitPath.fitted(in: rect)
+    }
+}
+
+/// Gemini：雙子，兩個並排、部分重疊的圓，重疊的透鏡形鏤空。
+public struct GeminiIconShape: Shape {
+    static let unitPath: Path = {
+        let left = Path(ellipseIn: CGRect(x: 1.5, y: 5, width: 14, height: 14))
+        let right = Path(ellipseIn: CGRect(x: 8.5, y: 5, width: 14, height: 14))
+        // 重疊處（透鏡）鏤空，透出背景（不是畫上背景色）
+        return left.symmetricDifference(right)
     }()
 
     public init() {}

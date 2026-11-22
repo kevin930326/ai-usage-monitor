@@ -27,7 +27,7 @@ public struct ProviderWindow: Equatable, Sendable {
 
 public extension UsageSnapshot {
     /// 固定順序：已知服務在前，其他依名稱排序。
-    static let knownProviderOrder = ["claude", "codex"]
+    static let knownProviderOrder = ["claude", "codex", "gemini"]
 
     var orderedProviderKeys: [String] {
         providers.keys.sorted { a, b in
@@ -71,6 +71,7 @@ public enum ProviderInfo {
         switch key {
         case "claude": "Claude"
         case "codex": "Codex"
+        case "gemini": "Gemini"
         default: key.prefix(1).uppercased() + key.dropFirst()
         }
     }

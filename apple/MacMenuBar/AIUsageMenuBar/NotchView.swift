@@ -752,6 +752,10 @@ struct NotchContent: View {
         HStack(alignment: .top, spacing: 18) {
             column("claude")
             column("codex")
+            // Gemini 只在收集器有啟用時才佔一欄（ADR-0022）
+            if snapshot?.providers["gemini"] != nil {
+                column("gemini")
+            }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
