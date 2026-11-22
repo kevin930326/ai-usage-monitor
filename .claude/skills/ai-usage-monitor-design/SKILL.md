@@ -145,7 +145,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex、Google、Gemini、An
 | 限制 | 規則 | 來源 |
 |---|---|---|
 | Live Activity ContentState < 4KB | 只放畫面需要的欄位（可見額度、錯誤、更新時間、顯示模式），錯誤訊息截短；新增欄位要跑大小測試 | `UsageActivityState.swift`（`maxEncodedBytes`、`encodedSize()`）；`UsageActivityStateTests`、`FixtureTests`、`EdgeCaseTests` 檢查 < 4096 bytes（最壞情況留 512 bytes 餘裕） |
-| 鎖定畫面卡片高度約 160pt | 超過會被系統截掉；標題維持單行，新增列之前先確認高度 | `apple/iOSApp/Shared/ActivityViews.swift` |
+| 鎖定畫面卡片高度約 160pt | 超過會被系統截掉；標題維持單行，新增列之前先確認高度。服務最多列兩個（`compactProviders`，剩餘最少的兩個，ADR-0022），動態島相同 | `apple/iOSApp/Shared/ActivityViews.swift` |
 | 動態島展開版面高度約 160pt | 只放剩餘最少的額度（名稱一行＋大數字）、各服務一行的 % 與 3pt 細進度條、一行更新時間；更新按鈕在右上、下面是剩餘最少的額度的重置倒數；**各額度不放重置時間**。左上、右上與底部另加內距（`IslandLayout`），文字不能碰到圓角。鎖定畫面卡片是另一套元件（`ProviderActivityRow`），兩邊不共用列 | `apple/iOSApp/Shared/ActivityViews.swift`（`IslandLeading`、`IslandTrailing`、`IslandBottom`、`IslandBar`）、`UsageLiveActivity.swift`；`AUM_RENDER=1` 輸出近似版面與高度（`IslandRender.swift`） |
 | `staleDate` 只會重繪一次、不可落在過去 | 每份內容只在 `staleDate` 重繪一次，App 也不在背景更新卡片：資料過期時間未到時一律給過期時間（過期前的重置在那次重繪一併顯示，最多晚 30 分鐘），已過期才給下一個重置時間，都過去就給 `nil`。給過去的時間，系統會直接把卡片從鎖定畫面移除 | `UsageActivityState.staleDate(now:)`、`apple/iOSApp/Shared/LiveActivityController.swift` |
 | Widget 擴充最低 iOS 18 | `supplementalActivityFamilies([.small])`（手錶智慧型堆疊，FR-27）需要 iOS 18；App 本身仍支援 iOS 17，不要拉高 App 的部署目標 | `apple/iOSApp/project.yml`（UsageWidget 的 `IPHONEOS_DEPLOYMENT_TARGET`）、`apple/iOSApp/UsageWidget/UsageLiveActivity.swift` |

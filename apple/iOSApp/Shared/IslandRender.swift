@@ -22,7 +22,7 @@ enum IslandRender {
         var over: [String] = []
         // 每個示範情境一張；兩個最高的情境另以最大的一般字級（xxxLarge）畫一張
         var items: [(String, DemoData.Scenario, DynamicTypeSize)] = DemoData.Scenario.allCases.map { ($0.rawValue, $0, .large) }
-        items += [("normal-xxxl", .normal, .xxxLarge), ("error-xxxl", .error, .xxxLarge)]
+        items += [("normal-xxxl", .normal, .xxxLarge), ("error-xxxl", .error, .xxxLarge), ("gemini-xxxl", .gemini, .xxxLarge)]
         for (name, scenario, typeSize) in items {
             let state = UsageActivityState(snapshot: DemoData.snapshot(for: scenario), mode: DemoData.mode(for: scenario))
             let renderer = ImageRenderer(content: mock(state: state).dynamicTypeSize(typeSize))
@@ -35,6 +35,17 @@ enum IslandRender {
             try? png.write(to: dir.appendingPathComponent("island-\(name).png"))
             sizes[name] = image.size.height
             if image.size.height > heightLimit { over.append(name) }
+            // 鎖定畫面卡片（設計 skill 第 7 節）：近似外框含內距，兩個服務時約 162pt，只記錄高度給服務變多時比較，
+            // 不列入 over（ADR-0022）
+            let lock = ImageRenderer(content: LockScreenActivityView(state: state, now: RenderClock.now)
+                .frame(width: 370).dynamicTypeSize(typeSize))
+            lock.proposedSize = ProposedViewSize(width: 370, height: nil)
+            if let image = lock.uiImage {
+                sizes["lock-\(name)"] = image.size.height
+                if scenario == .gemini, let png = image.pngData() {
+                    try? png.write(to: dir.appendingPathComponent("lock-\(name).png"))
+                }
+            }
         }
         renderSnapshots(to: dir)
         let report: [String: Any] = ["limit": Double(heightLimit), "heights": sizes, "over": over.sorted()]

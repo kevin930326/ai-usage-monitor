@@ -15,6 +15,7 @@ enum DemoData {
         case claudeOnly = "claude-only"  // 只用 Claude：收集器沒有啟用 Codex
         case codexOnly = "codex-only"    // 只用 Codex：收集器沒有啟用 Claude
         case noProviders = "none"  // 收集器沒有啟用任何服務
+        case gemini   // 三個服務（ADR-0022），Gemini 剩最少：檢查版面高度與 Gemini 圖示
     }
 
     static var current: Scenario? {
@@ -46,11 +47,17 @@ enum DemoData {
             ], resetCredits: ResetCredits(available: 2, credits: [  // 重置卷 2 張，一張 2 天後到期
                 .init(expiresAt: at(2 * 24 * 60)), .init(expiresAt: at(30 * 24 * 60)),
             ]))
+        let gemini = ProviderUsage(windows: [
+            UsageWindow(id: "five_hour", label: "5 小時", usedPct: 86, resetsAt: at(150)),
+            UsageWindow(id: "weekly", label: "每週", usedPct: 40, resetsAt: at(4 * 24 * 60)),
+            UsageWindow(id: "weekly_claude_gpt", label: "每週 Claude／GPT", usedPct: 0, resetsAt: nil, hidden: true),
+        ])
         // 未啟用的服務不在 providers 裡（不是錯誤）
         let providers: [String: ProviderUsage] = switch scenario {
         case .claudeOnly: ["claude": claude]
         case .codexOnly: ["codex": codex]
         case .noProviders: [:]
+        case .gemini: ["claude": claude, "codex": codex, "gemini": gemini]
         default: ["claude": claude, "codex": codex]
         }
         return UsageSnapshot(updatedAt: updatedAt, providers: providers)

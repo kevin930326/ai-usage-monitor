@@ -63,6 +63,22 @@ public struct UsageActivityState: Codable, Hashable, Sendable {
         }))
     }
 
+    /// 鎖定畫面卡片與動態島展開版面高約 160pt，放得下兩個服務（ADR-0022，審查 C-03）
+    public static let compactProviderLimit = 2
+
+    /// 空間有限的版面要列的服務：超過 `compactProviderLimit` 個時，留剩餘最少的幾個
+    /// （有錯誤或沒有額度的服務排在後面；同分照固定順序），列出時仍照固定順序。剩餘最少的額度一定在裡面。
+    public func compactProviders(at now: Date = RenderClock.now) -> [Provider] {
+        guard providers.count > Self.compactProviderLimit else { return providers }
+        func least(_ p: Provider) -> Double {
+            guard p.error == nil else { return .infinity }
+            return p.windows.map { $0.effectiveRemainingPct(at: now) }.min() ?? .infinity
+        }
+        let ranked = providers.enumerated().sorted { (least($0.element), $0.offset) < (least($1.element), $1.offset) }
+        let keep = Set(ranked.prefix(Self.compactProviderLimit).map(\.element.key))
+        return providers.filter { keep.contains($0.key) }
+    }
+
     /// 剩餘最少的額度（FR-15），已重置的額度視為剩餘 100%（FR-26）。
     public func tightest(at now: Date = RenderClock.now) -> ProviderWindow? {
         snapshot.tightestWindow(at: now)
