@@ -37,6 +37,7 @@ class FakeServer:
     def __init__(self, reply=OK_REPLY):
         self.reply = reply
         self.requests: list[dict] = []
+        self.extra_headers: dict[str, str] = {}
         server = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -47,6 +48,8 @@ class FakeServer:
                 status, content = server.reply
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
+                for key, value in server.extra_headers.items():
+                    self.send_header(key, value)
                 self.end_headers()
                 self.wfile.write(content)
 
@@ -206,6 +209,18 @@ class FetchTest(unittest.TestCase):
                 self.fetch(server)
             self.assertIn(expected, str(e.exception))
             self.assertNotIn("@", str(e.exception))
+            self.assertNotIn(TOKEN, str(e.exception))
+
+    def test_redirects_are_not_followed(self):
+        # 導向別的主機時，csrfToken 不能跟著送出去（審查 C-01）
+        for code in (301, 302, 303, 307, 308):
+            server = FakeServer((code, b""))
+            server.extra_headers = {"Location": "http://example.invalid/steal"}
+            with self.subTest(code=code), server, self.assertRaises(ProviderError) as e:
+                self.fetch(server)
+            self.assertEqual(len(server.requests), 1)
+            self.assertIn("重新導向", str(e.exception))
+            self.assertNotIn("example.invalid", str(e.exception))
             self.assertNotIn(TOKEN, str(e.exception))
 
     def test_closed_port_is_not_running(self):

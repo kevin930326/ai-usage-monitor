@@ -87,13 +87,20 @@ def find_server(directory: Path | None = None) -> tuple[int, str]:
     raise ProviderError(NOT_RUNNING)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """不跟隨重新導向：預設的處理會把 csrfToken 標頭一起帶到導向的網址（可能不在本機，審查 C-01）。"""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise ProviderError("Antigravity 回應了重新導向，沒有跟隨")
+
+
 def request(port: int, token: str) -> dict:
-    """呼叫本機 language server。代理伺服器一律不用：請求（含 csrfToken）只送到 127.0.0.1。"""
+    """呼叫本機 language server。代理伺服器一律不用、不跟隨重新導向：請求（含 csrfToken）只送到 127.0.0.1。"""
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}{METHOD}", data=json.dumps({"forceRefresh": True}).encode(), method="POST",
         headers={"Content-Type": "application/json", "Connect-Protocol-Version": "1",
                  "x-codeium-csrf-token": token})
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     try:
         with opener.open(req, timeout=TIMEOUT) as response:
             body = response.read(MAX_OUTPUT + 1)
