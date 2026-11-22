@@ -25,7 +25,7 @@ enum DebugMascot {
         var loopPhase: Double?
     }
 
-    enum Quota { case normal, low, stale, forecast, forecastWeekly, incident }
+    enum Quota { case normal, low, stale, forecast, forecastWeekly, incident, gemini }
 
     static func render(to dir: URL, snapshot: UsageSnapshot?, now: Date, write: (any View, URL) -> Void) {
         guard let data = MascotController.bundledConfig(), let config = try? MascotConfig.decode(data) else {
@@ -85,6 +85,12 @@ enum DebugMascot {
                     }
                     snapshot.providers["claude"] = claude
                 }
+            case .gemini:
+                // ADR-0022：三個服務時額度卡多一欄 Gemini
+                snapshot.providers["gemini"] = ProviderUsage(windows: [
+                    UsageWindow(id: "five_hour", label: "5 小時", usedPct: 18, resetsAt: now.addingTimeInterval(150 * 60)),
+                    UsageWindow(id: "weekly", label: "每週", usedPct: 40, resetsAt: now.addingTimeInterval(4 * 86400)),
+                ])
             case .incident:
                 snapshot.providers["claude"]?.incidents = [
                     ServiceIncident(name: "Elevated errors on Claude Code", impact: "major",
@@ -265,6 +271,10 @@ enum DebugMascot {
                 Shot(name: "collapsed-claude-incident", setup: { _ in }, time: 1000, quota: .incident),
             ], height: 40)
         }, dir.appendingPathComponent("notch-forecast.png"))
+        // ADR-0022：有 Gemini 時的三欄額度卡（不在截圖基準裡，給人工檢查）
+        write(sheet([
+            Shot(name: "expanded-three-services", setup: { $0.open(at: 0, intro: false) }, time: 1500, quota: .gemini),
+        ]), dir.appendingPathComponent("notch-gemini.png"))
         // ADR-0020：角色卡下方的等級、進度與連續天數；升級時歡呼（彩紙）；最高級
         func levelDays(_ count: Int, tokens: Int64, endingAt end: Int) -> [String: Int64] {
             Dictionary(uniqueKeysWithValues: (0..<count).map { (LevelDebug.day(end - $0), tokens) })
