@@ -1,6 +1,7 @@
 #!/bin/bash
 # 偵測這台 Mac 登入過哪些服務，每行印出一個結果（順序與收集器相同）：
 #   claude／codex      已登入，要啟用
+#   gemini             用過 Antigravity（~/.gemini/antigravity 存在），要啟用（ADR-0022）
 #   ?claude／?codex    不知道（裝過但找不到執行檔、或輸出認不得）：安裝腳本不更動 enabled_providers
 #   （不印）           沒有登入
 #
@@ -58,3 +59,7 @@ else
         *) echo '?codex' ;;
     esac
 fi
+
+# Gemini（ADR-0022）：額度來自 Antigravity 開著時的本機服務，沒開時無法得知登入狀態；
+# 用過 Antigravity（資料夾存在，只看是否存在、不讀內容）就啟用，沒開或沒登入時由收集器說明原因
+if [ -d "$HOME/.gemini/antigravity" ]; then echo gemini; fi

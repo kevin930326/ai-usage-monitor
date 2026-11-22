@@ -18,7 +18,7 @@ public sealed record UsageSnapshot(int SchemaVersion, DateTimeOffset UpdatedAt, 
     public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(30);
 
     /// <summary>固定順序：已知服務在前，其他依名稱排序（<c>orderedProviderKeys</c>）。</summary>
-    public static readonly IReadOnlyList<string> KnownProviderOrder = ["claude", "codex"];
+    public static readonly IReadOnlyList<string> KnownProviderOrder = ["claude", "codex", "gemini"];
 
     public IReadOnlyList<string> OrderedProviderKeys =>
         Providers.Keys
@@ -123,6 +123,7 @@ public static class ProviderInfo
     {
         "claude" => "Claude",
         "codex" => "Codex",
+        "gemini" => "Gemini",
         "" => "",
         _ => char.ToUpperInvariant(key[0]) + key[1..],
     };

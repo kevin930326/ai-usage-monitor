@@ -63,9 +63,14 @@ class EnabledProvidersTest(unittest.TestCase):
         self.assertIn("字串陣列", err)
 
     def test_unknown_names_are_skipped_and_logged(self):
-        names, err = self.load({"enabled_providers": ["claude", "gemini"]})
+        names, err = self.load({"enabled_providers": ["claude", "bard"]})
         self.assertEqual(names, ["claude"])
-        self.assertIn("gemini", err)
+        self.assertIn("bard", err)
+
+    def test_gemini_only_when_listed(self):
+        # Antigravity 沒開就讀不到：沒有設定時不啟用，安裝腳本偵測到才列入（ADR-0022）
+        self.assertNotIn("gemini", self.load(None)[0])
+        self.assertEqual(self.load({"enabled_providers": ["gemini", "claude"]})[0], ["claude", "gemini"])
 
 
 class CollectEnabledTest(unittest.TestCase):
@@ -138,7 +143,7 @@ class DetectProvidersTest(unittest.TestCase):
     """install-launchd.sh 用的偵測：問 `claude auth status` 與 `codex login status`，不讀登入檔。"""
 
     def detect(self, claude: bool | int | None, codex: str | None, codex_dir: bool = False,
-               claude_dir: bool = False) -> list[str]:
+               claude_dir: bool = False, antigravity_dir: bool = False) -> list[str]:
         """claude：True 已登入、False 未登入、None 找不到 claude、整數是 auth status 的結束碼；
         claude_dir：~/.claude 是否存在。codex：CODEX_STATUS 的狀態，None 找不到 codex；codex_dir：~/.codex 是否存在。"""
         with tempfile.TemporaryDirectory() as d:
@@ -159,6 +164,11 @@ class DetectProvidersTest(unittest.TestCase):
             fake_codex = write_fake_codex(bin_dir, codex) if codex else None
             if claude_dir:
                 (home / ".claude").mkdir()
+            if antigravity_dir:
+                daemon = home / ".gemini" / "antigravity" / "daemon"
+                daemon.mkdir(parents=True)
+                (daemon / "hub_1.json").write_text('{"csrfToken": "secret"}')
+                (daemon / "hub_1.json").chmod(0)
             if codex_dir:
                 (home / ".codex").mkdir()
                 # 登入檔不能被讀：權限設成 000，cat 也讀不到
@@ -188,6 +198,11 @@ class DetectProvidersTest(unittest.TestCase):
         self.assertEqual(self.detect(True, "logged-out", codex_dir=True), ["claude"])  # 有登入檔也不算
         self.assertEqual(self.detect(True, "weird"), ["claude", "?codex"])  # 認不得：不知道
         self.assertEqual(self.detect(True, "apikey-mentions-chatgpt"), ["claude"])
+
+    def test_gemini_follows_the_antigravity_folder(self):
+        self.assertEqual(self.detect(True, "chatgpt"), ["claude", "codex"])
+        self.assertEqual(self.detect(True, "chatgpt", antigravity_dir=True), ["claude", "codex", "gemini"])
+        self.assertEqual(self.detect(None, None, antigravity_dir=True), ["gemini"])
 
     def test_status_commands_are_time_limited(self):
         started = time.monotonic()

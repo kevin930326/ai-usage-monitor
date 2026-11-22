@@ -50,6 +50,7 @@ internal sealed class Palette
     {
         "claude" => Rgb(Dark ? 0xD97757 : 0xB4532F),
         "codex" => Rgb(Dark ? 0x5CC2B1 : 0x237A6B),
+        "gemini" => Rgb(Dark ? 0xA78BFA : 0x6D4FC9),
         _ => Rgb(Dark ? 0x9AAAC8 : 0x4A5D80),
     };
 

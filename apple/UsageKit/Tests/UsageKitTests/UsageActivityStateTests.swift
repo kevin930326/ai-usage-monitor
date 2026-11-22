@@ -169,4 +169,23 @@ import Testing
             .withRefreshError(String(repeating: "錯誤", count: 100))
         #expect(try state.encodedSize() < UsageActivityState.maxEncodedBytes)
     }
+
+    /// 三個服務時，鎖定畫面與動態島只放剩餘最少的兩個，順序照固定順序（ADR-0022，審查 C-03）
+    @Test func compactProvidersKeepTheTwoTightest() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func usage(_ used: Double) -> ProviderUsage {
+            ProviderUsage(windows: [UsageWindow(id: "weekly", label: "每週", usedPct: used, resetsAt: now.addingTimeInterval(86400))])
+        }
+        let three = UsageSnapshot(updatedAt: now, providers: ["claude": usage(30), "codex": usage(60), "gemini": usage(90)])
+        let state = UsageActivityState(snapshot: three, mode: .remaining)
+        #expect(state.compactProviders(at: now).map(\.key) == ["codex", "gemini"])
+        #expect(state.providers.count == 3)  // 狀態本身仍保留全部
+        // 有錯誤的服務排在後面
+        var withError = three
+        withError.providers["codex"] = ProviderUsage(error: "壞了")
+        #expect(UsageActivityState(snapshot: withError, mode: .remaining).compactProviders(at: now).map(\.key) == ["claude", "gemini"])
+        // 兩個以下照舊全部
+        let two = UsageSnapshot(updatedAt: now, providers: ["claude": usage(30), "codex": usage(60)])
+        #expect(UsageActivityState(snapshot: two, mode: .remaining).compactProviders(at: now).map(\.key) == ["claude", "codex"])
+    }
 }

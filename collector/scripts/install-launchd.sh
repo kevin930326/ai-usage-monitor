@@ -129,6 +129,11 @@ else
     else
         echo "Codex 用量：未啟用（Codex CLI 沒有用 ChatGPT 登入）"
     fi
+    if has_provider gemini; then
+        echo "Gemini 用量：啟用（用過 Antigravity；Antigravity 開著時才會更新）"
+    else
+        echo "Gemini 用量：未啟用（沒有使用 Antigravity）"
+    fi
     echo "之後登入了另一個服務，重新執行這個腳本即可啟用。"
 fi
 echo "Python：$PYTHON"

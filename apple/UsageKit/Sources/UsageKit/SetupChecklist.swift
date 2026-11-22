@@ -76,9 +76,12 @@ public struct SetupInputs: Equatable, Sendable {
     public var relayConfigured: Bool
     /// 這次偵測有沒有一併更新 config.json（內建收集器在用時會；install-launchd.sh 的收集器由它自己的腳本設定）
     public var detectionUpdatedConfig: Bool
+    /// Gemini（Antigravity，ADR-0022）正在收集：只用 Gemini 時，沒裝的 Claude、Codex 是可選（審查 C-02）
+    public var geminiCollecting: Bool
 
     public init(appInApplications: Bool, collectorNeedsAction: Bool, claude: ProviderSetupInput, codex: ProviderSetupInput,
-                notificationsAllowed: Bool?, loginItemEnabled: Bool, relayConfigured: Bool, detectionUpdatedConfig: Bool = true) {
+                notificationsAllowed: Bool?, loginItemEnabled: Bool, relayConfigured: Bool, detectionUpdatedConfig: Bool = true,
+                geminiCollecting: Bool = false) {
         self.appInApplications = appInApplications
         self.collectorNeedsAction = collectorNeedsAction
         self.claude = claude
@@ -87,6 +90,7 @@ public struct SetupInputs: Equatable, Sendable {
         self.loginItemEnabled = loginItemEnabled
         self.relayConfigured = relayConfigured
         self.detectionUpdatedConfig = detectionUpdatedConfig
+        self.geminiCollecting = geminiCollecting
     }
 }
 
@@ -98,8 +102,8 @@ public enum SetupChecklist {
         switch step {
         case .location: return inputs.appInApplications ? .done : .needsAction
         case .collector: return inputs.collectorNeedsAction ? .needsAction : .done
-        case .claude: return providerStatus(inputs.claude, other: inputs.codex)
-        case .codex: return providerStatus(inputs.codex, other: inputs.claude)
+        case .claude: return providerStatus(inputs.claude, other: inputs.codex, otherServiceCollecting: inputs.geminiCollecting)
+        case .codex: return providerStatus(inputs.codex, other: inputs.claude, otherServiceCollecting: inputs.geminiCollecting)
         case .notifications: return inputs.notificationsAllowed == true ? .done : .optional
         case .loginItem: return inputs.loginItemEnabled ? .done : .optional
         case .appearance: return .done
@@ -141,11 +145,12 @@ public enum SetupChecklist {
         [.collecting, .loggedIn].contains(situation(p))
     }
 
-    /// 可以用＝完成；沒安裝或沒有任何資訊＝可選（另一個服務可用時），兩個都不能用時兩個都要處理
-    static func providerStatus(_ provider: ProviderSetupInput, other: ProviderSetupInput) -> SetupStepStatus {
+    /// 可以用＝完成；沒安裝或沒有任何資訊＝可選（另一個服務可用、或 Gemini 正在收集時），都不能用時兩個都要處理
+    static func providerStatus(_ provider: ProviderSetupInput, other: ProviderSetupInput,
+                               otherServiceCollecting: Bool = false) -> SetupStepStatus {
         switch situation(provider) {
         case .collecting, .loggedIn: .done
-        case .notInstalled, .noInfo: isUsable(other) ? .optional : .needsAction
+        case .notInstalled, .noInfo: isUsable(other) || otherServiceCollecting ? .optional : .needsAction
         case .notLoggedIn, .apiKey, .collectError, .unknown: .needsAction
         }
     }

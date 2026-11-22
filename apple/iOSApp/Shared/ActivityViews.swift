@@ -24,7 +24,7 @@ struct LockScreenActivityView<Trailing: View>: View {
             if state.providers.isEmpty {
                 NoProvidersNotice()
             }
-            ForEach(state.providers) { provider in
+            ForEach(state.compactProviders(at: now)) { provider in
                 ProviderActivityRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
             ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError) {
@@ -253,7 +253,7 @@ struct IslandBottom: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ForEach(state.providers) { provider in
+            ForEach(state.compactProviders(at: now)) { provider in
                 IslandProviderRow(provider: provider, mode: state.mode, stale: stale, now: now)
             }
             ActivityFooter(updatedAt: state.updatedAt, stale: stale, refreshError: state.refreshError)

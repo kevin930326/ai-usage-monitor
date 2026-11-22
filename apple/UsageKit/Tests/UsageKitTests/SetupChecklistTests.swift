@@ -26,6 +26,17 @@ final class SetupChecklistTests: XCTestCase {
         XCTAssertEqual(SetupChecklist.status(of: .claude, dev), .needsAction)
     }
 
+    func testGeminiAloneMakesOthersOptional() {
+        // 只用 Antigravity（ADR-0022，審查 C-02）：Gemini 正在收集時，沒裝的 Claude、Codex 是可選
+        var i = inputs(claude: .init(login: .notInstalled), codex: .init(login: .notInstalled))
+        i.geminiCollecting = true
+        XCTAssertEqual(SetupChecklist.status(of: .claude, i), .optional)
+        XCTAssertEqual(SetupChecklist.status(of: .codex, i), .optional)
+        // 登入有問題的照樣要處理
+        i.claude = .init(login: .notLoggedIn)
+        XCTAssertEqual(SetupChecklist.status(of: .claude, i), .needsAction)
+    }
+
     func testLoginStates() {
         let notLogged = inputs(claude: .init(login: .notLoggedIn), codex: .init(login: .apiKey))
         XCTAssertEqual(SetupChecklist.status(of: .claude, notLogged), .needsAction)

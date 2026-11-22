@@ -84,6 +84,8 @@ if ($WithQuota) {
             $enabled += $name
         }
     }
+    # Gemini（ADR-0022）：額度來自 Antigravity 開著時的本機服務，用過 Antigravity（資料夾存在）就啟用
+    if (Test-Path -LiteralPath (Join-Path $env:USERPROFILE '.gemini\antigravity') -PathType Container) { $enabled += 'gemini' }
     if ($enabled.Count -eq 0) { Write-Warning '找不到 claude 或 codex，額度不會收集（Token 統計照常）。' }
     Update-Config (@('--list', $Config, 'enabled_providers') + $enabled)
     $Mode = '--write-local'

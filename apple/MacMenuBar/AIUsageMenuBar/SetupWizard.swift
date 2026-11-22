@@ -55,7 +55,8 @@ final class SetupWizardModel {
             notificationsAllowed: Self.allowed(notificationStatus),
             loginItemEnabled: LoginItemSection.isEnabled,
             relayConfigured: Self.relayConfigured,
-            detectionUpdatedConfig: updatesConfig
+            detectionUpdatedConfig: updatesConfig,
+            geminiCollecting: provider("gemini", nil).collecting
         )
     }
 
