@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- Gemini 額度（ADR-0022）：Google AI Pro／Ultra 寫程式用的 Antigravity 額度。Antigravity 開著時，收集器向它在本機的官方服務查詢（不叫模型、不消耗額度、不讀 Google 登入資訊），顯示 Gemini 模型的 5 小時與每週額度，Claude／GPT 與 Argon 兩組列為次要額度。用過 Antigravity 的電腦由 `install-launchd.sh`、Mac App 的設定精靈或 Windows 的 `install-task.ps1 -WithQuota` 啟用；已安裝的人重新執行一次即可。識別色紫色、原創圖示「雙子」。Gemini App（聊天）的額度只在網頁上，不收
+
 ### Fixed
 - Apple Watch App 無法編成實機版本：手錶實機是 arm64_32，`CGFloat` 是 `Float`，角色手勢偵測把 `CGPoint` 的座標直接和 `Double` 混算，只有 64 位元的模擬器編得過。座標先轉成 `Double`；`scripts/verify-all.sh` 與 CI 另外編一次手錶實機版本（`watch-device`，不簽署），之後這類錯誤會被抓到
 - Mac 瀏海面板太敏感：移開後收合動畫（含 350 ms 的等待）播完前，或收著時播提醒動畫時，視窗還是整張 580×190 的畫布，游標碰到畫布任何地方就又展開，明明離瀏海還有一段距離。改成收著時只有游標移進看得到的瀏海本身才展開（不含視窗左右各 22 px、下方 5 px 留給提醒鼓起的透明邊，從左右靠近不會提早展開）；展開中回到面板上照舊取消收合

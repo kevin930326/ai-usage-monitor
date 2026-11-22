@@ -13,6 +13,7 @@ description: AI Usage Monitor 的設計與識別規則：服務識別色、原�
 |---|---|---|
 | Claude 識別色 | `#D97757` | `#B4532F` |
 | Codex 識別色 | `#5CC2B1` | `#237A6B` |
+| Gemini 識別色（ADR-0022） | `#A78BFA` | `#6D4FC9` |
 | 剩餘 < 20% 的進度條（critical） | `#FF453A` | `#D70015` |
 | 提示文字（資料已過期、服務錯誤） | `#FF9F0A` | `#A65200` |
 | 資料過期時的進度條 | 系統灰色 `Color.gray` | 同左 |
@@ -35,7 +36,7 @@ description: AI Usage Monitor 的設計與識別規則：服務識別色、原�
 
 ## 2. 服務圖示
 
-動態島精簡版與圓形錶面複雜功能用圖示區分服務（空間不夠放名稱）。兩個圖示都是**原創**，定義在 `viewBox 0 0 24 24`，實作為 UsageKitUI 的 `ProviderIcon`（`ClaudeIconShape`、`CodexIconShape`），三個平台共用。
+動態島精簡版與圓形錶面複雜功能用圖示區分服務（空間不夠放名稱）。圖示都是**原創**，定義在 `viewBox 0 0 24 24`，實作為 UsageKitUI 的 `ProviderIcon`（`ClaudeIconShape`、`CodexIconShape`、`GeminiIconShape`），三個平台共用；Windows 是 `ProviderIcons`（`Drawing.cs`）。
 
 ### Claude：八芒星
 
@@ -51,6 +52,11 @@ L12.00 23.00 L10.35 15.97 L6.20 17.80 L8.03 13.65 L1.00 12.00 L8.03 10.35 L6.20 
 - 實心形狀是 7 個圓的聯集：中心圓 (12,12) 半徑 8.0；6 個外圓半徑 4.0，圓心
   (12.00,5.00)、(18.06,8.50)、(18.06,15.50)、(12.00,19.00)、(5.94,15.50)、(5.94,8.50)。
 - 以筆劃 `M8 9l3 3-3 3M12.6 15.2h3.8`（線寬 2.3、圓頭、圓角）挖空，**鏤空處透出背景**（不是畫上背景色）。
+
+### Gemini：雙子（ADR-0022）
+
+- 兩個半徑 7 的圓，圓心 (8.5,12)、(15.5,12)；重疊的透鏡形**鏤空**（對稱差：Swift `symmetricDifference`、WPF `GeometryCombineMode.Xor`），透出背景。
+- 不要改成四芒星或漸層的星形：那是 Google Gemini 的標誌。
 
 ### 繪製規則
 
@@ -81,7 +87,7 @@ L12.00 23.00 L10.35 15.97 L6.20 17.80 L8.03 13.65 L1.00 12.00 L8.03 10.35 L6.20 
 
 ## 3. 不收錄官方 logo
 
-repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商標圖或其描摹，包括 SVG、PNG、SF Symbols 以外的圖片資源。上面兩個圖示是原創造型，不要改成接近官方 logo 的形狀。
+repo 內**不收錄** Anthropic、Claude、OpenAI、Codex、Google、Gemini、Antigravity 的官方 logo、商標圖或其描摹，包括 SVG、PNG、SF Symbols 以外的圖片資源。上面的圖示是原創造型，不要改成接近官方 logo 的形狀。
 
 ## 4. 資料過期門檻（FR-11）
 
@@ -118,7 +124,7 @@ repo 內**不收錄** Anthropic、Claude、OpenAI、Codex 的官方 logo、商�
 
 - **剩餘最少的額度永遠放在最顯眼的位置**（FR-15）：所有服務的可見額度中剩餘最少的一項；畫面上**不加「剩餘最少」之類的標題**，用服務圖示＋服務名稱＋額度名稱（「Claude 每週」，`ProviderWindow.displayName`）表達；VoiceOver 仍說完整的「剩餘最少的額度：Claude 每週，剩 67%」（`leastRemainingAccessibilityLabel(mode:at:)`）；排除 `hidden` 額度與有錯誤的服務；同分時取較早重置的；已重置的額度視為剩餘 100%。一律用 `UsageSnapshot.tightestWindow(at:)`（Live Activity 用 `UsageActivityState.tightest(at:)`），不要自己挑。
   來源：`apple/UsageKit/Sources/UsageKit/UsageWindow+Reset.swift`（`tightestWindow(at:)`）、`UsageActivityState.swift`（`tightest(at:)`）。
-- **服務順序固定**：Claude、Codex，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
+- **服務順序固定**：Claude、Codex、Gemini，其他服務依名稱排序。用 `orderedProviderKeys`，不要直接走訪 `providers` 字典（字典沒有順序）。
   來源：`apple/UsageKit/Sources/UsageKit/UsageSnapshot+Display.swift`（`knownProviderOrder`、`orderedProviderKeys`）。
 - **每個額度顯示**：名稱、剩餘或已用 %、進度條、依 `resets_at` 計算的重置倒數（用 `Text(date, style: .relative)` 讓系統自己倒數，不必重新抓資料）。**例外：手錶 App 的 `List`** 裡不能放 `Text(date, style: .relative)`（重置倒數、頁尾更新時間都一樣），它每秒更新會讓 watchOS 版面不斷重算、CPU 吃滿；改用 `ResetCountdown.text(until:now:)`／`updatedText(since:now:)`，由 `TimelineView(.everyMinute)` 每分鐘更新。**例外：動態島展開版面**只顯示剩餘最少的額度的倒數，各額度只有 % 與細進度條（高度上限約 160pt，第 7 節）；鎖定畫面卡片仍每個額度都有倒數。
   來源：`apple/UsageKit/Sources/UsageKitUI/UsageWindowRow.swift`、`UsageWindow+Reset.swift`（`UsageDisplayMode`、`displayedPct`、`ResetCountdown`）、`apple/WatchApp/AIUsageWatch/UsageListView.swift`。

@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml)
 
-See how much of your **Claude** and **Codex** usage limits (5-hour / weekly) is left at any time: Live Activity and widgets on the iPhone Lock Screen, Apple Watch, and the Mac menu bar. The Mac panel also shows limit trends, a consumption heatmap, token statistics for this Mac, and the status of both services. Using only one of the two services works too.
+See how much of your **Claude**, **Codex** and **Gemini** (Antigravity) usage limits (5-hour / weekly) is left at any time: Live Activity and widgets on the iPhone Lock Screen, Apple Watch, and the Mac menu bar. The Mac panel also shows limit trends, a consumption heatmap, token statistics for this Mac, and the status of both services. Using only one of the two services works too.
 
 > The apps' interface is in Traditional Chinese; in this README, UI labels are quoted in Chinese with an English gloss the first time they appear. The detailed documentation linked below (`docs/`, ADRs, component READMEs) is in Traditional Chinese.
 
@@ -107,7 +107,7 @@ Mac collector (Python)  ──POST──▶ Cloudflare Worker (KV) ◀──GET�
 Local usage.json, history.sqlite3, service-status.json ◀──read── Mac menu bar app (no network access)
 ```
 
-- **The collector does not read any service's access token**: Claude usage comes from the unmodified Claude Code's own `/usage` ([ADR-0006](docs/adr/0006-claude-usage-via-cli.md)), and Codex usage comes from Codex CLI's own `app-server` ([ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)).
+- **The collector does not read any service's access token**: Claude usage comes from the unmodified Claude Code's own `/usage` ([ADR-0006](docs/adr/0006-claude-usage-via-cli.md)), Codex usage comes from Codex CLI's own `app-server` ([ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)), and Gemini usage comes from Antigravity's own local service while Antigravity is open ([ADR-0022](docs/adr/0022-gemini-usage-via-antigravity.md); Google's FAQ forbids accessing Antigravity with third-party tools. The collector only reads the quota, never calls a model and never touches your Google sign-in, but there is no guarantee Google won't misjudge it; see the ADR for the risk).
 - No paid Apple Developer account needed: "Shortcuts restarts it on a schedule + a button for manual refresh" works around the Live Activity's 8-hour limit, and the 7-day signing expiry of a free Apple ID is handled by an automatic weekly reinstall.
 
 ## Documentation
@@ -270,6 +270,7 @@ Principles:
 | Reader | File or source | What is used | Not used (examples) |
 |---|---|---|---|
 | Collector | Output of `claude -p /usage` and `claude auth status` | Used % and reset time for each limit; plan name | Email and all other output are discarded |
+| Collector | The `RetrieveUserQuotaSummary` response from Antigravity's local service; `~/.gemini/antigravity/daemon/hub_*.json` | Remaining fraction and reset time of each limit; the local service's pid, port and csrfToken (used only to call the local service, never logged or uploaded) | The descriptions of each group and limit. It never calls `GetUserStatus`, which returns your email and name |
 | Collector | The `account/rateLimits/read` response from `codex app-server` | Used %, reset time and plan name for each limit; the number of available reset credits and each one's expiry time | Account ID, credit balance, and the reset credits' id / title / description / time obtained and other fields. The collector only reads reset credits and never uses them (the code has no method for using one; a test scans to confirm this) |
 | Collector | `~/Library/Application Support/AIUsageMonitor/config.json` | Relay URL, `claude` / `codex` paths, enabled services, conversation log folders | — |
 | Collector | Keychain `AIUsageMonitor-relay-write` | Relay write key (used when uploading) | — |

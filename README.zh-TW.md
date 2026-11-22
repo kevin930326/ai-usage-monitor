@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/kevin930326/ai-usage-monitor/actions/workflows/ci.yml)
 
-隨時查看 **Claude** 與 **Codex** 的剩餘使用額度（5 小時／每週）：iPhone 鎖定畫面的 Live Activity 與小工具、Apple Watch、Mac 選單列。Mac 面板另外顯示額度走勢、消耗熱力圖、這台 Mac 的 Token 統計與兩家服務的狀態。只用其中一個服務也可以。
+隨時查看 **Claude**、**Codex** 與 **Gemini**（Antigravity）的剩餘使用額度（5 小時／每週）：iPhone 鎖定畫面的 Live Activity 與小工具、Apple Watch、Mac 選單列。Mac 面板另外顯示額度走勢、消耗熱力圖、這台 Mac 的 Token 統計與兩家服務的狀態。只用其中一個服務也可以。
 
 > 目前的版本是 [1.0.0](CHANGELOG.md#100---2026-10-30)：Mac 的 `.dmg`／一行指令、Windows 收集器的一行指令與 Windows 桌面 App 的 zip 都在 [Releases](https://github.com/kevin930326/ai-usage-monitor/releases)。安裝見[安裝](#安裝)，各版本的變更見 [CHANGELOG](CHANGELOG.md)。
 
@@ -105,7 +105,7 @@ Mac 收集器 (Python)     ──POST──▶ Cloudflare Worker (KV) ◀──G
 本機 usage.json、history.sqlite3、service-status.json ◀──讀── Mac 選單列 App（不連網）
 ```
 
-- **收集器不讀取任何服務的 token**：Claude 用量由未修改的 Claude Code 自己的 `/usage` 取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)），Codex 用量由 Codex CLI 自己的 `app-server` 取得（[ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)）。
+- **收集器不讀取任何服務的 token**：Claude 用量由未修改的 Claude Code 自己的 `/usage` 取得（[ADR-0006](docs/adr/0006-claude-usage-via-cli.md)），Codex 用量由 Codex CLI 自己的 `app-server` 取得（[ADR-0007](docs/adr/0007-codex-usage-via-app-server.md)），Gemini 用量由 Antigravity 開著時它在本機的官方服務取得（[ADR-0022](docs/adr/0022-gemini-usage-via-antigravity.md)；Google 的 FAQ 禁止用第三方工具存取 Antigravity，收集器只查額度、不叫模型、不拿 Google 登入，但不能保證 Google 不會誤判，風險見 ADR）。
 - 不需付費 Apple Developer 帳號：用「捷徑定時重開 + 按鈕手動更新」繞過 Live Activity 的 8 小時上限，免費 Apple ID 的 7 天簽署期限可用每週自動重裝處理。
 
 ## 文件
@@ -264,6 +264,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/ins
 | 讀取者 | 檔案或來源 | 取用的內容 | 不取用（舉例） |
 |---|---|---|---|
 | 收集器 | `claude -p /usage`、`claude auth status` 的輸出 | 各額度的已用 %、重置時間；方案名稱 | email 等其餘輸出直接丟棄 |
+| 收集器 | Antigravity 本機服務的 `RetrieveUserQuotaSummary` 回應；`~/.gemini/antigravity/daemon/hub_*.json` | 各額度的剩餘比例與重置時間；本機服務的 pid、埠與 csrfToken（只用來呼叫本機服務，不記錄、不上傳） | 各分組與額度的說明文字。不呼叫會回傳 email 與姓名的 `GetUserStatus` |
 | 收集器 | `codex app-server` 的 `account/rateLimits/read` 回應 | 各額度的已用 %、重置時間、方案名稱；重置次數卷的可用張數與各張到期時間 | 帳號 ID、點數餘額、重置卷的 id／標題／說明／取得時間等其餘欄位。收集器只讀、不使用重置卷（程式裡沒有使用卷的方法，測試會掃描確認） |
 | 收集器 | `~/Library/Application Support/AIUsageMonitor/config.json` | 中繼網址、`claude`／`codex` 路徑、啟用的服務、對話紀錄資料夾 | — |
 | 收集器 | Keychain `AIUsageMonitor-relay-write` | 中繼寫入密鑰（上傳時使用） | — |
