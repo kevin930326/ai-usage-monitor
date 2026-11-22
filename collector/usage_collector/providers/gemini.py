@@ -34,6 +34,7 @@ MAX_DAEMON_FILE = 64 * 1024
 
 FORMAT_CHANGED = "Antigravity 的回應格式已改變，請更新收集器"
 NOT_RUNNING = "Antigravity 沒有開啟，開啟後才會更新 Gemini 額度"
+REDIRECTED = "Antigravity 回應了重新導向，沒有跟隨"
 
 # bucketId 的開頭 → (額度 id 的後綴, 名稱的後綴, 是否為次要額度)；依序比對，第一個符合的為準
 GROUPS = (
@@ -91,7 +92,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     """不跟隨重新導向：預設的處理會把 csrfToken 標頭一起帶到導向的網址（可能不在本機，審查 C-01）。"""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ProviderError("Antigravity 回應了重新導向，沒有跟隨")
+        raise ProviderError(REDIRECTED)
 
 
 def request(port: int, token: str) -> dict:
@@ -129,6 +130,8 @@ def http_error(e: urllib.error.HTTPError) -> str:
         code = None
     if code == "unauthenticated":
         return "尚未登入 Antigravity，請開啟 Antigravity 登入 Google 帳號"
+    if 300 <= e.code < 400:
+        return REDIRECTED  # NoRedirect 沒接手的（Python 3.10 的 urllib 不處理 308）同樣不跟隨
     if e.code in (401, 403):
         return "Antigravity 拒絕連線，請重新開啟 Antigravity"
     return f"Antigravity 查詢額度失敗（HTTP {e.code}）"

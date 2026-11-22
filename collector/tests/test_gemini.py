@@ -223,6 +223,13 @@ class FetchTest(unittest.TestCase):
             self.assertNotIn("example.invalid", str(e.exception))
             self.assertNotIn(TOKEN, str(e.exception))
 
+    def test_unhandled_redirect_codes_are_reported_as_redirects(self):
+        # Python 3.10 的 urllib 不處理 308，直接成為 HTTPError：同樣當成重新導向、不跟隨
+        import io
+        import urllib.error
+        error = urllib.error.HTTPError("http://127.0.0.1:1/", 308, "Permanent Redirect", {}, io.BytesIO(b""))
+        self.assertEqual(gemini.http_error(error), gemini.REDIRECTED)
+
     def test_closed_port_is_not_running(self):
         with FakeServer() as server:
             port = server.port

@@ -207,7 +207,7 @@ class UserAgentTest(unittest.TestCase):
     def test_only_http_py_makes_requests(self):
         # 其他模組都經過 request_json（才會帶 User-Agent、只跟隨同源的重新導向）；providers 透過 CLI，不直接連網
         package = Path(__file__).resolve().parent.parent / "usage_collector"
-        offenders = [str(f.relative_to(package)) for f in sorted(package.rglob("*.py")) if f.name != "http.py"
+        offenders = [f.relative_to(package).as_posix() for f in sorted(package.rglob("*.py")) if f.name != "http.py"
                      and any(m in f.read_text(encoding="utf-8")
                              for m in ("urllib.request", "http.client", "urlopen", "import socket", "import requests"))]
         # 例外：agent_sync 以本機的 Unix socket 確認 Mac App 在不在跑（hook.sock，連上立刻關、不送資料），不連網路
