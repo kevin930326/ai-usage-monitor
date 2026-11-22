@@ -51,6 +51,19 @@ class SetupDetectionTests(unittest.TestCase):
             exit {rc}
         """)
 
+    def test_gemini_follows_the_antigravity_folder(self):
+        self.assertEqual(setup.detect_gemini(self.env), "not_installed")
+        (self.home / ".gemini" / "antigravity" / "daemon").mkdir(parents=True)
+        # 連線資訊不能被讀：權限設成 000
+        secret = self.home / ".gemini" / "antigravity" / "daemon" / "hub_1.json"
+        secret.write_text('{"csrfToken": "secret"}')
+        secret.chmod(0)
+        self.assertEqual(setup.detect_gemini(self.env), "enabled")
+        self.fake_claude(0)
+        result = setup.run(self.config, self.env, candidates=self.none)
+        self.assertEqual(result["enabled_providers"], ["claude", "gemini"])
+        self.assertNotIn("secret", json.dumps(result))
+
     def test_claude_states_follow_the_exit_code(self):
         for rc, state in [(0, "enabled"), (1, "not_logged_in"), (3, "unknown")]:
             with self.subTest(rc=rc):
@@ -129,7 +142,8 @@ class SetupDetectionTests(unittest.TestCase):
         self.assertEqual(config["enabled_providers"], ["claude"])
         self.assertNotIn("claude_config_dir", config)
         self.assertEqual(result, {"claude": {"state": "enabled", "found": True},
-                                  "codex": {"state": "not_logged_in", "found": True}, "enabled_providers": ["claude"]})
+                                  "codex": {"state": "not_logged_in", "found": True},
+                                  "gemini": {"state": "not_installed", "found": False}, "enabled_providers": ["claude"]})
         # 結果不含路徑或帳號（App 會顯示）
         self.assertNotIn(str(self.tmp), json.dumps(result))
         self.assertNotIn("example.com", json.dumps(result))

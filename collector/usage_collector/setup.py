@@ -120,11 +120,17 @@ def detect_codex(path: str | None, environ: Mapping[str, str] = os.environ) -> s
     return "unknown"
 
 
+def detect_gemini(environ: Mapping[str, str] = os.environ) -> str:
+    """Antigravity（ADR-0022）：只看 ~/.gemini/antigravity 是否存在（不讀內容）。Antigravity 沒有開著時
+    無法得知登入狀態，用過就啟用；沒開或沒登入時收集器會在 Gemini 這一欄說明原因。"""
+    return "enabled" if os.path.isdir(expand_home("~/.gemini/antigravity", environ)) else "not_installed"
+
+
 def plan(states: Mapping[str, str]) -> list[str] | None:
     """要寫入的 enabled_providers；None＝不更動（沒有任何已登入，或有任何一個不知道）。"""
     if any(state == "unknown" for state in states.values()):
         return None
-    enabled = [name for name in ("claude", "codex") if states.get(name) == "enabled"]
+    enabled = [name for name in ("claude", "codex", "gemini") if states.get(name) == "enabled"]
     return enabled or None
 
 
@@ -163,7 +169,8 @@ def run(config_path: Path, environ: Mapping[str, str] = os.environ, dry_run: boo
             detect_env[env] = config[key]
     claude = find_executable("claude", candidates["claude"], detect_env, config.get("claude_path"))
     codex = find_executable("codex", candidates["codex"], detect_env, config.get("codex_path"))
-    states = {"claude": detect_claude(claude, detect_env), "codex": detect_codex(codex, detect_env)}
+    states = {"claude": detect_claude(claude, detect_env), "codex": detect_codex(codex, detect_env),
+              "gemini": detect_gemini(detect_env)}
     enabled = plan(states)
     updates: dict[str, object] = {}
     # App 從登入項目啟動時沒有這兩個環境變數：沒有時保留 config.json 原本的值（遷移前 install-launchd.sh 寫的）
@@ -181,6 +188,7 @@ def run(config_path: Path, environ: Mapping[str, str] = os.environ, dry_run: boo
     return {
         "claude": {"state": states["claude"], "found": claude is not None},
         "codex": {"state": states["codex"], "found": codex is not None},
+        "gemini": {"state": states["gemini"], "found": states["gemini"] == "enabled"},
         "enabled_providers": enabled,
     }
 
@@ -200,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         labels = {"enabled": "已登入", "not_logged_in": "沒有登入", "api_key": "以 API key 登入（沒有訂閱額度，不啟用）",
                   "not_installed": "沒有安裝", "unknown": "不確定"}
-        for name in ("claude", "codex"):
+        for name in ("claude", "codex", "gemini"):
             print(f"{name}：{labels[result[name]['state']]}")
         if result["enabled_providers"] is None:
             print("enabled_providers 維持原設定")
