@@ -665,6 +665,42 @@ class ClaudeTest(TokenStatsTestCase):
             tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
             self.assertFalse(tables & {"task_recount", "task_recount_seen"})
 
+    def test_recount_swap_is_fast_with_many_tasks(self):
+        # 第 2 輪審查 C-03：換上時的最長任務不能逐列查 seen_tasks（2 萬個任務、90 天 × 3 個模型的每小時列，
+        # 逐列子查詢約 8 秒；彙總後不到 0.1 秒）。門檻放寬，避免忙碌的機器誤判
+        self.scan()
+        days = [(date(2026, 9, 1) + timedelta(days=i)).isoformat() for i in range(90)]
+        models = ("claude-a", "claude-b", "claude-c")
+        with self.db() as c:
+            device = c.execute("SELECT value FROM meta WHERE key = 'device_id'").fetchone()[0]
+            c.executemany("INSERT INTO hourly_tokens (device_id, day, hour, provider, model, updated_at)"
+                          " VALUES (?, ?, ?, 'claude', ?, 0)",
+                          [(device, d, h, m) for d in days for h in range(24) for m in models])
+            c.executemany("INSERT INTO daily_tokens (device_id, day, provider, model, updated_at) VALUES (?, ?, 'claude', ?, 0)",
+                          [(device, d, m) for d in days for m in models])
+            tasks = [(f"t{i}", days[i % 90], i % 24, models[i % 3], 1 + i % 5000) for i in range(20_000)]
+            c.executemany("INSERT INTO seen_tasks (provider, id, day, hour, model, seconds) VALUES ('claude', ?, ?, ?, ?, ?)",
+                          tasks)
+            c.execute("CREATE TABLE task_recount (id TEXT PRIMARY KEY, day TEXT NOT NULL, hour INTEGER NOT NULL,"
+                      " model TEXT NOT NULL, seconds INTEGER NOT NULL)")
+            c.execute("CREATE TABLE task_recount_seen (id TEXT PRIMARY KEY)")
+            c.executemany("INSERT INTO task_recount (id, day, hour, model, seconds) VALUES (?, ?, ?, ?, ?)", tasks)
+            c.executemany("INSERT INTO task_recount_seen (id) VALUES (?)", [(t[0],) for t in tasks])
+            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_recount_from', '')")
+            c.commit()
+        conn = history.connect(self.path)
+        try:
+            started = time.monotonic()
+            with history._transaction(conn):
+                token_stats._finish_recount(conn, T0, ("", ""))
+            self.assertLess(time.monotonic() - started, 2.0)
+        finally:
+            conn.close()
+        with self.db() as c:
+            # 舊任務與重算結果相同：次數不變，最長任務每一列都重算了
+            self.assertEqual(c.execute("SELECT MAX(longest_task_seconds), COUNT(*), SUM(task_count) FROM daily_tokens"
+                                       " WHERE provider = 'claude' AND longest_task_seconds > 0").fetchone(), (5000, 90, 0))
+
     def test_recount_keeps_older_personal_record(self):
         # 審查 C-02：最長任務的個人紀錄早於略過界（每日資料已超過保留期間刪除）時保留
         self.old_rules_state()

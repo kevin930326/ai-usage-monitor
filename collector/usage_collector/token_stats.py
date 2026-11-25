@@ -1327,11 +1327,17 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
             conn.execute(f"INSERT INTO {table} (device_id, day{', hour' if hourly else ''}, provider, model, task_count,"
                          f" task_seconds, updated_at) VALUES (?, ?{', ?' if hourly else ''}, 'claude', ?, ?, ?, ?)",
                          (*key, count, seconds, now))
-    for table, keys in (("daily_tokens", "day, model"), ("hourly_tokens", "day, hour, model")):
-        match = " AND ".join(f"t.{k.strip()} = {table}.{k.strip()}" for k in keys.split(","))
-        conn.execute(f"UPDATE {table} SET longest_task_seconds = COALESCE((SELECT MAX(t.seconds) FROM seen_tasks t"
-                     f" WHERE t.provider = 'claude' AND {match}), 0)"
+    # 最長任務：先一次彙總每個日期（小時）、模型的最大值，再以主鍵更新（逐列子查詢在 seen_tasks 上沒有索引可用，
+    # 6 萬個任務要 20 幾秒，第 2 輪審查 C-03）
+    for table, keys in (("daily_tokens", ("day", "model")), ("hourly_tokens", ("day", "hour", "model"))):
+        conn.execute(f"UPDATE {table} SET longest_task_seconds = 0"
                      " WHERE device_id = ? AND provider = 'claude' AND day >= ?", (device_id, start))
+        cols = ", ".join(keys)
+        conn.executemany(f"UPDATE {table} SET longest_task_seconds = ? WHERE device_id = ? AND provider = 'claude' AND "
+                         + " AND ".join(f"{k} = ?" for k in keys),
+                         ((row[-1], device_id, *row[:-1]) for row in conn.execute(
+                             f"SELECT {cols}, MAX(seconds) FROM seen_tasks WHERE provider = 'claude' AND day >= ?"
+                             f" GROUP BY {cols}", (start,)).fetchall()))
 
     def record(key):
         row = conn.execute("SELECT day, value FROM records WHERE key = ?", (key,)).fetchone()
