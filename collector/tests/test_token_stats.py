@@ -540,6 +540,15 @@ class ClaudeTest(TokenStatsTestCase):
         self.assertEqual(self.totals("claude")[5:], (2, 200 + 11 * HOUR))
         self.assertEqual(self.records()["longest_task_seconds"][0], 11 * HOUR)
 
+    def test_gap_before_the_first_reply_is_idle_too(self):
+        # 使用者的定義（2026-11-26）：從提示起，中間任何超過 1 小時沒有動靜的空檔都不算；剛好 1 小時照算
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("a1", T0 + 2 * HOUR, out=1),
+                   claude_assistant("a2", T0 + 2 * HOUR + 600, out=1),
+                   claude_user(T0 + 3 * HOUR), claude_assistant("b1", T0 + 4 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 600 + HOUR))
+
     def old_rules_state(self, model="claude-opus-5-5"):
         """舊版（6 小時上限、壓縮摘要會切開任務）記下的樣子：a1 被切成 a1（600 秒）與 a2（假的 6 小時）兩段；
         另有一個紀錄檔已被刪除的任務 x1，與略過界以前的舊日子。回傳以新規則一次讀完的每日／每小時表。"""
