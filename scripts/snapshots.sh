@@ -30,6 +30,7 @@ MAC_SET=(panel-light panel-dark fullpanel-light fullpanel-dark stats-window-ligh
          menubar-icons-light menubar-icons-dark wizard-light wizard-dark
          tier2-card-revoked-device-light tier2-card-revoked-device-dark tier2-card-deleted-device-light tier2-card-deleted-device-dark
          tier2-card-all-cache-read-light tier2-card-all-cache-read-dark
+         stats-card-gemini-light stats-card-gemini-dark
          notch-collapsed notch-intro notch-expressions notch-agents notch-forecast notch-level notch-looks-expanded notch-looks-collapsed notch-collapsed-motion notch-menubar-light notch-menubar-dark notch-menu-light notch-menu-dark)
 IOS_SET=(widget-small-light widget-small-dark widget-medium-light widget-medium-dark widget-large-light widget-large-dark
          live-activity-light live-activity-dark island-normal)
