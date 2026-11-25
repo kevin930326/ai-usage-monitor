@@ -706,12 +706,16 @@ class _Decompressed:
     def tell(self) -> int:
         return self._pos
 
-    def skip(self, count: int) -> None:
-        """丟棄已處理過的前 `count` 個位元組（上一輪讀到一半）。不扣預算：時間上限仍然有效。"""
+    def skip(self, count: int, budget: Budget) -> bool:
+        """丟棄已處理過的前 `count` 個位元組（上一輪讀到一半）。不扣位元組預算，但遵守時間上限：
+        時間用完時回傳 False，呼叫端保留原本的位置、這一輪不讀。"""
         while self._pos < count:
+            if budget.exhausted():
+                return False
             chunk = self.readline(min(ZSTD_SKIP_BYTES, count - self._pos))
             if not chunk:
                 raise ZstdError("shorter than recorded")
+        return True
 
     def close(self) -> None:
         if self._proc is not None:
@@ -810,9 +814,8 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
             src = _Decompressed(fh, zstd_backend() or "")
             st.offset = st.state.pop("zpos", 0)
         try:  # 丟棄已處理的部分也在裡面：任何例外（含中斷）都會結束並回收 zstd
-            if isinstance(src, _Decompressed):
-                src.skip(st.offset)
-            if not at_end:
+            # 丟棄時時間用完：offset 仍是原本的位置，這一輪不讀（at_end 為 False，下面記回 zpos）
+            if not at_end and (not isinstance(src, _Decompressed) or src.skip(st.offset, budget)):
                 at_end = _read_lines(conn, f, src, st, totals, budget, counters)
         finally:
             if src is not fh:

@@ -1721,6 +1721,32 @@ class CompressedCodexCases:
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(json.loads(self.scan_row()[2])["zpos"], 10**9)
 
+    def test_skipping_the_read_part_respects_the_time_budget(self):
+        """丟棄已處理的部分時時間用完：這一輪不讀、位置不變，之後照常讀完，結果與一次讀完相同（C-01）。"""
+        lines = [codex_turn()] + [codex_record(f"r{i}", T0 + i, inp=i + 1, out=1) for i in range(20)]
+        self.write_zst(self.zst_file(), *lines)
+        self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 5))
+        before, zpos = self.snapshot(), json.loads(self.scan_row()[2])["zpos"]
+
+        class Expires(token_stats.Budget):
+            """scan() 決定處理這個檔案之後就到時間"""
+            calls = 0
+
+            def exhausted(self):
+                self.calls += 1
+                return self.calls > 1
+
+        real_readline = token_stats._Decompressed.readline
+        with mock.patch.object(token_stats._Decompressed, "readline", autospec=True,
+                               side_effect=real_readline) as readline:
+            result = self.scan(budget=Expires())
+        self.assertEqual(readline.call_count, 0)  # 到時間後不再解壓
+        self.assertEqual(result.counters.failed_files, 0)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(json.loads(self.scan_row()[2])["zpos"], zpos)
+        self.scan()
+        self.assertEqual(self.totals("codex")[:4], (sum(range(1, 21)), 0, 0, 20))
+
 
 class CompressedCodexStdlibTest(CompressedCodexCases, TokenStatsTestCase):
     backend = "stdlib" if token_stats._stdlib_zstd() is not None else None
