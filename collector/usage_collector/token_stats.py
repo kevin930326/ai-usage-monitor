@@ -1,8 +1,10 @@
-"""Token 統計（ADR-0009 第 3、4、7 節）：從本機 Claude Code 與 Codex CLI 的對話紀錄累加每日／每小時的 Token。
+"""Token 統計（ADR-0009 第 3、4、7 節）：從本機 Claude Code、Codex CLI 與 Antigravity（Gemini，ADR-0023）的
+對話紀錄累加每日／每小時的 Token。
 
 隱私（NFR-9）：
 - 只列舉 ADR 列出的檔案（一般檔案，不跟隨符號連結）；不讀憑證、設定或其他檔案。
 - 逐行先以位元組篩選，解析後立刻只取白名單欄位，其餘丟棄；不保留原始行或整個物件。
+- Antigravity 的對話資料庫以唯讀開啟，只讀 gen_metadata 的用量數字與模型名稱、steps 的建立時間（不讀步驟內容）。
 - 資料庫只存數字、時間、服務、正規化後的模型名稱與 ID；`file_key` 只用檔名中的 UUID。
 - 日誌只記錄例外的類別名稱與檔案序號，不記錄檔名、路徑、行內容或例外訊息。
 """
@@ -36,13 +38,13 @@ SEEN_PRUNE_ROWS = 20_000
 SEEN_STEP_DAYS = 2  # 略過界每個本機日期最多前進的天數
 SEEN_TABLES = ("seen_ids", "seen_tasks", "file_tokens")
 
-PROVIDERS = ("claude", "codex")
+PROVIDERS = ("claude", "codex", "gemini")
 # 向量順序：input、cache_write、cache_read、output、reasoning（與資料表欄位相同）
 TOKEN_FIELDS = ("input_tokens", "cache_write_tokens", "cache_read_tokens", "output_tokens", "reasoning_tokens")
 RECORD_KEYS = ("total_tokens", "best_day_tokens", "longest_task_seconds", "longest_streak_days",
                "total_tokens_cached", "best_day_tokens_cached")
 
-_MODEL_RE = re.compile(r"^(claude-|gpt-|codex-|o[0-9])[a-z0-9._-]*$")
+_MODEL_RE = re.compile(r"^(claude-|gpt-|codex-|o[0-9]|gemini-)[a-z0-9._-]*$")
 _UUID_RE = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 # 檔名只接受固定格式（file_key 會寫進資料庫，不能帶出專案或帳號名稱）：
 # Claude 主紀錄 `<uuid>`、同一 session 的舊副本 `<uuid>.orphaned-…`／`<uuid>.superseded-…`、子代理 `agent-<hex>`
@@ -50,6 +52,9 @@ _CLAUDE_MAIN = re.compile(r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
                           r"(?:\.(?:orphaned|superseded)-[0-9A-Za-z_]{1,40})?$")
 _CLAUDE_SUBAGENT = re.compile(r"^agent-[0-9a-f]{1,64}$")
 _DIGITS = {4: re.compile(r"^[0-9]{4}$"), 2: re.compile(r"^[0-9]{2}$")}
+# Antigravity：<antigravity>/conversations/<uuid>.db（-wal／-shm 只併入大小與時間，不另外列）
+_GEMINI_DB = re.compile(r"^(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.db$")
+GEMINI_BATCH_ROWS = 500  # 每個交易最多讀幾筆 gen_metadata
 
 _CLAUDE_NEEDLES = (b'"user"',)
 _CODEX_NEEDLES = (b'"token_usage_record"', b'"token_count"', b'"task_started"', b'"task_complete"', b'"turn_context"')
@@ -103,7 +108,8 @@ def _day_hour(ts: int) -> tuple[str, int]:
 
 
 def log_dirs(config_path: Path | None = None, environ: Mapping[str, str] = os.environ) -> dict[str, Path]:
-    """config.json 的 claude_config_dir／codex_home → 環境變數 → 預設的 ~/.claude、~/.codex。"""
+    """config.json 的 claude_config_dir／codex_home → 環境變數 → 預設的 ~/.claude、~/.codex。
+    Antigravity（~/.gemini/antigravity）只在 enabled_providers 列出 gemini 時才讀（ADR-0022、ADR-0023）。"""
     try:
         config = json.loads((config_path or CONFIG_PATH).read_text(encoding="utf-8"))
         if not isinstance(config, dict):
@@ -119,8 +125,12 @@ def log_dirs(config_path: Path | None = None, environ: Mapping[str, str] = os.en
             return Path(environ[env]).expanduser()
         return Path.home() / default
 
-    return {"claude": pick("claude_config_dir", "CLAUDE_CONFIG_DIR", ".claude"),
+    dirs = {"claude": pick("claude_config_dir", "CLAUDE_CONFIG_DIR", ".claude"),
             "codex": pick("codex_home", "CODEX_HOME", ".codex")}
+    enabled = config.get("enabled_providers")
+    if isinstance(enabled, list) and "gemini" in enabled:
+        dirs["gemini"] = Path.home() / ".gemini" / "antigravity"
+    return dirs
 
 
 @dataclass
@@ -215,9 +225,33 @@ def _codex_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
         yield from rollouts(archived)
 
 
+def _gemini_files(root: Path) -> Iterable[LogFile]:
+    """對話資料庫：大小與時間併入 -wal（WAL 模式下新內容先寫進 -wal，主檔不變）。"""
+    conversations = _subdir(root, "conversations")
+    if conversations is None:
+        return
+    for entry in _entries(conversations):
+        m = _GEMINI_DB.match(entry.name)
+        if m is None or not _is_file(entry):
+            continue
+        try:
+            st = system.entry_stat(entry)
+        except OSError:
+            continue
+        size, mtime = st.st_size, int(st.st_mtime)
+        try:
+            wal = os.stat(entry.path + "-wal", follow_symlinks=False)
+            size, mtime = size + wal.st_size, max(mtime, int(wal.st_mtime))
+        except OSError:
+            pass
+        yield LogFile("gemini", "gemini:" + m["uuid"], entry.path, *system.file_identity(st), size, mtime)
+
+
 def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
-    """只回傳 ADR-0009 第 3 節列出的檔案。"""
+    """只回傳 ADR-0009 第 3 節與 ADR-0023 列出的檔案。"""
     files: dict[str, LogFile] = {}
+    if dirs.get("gemini") is not None:
+        files.update((f.key, f) for f in _gemini_files(dirs["gemini"]))
     for provider, candidates in (("claude", _claude_candidates(dirs["claude"])),
                                  ("codex", _codex_candidates(dirs["codex"]))):
         for entry, subagent in candidates:
@@ -712,6 +746,166 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     return st.offset
 
 
+# MARK: - Antigravity（Gemini，ADR-0023）
+
+
+class _PbError(ValueError):
+    pass
+
+
+def _pb_fields(buf: bytes) -> list[tuple[int, int | bytes | None]]:
+    """最小的 protobuf 解碼：只回傳（欄位編號、varint 或位元組）；fixed32／64 的值不需要，記為 None。"""
+    out: list[tuple[int, int | bytes | None]] = []
+    i, n = 0, len(buf)
+
+    def varint() -> int:
+        nonlocal i
+        result = shift = 0
+        while True:
+            if i >= n or shift > 63:
+                raise _PbError
+            c = buf[i]
+            i += 1
+            result |= (c & 0x7F) << shift
+            shift += 7
+            if c < 0x80:
+                return result
+
+    while i < n:
+        key = varint()
+        number, wire = key >> 3, key & 7
+        if wire == 0:
+            out.append((number, varint()))
+        elif wire == 2:
+            size = varint()
+            if i + size > n:
+                raise _PbError
+            out.append((number, buf[i:i + size]))
+            i += size
+        elif wire in (1, 5):
+            i += 8 if wire == 1 else 4
+            if i > n:
+                raise _PbError
+            out.append((number, None))
+        else:
+            raise _PbError
+    return out
+
+
+def _pb_first(fields, number: int, kind: type):
+    for f, v in fields:
+        if f == number and isinstance(v, kind):
+            return v
+    return None
+
+
+def _gemini_generation(data) -> tuple[tuple[int, int, int, int, int], str, int | None] | None:
+    """gen_metadata.data → （Token 向量、模型、最後一個步驟的編號）；不是一次生成的列回傳 None。
+    欄位（Antigravity 的 ModelUsageStats）：2 input、3 output（含思考）、4 cache_write、5 cache_read、9 思考。"""
+    if not isinstance(data, bytes):
+        raise _PbError
+    meta = _pb_first(_pb_fields(data), 1, bytes)
+    if meta is None:
+        raise _PbError
+    meta = _pb_fields(meta)
+    usage = _pb_first(meta, 4, bytes)
+    if usage is None:
+        return None
+    nums = {f: v for f, v in _pb_fields(usage) if isinstance(v, int)}
+    vec = tuple(_count(nums.get(f)) for f in (2, 4, 5, 3, 9))
+    if not any(vec):
+        return None  # 失敗或取消的生成：沒有用量
+    raw_model = _pb_first(meta, 19, bytes)
+    model = normalize_model(raw_model.decode("ascii", "replace")) if raw_model is not None and len(raw_model) <= 64 \
+        else "other"
+    step = None
+    for f, pair in meta:
+        if f != 20 or not isinstance(pair, bytes):
+            continue
+        kv = _pb_fields(pair)
+        if _pb_first(kv, 1, bytes) == b"last_step_index":
+            value = _pb_first(kv, 2, bytes)
+            if value is not None and value.isdigit() and len(value) <= 9:
+                step = int(value)
+            break
+    return vec, model, step
+
+
+def _gemini_step_time(db: sqlite3.Connection, step: int | None) -> int | None:
+    """steps.metadata 的欄位 1.1 是步驟建立的時間（epoch 秒）；只讀這一欄，不讀步驟內容。"""
+    if step is None:
+        return None
+    row = db.execute("SELECT metadata FROM steps WHERE idx = ?", (step,)).fetchone()
+    if row is None or not isinstance(row[0], bytes):
+        return None
+    created = _pb_first(_pb_fields(row[0]), 1, bytes)
+    ts = _pb_first(_pb_fields(created), 1, int) if created is not None else None
+    return ts if ts is not None and 1_500_000_000 < ts < 4_000_000_000 else None
+
+
+def _process_gemini(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: Budget,
+                    counters: Counters, cutoffs) -> int:
+    """一個 Antigravity 對話資料庫從上次的 gen_metadata 編號起的新生成。回傳處理後的 offset
+    （讀完為列舉時的大小；還沒讀完時依比例估，只用於進度）。
+    每次從上次最後一筆重讀：那一筆可能在上次讀到後才寫完，以 seen_ids 的差額補上。"""
+    st = _load_state(row)
+    if row is not None and (row["device"], row["inode"]) != (f.device, f.inode):
+        st = FileState()  # 換成另一個檔案：從頭讀，以 seen_ids 避免重複計入
+    last = st.state.get("idx", -1)
+    last = last if type(last) is int else -1
+    uuid = f.key.split(":", 1)[1]
+    try:
+        # 唯讀（不用 immutable：WAL 模式的新內容在 -wal，immutable 會讀不到）；Antigravity 寫入時最多等 1 秒
+        db = sqlite3.connect(Path(f.path).as_uri() + "?mode=ro", uri=True, timeout=1)
+    except sqlite3.Error:
+        return st.offset
+    try:
+        try:
+            if system.file_identity(os.stat(f.path)) != (f.device, f.inode):
+                return st.offset
+            done, op = 0, ">="  # 第一批包含上次最後一筆
+            while not budget.exhausted():
+                rows = db.execute(f"SELECT idx, data FROM gen_metadata WHERE idx {op} ? ORDER BY idx LIMIT ?",
+                                  (last, GEMINI_BATCH_ROWS)).fetchall()
+                op = ">"
+                if not rows:
+                    break
+                for idx, data in rows:
+                    if budget.exhausted():
+                        break
+                    size = len(data) if isinstance(data, bytes) else 0
+                    budget.bytes_left -= size
+                    counters.bytes_read += size
+                    counters.candidate_lines += 1
+                    try:
+                        generation = _gemini_generation(data)
+                        ts = _gemini_step_time(db, generation[2]) if generation is not None else None
+                    except _PbError:
+                        counters.bad_lines += 1
+                    else:
+                        if generation is not None:
+                            if ts is None:
+                                counters.bad_lines += 1
+                            else:
+                                counters.token_lines += 1
+                                _count_id(conn, totals, "gemini", f"{uuid}:{idx}", ts, generation[1], generation[0])
+                    last = idx
+                    done += 1
+            remaining = db.execute("SELECT count(*) FROM gen_metadata WHERE idx > ?", (last,)).fetchone()[0]
+        except sqlite3.Error:
+            # 正在建立、損毀或不是 SQLite 的檔案：這次不動統計（不中斷其他檔案的掃描）
+            return st.offset
+    finally:
+        db.close()
+    offset = f.size if remaining == 0 else min(f.size - 1, f.size * done // max(1, done + remaining))
+    totals.flush(conn, None, cutoffs)
+    conn.execute(
+        "INSERT OR REPLACE INTO scan_state (file_key, inode, device, size, mtime, offset, source, last_total, state, last_seen)"
+        " VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)",
+        (f.key, f.inode, f.device, f.size, f.mtime, offset, json.dumps({"idx": last}), totals.now))
+    return offset
+
+
 def _update_records(conn: sqlite3.Connection) -> None:
     """單日最高與最長連續天數：從 record_days（不套用保留期間）重算後直接寫入。
     record_days 包含所有計入過的日子，所以重算值只會在 Codex 重算扣除時變小，這時紀錄也跟著下修（ADR-0014 LT-18）；
@@ -805,7 +999,10 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                         row = _scan_row(conn, f.key)
                         # 略過界也一樣：另一個收集器可能已前進 D、刪掉去重列，沿用交易外讀到的舊值會重複計入（審查 C-02）
                         totals.seen_cutoff = history.meta(conn, "seen_cutoff_day")
-                        offset = _process(conn, f, row, totals, budget, counters, cutoffs, switch)
+                        if f.provider == "gemini":
+                            offset = _process_gemini(conn, f, row, totals, budget, counters, cutoffs)
+                        else:
+                            offset = _process(conn, f, row, totals, budget, counters, cutoffs, switch)
                     break
                 except _SwitchToRecord:
                     continue

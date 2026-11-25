@@ -40,6 +40,7 @@ class FakeRelay:
         self.now: int | None = None
         self.revoked: set[str] = set()
         self.has_data_field = True  # False：舊版中繼，下載的裝置清單沒有 has_data
+        self.providers = ("claude", "codex", "gemini")  # 舊版中繼只認得 claude、codex（ADR-0023 之前）
 
     def add(self, key: str, name: str) -> str:
         device_id = str(uuid.uuid4())
@@ -65,6 +66,8 @@ class FakeRelay:
             latest = time.strftime("%Y-%m-%d", time.gmtime(self.now + DAY)) if self.now else "9999-12-31"
             if any(r["day"] > latest or any(r[f] > token_sync.MAX_VALUE for f in FIELDS) for r in body["rows"]):
                 raise HTTPStatusError("HTTP 422：day 必須是 400 天內到明天的日期", 422)
+            if any(r["provider"] not in self.providers for r in body["rows"]):
+                raise HTTPStatusError("HTTP 422：provider 只能是 claude 或 codex", 422)
             for r in body["rows"]:
                 self.rows[(device_id, r["day"], r["provider"], r["model"])] = {f: r[f] for f in FIELDS}
             if self.apply_then_fail:  # 中繼寫入了，但回應在路上斷掉
@@ -266,6 +269,32 @@ class UploadTest(TokenSyncTestCase):
         self.relay.fail = [HTTPStatusError("HTTP 422：provider 只能是 claude 或 codex", 422)]
         mac.run(NOW)
         self.assertIn("HTTP 422：provider 只能是 claude 或 codex", mac.log.getvalue())
+
+
+    def test_gemini_rows_go_last_in_their_own_batch(self):
+        mac = self.machine()
+        mac.set_tokens(0, 7, provider="gemini", model="gemini-4-neon")
+        mac.set_tokens(0, 100)
+        mac.set_tokens(-1, 50, provider="codex", model="gpt-6.1-sol")
+        mac.run(NOW)
+        self.assertEqual([[r["provider"] for r in b] for b in self.relay.uploads()], [["codex", "claude"], ["gemini"]])  # 依日期排序
+        self.assertEqual(self.relay.total(mac.relay_id), 157)
+
+    def test_old_relay_rejecting_gemini_does_not_block_the_others(self):
+        self.relay.providers = ("claude", "codex")
+        mac = self.machine()
+        mac.set_tokens(0, 7, provider="gemini", model="gemini-4-neon")
+        mac.set_tokens(0, 100)
+        mac.run(NOW)
+        self.assertEqual(mac.meta("upload_status"), "ok")
+        self.assertEqual(self.relay.total(mac.relay_id), 100)
+        self.assertEqual(mac.meta("gemini_upload_after"), str(NOW + token_sync.GEMINI_RETRY))
+        mac.set_tokens(0, 120)
+        mac.run(NOW + HOUR)  # 一天內不再送 Gemini
+        self.assertEqual([[r["provider"] for r in b] for b in self.relay.uploads()], [["claude"], ["gemini"], ["claude"]])
+        self.relay.providers = ("claude", "codex", "gemini")  # 中繼更新了
+        mac.run(NOW + token_sync.GEMINI_RETRY + HOUR)
+        self.assertEqual(self.relay.total(mac.relay_id), 127)
 
 
 class FailureTest(TokenSyncTestCase):
@@ -568,7 +597,7 @@ class MergeTest(TokenSyncTestCase):
     def test_bad_downloaded_rows_are_skipped(self):
         bad = [
             {"device_id": "not-an-id", "day": "2026-10-14", "provider": "claude", "model": "claude-x", "input_tokens": 1},
-            {"device_id": str(uuid.uuid4()), "day": "2026-10-14", "provider": "gemini", "model": "claude-x"},
+            {"device_id": str(uuid.uuid4()), "day": "2026-10-14", "provider": "bard", "model": "claude-x"},
             {"device_id": str(uuid.uuid4()), "day": "2026-10-14", "provider": "claude", "model": "secret project"},
             {"device_id": str(uuid.uuid4()), "day": "2026-10-14", "provider": "claude", "model": "claude-x", "input_tokens": -1},
             {"device_id": str(uuid.uuid4()), "day": "14/10/2026", "provider": "claude", "model": "claude-x"},
