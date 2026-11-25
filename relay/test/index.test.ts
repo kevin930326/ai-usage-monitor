@@ -128,6 +128,21 @@ describe("POST /usage 欄位驗證（C-12）", () => {
     assert.deepEqual((await (await call("GET", "read-secret")).json()).providers.claude.reset_credits, resetCredits);
   });
 
+  it("Google Cloud 狀態頁的事故連結也保留（ADR-0024），網域相近的不收", async () => {
+    const incidents = [
+      { name: "Antigravity errors", impact: "minor", url: "https://status.cloud.google.com/incidents/Xs2XTHzAVC9YnafnPyzj" },
+      { name: "Lookalike", impact: "minor", url: "https://status.cloud.google.com.evil.example/incidents/x" },
+      { name: "Other path", impact: "minor", url: "https://status.cloud.google.com/summary" },
+    ];
+    assert.equal((await post(snapshot({ incidents }))).status, 204);
+    const saved = (await (await call("GET", "read-secret")).json()).providers.claude;
+    assert.deepEqual(saved.incidents, [
+      { name: "Antigravity errors", impact: "minor", url: "https://status.cloud.google.com/incidents/Xs2XTHzAVC9YnafnPyzj" },
+      { name: "Lookalike", impact: "minor" },
+      { name: "Other path", impact: "minor" },
+    ]);
+  });
+
   it("預測與事故只保留白名單欄位，格式不符時丟掉欄位或項目、不擋下快照（ADR-0018）", async () => {
     const forecast = { exhausts_at: "2026-10-21T04:00:00Z", urgent: true, faster: 2.1, note: "leak" };
     const incidents = [

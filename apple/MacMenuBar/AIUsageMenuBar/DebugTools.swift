@@ -423,6 +423,20 @@ enum DebugTools {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    /// 示範資料加上 Gemini：沿用 Codex 的每日資料、數字減半
+    private static func withGemini(_ data: TokenStatsData) -> TokenStatsData {
+        var three = data
+        three.days += data.days.filter { $0.provider == "codex" }.map { row in
+            var copy = row
+            copy.provider = "gemini"
+            copy.model = "gemini-demo"
+            copy.counts = TokenCounts(input: row.counts.input / 2, cacheWrite: row.counts.cacheWrite / 2,
+                                      cacheRead: row.counts.cacheRead / 2, output: row.counts.output / 2, reasoning: row.counts.reasoning / 2)
+            return copy
+        }
+        return three
+    }
+
     private static func renderStats(to dir: URL) {
         let data = HistoryStore.shared.tokens
         var fresh = TokenStatsData.empty
@@ -438,6 +452,12 @@ enum DebugTools {
             let n = scheme.name
             write(statsCard(data), scheme: scheme, to: dir.appendingPathComponent("stats-card-\(n).png"))
             write(statsCard(data, scope: .codex, range: .weeks), scheme: scheme, to: dir.appendingPathComponent("stats-card-codex-weeks-\(n).png"))
+            // 三個服務（不在截圖基準裡）：面板寬度放不下名稱時只顯示圖示，文字不換行
+            let three = withGemini(data)
+            write(statsCard(three), scheme: scheme, to: dir.appendingPathComponent("stats-card-gemini-\(n).png"))
+            write(statsCard(three, measure: .includingCacheRead), scheme: scheme, to: dir.appendingPathComponent("stats-card-gemini-cache-read-\(n).png"))
+            write(StatsWindowView(historyStore: HistoryStore.shared, fixedData: three, fixedMotion: .settled, scrolls: false).frame(width: 860),
+                  scheme: scheme, to: dir.appendingPathComponent("stats-window-gemini-\(n).png"))
             write(statsCard(data, scope: .claude, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-claude-cumulative-\(n).png"))
             write(statsCard(short, range: .cumulative), scheme: scheme, to: dir.appendingPathComponent("stats-card-retention7-\(n).png"))
             // 含快取讀取（FR-60）：數字、長條、熱力圖都改變，數字旁標「含快取」
@@ -547,8 +567,9 @@ enum DebugTools {
 
     // MARK: - 服務狀態（第四階段）
 
-    private static func statusRows(_ health: [String: ServiceHealth], exhausted: Set<String> = []) -> [ServiceStatusRow] {
-        ["claude", "codex"].map { ServiceStatusRow(provider: $0, health: health[$0] ?? .operational, quotaExhausted: exhausted.contains($0)) }
+    private static func statusRows(_ health: [String: ServiceHealth], exhausted: Set<String> = [],
+                                   providers: [String] = ["claude", "codex"]) -> [ServiceStatusRow] {
+        providers.map { ServiceStatusRow(provider: $0, health: health[$0] ?? .operational, quotaExhausted: exhausted.contains($0)) }
     }
 
     private static func statusCard(_ rows: [ServiceStatusRow], motion: PanelMotion = .settled) -> some View {
@@ -575,6 +596,9 @@ enum DebugTools {
         ("both", statusRows(["claude": .disrupted(summary: "示範：API 錯誤率升高", affectsTool: true)], exhausted: ["claude"])),
         ("maintenance", statusRows(["codex": .maintenance(summary: "示範：排定的維護")])),
         ("unknown", statusRows(["claude": .unknown, "codex": .unknown])),
+        ("gemini", statusRows(["gemini": .disrupted(summary: "示範：Gemini Code Assist 回應變慢", affectsTool: true)],
+                              providers: ["claude", "codex", "gemini"])),
+        ("gemini-normal", statusRows([:], providers: ["claude", "codex", "gemini"])),
     ]
 
     private static func renderStatus(to dir: URL) {

@@ -152,13 +152,21 @@ struct UploadCopiedNotice: View {
     }
 }
 
-/// 全部／Claude／Codex
+/// 全部／Claude／Codex／Gemini。放不下時（面板寬度、三個服務加「含快取讀取」）服務只顯示圖示，
+/// 名稱改在滑鼠提示與輔助說明；文字一律不換行
 struct TokenScopeChips: View {
     let scopes: [TokenScope]
     let selected: TokenScope
     let select: (TokenScope) -> Void
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            chips(titles: true)
+            chips(titles: false)
+        }
+    }
+
+    private func chips(titles: Bool) -> some View {
         HStack(spacing: 2) {
             ForEach(scopes) { scope in
                 Button { select(scope) } label: {
@@ -166,9 +174,11 @@ struct TokenScopeChips: View {
                         if scope != .all {
                             ProviderIcon(scope.rawValue)
                                 .foregroundStyle(UsageColors.provider(scope.rawValue))
-                                .frame(width: 10, height: 10)
+                                .frame(width: titles ? 10 : 12, height: titles ? 10 : 12)
                         }
-                        Text(scope.title)
+                        if titles || scope == .all {
+                            Text(scope.title).lineLimit(1)
+                        }
                     }
                     .font(.caption)
                     .padding(.horizontal, 7)
@@ -177,10 +187,12 @@ struct TokenScopeChips: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .help(titles ? "" : scope.title)
                 .accessibilityLabel(scope.title)
                 .accessibilityAddTraits(scope == selected ? .isSelected : [])
             }
         }
+        .fixedSize()
         .padding(2)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }

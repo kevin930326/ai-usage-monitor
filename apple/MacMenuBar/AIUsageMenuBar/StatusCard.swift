@@ -15,11 +15,20 @@ struct ServiceStatusRow: Equatable, Identifiable {
 
     var id: String { provider }
 
+    /// 「可能影響 …」裡的工具名稱
+    static func toolName(_ provider: String) -> String {
+        switch provider {
+        case "codex": "Codex"
+        case "gemini": "Antigravity"
+        default: "Claude Code"
+        }
+    }
+
     var explanation: String? {
         ServiceStatusSummary.explanation(health: health, quotaExhausted: quotaExhausted, provider: provider)
     }
 
-    /// 快照中的服務（依顯示順序）各一列。沒有公開狀態頁的服務（Gemini）只在額度用完時列出：
+    /// 快照中的服務（依顯示順序）各一列。沒有公開狀態頁的服務只在額度用完時列出：
     /// 否則它的狀態永遠是「無法取得」，正常時那一行會一直多出「（其他無法取得）」
     static func rows(snapshot: UsageSnapshot, status: ServiceStatusFile?, now: Date) -> [ServiceStatusRow] {
         snapshot.orderedProviderKeys.compactMap { key in
@@ -47,6 +56,7 @@ enum ServiceStatusPage {
         switch provider {
         case "claude": URL(string: "https://status.claude.com")
         case "codex": URL(string: "https://status.openai.com")
+        case "gemini": URL(string: "https://status.cloud.google.com")
         default: nil
         }
     }
@@ -77,7 +87,8 @@ struct ServiceStatusLine: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .help(unknown ? "收集器每 5 分鐘讀一次 Anthropic 與 OpenAI 的公開狀態頁；目前沒有 30 分鐘內的結果" : "Anthropic 與 OpenAI 公開狀態頁的結果（收集器每 5 分鐘讀一次；Gemini 沒有公開狀態頁）")
+        .help(unknown ? "收集器每 5 分鐘讀一次 Anthropic、OpenAI 與 Google Cloud 的公開狀態頁；目前沒有 30 分鐘內的結果"
+              : "Anthropic、OpenAI 與 Google Cloud 公開狀態頁的結果（收集器每 5 分鐘讀一次；Gemini 看 Google Cloud 上 Antigravity 與 Gemini Code Assist 的事故）")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
     }
@@ -146,7 +157,7 @@ struct ServiceStatusRowView: View {
                 }
             }
             if case .disrupted(_, true) = row.health {
-                Text("可能影響 \(row.provider == "codex" ? "Codex" : "Claude Code")")
+                Text("可能影響 \(ServiceStatusRow.toolName(row.provider))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 13)
