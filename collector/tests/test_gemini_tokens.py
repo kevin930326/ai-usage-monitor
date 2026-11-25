@@ -182,6 +182,47 @@ class GeminiTokenTest(TokenStatsTestCase):
         self.scan()
         self.assertEqual(self.totals("gemini")[:4], (10, 0, 0, 5))
 
+    def test_source_error_midway_changes_nothing(self):
+        """審查 C-02：讀到一半出錯時不留下計入一半的去重紀錄；之後重試的結果與一次讀完相同。"""
+        conn = self.conversation()
+        self.add_steps(conn, T0, T0 + 1)
+        self.add_generation(conn, 0, inp=10, out=1, step=0)
+        self.add_generation(conn, 1, inp=10, out=1, step=1)
+        conn.commit()
+        real = token_stats._gemini_step_time
+        calls = []
+
+        def flaky(db, step):
+            calls.append(step)
+            if len(calls) == 2:
+                raise sqlite3.OperationalError("database is locked")
+            return real(db, step)
+
+        with mock.patch.object(token_stats, "_gemini_step_time", flaky):
+            self.scan()
+        self.assertEqual(self.totals("gemini")[:4], (0, 0, 0, 0))
+        self.assertEqual(self.table("seen_ids"), [])
+        self.scan()
+        self.assertEqual(self.totals("gemini")[:4], (20, 0, 0, 2))
+
+    def test_rows_are_loaded_one_at_a_time_within_the_budget(self):
+        """審查 C-03：預算用完後不再載入；過大的列不載入，只計次數。"""
+        conn = self.conversation()
+        self.add_steps(conn, T0)
+        for i in range(3):
+            self.add_generation(conn, i, inp=1, out=1, step=0)
+        conn.commit()
+        size = len(generation(inp=1, out=1))
+        loaded = []
+        real = token_stats._gemini_generation
+        with mock.patch.object(token_stats, "_gemini_generation", lambda d: loaded.append(len(d)) or real(d)):
+            self.scan(budget=token_stats.Budget(bytes_left=1))
+        self.assertEqual(loaded, [size])
+        with mock.patch.object(token_stats, "MAX_LINE_BYTES", size - 1):
+            result = self.scan()
+        self.assertEqual(result.counters.long_lines, 3)  # 上次最後一筆重讀，加上另外兩筆
+        self.assertEqual(self.totals("gemini")[:4], (1, 0, 0, 1))
+
 def mock_batch(rows):
     return mock.patch.object(token_stats, "GEMINI_BATCH_ROWS", rows)
 

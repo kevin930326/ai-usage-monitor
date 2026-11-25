@@ -844,37 +844,37 @@ def _gemini_step_time(db: sqlite3.Connection, step: int | None) -> int | None:
     return ts if ts is not None and 1_500_000_000 < ts < 4_000_000_000 else None
 
 
-def _process_gemini(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: Budget,
-                    counters: Counters, cutoffs) -> int:
-    """一個 Antigravity 對話資料庫從上次的 gen_metadata 編號起的新生成。回傳處理後的 offset
-    （讀完為列舉時的大小；還沒讀完時依比例估，只用於進度）。
-    每次從上次最後一筆重讀：那一筆可能在上次讀到後才寫完，以 seen_ids 的差額補上。"""
-    st = _load_state(row)
-    if row is not None and (row["device"], row["inode"]) != (f.device, f.inode):
-        st = FileState()  # 換成另一個檔案：從頭讀，以 seen_ids 避免重複計入
-    last = st.state.get("idx", -1)
-    last = last if type(last) is int else -1
-    uuid = f.key.split(":", 1)[1]
+def _read_gemini(f: LogFile, last: int, budget: Budget, counters: Counters):
+    """從 `last`（含）起讀生成，回傳（[(idx, 向量, 模型, 時間)], 讀到的最後編號, 讀了幾列, 還剩幾列）；
+    打不開或讀到一半出錯時回傳 None。一次只載入一列的 data，載入前先看長度與預算（審查 C-03）。"""
     try:
         # 唯讀（不用 immutable：WAL 模式的新內容在 -wal，immutable 會讀不到）；Antigravity 寫入時最多等 1 秒
         db = sqlite3.connect(Path(f.path).as_uri() + "?mode=ro", uri=True, timeout=1)
     except sqlite3.Error:
-        return st.offset
+        return None
+    generations = []
+    done = 0
     try:
-        try:
-            if system.file_identity(os.stat(f.path)) != (f.device, f.inode):
-                return st.offset
-            done, op = 0, ">="  # 第一批包含上次最後一筆
-            while not budget.exhausted():
-                rows = db.execute(f"SELECT idx, data FROM gen_metadata WHERE idx {op} ? ORDER BY idx LIMIT ?",
-                                  (last, GEMINI_BATCH_ROWS)).fetchall()
-                op = ">"
-                if not rows:
+        if system.file_identity(os.stat(f.path)) != (f.device, f.inode):
+            return None
+        op = ">="  # 第一批包含上次最後一筆
+        while not budget.exhausted():
+            batch = db.execute(f"SELECT idx, length(data) FROM gen_metadata WHERE idx {op} ? ORDER BY idx LIMIT ?",
+                               (last, GEMINI_BATCH_ROWS)).fetchall()
+            op = ">"
+            if not batch:
+                break
+            for idx, size in batch:
+                if budget.exhausted():
                     break
-                for idx, data in rows:
-                    if budget.exhausted():
-                        break
-                    size = len(data) if isinstance(data, bytes) else 0
+                size = size or 0
+                if size > MAX_LINE_BYTES:
+                    # 不載入過大的列（同 jsonl 的過長行）：只扣預算、計次數
+                    budget.bytes_left -= size
+                    counters.long_lines += 1
+                else:
+                    data = db.execute("SELECT data FROM gen_metadata WHERE idx = ?", (idx,)).fetchone()
+                    data = data[0] if data is not None else None
                     budget.bytes_left -= size
                     counters.bytes_read += size
                     counters.candidate_lines += 1
@@ -889,15 +889,42 @@ def _process_gemini(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, b
                                 counters.bad_lines += 1
                             else:
                                 counters.token_lines += 1
-                                _count_id(conn, totals, "gemini", f"{uuid}:{idx}", ts, generation[1], generation[0])
-                    last = idx
-                    done += 1
-            remaining = db.execute("SELECT count(*) FROM gen_metadata WHERE idx > ?", (last,)).fetchone()[0]
-        except sqlite3.Error:
-            # 正在建立、損毀或不是 SQLite 的檔案：這次不動統計（不中斷其他檔案的掃描）
-            return st.offset
+                                generations.append((idx, generation[0], generation[1], ts))
+                    del data
+                last = idx
+                done += 1
+        remaining = db.execute("SELECT count(*) FROM gen_metadata WHERE idx > ?", (last,)).fetchone()[0]
+    except sqlite3.Error:
+        return None
     finally:
         db.close()
+    return generations, last, done, remaining
+
+
+def _process_gemini(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: Budget,
+                    counters: Counters, cutoffs) -> int:
+    """一個 Antigravity 對話資料庫從上次的 gen_metadata 編號起的新生成。回傳處理後的 offset
+    （讀完為列舉時的大小；還沒讀完時依比例估，只用於進度）。
+    每次從上次最後一筆重讀：那一筆可能在上次讀到後才寫完，以 seen_ids 的差額補上。"""
+    st = _load_state(row)
+    if row is not None and (row["device"], row["inode"]) != (f.device, f.inode):
+        st = FileState()  # 換成另一個檔案：從頭讀，以 seen_ids 避免重複計入
+    last = st.state.get("idx", -1)
+    last = last if type(last) is int else -1
+    uuid = f.key.split(":", 1)[1]
+    # 讀到一半的計數也回復：這次整個檔案不算（下次重讀時再計）
+    before = Counters()
+    before.add(counters)
+    read = _read_gemini(f, last, budget, counters)
+    if read is None:
+        for name in ("bad_lines", "long_lines", "bytes_read", "candidate_lines", "token_lines"):
+            setattr(counters, name, getattr(before, name))
+        return st.offset  # 打不開、正在建立、損毀或不是 SQLite：這次不動統計（不中斷其他檔案的掃描）
+    generations, last, done, remaining = read
+    # 來源全部讀完、關閉後才寫統計：讀到一半失敗時不會留下計入一半的去重紀錄（審查 C-02）；
+    # 這裡的錯誤來自 history.sqlite3，照常往外丟
+    for idx, vec, model, ts in generations:
+        _count_id(conn, totals, "gemini", f"{uuid}:{idx}", ts, model, vec)
     offset = f.size if remaining == 0 else min(f.size - 1, f.size * done // max(1, done + remaining))
     totals.flush(conn, None, cutoffs)
     conn.execute(
