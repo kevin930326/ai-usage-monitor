@@ -1,6 +1,6 @@
 import Foundation
 
-// 服務狀態（FR-45、ADR-0008 第 2 節第 8 項）：收集器讀 Anthropic 與 OpenAI 的公開狀態頁，寫入本機
+// 服務狀態（FR-45、ADR-0008 第 2 節第 8 項）：收集器讀 Anthropic、OpenAI 與 Google Cloud 的公開狀態頁，寫入本機
 // `service-status.json`；App 只讀這個檔案、不連網。這裡是解碼與「服務異常還是額度用完」的判斷。
 
 public struct ServiceStatusFile: Decodable, Equatable, Sendable {
@@ -111,8 +111,8 @@ public struct ServiceIncident: Codable, Hashable, Sendable {
 
     public var isDisruption: Bool { Self.disruptionImpacts.contains(impact) }
 
-    /// 只接受兩個官方狀態頁的事故頁，其他網址不顯示成連結（收集器實際查的兩個狀態頁，`service_status.PAGES`）
-    public static let allowedHosts: Set<String> = ["status.claude.com", "status.openai.com"]
+    /// 只接受官方狀態頁的事故頁，其他網址不顯示成連結（收集器實際查的狀態頁，`service_status.PAGES`）
+    public static let allowedHosts: Set<String> = ["status.claude.com", "status.openai.com", "status.cloud.google.com"]
 
     public var link: URL? { Self.link(url) }
 
@@ -137,7 +137,7 @@ public struct ServiceIncident: Codable, Hashable, Sendable {
 /// 一個服務在面板上的狀態。
 public enum ServiceHealth: Equatable, Sendable {
     case operational
-    /// 狀態頁回報異常；`affectsTool` 為真時寫「可能影響 Claude Code」
+    /// 狀態頁回報異常；`affectsTool` 為真時寫「可能影響 Claude Code」（Codex、Antigravity）
     case disrupted(summary: String, affectsTool: Bool)
     case maintenance(summary: String)
     /// 狀態檔太舊、沒有這個服務或抓取失敗

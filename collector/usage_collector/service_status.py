@@ -1,6 +1,9 @@
-"""服務狀態（FR-45、ADR-0008 第 2 節第 8 項）：讀 Anthropic 與 OpenAI 的公開狀態頁，寫入本機 `service-status.json`。
+"""服務狀態（FR-45、ADR-0008 第 2 節第 8 項）：讀 Anthropic、OpenAI 與 Google Cloud 的公開狀態頁，寫入本機
+`service-status.json`。
 
 - 只讀公開的狀態頁 `summary.json` 與事故清單（ADR-0018 第 4 節），不帶任何密鑰或 cookie、不跟隨到其他主機的重新導向。
+- Gemini（Antigravity）沒有自己的狀態頁：讀 Google Cloud 狀態頁的 `incidents.json`，只算影響
+  「Google Antigravity」與「Gemini Code Assist」（Antigravity 的後端）的進行中事故（ADR-0024）。
 - 結果寫在本機（0600）；Mac App 讀這個檔案，App 本身不連網。進行中事故的精簡版（名稱、等級、連結、開始時間）
   另外由 `annotate` 放進 usage.json 的 `providers.*.incidents`，Windows 與 iPhone 也看得到（狀態頁是公開資訊）。
 - 收集器每 5 分鐘執行一次；按「更新」可能更頻繁，兩次抓取至少間隔 `MIN_INTERVAL` 秒。
@@ -31,6 +34,7 @@ TIMEOUT = 8
 PAGES = {
     "claude": "https://status.claude.com",
     "codex": "https://status.openai.com",
+    "gemini": "https://status.cloud.google.com",
 }
 # 事故清單：Claude（Statuspage）有 unresolved.json；OpenAI（incident.io）沒有，summary.json 也沒有事故，
 # 只能讀最近的事故（含已解決）自己篩
@@ -47,6 +51,17 @@ INCIDENT_COMPONENTS = {
 INCIDENT_NAME = {
     "codex": re.compile(r"\b(codex|apis?|responses)\b", re.IGNORECASE),
 }
+# Google Cloud 狀態頁（不是 Statuspage 格式）：產品以 ID 比對（名稱會改，例如 Vertex 改名 Agent Platform），
+# 名稱含 Antigravity 的產品也算（之後新增的個人版之類）
+GOOGLE_PRODUCTS = {
+    "hZpxrZf6wIdajCN6y30V": "Google Antigravity",
+    "deUeOEPYanfJ9w8cpyBJ": "Gemini Code Assist",
+}
+GOOGLE_PRODUCT_NAME = re.compile(r"\bantigravity\b", re.IGNORECASE)
+# incidents.json 含最近幾個月所有 Google Cloud 事故（2026-11 實測約 300 KB）
+GOOGLE_MAX_RESPONSE = 4_000_000
+# status_impact → 影響程度；嚴重度 high 的中斷再升一級
+GOOGLE_IMPACT = {"SERVICE_INFORMATION": "none", "SERVICE_DISRUPTION": "minor", "SERVICE_OUTAGE": "major"}
 # 放進 usage.json 的事故數量上限、新鮮度（上一次查詢超過這麼久就不放）
 SNAPSHOT_INCIDENTS = 3
 SNAPSHOT_MAX_AGE = 15 * 60
@@ -54,6 +69,7 @@ SNAPSHOT_MAX_AGE = 15 * 60
 RELATED = {
     "claude": ("Claude Code", "Claude API"),
     "codex": ("Codex", "Responses"),
+    "gemini": tuple(GOOGLE_PRODUCTS.values()),
 }
 INDICATORS = ("none", "minor", "major", "critical", "maintenance")
 COMPONENT_STATUSES = ("operational", "degraded_performance", "partial_outage", "major_outage", "under_maintenance")
@@ -158,10 +174,70 @@ def parse_incidents(provider: str, data: dict) -> list[dict]:
     return result
 
 
+def _google_products(incident: dict) -> list[str]:
+    """這個事故影響的相關產品名稱（固定的名稱，不用狀態頁的字串）；不相關時為空"""
+    names: list[str] = []
+    for product in _items(incident.get("affected_products")):
+        if not isinstance(product, dict):
+            continue
+        product_id = product.get("id")
+        name = GOOGLE_PRODUCTS.get(product_id) if isinstance(product_id, str) else None
+        if name is None and any(isinstance(product.get(k), str) and GOOGLE_PRODUCT_NAME.search(product[k])
+                                for k in ("title", "current_title")):
+            name = "Google Antigravity"
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def parse_google(data: object) -> dict:
+    """Google Cloud 的 incidents.json（陣列）縮成與 Statuspage 相同的欄位：沒有 `end` 的相關事故為進行中；
+    整體狀態取最嚴重的事故，元件是受影響的相關產品（都算「可能影響」）。"""
+    if not isinstance(data, list):
+        raise ProviderError("狀態頁格式不符")
+    incidents: list[dict] = []
+    affected: dict[str, str] = {}
+    order = ("none", "minor", "major", "critical")
+    worst = "none"
+    for i in data:
+        if not isinstance(i, dict) or i.get("end") or _aware(i.get("begin")) is None:
+            continue
+        products = _google_products(i)
+        name = _text(i.get("external_desc"))
+        if not products or not name or len(incidents) >= MAX_ITEMS:
+            continue
+        status_impact = i.get("status_impact")
+        impact = GOOGLE_IMPACT.get(status_impact, "minor") if isinstance(status_impact, str) else "minor"
+        if impact != "none" and i.get("severity") == "high":
+            impact = order[min(order.index(impact) + 1, len(order) - 1)]
+        incident_id = _incident_id(i.get("id"))
+        incidents.append({"name": name, "impact": impact,
+                          "url": f"{PAGES['gemini']}/incidents/{incident_id}" if incident_id else None,
+                          "started_at": _aware_iso(i.get("begin"))})
+        worst = max(worst, impact, key=order.index)
+        if impact != "none":
+            for product in products:
+                state = "major_outage" if impact in ("major", "critical") else "partial_outage"
+                if affected.get(product) != "major_outage":
+                    affected[product] = state
+    return {
+        "indicator": worst,
+        "description": None,
+        "components": [{"name": n, "status": st, "related": True} for n, st in affected.items()],
+        "incidents": incidents,
+        "page": PAGES["gemini"],
+        "error": None,
+        "incidents_checked": True,
+    }
+
+
 def fetch(provider: str) -> dict:
     """抓一個服務的狀態頁與事故清單。任何失敗（網路、讀取逾時、格式）只影響這個服務，錯誤只記固定訊息或類別。
     事故清單失敗時保留 summary.json 的結果，`incidents_checked` 為 False（不放進 usage.json）。"""
     try:
+        if provider == "gemini":
+            return parse_google(http.request_json(f"{PAGES[provider]}/incidents.json", {}, timeout=TIMEOUT,
+                                                  max_bytes=GOOGLE_MAX_RESPONSE))
         summary = http.request_json(f"{PAGES[provider]}/api/v2/summary.json", {}, timeout=TIMEOUT, max_bytes=MAX_RESPONSE)
         result = parse(provider, summary)
         try:

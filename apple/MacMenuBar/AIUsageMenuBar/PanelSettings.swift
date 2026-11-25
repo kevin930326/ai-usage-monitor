@@ -65,7 +65,7 @@ enum PanelSection: String, CaseIterable, Identifiable {
         case .trend: "目前這一輪的剩餘 % 曲線與照時間的預期，沒有紀錄的時段畫斜線"
         case .consumption: "每小時消耗的額度 %（熱力圖與每日合計），包含所有裝置"
         case .stats: "這台 Mac（有第二層時含其他電腦）的 Token：本週、單日最高、最長任務、連續天數、Token 活動與活動熱力圖"
-        case .status: "Anthropic 與 OpenAI 公開狀態頁的結果，分辨服務異常與額度用完；正常時只有一行"
+        case .status: "Anthropic、OpenAI 與 Google Cloud 公開狀態頁的結果，分辨服務異常與額度用完；正常時只有一行"
         }
     }
 

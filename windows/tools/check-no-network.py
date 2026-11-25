@@ -9,7 +9,7 @@
   packages.lock.json（每個 framework 都有 SkiaSharp 與它的 Win32、macOS 原生檔，只有這三個，版本相同、有雜湊）
 - 不得用 CompositionTarget.Rendering（每一格都會執行；動畫只用 DoubleAnimation，ADR-0015 第 7 節）
 - 唯一的例外（2026-10-29，ADR-0015 第 2 節）：事故頁連結。網址只能出現在 UsageCore/IncidentLink.cs，而且只能是
-  https://status.claude.com/incidents/、https://status.openai.com/incidents/ 兩個前綴；用預設瀏覽器打開
+  https://status.claude.com/incidents/、https://status.openai.com/incidents/、https://status.cloud.google.com/incidents/ 三個前綴；用預設瀏覽器打開
   （UseShellExecute 不是 false）只能在 AIUsageMonitor.Windows/SystemServices.cs 的 IncidentPage 裡出現一次，而且要經過
   IncidentLink.Link 檢查
 - 這是擋誤用的靜態檢查，不追資料流：SystemServices.cs 裡用 explorer.exe 開網址、IncidentPage 裡把沒檢查過的字串交給
@@ -43,7 +43,8 @@ PROCESS = re.compile(r"\bProcess\.Start\b|\bProcessStartInfo\b|\bShellExecute")
 PROCESS_ALLOWED = ("AIUsageMonitor.Windows", "SystemServices.cs")
 # 事故頁連結的例外：只有這個檔案可以寫網址，而且只能是這兩個前綴
 URL_ALLOWED_FILE = ("UsageCore", "IncidentLink.cs")
-URL_ALLOWED = ("https://status.claude.com/incidents/", "https://status.openai.com/incidents/")
+URL_ALLOWED = ("https://status.claude.com/incidents/", "https://status.openai.com/incidents/",
+               "https://status.cloud.google.com/incidents/")
 URL = re.compile(r"(?i:https?://)")
 # 用預設程式打開：UseShellExecute 只要不是寫明 = false 都算
 SHELL_OPEN = re.compile(r"\bUseShellExecute\b(?!\s*=\s*false\b)")

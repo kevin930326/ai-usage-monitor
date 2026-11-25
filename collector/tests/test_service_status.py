@@ -134,7 +134,7 @@ class UpdateTest(unittest.TestCase):
                 self.assertNotIn("/secret", self.path.read_text())
 
     def test_unknown_providers_are_ignored(self):
-        service_status.update(["claude", "gemini"], self.path, now=NOW)
+        service_status.update(["claude", "bard"], self.path, now=NOW)
         self.assertEqual(list(json.loads(self.path.read_text())["providers"]), ["claude"])
 
     def test_update_safely_logs_class_only(self):
@@ -143,6 +143,90 @@ class UpdateTest(unittest.TestCase):
             service_status.update_safely(["claude"], self.path)
         self.assertIn("PermissionError", err.getvalue())
         self.assertNotIn("/secret/path", err.getvalue())
+
+
+def google(i, desc, products, end=None, impact="SERVICE_DISRUPTION", severity="medium", begin="2026-10-24T02:05:00+00:00"):
+    """假的 Google Cloud 事故（incidents.json 的一項），加上不該保留的更新內文"""
+    return {"id": i, "number": "123", "begin": begin, "created": begin, "end": end, "modified": begin,
+            "external_desc": desc, "severity": severity, "status_impact": impact, "uri": f"incidents/{i}",
+            "service_key": "x", "service_name": "Multiple Products",
+            "affected_products": [{"title": t, "id": pid} for t, pid in products],
+            "most_recent_update": {"text": "long body text that must not be stored"},
+            "updates": [{"text": "long body text that must not be stored"}]}
+
+
+ANTIGRAVITY = ("Google Antigravity for enterprises", "hZpxrZf6wIdajCN6y30V")
+CODE_ASSIST = ("Gemini Code Assist", "deUeOEPYanfJ9w8cpyBJ")
+BIGQUERY = ("BigQuery", "9CcrhHUcFevXPSVaSxkf")
+
+
+class GoogleTest(unittest.TestCase):
+    def test_only_open_incidents_on_related_products(self):
+        data = service_status.parse_google([
+            google("aaa", "Antigravity requests failing", [ANTIGRAVITY, BIGQUERY]),
+            google("bbb", "Old Code Assist issue", [CODE_ASSIST], end="2026-10-24T03:00:00+00:00"),
+            google("ccc", "BigQuery slow", [BIGQUERY], impact="SERVICE_OUTAGE"),
+            google("ddd", "Renamed product", [("Google Antigravity", "newIdNotInTheList")], severity="high"),
+            google("eee", "Information only", [CODE_ASSIST], impact="SERVICE_INFORMATION"),
+            google("bad id/../x", "Weird id", [CODE_ASSIST]),
+            google("fff", "No begin", [CODE_ASSIST], begin=None),
+            "not an incident",
+        ])
+        self.assertEqual(data["indicator"], "major")
+        self.assertEqual(data["page"], "https://status.cloud.google.com")
+        self.assertTrue(data["incidents_checked"])
+        self.assertIsNone(data["error"])
+        self.assertEqual([(i["name"], i["impact"], i["url"]) for i in data["incidents"]], [
+            ("Antigravity requests failing", "minor", "https://status.cloud.google.com/incidents/aaa"),
+            ("Renamed product", "major", "https://status.cloud.google.com/incidents/ddd"),
+            ("Information only", "none", "https://status.cloud.google.com/incidents/eee"),
+            ("Weird id", "minor", None),
+        ])
+        self.assertEqual(data["incidents"][0]["started_at"], "2026-10-24T02:05:00Z")
+        self.assertEqual(data["components"], [
+            {"name": "Google Antigravity", "status": "major_outage", "related": True},
+            {"name": "Gemini Code Assist", "status": "partial_outage", "related": True},
+        ])
+        self.assertNotIn("long body", json.dumps(data))
+        self.assertNotIn("BigQuery", json.dumps(data))
+
+    def test_quiet_and_bad_format(self):
+        self.assertEqual(service_status.parse_google([])["indicator"], "none")
+        self.assertEqual(service_status.parse_google([google("a", "x", [BIGQUERY])])["components"], [])
+        for bad in ({}, {"incidents": []}, None, "x"):
+            with self.subTest(bad=bad), self.assertRaises(ProviderError):
+                service_status.parse_google(bad)
+
+    def test_fetch_reads_google_incidents_only(self):
+        calls = []
+
+        def fake(url, headers, timeout=15, max_bytes=None):
+            calls.append((url, headers, max_bytes))
+            return [google("aaa", "Antigravity requests failing", [ANTIGRAVITY])]
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(service_status.http, "request_json", side_effect=fake):
+            path = Path(d) / "service-status.json"
+            self.assertTrue(service_status.update(["claude", "gemini"], path, now=NOW))
+            gemini = json.loads(path.read_text())["providers"]["gemini"]
+        self.assertEqual(calls[-1], ("https://status.cloud.google.com/incidents.json", {}, service_status.GOOGLE_MAX_RESPONSE))
+        self.assertEqual(gemini["indicator"], "minor")
+        snap = {"providers": {"gemini": {"error": None, "windows": []}}}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "service-status.json"
+            path.write_text(json.dumps({"schema_version": 1, "updated_at": service_status.iso_utc(NOW),
+                                        "providers": {"gemini": gemini}}))
+            service_status.annotate(snap, path, now=NOW)
+        self.assertEqual(snap["providers"]["gemini"]["incidents"], [
+            {"name": "Antigravity requests failing", "impact": "minor",
+             "url": "https://status.cloud.google.com/incidents/aaa", "started_at": "2026-10-24T02:05:00Z"}])
+
+    def test_failure_is_recorded_without_details(self):
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(service_status.http, "request_json", side_effect=TimeoutError("/secret")):
+            path = Path(d) / "service-status.json"
+            service_status.update(["gemini"], path, now=NOW)
+            gemini = json.loads(path.read_text())["providers"]["gemini"]
+        self.assertEqual(gemini["error"], "狀態頁讀取失敗（TimeoutError）")
+        self.assertFalse(gemini["incidents_checked"])
 
 
 def incident(i, name, status="investigating", impact="minor", components=None, **extra):

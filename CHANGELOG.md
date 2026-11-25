@@ -9,11 +9,14 @@
 
 - Gemini 的 Token 統計（ADR-0023）：啟用 Gemini 的電腦另外讀 Antigravity 的對話資料庫（`~/.gemini/antigravity/conversations/*.db`，唯讀），只取每次生成的 Token 數字、模型名稱與時間，統計卡片多一個 Gemini 分頁，第二層也會同步。中繼要重新部署才收 Gemini 的列；還沒更新前收集器照常上傳 Claude 與 Codex，Gemini 隔一天再試
 
+- Gemini 的服務狀態（ADR-0024）：Antigravity 沒有自己的狀態頁，收集器改讀 Google Cloud 公開狀態頁的事故清單，只算影響「Google Antigravity」與「Gemini Code Assist」（Antigravity 的後端）的事故。Mac 面板的服務狀態多一列 Gemini，事故也會出現在 Windows、iPhone 與角色表情（事故頁連結只接受 `status.cloud.google.com/incidents/…`）。中繼要重新部署才會保留 Gemini 事故的連結
+
 ### Changed
 - Gemini 圖示改成原創的四芒星（凹邊、腰身飽滿、單色），取代原本的「雙子」
 
 ### Fixed
-- Mac 面板的服務狀態一直顯示「（其他無法取得）」：Gemini 沒有公開狀態頁，除了額度用完以外不列在服務狀態裡
+- Mac 面板的服務狀態一直顯示「（其他無法取得）」：當時 Gemini 還沒有狀態來源，除了額度用完以外不列在服務狀態裡
+- Mac 面板的統計卡片有三個服務時，「Codex」「Gemini」的按鈕文字斷成兩行：面板寬度放不下名稱時，服務按鈕只顯示圖示（滑鼠提示與輔助說明仍是名稱），完整統計視窗照舊顯示名稱
 - Apple Watch App 無法編成實機版本：手錶實機是 arm64_32，`CGFloat` 是 `Float`，角色手勢偵測把 `CGPoint` 的座標直接和 `Double` 混算，只有 64 位元的模擬器編得過。座標先轉成 `Double`；`scripts/verify-all.sh` 與 CI 另外編一次手錶實機版本（`watch-device`，不簽署），之後這類錯誤會被抓到
 - Mac 瀏海面板太敏感：移開後收合動畫（含 350 ms 的等待）播完前，或收著時播提醒動畫時，視窗還是整張 580×190 的畫布，游標碰到畫布任何地方就又展開，明明離瀏海還有一段距離。改成收著時只有游標移進看得到的瀏海本身才展開（不含視窗左右各 22 px、下方 5 px 留給提醒鼓起的透明邊，從左右靠近不會提早展開）；展開中回到面板上照舊取消收合
 - iPhone 自動重新安裝：Xcode 被登出 Apple ID（例如更新 Xcode 後）時會沿用快取裡快到期的描述檔，記錄卻寫「簽署約在 7 天後到期」，App 幾小時後就打不開、也沒有通知。改成讀 App 實際嵌入的描述檔到期日：寫進記錄與通知、排程從描述檔建立時算起；剩不到 24 小時就不安裝（結束碼 5），與建置出現 `No Accounts` 一樣立刻通知去 Xcode 登入

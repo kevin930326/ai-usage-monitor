@@ -272,7 +272,7 @@ irm https://github.com/kevin930326/ai-usage-monitor/releases/download/v1.0.0/ins
 | 收集器 | Claude Code 對話紀錄 `<claude>/projects/*/<uuid>.jsonl`、`…/<uuid>/subagents/*.jsonl` | assistant 行：`timestamp`、`message.id`、`requestId`、`message.model`、`message.usage` 的四種 Token 數、`isSidechain`；user 行：`timestamp`、`isMeta`、`isSidechain`、`message.content` **是否為** `tool_result`（只判斷型別） | 對話文字、`cwd`、`gitBranch`、附件、檔案快照、`lastPrompt`、`customTitle` |
 | 收集器 | Codex 對話紀錄 `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、`timestamp`；`token_count` 的 `info.total_token_usage`、`timestamp`；`turn_context` 的 `model`；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` | `last_agent_message`、`cwd`、`workspace_roots`、`response_item` 的一切、`rate_limits` |
 | 收集器 | Antigravity 對話資料庫 `~/.gemini/antigravity/conversations/<uuid>.db`（只在啟用 Gemini 時；唯讀） | 每次生成的 Token 數字、模型名稱與最後一個步驟的編號（`gen_metadata`）；那個步驟的建立時間（`steps`） | 提示、回覆、工具輸出、檔案路徑與其他所有欄位（ADR-0023） |
-| 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`、`https://status.claude.com/api/v2/incidents/unresolved.json`、`https://status.openai.com/api/v2/incidents.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字）；影響這個服務的進行中事故另取事故頁連結（`https://status.claude.com/incidents/<id>`／`https://status.openai.com/incidents/<id>`）與開始時間（[ADR-0018](docs/adr/0018-quota-forecast-and-service-incidents.md) 第 4 節） | 事件內文與更新、其他連結 |
+| 收集器 | `https://status.claude.com/api/v2/summary.json`、`https://status.openai.com/api/v2/summary.json`、`https://status.claude.com/api/v2/incidents/unresolved.json`、`https://status.openai.com/api/v2/incidents.json`、`https://status.cloud.google.com/incidents.json`（公開，不帶任何密鑰或 cookie） | 整體狀態、異常元件的名稱與狀態、未解決事件的名稱與影響程度（各最多 8 項、120 字）；影響這個服務的進行中事故另取事故頁連結（`https://status.claude.com/incidents/<id>`／`https://status.openai.com/incidents/<id>`／`https://status.cloud.google.com/incidents/<id>`）與開始時間（[ADR-0018](docs/adr/0018-quota-forecast-and-service-incidents.md) 第 4 節） | 事件內文與更新、其他連結 |
 | Mac 選單列 App | `usage.json`、`history.sqlite3`、`service-status.json`（同一個資料夾） | 全部（都是收集器寫的、不含帳號資訊） | — |
 | iPhone、小工具、手錶 | 你的中繼 `GET /usage` | 用量快照 | — |
 | iPhone App | 相機（只在按「掃描 QR 碼」時，VisionKit） | 只認 `aiusage-pair:v1:` 開頭的配對 QR 碼（中繼網址與讀取密鑰） | 其他 QR 碼與畫面內容 |
@@ -322,7 +322,7 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | Mac 收集器 | 你的 Cloudflare Worker `POST /usage` | 寫入密鑰 | 用量快照（見下方） | 每 5 分鐘，有設定中繼時 |
 | Mac／PC 收集器（只在設定第二層後） | 你的 Worker `POST /tokens/daily`、`GET /tokens/daily`（只在存了讀取密鑰的電腦：Mac，或以 `set-tier2.ps1 -ReadKey` 設定的 PC） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每日 Token 加總；下載其他電腦的（見 [docs/tier2-setup.md](docs/tier2-setup.md)） | 有變動時每小時一次＋日期改變後的第一輪；下載每小時一次 |
 | Mac／PC 收集器（只在 `set-tier2.sh --agent-sync`／`set-tier2.ps1 -AgentSync` 打開後） | 你的 Worker `POST /agents/state`、`GET /agents/state`（[ADR-0019](docs/adr/0019-windows-agent-state-and-sync.md) 第 2 節） | 這台電腦的寫入密鑰；讀取密鑰 | 上傳每個 AI 的狀態、工作階段數與進入狀態的時間（沒有資料夾名稱、工作階段 ID 或任何內容）；下載其他電腦的，寫成 `agent-remote.json` | App 的彙總改變時（最短 1 分鐘一次）、沒變時每 10 分鐘，以及每 5 分鐘一輪 |
-| Mac 收集器 | `status.claude.com`、`status.openai.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
+| Mac 收集器 | `status.claude.com`、`status.openai.com`、`status.cloud.google.com` | 無（只有固定的 User-Agent） | 取得公開的服務狀態，不送出任何使用者資料 | 至少間隔 4 分鐘 |
 | iPhone App（含 Live Activity 的「更新」按鈕與捷徑） | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、下拉、按卡片上的「更新」、捷徑自動化 |
 | iPhone App | 你的 Worker `GET /agents/state` | 讀取密鑰 | 取得其他電腦的 AI 狀態（中繼設定 `AGENT_SYNC=on` 時才有） | 打開 App、回到前景、下拉更新 |
 | iPhone 主畫面／鎖定畫面小工具 | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 約每 25 分鐘（資料過期時每小時），受 WidgetKit 每日次數限制；按小工具上的「更新」 |
@@ -330,8 +330,8 @@ iPhone 以 WatchConnectivity `sendMessage` 把中繼網址與讀取密鑰傳給�
 | `setup-iphone.sh --pair code`（Mac） | 你的 Worker `POST /pair` | 寫入密鑰（從 Keychain 經標準輸入交給 curl） | 取得一次性短碼 | 只在你執行時 |
 | `setup-relay.sh`（Mac） | Cloudflare（以 wrangler） | 你登入 Cloudflare 的 wrangler 帳號 | 建 KV、部署 Worker、設定兩把密鑰；確認網址回應 | 只在你執行時 |
 | Apple Watch App | 你的 Worker `GET /usage` | 讀取密鑰 | 取得快照 | 打開 App、回到前景、背景重新整理（約每 30 分鐘） |
-| Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
-| Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行；點面板上的事故時用預設瀏覽器打開事故頁（只接受 `https://status.claude.com/incidents/…`、`https://status.openai.com/incidents/…`，App 本身不連線） | — | — | 只在你按下時 |
+| Mac 選單列 App | App 本身不連網；按服務狀態的「狀態頁」時以預設瀏覽器打開 status.claude.com／status.openai.com／status.cloud.google.com，按「更新」時執行 `launchctl kickstart` 讓收集器立即執行 | — | — | 只在你按下時 |
+| Windows App | 不連網、不持有密鑰（CI 以 `windows/tools/check-no-network.py` 檢查原始碼）；按「立即更新」時執行 `schtasks /Run` 讓收集器立即執行；點面板上的事故時用預設瀏覽器打開事故頁（只接受 `https://status.claude.com/incidents/…`、`https://status.openai.com/incidents/…`、`https://status.cloud.google.com/incidents/…`，App 本身不連線） | — | — | 只在你按下時 |
 | Live Activity 畫面、錶面複雜功能 | 不連網 | — | 只讀 App 傳來的資料 | — |
 
 上傳到 Worker 的快照只有：`schema_version`、`updated_at`，以及每個服務的方案名稱（如 Max、Team）、錯誤訊息（不含 token）、各額度的 id／名稱／已用 %／重置時間／是否隱藏與預測（`forecast`：預計用完的時間、是否不到 1 小時、比平常快幾倍）、公開狀態頁的進行中事故（`incidents`：最多 3 項，名稱／影響程度／事故頁連結／開始時間），以及 Codex 重置次數卷的張數與各張到期時間。不含 token、email、帳號 ID、對話內容、Token 統計或額度歷史（第二層的每日 Token 加總另存在 D1，欄位見 [docs/tier2-setup.md](docs/tier2-setup.md)）。Worker 會驗證格式並只保存上述欄位，其他欄位一律移除；只保存最新一筆（KV 的 `latest`），回應帶 `Cache-Control: no-store`。

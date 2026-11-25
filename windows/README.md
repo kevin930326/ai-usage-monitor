@@ -3,7 +3,7 @@
 PC 上的懸浮圓環與卡片式面板（[ADR-0015](../docs/adr/0015-windows-desktop-app.md)，FR-61）。WPF／.NET 10，x64 與 ARM64。
 **只讀本機檔案**：收集器寫的 `%LOCALAPPDATA%\AIUsageMonitor\usage.json`。App 不連網、不持有密鑰；啟動的程式只有按「立即更新」時的
 `schtasks.exe /Run /TN \AIUsageMonitor\Collector`（觸發收集器，60 秒內一次、24 小時 100 次），以及使用者點面板的事故那行時，
-經 ShellExecute 用預設瀏覽器打開官方狀態頁的事故頁（只限 `status.claude.com`、`status.openai.com`，ADR-0015 第 2 節）。
+經 ShellExecute 用預設瀏覽器打開官方狀態頁的事故頁（只限 `status.claude.com`、`status.openai.com`、`status.cloud.google.com`，ADR-0015 第 2 節）。
 
 目前是階段 1：懸浮圓環、系統匣圖示、面板（主圓環卡片、額度卡片）、設定。Token 統計、走勢、通知等見 ADR-0015 第 5 節的階段表。
 

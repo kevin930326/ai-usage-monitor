@@ -156,7 +156,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 
 ### 服務狀態
 
-`--write-local` 時，最後讀 Anthropic 與 OpenAI 的公開狀態頁，寫入本機的 `service-status.json`（FR-45，權限 `0600`），讓 Mac 面板分辨「服務異常」與「額度用完」。Mac App 只讀這個檔案、自己不連網。
+`--write-local` 時，最後讀 Anthropic、OpenAI 與 Google Cloud 的公開狀態頁，寫入本機的 `service-status.json`（FR-45，權限 `0600`），讓 Mac 面板分辨「服務異常」與「額度用完」。Mac App 只讀這個檔案、自己不連網。
 
 | 服務 | 狀態頁 | 保留的欄位 |
 |---|---|---|
@@ -164,10 +164,11 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | Codex | `https://status.openai.com/api/v2/summary.json` | 同上 |
 | Claude 事故 | `https://status.claude.com/api/v2/incidents/unresolved.json` | 影響 Claude Code、Claude API、claude.ai（或沒列元件）的進行中事故：名稱、影響程度、事故頁連結、開始時間 |
 | Codex 事故 | `https://status.openai.com/api/v2/incidents.json` | 名稱提到 Codex、API 或 Responses 的進行中事故（名稱只寫 ChatGPT 的不算），欄位同上 |
+| Gemini 事故 | `https://status.cloud.google.com/incidents.json`（Google Cloud；Antigravity 沒有自己的狀態頁） | 影響「Google Antigravity」或「Gemini Code Assist」、還沒結束的事故：說明、影響程度、事故頁連結、開始時間；受影響的這兩個產品當作元件（[ADR-0024](../docs/adr/0024-gemini-service-status.md)） |
 
 - 事故的篩選規則與為什麼放進 `usage.json` 見 [ADR-0018](../docs/adr/0018-quota-forecast-and-service-incidents.md) 第 4 節。
 - 不帶任何密鑰、cookie 或帳號資訊，不跟隨到其他主機的重新導向；只送出固定的 User-Agent。
-- 名稱與說明最長 120 字、各最多 8 項；事件的內文與更新、其他連結與欄位不保存（事故只多存事故頁連結與開始時間）。元件名稱含「Claude Code」「Claude API」（Codex：「Codex」「Responses」）時標記為與這個工具相關。
+- 名稱與說明最長 120 字、各最多 8 項；事件的內文與更新、其他連結與欄位不保存（事故只多存事故頁連結與開始時間）。元件名稱含「Claude Code」「Claude API」（Codex：「Codex」「Responses」）時標記為與這個工具相關；Gemini 的元件都是相關產品。
 - 兩次抓取至少間隔 4 分鐘（啟用的服務改變時立刻重抓）；每個狀態頁逾時 8 秒。抓不到時該服務記錯誤類別，其他照常。
 - 整體狀態與元件只存在本機的 `service-status.json`，不放進快照。**進行中事故的精簡版**（名稱、影響程度、事故頁連結、開始時間，每個服務最多 3 筆）會放進 `usage.json` 的 `providers.*.incidents`，跟著快照上傳到中繼（狀態頁是公開資訊，ADR-0018 第 4 節）。失敗只記錯誤類別，不影響 `usage.json`、上傳與結束碼。
 

@@ -70,7 +70,7 @@ export const LIMITS = {
 };
 const IMPACTS = ["none", "minor", "major", "critical", "maintenance"];
 // 事故連結只收兩個官方狀態頁的事故頁
-const INCIDENT_URL = /^https:\/\/status\.(claude|openai)\.com\/incidents\/[A-Za-z0-9_-]{1,64}$/;
+const INCIDENT_URL = /^https:\/\/status\.(claude\.com|openai\.com|cloud\.google\.com)\/incidents\/[A-Za-z0-9_-]{1,64}$/;
 const PROVIDER_KEY = /^[a-z0-9_-]{1,32}$/;
 // 收集器輸出整秒的 ISO 8601；不收小數秒，iOS 17／macOS 14 的 ISO8601DateFormatter 解不出來
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/;
