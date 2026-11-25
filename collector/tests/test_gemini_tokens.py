@@ -166,5 +166,22 @@ class GeminiTokenTest(TokenStatsTestCase):
         self.assertEqual({r[2] for r in self.table("daily_tokens")}, {"other"})
 
 
+    def test_update_without_size_change_is_read(self):
+        """審查 C-01：SQLite 改寫既有的頁時大小不變，只有時間變了。"""
+        conn = self.conversation()
+        self.add_steps(conn, T0)
+        self.add_generation(conn, 0, inp=10, out=1, step=0)
+        conn.commit()
+        self.scan()
+        self.add_generation(conn, 0, inp=10, out=5, step=0)  # 同樣長度的資料：頁數不變
+        conn.commit()
+        f, = token_stats.list_files(self.dirs)[-1:]
+        with self.db() as c:
+            c.execute("UPDATE scan_state SET offset = ? WHERE file_key = ?", (f.size, f.key))  # 模擬大小不變
+            c.commit()
+        self.scan()
+        self.assertEqual(self.totals("gemini")[:4], (10, 0, 0, 5))
+
 def mock_batch(rows):
     return mock.patch.object(token_stats, "GEMINI_BATCH_ROWS", rows)
+

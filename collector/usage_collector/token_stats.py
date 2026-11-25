@@ -226,7 +226,8 @@ def _codex_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
 
 
 def _gemini_files(root: Path) -> Iterable[LogFile]:
-    """對話資料庫：大小與時間併入 -wal（WAL 模式下新內容先寫進 -wal，主檔不變）。"""
+    """對話資料庫：大小與時間併入 -wal（WAL 模式下新內容先寫進 -wal，主檔不變）。
+    時間用毫秒：SQLite 改寫既有的頁、重用 -wal 時大小可以不變，只能靠時間判斷有沒有變（審查 C-01）。"""
     conversations = _subdir(root, "conversations")
     if conversations is None:
         return
@@ -238,10 +239,10 @@ def _gemini_files(root: Path) -> Iterable[LogFile]:
             st = system.entry_stat(entry)
         except OSError:
             continue
-        size, mtime = st.st_size, int(st.st_mtime)
+        size, mtime = st.st_size, st.st_mtime_ns // 1_000_000
         try:
             wal = os.stat(entry.path + "-wal", follow_symlinks=False)
-            size, mtime = size + wal.st_size, max(mtime, int(wal.st_mtime))
+            size, mtime = size + wal.st_size, max(mtime, wal.st_mtime_ns // 1_000_000)
         except OSError:
             pass
         yield LogFile("gemini", "gemini:" + m["uuid"], entry.path, *system.file_identity(st), size, mtime)
@@ -978,8 +979,10 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     skipped = []  # 交易外判斷沒變而略過的檔案
     for index, f in enumerate(files, 1):
         row = rows.get(f.key)
+        # Gemini（SQLite）要時間完全相同：改寫既有的頁時大小不變、時間變了（審查 C-01）
         if row is not None and (row["device"], row["inode"]) == (f.device, f.inode) \
-                and row["offset"] == f.size and f.mtime >= row["mtime"]:
+                and row["offset"] == f.size and (f.mtime == row["mtime"] if f.provider == "gemini"
+                                                 else f.mtime >= row["mtime"]):
             done_bytes += f.size
             skipped.append(f.key)
             if now - row["last_seen"] >= LAST_SEEN_REFRESH or f.mtime != row["mtime"]:
