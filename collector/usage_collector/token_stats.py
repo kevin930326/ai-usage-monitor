@@ -4,16 +4,22 @@
 隱私（NFR-9）：
 - 只列舉 ADR 列出的檔案（一般檔案，不跟隨符號連結）；不讀憑證、設定或其他檔案。
 - 逐行先以位元組篩選，解析後立刻只取白名單欄位，其餘丟棄；不保留原始行或整個物件。
+- Codex 壓縮過的紀錄（`.jsonl.zst`）由收集器自己開檔（不跟隨連結）後交給標準函式庫或 `zstd` 指令的標準輸入解壓，
+  解壓後的內容只在記憶體中逐行處理，不寫進任何檔案（ADR-0009 第 3 節）。
 - Antigravity 的對話資料庫以唯讀開啟，只讀 gen_metadata 的用量數字與模型名稱、steps 的建立時間（不讀步驟內容）。
 - 資料庫只存數字、時間、服務、正規化後的模型名稱與 ID；`file_key` 只用檔名中的 UUID。
 - 日誌只記錄例外的類別名稱與檔案序號，不記錄檔名、路徑、行內容或例外訊息。
 """
 from __future__ import annotations
 
+import functools
+import importlib
+import io
 import json
 import os
 import re
 import sqlite3
+import subprocess
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -22,7 +28,7 @@ from pathlib import Path
 
 from . import history, system
 from .log import log
-from .paths import CONFIG_PATH
+from .paths import CONFIG_PATH, resolve_executable
 
 MAX_LINE_BYTES = 4 * 1024 * 1024
 SKIP_CHUNK_BYTES = 1024 * 1024  # 丟棄過長的行時每次讀多少（每段都扣預算）
@@ -58,6 +64,10 @@ GEMINI_BATCH_ROWS = 500  # 每個交易最多讀幾筆 gen_metadata
 
 _CLAUDE_NEEDLES = (b'"user"',)
 _CODEX_NEEDLES = (b'"token_usage_record"', b'"token_count"', b'"task_started"', b'"task_complete"', b'"turn_context"')
+# Codex 會把舊的 rollout 壓縮成 .jsonl.zst（同一個 UUID，原檔刪掉）
+CODEX_SUFFIXES = (".jsonl", ".jsonl.zst")
+ZSTD_SKIP_BYTES = 1024 * 1024  # 接著讀壓縮檔時，每次丟棄多少已處理過的解壓內容
+ZSTD_WAIT_SECONDS = 10  # 讀完 zstd 的輸出後，等它結束的上限
 
 
 def main_tokens(vec) -> int:
@@ -142,6 +152,7 @@ class LogFile:
     inode: int
     size: int
     mtime: int
+    compressed: bool = False  # Codex 的 .jsonl.zst：整檔串流解壓，不能用 offset 接著讀
 
 
 def _entries(path) -> list[os.DirEntry]:
@@ -175,7 +186,7 @@ def _subdir(path, name: str) -> str | None:
 
 def _file_key(provider: str, name: str, subagent: bool = False) -> str | None:
     """檔名中的 UUID（或子代理 ID）；格式不符的檔案不讀。"""
-    stem = name[: -len(".jsonl")]
+    stem = name.removesuffix(".zst").removesuffix(".jsonl")
     if provider == "codex":
         ids = _UUID_RE.findall(stem)
         return "codex:" + ids[-1].lower() if ids else None
@@ -206,7 +217,7 @@ def _claude_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
 def _codex_candidates(root: Path) -> Iterable[tuple[os.DirEntry, bool]]:
     def rollouts(path):
         for entry in _entries(path):
-            if _is_file(entry) and entry.name.startswith("rollout-") and entry.name.endswith(".jsonl"):
+            if _is_file(entry) and entry.name.startswith("rollout-") and entry.name.endswith(CODEX_SUFFIXES):
                 yield entry, False
 
     sessions = _subdir(root, "sessions")
@@ -248,9 +259,11 @@ def _gemini_files(root: Path) -> Iterable[LogFile]:
         yield LogFile("gemini", "gemini:" + m["uuid"], entry.path, *system.file_identity(st), size, mtime)
 
 
-def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
-    """只回傳 ADR-0009 第 3 節與 ADR-0023 列出的檔案。"""
+def list_files(dirs: Mapping[str, Path], unread: list[str] | None = None) -> list[LogFile]:
+    """只回傳 ADR-0009 第 3 節與 ADR-0023 列出的檔案。沒有解壓方式時不列 Codex 的 .jsonl.zst
+    （已讀過的原檔被壓縮後，帳本留著、數字不變；之後有了解壓方式再先扣再重算），它們的 file_key 放進 `unread`。"""
     files: dict[str, LogFile] = {}
+    can_decompress = zstd_backend() is not None
     if dirs.get("gemini") is not None:
         files.update((f.key, f) for f in _gemini_files(dirs["gemini"]))
     for provider, candidates in (("claude", _claude_candidates(dirs["claude"])),
@@ -259,16 +272,23 @@ def list_files(dirs: Mapping[str, Path]) -> list[LogFile]:
             key = _file_key(provider, entry.name, subagent)
             if key is None:
                 continue
+            compressed = entry.name.endswith(".zst")
+            if compressed and not can_decompress:
+                if unread is not None:
+                    unread.append(key)
+                continue
             try:
                 st = system.entry_stat(entry)
             except OSError:
                 continue
             if key in files:  # 同名的檔案出現在兩個地方（複製而不是搬移）
                 if provider == "codex":
-                    # token_count 來源沒有跨檔的 ID 可以去重，兩份都算會重複計入：只算先列到的那份（sessions 優先）
+                    # token_count 來源沒有跨檔的 ID 可以去重，兩份都算會重複計入：只算先列到的那份
+                    # （sessions 優先；同一資料夾中 .jsonl 排在 .jsonl.zst 前面，壓縮到一半時讀原檔）
                     continue
                 key = f"{key}#{st.st_ino}"  # Claude 以訊息 ID 跨檔去重，兩份都讀
-            files[key] = LogFile(provider, key, entry.path, *system.file_identity(st), st.st_size, int(st.st_mtime))
+            files[key] = LogFile(provider, key, entry.path, *system.file_identity(st), st.st_size, int(st.st_mtime),
+                                 compressed)
     # 舊的先處理：首次掃描時第一次計入的日期、任務的先後都與實際順序一致
     return sorted(files.values(), key=lambda f: (f.mtime, f.key))
 
@@ -628,6 +648,84 @@ def _codex_line(conn, totals: Totals, st: FileState, line: bytes, counters: Coun
         _count_task(conn, totals, "codex", turn_id, start, st.state.get("model", "other"), seconds)
 
 
+# MARK: - Codex 壓縮紀錄（.jsonl.zst）
+
+
+def _stdlib_zstd():
+    """Python 3.14 以上的標準函式庫 `compression.zstd`；更早的版本沒有，回傳 None。"""
+    try:
+        return importlib.import_module("compression.zstd")
+    except ImportError:
+        return None
+
+
+@functools.cache
+def zstd_backend() -> str | None:
+    """解壓 .jsonl.zst 的方式（ADR-0009 第 3 節）：標準函式庫有 zstd 時為 "stdlib"；否則是 zstd 指令的完整路徑
+    （config.json 的 `zstd_path`、PATH，再試 Homebrew／MacPorts 的位置：launchd 的 PATH 只有系統目錄）；
+    都沒有時為 None，壓縮檔不列舉。每個程序只找一次。"""
+    if _stdlib_zstd() is not None:
+        return "stdlib"
+    return resolve_executable("zstd_path", "zstd")
+
+
+class ZstdError(Exception):
+    """壓縮紀錄無法完整解壓（損毀、被截斷）：整個交易回復，這個檔案下次再試，其他檔案照常處理。"""
+
+
+class _Decompressed:
+    """壓縮紀錄的解壓串流，只往前讀；`tell()` 是解壓後的位置。檔案由呼叫端開啟（不跟隨連結、確認是列舉到的那一個），
+    標準函式庫直接讀這個檔案物件；zstd 指令從標準輸入讀同一個 fd，拿不到路徑。讀到尾端時確認解壓完整。"""
+
+    def __init__(self, fh, backend: str):
+        self._pos = 0
+        self._proc: subprocess.Popen | None = None
+        if backend == "stdlib":
+            self._stream = _stdlib_zstd().ZstdFile(fh, "rb")
+        else:
+            self._proc = subprocess.Popen([backend, "-d", "-c", "-q"], stdin=fh, stdout=subprocess.PIPE,
+                                          stderr=subprocess.DEVNULL, **system.isolated_popen_kwargs())
+            self._stream = self._proc.stdout
+
+    def readline(self, limit: int) -> bytes:
+        try:
+            line = self._stream.readline(limit)
+        except Exception as e:
+            # 損毀（compression.zstd.ZstdError）、被截斷（EOFError）等：只留類別名稱，不帶出例外訊息
+            raise ZstdError(type(e).__name__) from None
+        if not line and self._proc is not None:
+            try:
+                code = self._proc.wait(timeout=ZSTD_WAIT_SECONDS)
+            except subprocess.TimeoutExpired:
+                raise ZstdError("timeout") from None
+            if code != 0:
+                raise ZstdError(f"zstd exit {code}")
+        self._pos += len(line)
+        return line
+
+    def tell(self) -> int:
+        return self._pos
+
+    def skip(self, count: int) -> None:
+        """丟棄已處理過的前 `count` 個位元組（上一輪讀到一半）。不扣預算：時間上限仍然有效。"""
+        while self._pos < count:
+            chunk = self.readline(min(ZSTD_SKIP_BYTES, count - self._pos))
+            if not chunk:
+                raise ZstdError("shorter than recorded")
+
+    def close(self) -> None:
+        if self._proc is not None:
+            if self._proc.poll() is None:
+                self._proc.kill()
+            try:
+                self._proc.wait(timeout=ZSTD_WAIT_SECONDS)
+            except subprocess.TimeoutExpired:
+                pass
+            self._proc.stdout.close()  # type: ignore[union-attr]
+        else:
+            self._stream.close()  # 只關解壓器；底下的檔案由呼叫端的 with 關閉
+
+
 # MARK: - 掃描
 
 
@@ -684,8 +782,11 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         # 大小與時間都用開檔後的 fstat：列舉在交易外，另一個收集器之後處理過新內容時，
         # 列舉時的 mtime 會比它寫下的舊，拿來比會把正常的附加誤判成改寫、整檔重算（審查 C-01）
         size, mtime = opened.st_size, int(opened.st_mtime)
+        # 壓縮檔不會附加：大小不同就是換了內容。它的 offset 欄只記「讀完了沒有」（讀完時等於檔案大小，否則 0），
+        # 讀到一半的位置（解壓後）記在 state 的 zpos。offset 不是這兩個值時，那一列是同一個檔案改名前（.jsonl）留下的
         rewritten = row is not None and (
-            (row["device"], row["inode"]) != (f.device, f.inode) or size < row["offset"] or mtime < row["mtime"])
+            (row["device"], row["inode"]) != (f.device, f.inode) or mtime < row["mtime"]
+            or (size != row["size"] or row["offset"] not in (0, size) if f.compressed else size < row["offset"]))
         if switch:
             _reset_codex(conn, totals, f.key, cutoffs)
             st = FileState(source="record", state={"cutoff": totals.seen_cutoff or ""})
@@ -700,41 +801,25 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         if "cutoff" in st.state:
             totals.seen_cutoff = st.state["cutoff"] or None
         at_end = False
-        fh.seek(st.offset)
-        while not budget.exhausted():
-            if st.skipping:
-                # 丟棄過長的一行：每段都扣預算，到換行為止；預算用完時下次從這裡接著丟
-                chunk = fh.readline(SKIP_CHUNK_BYTES)
-                if not chunk:
-                    at_end = True
-                    break
-                budget.bytes_left -= len(chunk)  # 不算進格式偵測的讀取量：貼上的圖片（base64）就會超過上限
-                st.offset = fh.tell()
-                if chunk.endswith(b"\n"):
-                    st.skipping = False
-                    counters.long_lines += 1
-                continue
-            line = fh.readline(MAX_LINE_BYTES + 1)
-            if not line:
-                at_end = True
-                break
-            if not line.endswith(b"\n"):
-                if len(line) <= MAX_LINE_BYTES:
-                    at_end = True
-                    break  # 最後一行還沒寫完：下次再讀
-                # 超過 4 MB：開始丟棄這一行，只計次數
-                budget.bytes_left -= len(line)
-                st.offset = fh.tell()
-                st.skipping = True
-                continue
-            budget.bytes_left -= len(line)
-            counters.bytes_read += len(line)
-            if f.provider == "claude":
-                _claude_line(conn, totals, st, line, counters)
+        src: io.BufferedReader | _Decompressed = fh
+        if not f.compressed:
+            fh.seek(st.offset)
+        elif st.offset == size:
+            at_end = True  # 已經讀完（從頭重算時 offset 是 0，不會走到這裡，除非是空檔）
+        else:
+            src = reader = _Decompressed(fh, zstd_backend() or "")
+            reader.skip(st.state.pop("zpos", 0))
+            st.offset = reader.tell()
+        try:
+            at_end = at_end or _read_lines(conn, f, src, st, totals, budget, counters)
+        finally:
+            if src is not fh:
+                src.close()
+        if f.compressed:
+            if at_end:
+                st.offset = size
             else:
-                _codex_line(conn, totals, st, line, counters, f.key)  # 可能丟出 _SwitchToRecord
-            del line
-            st.offset = fh.tell()
+                st.state["zpos"], st.offset = st.offset, 0
     if at_end:
         st.state.pop("cutoff", None)  # 重算讀完了：之後附加的內容照目前的略過界
     totals.flush(conn, f.key if f.provider == "codex" else None, cutoffs)
@@ -745,6 +830,49 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
          json.dumps(st.last_total) if st.last_total is not None else None,
          st.state_json(), totals.now))
     return st.offset
+
+
+def _read_lines(conn: sqlite3.Connection, f: LogFile, fh, st: FileState, totals: Totals, budget: Budget,
+                counters: Counters) -> bool:
+    """從 `fh` 目前的位置逐行處理到預算用完或檔尾，`st.offset` 跟著前進。回傳是否讀到檔尾。"""
+    at_end = False
+    while not budget.exhausted():
+        if st.skipping:
+            # 丟棄過長的一行：每段都扣預算，到換行為止；預算用完時下次從這裡接著丟
+            chunk = fh.readline(SKIP_CHUNK_BYTES)
+            if not chunk:
+                at_end = True
+                break
+            budget.bytes_left -= len(chunk)  # 不算進格式偵測的讀取量：貼上的圖片（base64）就會超過上限
+            st.offset = fh.tell()
+            if chunk.endswith(b"\n"):
+                st.skipping = False
+                counters.long_lines += 1
+            continue
+        line = fh.readline(MAX_LINE_BYTES + 1)
+        if not line:
+            at_end = True
+            break
+        if not line.endswith(b"\n"):
+            if len(line) > MAX_LINE_BYTES:
+                # 超過 4 MB：開始丟棄這一行，只計次數
+                budget.bytes_left -= len(line)
+                st.offset = fh.tell()
+                st.skipping = True
+                continue
+            if not f.compressed:
+                at_end = True
+                break  # 最後一行還沒寫完：下次再讀
+            # 壓縮檔不會再附加：最後一行沒有換行也照常處理
+        budget.bytes_left -= len(line)
+        counters.bytes_read += len(line)
+        if f.provider == "claude":
+            _claude_line(conn, totals, st, line, counters)
+        else:
+            _codex_line(conn, totals, st, line, counters, f.key)  # 可能丟出 _SwitchToRecord
+        del line
+        st.offset = fh.tell()
+    return at_end
 
 
 # MARK: - Antigravity（Gemini，ADR-0023）
@@ -1145,19 +1273,32 @@ def _advance_seen_window(conn: sqlite3.Connection, now: int) -> None:
 def run(path: Path | None = None, dirs: Mapping[str, Path] | None = None, now: int | None = None,
         budget: Budget | None = None) -> ScanResult:
     path = path or history.HISTORY_PATH
-    files = list_files(dirs or log_dirs())
+    unread: list[str] = []
+    files = list_files(dirs or log_dirs(), unread)
     with history._private_files():
         history._tighten_permissions(path)
         conn = history.connect(path)
         try:
             first = history.meta(conn, "first_scan_done") != "1"
             result = scan(conn, files, now, budget)
+            _note_unread(conn, len(unread))
         finally:
             conn.close()
     history._tighten_permissions(path)
     if first and result.files:
         log(f"Token 統計：首次整理 {result.progress}%（{result.files} 個紀錄檔）")
     return result
+
+
+def _note_unread(conn: sqlite3.Connection, count: int) -> None:
+    """沒有解壓方式而沒讀的 Codex 壓縮紀錄：個數改變時記一次日誌（不是每輪都記），個數存在 meta。"""
+    if history.meta(conn, "codex_zst_unread") == str(count):
+        return
+    with history._transaction(conn):
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('codex_zst_unread', ?)", (str(count),))
+    if count:
+        log(f"Token 統計：有 {count} 個 Codex 壓縮過的紀錄（.jsonl.zst）沒有讀，找不到解壓方式；"
+            "用 Python 3.14 以上執行收集器，或安裝 zstd 指令（例如 brew install zstd）後會自動補上")
 
 
 def run_safely(path: Path | None = None) -> bool:

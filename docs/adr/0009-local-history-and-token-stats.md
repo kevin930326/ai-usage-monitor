@@ -132,10 +132,17 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 | 服務 | 路徑 |
 |---|---|
 | Claude Code | `<claude>/projects/*/<uuid>.jsonl` 與 `<claude>/projects/*/<uuid>/subagents/*.jsonl` |
-| Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl` 與 `<codex>/archived_sessions/rollout-*.jsonl` |
+| Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl` 與 `<codex>/archived_sessions/rollout-*.jsonl`，以及兩處壓縮過的 `rollout-*.jsonl.zst`（見下方「壓縮過的 Codex 紀錄」） |
 
 - `*.orphaned-*.jsonl`、`*.superseded-*.jsonl` 等同一 session 的舊副本也會讀，靠 `seen_ids` 去重（不另外判斷是否為副本）。
 - 同一個 Codex rollout 同時出現在 `sessions/` 與 `archived_sessions/`（被複製而不是搬移）時只讀先列到的那份（`sessions/` 優先）：`token_count` 來源沒有跨檔的 ID，兩份都讀會重複計入。原檔不見後改讀複本，等同該檔被替換（第 7 節），先扣再重算。Claude 的複本仍兩份都讀（以訊息 ID 去重）。
+- **壓縮過的 Codex 紀錄**（2026-11-26 補充）：Codex 會把舊的 rollout 壓縮成同一資料夾、同名的 `rollout-*.jsonl.zst`，再刪掉原檔（`~/.codex/state_5.sqlite` 的 `rollout_migration_state` 有 `legacy_to_paginated_v1`）。之前只列 `.jsonl`，在收集器讀到之前就被壓縮的檔案整個漏掉（本機 2026-11-26：451 個壓縮檔中有 18 個，9 月中到 10 月中的 74 個 Codex 任務與它們的 Token）。改為也讀 `.jsonl.zst`，`file_key` 一樣只用檔名中的 UUID。
+  - **解壓方式**，依序：(1) Python 3.14 以上標準函式庫的 `compression.zstd`；(2) `zstd` 指令：`config.json` 的 `zstd_path`、PATH，再試 `/opt/homebrew/bin`、`/usr/local/bin`、`/opt/local/bin`（launchd 的 PATH 只有系統目錄）；Windows 只找 PATH；(3) 都沒有時**不列舉**壓縮檔：已讀過的原檔被壓縮後帳本與數字都留著，之後有了解壓方式再先扣再重算；日誌只在沒讀的個數改變時提示一次（個數記在 `meta.codex_zst_unread`）。
+  - 不採用第三方套件 `zstandard`：收集器只用標準函式庫；Homebrew 的 Python 不允許直接 `pip install`（PEP 668），App 內嵌的 Python 也不帶 pip。也不自己寫 zstd 解碼器：程式碼多、純 Python 解 1 GB 太慢。內嵌的 Python 升到 3.14 後，App 版本不需要 `zstd` 指令。
+  - **隱私**：檔案仍由收集器以不跟隨連結的方式開啟、確認是列舉到的那一個（`(device, inode)`）後，標準函式庫直接讀這個檔案物件，或把同一個 fd 當成 `zstd -d -c -q` 的標準輸入——`zstd` 拿不到路徑、不寫任何檔案、輸出只經過管線。解壓後的內容與 `.jsonl` 一樣在記憶體中逐行處理（同樣的位元組篩選、白名單、4 MB 上限）；日誌只記 `ZstdError` 等類別名稱。
+  - **讀法**：壓縮檔不會附加，也不能從某個位置接著解壓，每次都從頭串流解壓。`scan_state.offset` 只記是否讀完（讀完時等於壓縮檔大小，否則 0）；超過第 7 節的預算、讀到一半時，解壓後的位置記在 `state.zpos`，下一輪從頭解壓並丟掉這一段（丟掉的部分不扣位元組預算，時間上限仍有效）。大小改變、`(device, inode)` 不同或 `mtime` 倒退時視為改寫。最後一行沒有換行也照常處理。解壓失敗（損毀、被截斷、`zstd` 以非 0 結束）丟出例外：這個檔案的交易整個回復，其他檔案照常，下一輪再試。
+  - **不重複計入**：原檔換成壓縮檔是不同的 inode，走第 7 節的「改寫」：先扣掉該檔在 `file_tokens` 中 D 以後的貢獻、清掉它計入的回應 ID，再從頭重算；D 以前的日子扣與補都略過（數字維持原樣），任務以 `seen_tasks` 的 `turn_id` 去重。所以已讀過的檔案重算後數字不變，只補上讀之前就被壓縮、或讀過之後才寫入的部分。壓縮到一半、兩份並存時只讀原檔（同一資料夾中 `.jsonl` 排在 `.jsonl.zst` 前面）。
+  - 量：本機的 451 個壓縮檔約 190 MB，解壓後約 1 GB；升級後會全部重算一次，依第 7 節的預算分成多輪完成。重算的檔案在讀完之前，該檔的數字暫時只有已重讀的部分。以本機資料庫的副本實測（2026-11-26，`zstd` 指令）：9 輪讀完（每輪 2～8 秒），Codex 只在 9 月 12 日到 10 月 12 日之間的 9 天多出數字、任務 +74（727 → 801），Codex 其他日子的每日資料完全相同。
 - **不讀**：`<session>/tool-results/` 與其他子資料夾、`~/.codex/auth.json`、`~/.claude/.credentials.json`、Keychain、`~/.codex/*.sqlite`、`config.toml`、`settings.json`、`history.jsonl`、`~/.claude.json`、`stats-cache.json` 與上表以外的任何檔案。收集器已有測試掃描原始碼確認不讀憑證，新模組要加入；另加測試確認檔案列舉只回傳上表的檔案。
 
 **逐行處理，只取白名單欄位**：
@@ -213,7 +220,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 ### 7. 效能（NFR-8、NFR-10）
 
-- 增量掃描：只讀 `offset` 之後新增的位元組；同一個 `(device, inode)` 的檔案變小或 `mtime` 倒退時（被改寫）從頭重掃該檔，Claude 以 `seen_ids` 避免重複計入；Codex 先扣掉 `file_tokens` 中該檔的貢獻再重算（第 4 節）。
+- 增量掃描：只讀 `offset` 之後新增的位元組（Codex 的 `.jsonl.zst` 例外：每次從頭解壓，見第 3 節）；同一個 `(device, inode)` 的檔案變小或 `mtime` 倒退時（被改寫）從頭重掃該檔，Claude 以 `seen_ids` 避免重複計入；Codex 先扣掉 `file_tokens` 中該檔的貢獻再重算（第 4 節）。
 - **首次掃描分段**：每次執行最多處理 64 MB 或 15 秒（先到者為準），其餘留給下次；以 `nice` 執行。以本機約 520 MB 的紀錄估計，首次約需 9 次執行（45 分鐘）。
 - 一般情況每次執行增加的時間 < 1 秒，須以測試量測並寫進 PR。
 - App 只在面板或統計視窗開啟時查詢資料庫；查詢結果在面板開啟期間快取，收到 `usage.json` 變更時才重新查詢。面板關閉時關閉資料庫連線。
