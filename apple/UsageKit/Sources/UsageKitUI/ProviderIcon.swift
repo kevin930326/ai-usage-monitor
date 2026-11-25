@@ -84,13 +84,22 @@ public struct CodexIconShape: Shape {
     }
 }
 
-/// Gemini：雙子，兩個並排、部分重疊的圓，重疊的透鏡形鏤空。
+/// Gemini：原創的四芒星。四個尖端在上下左右，四邊是向內凹的二次曲線；控制點不在中心而往外 2.2，
+/// 腰身比較飽滿（不是 Google Gemini 標誌那種收到中心的細腰與漸層）。實心加 0.7 寬、圓角接合的同色描邊，
+/// 尖端在小尺寸下不會太細（同 Claude 八芒星）。
 public struct GeminiIconShape: Shape {
+    static let tips: [CGPoint] = [(12, 1), (23, 12), (12, 23), (1, 12)].map { CGPoint(x: $0.0, y: $0.1) }
+    static let controls: [CGPoint] = [(14.2, 9.8), (14.2, 14.2), (9.8, 14.2), (9.8, 9.8)].map { CGPoint(x: $0.0, y: $0.1) }
+
     static let unitPath: Path = {
-        let left = Path(ellipseIn: CGRect(x: 1.5, y: 5, width: 14, height: 14))
-        let right = Path(ellipseIn: CGRect(x: 8.5, y: 5, width: 14, height: 14))
-        // 重疊處（透鏡）鏤空，透出背景（不是畫上背景色）
-        return left.symmetricDifference(right)
+        var star = Path()
+        star.move(to: tips[0])
+        for i in 0..<4 {
+            star.addQuadCurve(to: tips[(i + 1) % 4], control: controls[i])
+        }
+        star.closeSubpath()
+        let outline = star.strokedPath(StrokeStyle(lineWidth: 0.7, lineJoin: .round))
+        return star.union(outline)
     }()
 
     public init() {}
