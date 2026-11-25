@@ -14,7 +14,7 @@ struct UsageHomeWidget: Widget {
                 .containerBackground(for: .widget) { Color(uiColor: .systemBackground) }
         }
         .configurationDisplayName("AI 用量")
-        .description("Claude 與 Codex 的剩餘額度，剩餘最少的額度放最大。")
+        .description("Claude、Codex 與 Gemini 的剩餘額度，剩餘最少的額度放最大。")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
                             .accessoryCircular, .accessoryRectangular, .accessoryInline])
         // 中型沿用 Live Activity 的版面，它自己留邊界；小、大型在下面自行加 padding

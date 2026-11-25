@@ -48,7 +48,7 @@ struct HomeView: View {
             ContentUnavailableView {
                 Label("尚未設定中繼", systemImage: "antenna.radiowaves.left.and.right.slash")
             } description: {
-                Text("輸入 Cloudflare Worker 網址與讀取密鑰後，就能看到 Claude 與 Codex 的用量。")
+                Text("輸入 Cloudflare Worker 網址與讀取密鑰後，就能看到 Claude、Codex 與 Gemini 的用量。")
             } actions: {
                 Button("前往設定") { showSettings = true }
                     .buttonStyle(.borderedProminent)

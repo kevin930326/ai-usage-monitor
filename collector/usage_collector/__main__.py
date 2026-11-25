@@ -169,7 +169,7 @@ def run(args: argparse.Namespace) -> int:
     snapshot = collect()
     if not snapshot["providers"]:
         fix = "重新打開 App（會重新偵測）" if args.agent == "app" else "重新執行 scripts/install-launchd.sh"
-        log(f"config.json 的 enabled_providers 沒有啟用任何服務，登入 Claude Code 或 Codex CLI 後{fix}")
+        log(f"config.json 的 enabled_providers 沒有啟用任何服務，登入 Claude Code、Codex CLI 或用過 Antigravity 後{fix}")
     ok = any(p["error"] is None for p in snapshot["providers"].values())
     for name, p in snapshot["providers"].items():
         if p["error"]:

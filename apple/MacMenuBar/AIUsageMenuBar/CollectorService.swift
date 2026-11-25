@@ -298,7 +298,7 @@ final class CollectorService {
             return
         }
         guard await runSetup() == 0 else {
-            errorText = "內建收集器無法執行（偵測 Claude Code／Codex 時失敗），沒有遷移；\(kept)"
+            errorText = "內建收集器無法執行（偵測 Claude Code／Codex／Antigravity 時失敗），沒有遷移；\(kept)"
             return
         }
         guard registerService() else {

@@ -22,7 +22,7 @@
   so Chinese text here would be garbled. The collector itself logs in UTF-8.
 
 .PARAMETER WithQuota
-  Also collect quota with the local claude / codex CLI (written to usage.json only, never uploaded).
+  Also collect quota with the local claude / codex CLI and Antigravity (gemini) (written to usage.json only, never uploaded).
 .PARAMETER Uninstall
   Remove the scheduled task and %LOCALAPPDATA%\AIUsageMonitor\app. Data (history, logs, config) is kept.
 .PARAMETER Version

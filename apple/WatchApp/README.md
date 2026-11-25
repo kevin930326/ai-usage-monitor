@@ -1,6 +1,6 @@
 # Apple Watch App
 
-在手錶上查看 Claude 與 Codex 的剩餘額度。資料模型與顏色規則來自 [UsageKit](../UsageKit/)，Keychain 存取與 Debug 示範資料直接共用 iOS App 的 `Shared/` 檔案。
+在手錶上查看 Claude、Codex 與 Gemini 的剩餘額度。資料模型與顏色規則來自 [UsageKit](../UsageKit/)，Keychain 存取與 Debug 示範資料直接共用 iOS App 的 `Shared/` 檔案。
 
 | 部分 | 內容 |
 |---|---|

@@ -65,7 +65,7 @@ public extension UsageSnapshot {
 public enum ProviderInfo {
     /// 沒有啟用任何服務時的提示（`UsageSnapshot.hasNoProviders`）。
     public static let noProvidersTitle = "沒有啟用任何服務"
-    public static let noProvidersHint = "在 Mac 登入 Claude Code 或 Codex CLI 後，重新執行收集器的安裝腳本。"
+    public static let noProvidersHint = "在 Mac 登入 Claude Code 或 Codex CLI（或用過 Antigravity）後，重新執行收集器的安裝腳本。"
 
     public static func displayName(_ key: String) -> String {
         switch key {
