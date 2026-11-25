@@ -55,6 +55,13 @@ class GeminiTokenTest(TokenStatsTestCase):
         super().setUp()
         self.gemini = Path(self.dir.name) / "antigravity"
         (self.gemini / "conversations").mkdir(parents=True)
+        self.conns: list[sqlite3.Connection] = []
+
+    def tearDown(self):
+        # Windows 不能刪除還開著的檔案：先關掉測試自己開的連線，再清掉暫存資料夾
+        for conn in self.conns:
+            conn.close()
+        super().tearDown()
 
     @property
     def dirs(self):
@@ -68,7 +75,7 @@ class GeminiTokenTest(TokenStatsTestCase):
                      " PRIMARY KEY (idx))")
         conn.execute("CREATE TABLE IF NOT EXISTS steps (idx integer, step_type integer NOT NULL DEFAULT 0,"
                      " metadata blob, step_payload blob, PRIMARY KEY (idx))")
-        self.addCleanup(conn.close)
+        self.conns.append(conn)
         return conn
 
     def add_steps(self, conn, *times):
