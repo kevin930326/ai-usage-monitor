@@ -63,7 +63,7 @@ struct TokenActivityChart: View {
         if range == .cumulative { return "\(when)：累計 \(TokenFormat.short(bar.value))" }
         var text = "\(when)：\(TokenFormat.short(bar.value))"
         if scope == .all, bar.byProvider.count > 1 {
-            text += "（" + ["claude", "codex"].compactMap { p in bar.byProvider[p].map { "\(ProviderInfo.displayName(p)) \(TokenFormat.short($0))" } }
+            text += "（" + TokenScope.providers.compactMap { p in bar.byProvider[p].map { "\(ProviderInfo.displayName(p)) \(TokenFormat.short($0))" } }
                 .joined(separator: "、") + "）"
         }
         if bar.counts.cacheRead > 0 {
@@ -137,7 +137,7 @@ struct TokenBarsCanvas: View, Animatable {
                 let x = slot * CGFloat(i) + (slot - barWidth) / 2
                 let scale: CGFloat = i == hovered ? 1.08 : 1
                 var y = size.height
-                for provider in ["claude", "codex"] where scope.includes(provider) {
+                for provider in TokenScope.providers where scope.includes(provider) {
                     guard let value = bar.byProvider[provider], value > 0 else { continue }
                     let h = max(CGFloat(Double(value) / peak) * size.height * CGFloat(grow) * scale, 1)
                     let rect = CGRect(x: x - (scale - 1) * barWidth / 2, y: y - h, width: barWidth * scale, height: h)

@@ -4,17 +4,21 @@ namespace AIUsageMonitor.Core;
 // 資料來自收集器寫的 history.sqlite3（daily_tokens、hourly_tokens、records、record_days；讀取在 HistoryReader）；
 // 這裡只有純計算。日期是收集器以本機時區寫入的 YYYY-MM-DD；計算以 DateOnly 進行，時區只用來決定「今天」。
 
-/// <summary>全部／Claude／Codex 切換。</summary>
-public enum TokenScope { All, Claude, Codex }
+/// <summary>全部／Claude／Codex／Gemini 切換。</summary>
+public enum TokenScope { All, Claude, Codex, Gemini }
 
 public static class TokenScopes
 {
-    public static readonly IReadOnlyList<TokenScope> AllCases = [TokenScope.All, TokenScope.Claude, TokenScope.Codex];
+    public static readonly IReadOnlyList<TokenScope> AllCases = [TokenScope.All, TokenScope.Claude, TokenScope.Codex, TokenScope.Gemini];
+
+    /// <summary>有 Token 統計的服務，依固定順序（Gemini 來自 Antigravity 的對話紀錄，ADR-0023）</summary>
+    public static readonly IReadOnlyList<string> Providers = ["claude", "codex", "gemini"];
 
     public static string RawValue(this TokenScope scope) => scope switch
     {
         TokenScope.Claude => "claude",
         TokenScope.Codex => "codex",
+        TokenScope.Gemini => "gemini",
         _ => "all",
     };
 
@@ -22,12 +26,13 @@ public static class TokenScopes
     {
         TokenScope.Claude => "Claude",
         TokenScope.Codex => "Codex",
+        TokenScope.Gemini => "Gemini",
         _ => "全部",
     };
 
     public static bool Includes(this TokenScope scope, string provider) => scope == TokenScope.All || provider == scope.RawValue();
 
-    /// <summary>records 的鍵：全部沒有後綴，各服務加 :claude／:codex</summary>
+    /// <summary>records 的鍵：全部沒有後綴，各服務加 :claude／:codex／:gemini</summary>
     public static string RecordKey(this TokenScope scope, string baseKey) => scope == TokenScope.All ? baseKey : $"{baseKey}:{scope.RawValue()}";
 }
 
@@ -111,7 +116,7 @@ public sealed record TokenStatsData
 
     /// <summary>這個範圍有資料的服務（給切換列決定要不要顯示）</summary>
     public IReadOnlyList<string> Providers =>
-        new[] { "claude", "codex" }
+        TokenScopes.Providers
             .Where(p => Days.Any(d => d.Provider == p && d.Counts.Value(TokenMeasure.IncludingCacheRead) > 0) || HasRecord($":{p}"))
             .ToList();
 

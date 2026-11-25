@@ -163,6 +163,16 @@ import Testing
         #expect(onlyRecords.providers == ["codex"])
     }
 
+    @Test func geminiIsAScopeLikeTheOthers() {
+        let data = TokenStatsData(days: [row("2026-11-05", "gemini", main: 30, model: "gemini-4-neon"), row("2026-11-05", main: 70)],
+                                  firstScanDone: true)
+        #expect(data.providers == ["claude", "gemini"])
+        #expect(TokenSummary(data: data, scope: .gemini, now: now, calendar: cal).thisWeek.main == 30)
+        #expect(TokenSummary(data: data, scope: .all, now: now, calendar: cal).thisWeek.main == 100)
+        #expect(TokenScope.gemini.recordKey("total_tokens") == "total_tokens:gemini")
+        #expect(TokenScope.allCases.map(\.title) == ["全部", "Claude", "Codex", "Gemini"])
+    }
+
     @Test func formatting() {
         // 萬／億、三位有效數字；不到一萬顯示整數
         #expect(TokenFormat.short(0) == "0")
