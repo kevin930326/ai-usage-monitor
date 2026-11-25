@@ -635,6 +635,36 @@ class ClaudeTest(TokenStatsTestCase):
         self.scan()
         self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), expected)
 
+    def test_clear_and_rescan_during_recount_cancels_it(self):
+        # 第 2 輪審查 C-02：重算還沒讀完時 App「清除並重新掃描」：重新掃描以新規則從頭算，
+        # 不能再以舊的範圍略過略過界以前、紀錄檔還在的任務
+        self.old_rules_state()
+        self.write(self.claude_file(f"{SESSION[:-1]}9"), claude_user(T0 - 100 * DAY, origin="human"),
+                   claude_assistant("old1", T0 - 100 * DAY + 700, out=1))
+        self.scan(budget=token_stats.Budget(bytes_left=300))
+        with self.db() as c:
+            self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            # 與 HistoryStore.clear(rescan: true) 相同的刪除
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached",
+                          "scan_state", "seen_ids", "seen_tasks", "file_tokens"):
+                c.execute(f"DELETE FROM {table}")
+            c.execute("DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done', 'token_bad_lines',"
+                      " 'token_long_lines', 'token_days_from', 'seen_cutoff_day')")
+            c.commit()
+        for _ in range(50):
+            if self.scan().done:
+                break
+        files = [(p, "claude") for p in self.project.glob("*.jsonl")] + [(p, "codex") for p in self.sessions.glob("*.jsonl")]
+        fresh = self.fresh(*files)
+        for table in ("daily_tokens", "hourly_tokens", "seen_tasks"):
+            self.assertEqual(self.table(table), self.table(table, fresh), table)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+            tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            self.assertFalse(tables & {"task_recount", "task_recount_seen"})
+
     def test_recount_keeps_older_personal_record(self):
         # 審查 C-02：最長任務的個人紀錄早於略過界（每日資料已超過保留期間刪除）時保留
         self.old_rules_state()

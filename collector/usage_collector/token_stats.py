@@ -1256,8 +1256,16 @@ def _start_recount(conn: sqlite3.Connection) -> None:
     if history.meta(conn, "task_rules") == TASK_RULES:
         return
     with history._transaction(conn):
-        if history.meta(conn, "task_rules") == TASK_RULES or history.meta(conn, "task_recount_from") is not None:
-            return  # 已經換好，或已經開始（另一個收集器）
+        if history.meta(conn, "task_rules") == TASK_RULES:
+            return  # 另一個收集器剛換好
+        if history.meta(conn, "task_recount_from") is not None:
+            if history.meta(conn, "first_scan_done") == "1" or conn.execute("SELECT 1 FROM scan_state LIMIT 1").fetchone():
+                return  # 重算進行中
+            # App 的「清除並重新掃描」清空了掃描進度：重新掃描本來就以新規則從頭算，取消重算，
+            # 不再以舊的範圍略過較早的任務（第 2 輪審查 C-02）
+            _drop_recount(conn)
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
+            return
         has_tasks = any(conn.execute(sql).fetchone() for sql in (
             "SELECT 1 FROM seen_tasks WHERE provider = 'claude' LIMIT 1",
             "SELECT 1 FROM daily_tokens WHERE provider = 'claude' AND task_count > 0 LIMIT 1",
@@ -1347,10 +1355,14 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
     _set_record(conn, "longest_task_seconds", best(
         claude, overall if before(overall) else None,
         *(record(f"longest_task_seconds:{p}") for p in PROVIDERS if p != "claude")))
-    conn.execute("DROP TABLE task_recount")
-    conn.execute("DROP TABLE task_recount_seen")
-    conn.execute("DELETE FROM meta WHERE key = 'task_recount_from'")
+    _drop_recount(conn)
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
+
+
+def _drop_recount(conn: sqlite3.Connection) -> None:
+    conn.execute("DROP TABLE IF EXISTS task_recount")
+    conn.execute("DROP TABLE IF EXISTS task_recount_seen")
+    conn.execute("DELETE FROM meta WHERE key = 'task_recount_from'")
 
 
 def _cleared_meanwhile(conn: sqlite3.Connection, skipped: list[str]) -> bool:
