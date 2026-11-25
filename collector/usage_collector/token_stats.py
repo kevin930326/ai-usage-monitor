@@ -37,7 +37,7 @@ CHUNK_SECONDS = 15.0
 # Claude 任務：兩筆回覆之間超過 1 小時沒有動靜（等你核准、等背景工作、離開電腦）時，那整段空檔不算進任務時間
 # （使用者 2026-11-26 決定，取代原本「超過 6 小時以 6 小時計」的上限）
 TASK_IDLE_SECONDS = 3600
-# 任務規則的版本：與資料庫的 meta.task_rules 不同時，Claude 的任務數字以新規則重算一次（`_recount_claude_tasks`）
+# 任務規則的版本：與資料庫的 meta.task_rules 不同時，Claude 的任務以新規則重算一次（`_start_recount`、`_finish_recount`）
 TASK_RULES = "2"
 LAST_SEEN_REFRESH = 86400  # 沒有變化的檔案一天更新一次 last_seen
 # 去重的時間窗（ADR-0014 第 1 節）：本機日期早於略過界 D（meta.seen_cutoff_day）的訊息、回應、任務與 Codex 累計差額
@@ -311,6 +311,7 @@ class Totals:
     total_cached: dict = field(default_factory=dict)  # provider → 含快取讀取的變化（records.total_tokens_cached）
     longest: dict = field(default_factory=dict)  # provider → (seconds, day)
     seen_cutoff: str | None = None  # 略過界 D；None 時不略過（首次掃描）
+    recount_from: str | None = None  # Claude 任務重算中（meta.task_recount_from）：新任務先記在 task_recount
 
     def too_old(self, ts: int) -> bool:
         """這個時間點的本機日期早於略過界：不計算也不記錄（它的去重列可能已經刪了，算了會重複）。"""
@@ -440,6 +441,15 @@ def _count_task(conn: sqlite3.Connection, totals: Totals, provider: str, task_id
     if totals.too_old(start):
         return
     seconds = max(0, seconds)
+    if provider == "claude" and totals.recount_from is not None:
+        # 重算中：記在暫存表，讀完所有紀錄檔才一次換上（`_finish_recount`），期間顯示的數字不變
+        day, hour = _day_hour(start)
+        if day < totals.recount_from:
+            return
+        conn.execute("INSERT INTO task_recount (id, day, hour, model, seconds) VALUES (?, ?, ?, ?, ?)"
+                     " ON CONFLICT (id) DO UPDATE SET seconds = max(seconds, excluded.seconds)",
+                     (task_id, day, hour, model, seconds))
+        return
     row = conn.execute("SELECT day, hour, model, seconds FROM seen_tasks WHERE provider = ? AND id = ?",
                        (provider, task_id)).fetchone()
     if row is None:
@@ -542,6 +552,10 @@ def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Cou
             return
         counters.token_lines += 1
         _count_id(conn, totals, "claude", msg_id, ts, model, vec)
+        if totals.recount_from is not None and not sidechain:
+            # 舊規則下以這則回覆為開頭的任務（被切開的一段）：這段紀錄已以新規則重讀，換上時以新的結果取代
+            conn.execute("INSERT OR IGNORE INTO task_recount_seen (id)"
+                         " SELECT id FROM seen_tasks WHERE provider = 'claude' AND id = ?", (msg_id,))
         prompt = st.state.get("prompt")
         if not sidechain and isinstance(prompt, int):
             # 任務：真人提示 → 下一個真人提示之前最後一筆 assistant 行；以第一則回覆的 ID 當任務 ID
@@ -1148,7 +1162,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     cutoffs = (history.local_day(now - days * 86400) if days > 0 else "",
                history.local_day(now - min(days or history.HOURLY_TOKENS_DAYS, history.HOURLY_TOKENS_DAYS) * 86400))
     _seen_cutoff(conn)  # 「清除並重新掃描」後刪掉舊的略過界；每個檔案在自己的交易內再讀目前的值
-    _recount_claude_tasks(conn)
+    _start_recount(conn)
     conn.row_factory = sqlite3.Row
     rows = {r["file_key"]: r for r in conn.execute("SELECT * FROM scan_state")}
     conn.row_factory = None
@@ -1182,6 +1196,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                         row = _scan_row(conn, f.key)
                         # 略過界也一樣：另一個收集器可能已前進 D、刪掉去重列，沿用交易外讀到的舊值會重複計入（審查 C-02）
                         totals.seen_cutoff = history.meta(conn, "seen_cutoff_day")
+                        totals.recount_from = history.meta(conn, "task_recount_from")
                         if f.provider == "gemini":
                             offset = _process_gemini(conn, f, row, totals, budget, counters, cutoffs)
                         else:
@@ -1205,6 +1220,9 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     with history._transaction(conn):
         if stale:
             conn.executemany("UPDATE scan_state SET last_seen = ?, mtime = ? WHERE file_key = ?", stale)
+        if result.done and history.meta(conn, "task_recount_from") is not None:
+            _finish_recount(conn, now)  # 所有紀錄檔都讀到檔尾了
+            changed = True
         if changed:
             _update_records(conn)
         c = result.counters
@@ -1225,34 +1243,104 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                          (str(result.progress),))
             if result.done:
                 conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
-        _advance_seen_window(conn, now)
+        if history.meta(conn, "task_recount_from") is None:
+            _advance_seen_window(conn, now)  # 重算中略過界不前進：重讀與換上用同一個範圍，去重列也不刪
     return result
 
 
-def _recount_claude_tasks(conn: sqlite3.Connection) -> None:
-    """任務規則改變（`TASK_RULES`）後，把 Claude 的任務數字以新規則重算一次：清掉略過界 D 以後（含）這台電腦的
-    Claude 任務數字與 seen_tasks，Claude 紀錄檔從頭重讀。Token 以 seen_ids 去重，不會重複計入；D 以前的任務
-    重讀時本來就略過（ADR-0014），那些日子保留原本的數字，最長任務的紀錄以它們為底再由重讀往上加。"""
+def _start_recount(conn: sqlite3.Connection) -> None:
+    """任務規則改變（`TASK_RULES`）後，開始以新規則重算 Claude 的任務：Claude 的主紀錄檔從頭重讀（Token 以
+    seen_ids 去重不變，子代理檔不含任務、不重讀），新規則算出的任務記在暫存表 task_recount，讀到的回覆若是舊任務的
+    開頭記在 task_recount_seen；顯示的數字在讀完前不變。範圍是開始時的略過界 D 以後（meta.task_recount_from），
+    重算期間 D 不前進（審查 C-04）。資料庫裡沒有 Claude 的任務時直接採用新規則。"""
     if history.meta(conn, "task_rules") == TASK_RULES:
         return
     with history._transaction(conn):
-        if history.meta(conn, "task_rules") == TASK_RULES:
-            return  # 另一個收集器剛重算過
-        cutoff = history.meta(conn, "seen_cutoff_day") or ""
-        device_id = history.meta(conn, "device_id") or ""
-        for table in ("daily_tokens", "hourly_tokens"):
-            conn.execute(f"UPDATE {table} SET task_count = 0, task_seconds = 0, longest_task_seconds = 0"
-                         " WHERE device_id = ? AND provider = 'claude' AND day >= ?", (device_id, cutoff))
-        conn.execute("DELETE FROM seen_tasks WHERE provider = 'claude'")
-        conn.execute("UPDATE scan_state SET offset = 0, state = NULL WHERE file_key LIKE 'claude:%'")
-        older = conn.execute("SELECT day, longest_task_seconds FROM daily_tokens WHERE device_id = ?"
-                             " AND provider = 'claude' AND longest_task_seconds > 0"
-                             " ORDER BY longest_task_seconds DESC, day LIMIT 1", (device_id,)).fetchone()
-        _set_record(conn, "longest_task_seconds:claude", older)
-        best = conn.execute("SELECT day, value FROM records WHERE key LIKE 'longest_task_seconds:%' AND value > 0"
-                            " ORDER BY value DESC, day LIMIT 1").fetchone()
-        _set_record(conn, "longest_task_seconds", best)
-        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
+        if history.meta(conn, "task_rules") == TASK_RULES or history.meta(conn, "task_recount_from") is not None:
+            return  # 已經換好，或已經開始（另一個收集器）
+        has_tasks = any(conn.execute(sql).fetchone() for sql in (
+            "SELECT 1 FROM seen_tasks WHERE provider = 'claude' LIMIT 1",
+            "SELECT 1 FROM daily_tokens WHERE provider = 'claude' AND task_count > 0 LIMIT 1",
+            "SELECT 1 FROM records WHERE key = 'longest_task_seconds:claude' AND value > 0"))
+        if not has_tasks:
+            conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
+            return
+        conn.execute("CREATE TABLE IF NOT EXISTS task_recount (id TEXT PRIMARY KEY, day TEXT NOT NULL,"
+                     " hour INTEGER NOT NULL, model TEXT NOT NULL, seconds INTEGER NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS task_recount_seen (id TEXT PRIMARY KEY)")
+        conn.execute("DELETE FROM task_recount")
+        conn.execute("DELETE FROM task_recount_seen")
+        conn.execute("UPDATE scan_state SET offset = 0, state = NULL"
+                     " WHERE file_key LIKE 'claude:%' AND file_key NOT LIKE 'claude:agent-%'")
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_recount_from', ?)",
+                     (history.meta(conn, "seen_cutoff_day") or "",))
+
+
+def _finish_recount(conn: sqlite3.Connection, now: int) -> None:
+    """所有紀錄檔都以新規則讀完後（在掃描最後的交易內），一次換上重算的結果：
+    - 只取代重讀時遇到的舊任務（task_recount_seen）；紀錄檔已刪除或打不開的舊任務照舊保留（審查 C-01）。
+    - 每日／每小時的任務次數與時間以差額更新既有的列（不新增列：超過保留期間或已清除的日子不會跑回來），
+      最長任務以這台電腦範圍內所有任務重算。
+    - 最長任務的個人紀錄：範圍以前的舊紀錄保留（不受保留期間影響，審查 C-02），範圍內以重算的任務為準。"""
+    start = history.meta(conn, "task_recount_from") or ""
+    device_id = history.meta(conn, "device_id") or ""
+    deltas: dict[tuple[str, int, str], list[int]] = {}
+    old = conn.execute("SELECT day, hour, model, seconds FROM seen_tasks WHERE provider = 'claude' AND day >= ?"
+                       " AND id IN (SELECT id FROM task_recount_seen)", (start,)).fetchall()
+    new = conn.execute("SELECT day, hour, model, seconds FROM task_recount").fetchall()
+    for rows, sign in ((old, -1), (new, 1)):
+        for day, hour, model, seconds in rows:
+            d = deltas.setdefault((day, hour, model), [0, 0])
+            d[0] += sign
+            d[1] += sign * seconds
+    conn.execute("DELETE FROM seen_tasks WHERE provider = 'claude' AND day >= ?"
+                 " AND id IN (SELECT id FROM task_recount_seen)", (start,))
+    conn.execute("INSERT OR REPLACE INTO seen_tasks (provider, id, day, hour, model, seconds)"
+                 " SELECT 'claude', id, day, hour, model, seconds FROM task_recount")
+    daily: dict[tuple[str, str], list[int]] = {}
+    for (day, hour, model), (count, seconds) in deltas.items():
+        d = daily.setdefault((day, model), [0, 0])
+        d[0] += count
+        d[1] += seconds
+        conn.execute("UPDATE hourly_tokens SET task_count = max(0, task_count + ?), task_seconds = max(0, task_seconds + ?),"
+                     " updated_at = ? WHERE device_id = ? AND day = ? AND hour = ? AND provider = 'claude' AND model = ?",
+                     (count, seconds, now, device_id, day, hour, model))
+    for (day, model), (count, seconds) in daily.items():
+        conn.execute("UPDATE daily_tokens SET task_count = max(0, task_count + ?), task_seconds = max(0, task_seconds + ?),"
+                     " updated_at = ? WHERE device_id = ? AND day = ? AND provider = 'claude' AND model = ?",
+                     (count, seconds, now, device_id, day, model))
+    for table, keys in (("daily_tokens", "day, model"), ("hourly_tokens", "day, hour, model")):
+        match = " AND ".join(f"t.{k.strip()} = {table}.{k.strip()}" for k in keys.split(","))
+        conn.execute(f"UPDATE {table} SET longest_task_seconds = COALESCE((SELECT MAX(t.seconds) FROM seen_tasks t"
+                     f" WHERE t.provider = 'claude' AND {match}), 0)"
+                     " WHERE device_id = ? AND provider = 'claude' AND day >= ?", (device_id, start))
+
+    def record(key):
+        row = conn.execute("SELECT day, value FROM records WHERE key = ?", (key,)).fetchone()
+        return row if row is not None and row[1] > 0 else None
+
+    def before(row):
+        return row is not None and row[0] is not None and row[0] < start
+
+    def best(*rows):
+        rows = [r for r in rows if r is not None and r[1] > 0]
+        return min(rows, key=lambda r: (-r[1], r[0] or "")) if rows else None
+
+    claude = best(
+        record("longest_task_seconds:claude") if before(record("longest_task_seconds:claude")) else None,
+        conn.execute("SELECT day, longest_task_seconds FROM daily_tokens WHERE device_id = ? AND provider = 'claude'"
+                     " AND day < ? ORDER BY longest_task_seconds DESC, day LIMIT 1", (device_id, start)).fetchone(),
+        conn.execute("SELECT day, seconds FROM seen_tasks WHERE provider = 'claude' AND day >= ?"
+                     " ORDER BY seconds DESC, day LIMIT 1", (start,)).fetchone())
+    _set_record(conn, "longest_task_seconds:claude", claude)
+    overall = record("longest_task_seconds")
+    _set_record(conn, "longest_task_seconds", best(
+        claude, overall if before(overall) else None,
+        *(record(f"longest_task_seconds:{p}") for p in PROVIDERS if p != "claude")))
+    conn.execute("DROP TABLE task_recount")
+    conn.execute("DROP TABLE task_recount_seen")
+    conn.execute("DELETE FROM meta WHERE key = 'task_recount_from'")
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
 
 
 def _cleared_meanwhile(conn: sqlite3.Connection, skipped: list[str]) -> bool:
