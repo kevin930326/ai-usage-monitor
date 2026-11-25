@@ -1221,7 +1221,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
         if stale:
             conn.executemany("UPDATE scan_state SET last_seen = ?, mtime = ? WHERE file_key = ?", stale)
         if result.done and history.meta(conn, "task_recount_from") is not None:
-            _finish_recount(conn, now)  # 所有紀錄檔都讀到檔尾了
+            _finish_recount(conn, now, cutoffs)  # 所有紀錄檔都讀到檔尾了
             changed = True
         if changed:
             _update_records(conn)
@@ -1276,10 +1276,11 @@ def _start_recount(conn: sqlite3.Connection) -> None:
                      (history.meta(conn, "seen_cutoff_day") or "",))
 
 
-def _finish_recount(conn: sqlite3.Connection, now: int) -> None:
+def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]) -> None:
     """所有紀錄檔都以新規則讀完後（在掃描最後的交易內），一次換上重算的結果：
     - 只取代重讀時遇到的舊任務（task_recount_seen）；紀錄檔已刪除或打不開的舊任務照舊保留（審查 C-01）。
-    - 每日／每小時的任務次數與時間以差額更新既有的列（不新增列：超過保留期間或已清除的日子不會跑回來），
+    - 每日／每小時的任務次數與時間以差額更新；任務改歸到沒有列的日期、小時或模型時新增只有任務的列（審查 2-C01），
+      但超過保留期間、或早於 meta.token_days_from（「清除歷史」清掉的日子）時不新增，清掉的日子不會跑回來。
       最長任務以這台電腦範圍內所有任務重算。
     - 最長任務的個人紀錄：範圍以前的舊紀錄保留（不受保留期間影響，審查 C-02），範圍內以重算的任務為準。"""
     start = history.meta(conn, "task_recount_from") or ""
@@ -1298,17 +1299,26 @@ def _finish_recount(conn: sqlite3.Connection, now: int) -> None:
     conn.execute("INSERT OR REPLACE INTO seen_tasks (provider, id, day, hour, model, seconds)"
                  " SELECT 'claude', id, day, hour, model, seconds FROM task_recount")
     daily: dict[tuple[str, str], list[int]] = {}
-    for (day, hour, model), (count, seconds) in deltas.items():
+    for (day, _hour, model), (count, seconds) in deltas.items():
         d = daily.setdefault((day, model), [0, 0])
         d[0] += count
         d[1] += seconds
-        conn.execute("UPDATE hourly_tokens SET task_count = max(0, task_count + ?), task_seconds = max(0, task_seconds + ?),"
-                     " updated_at = ? WHERE device_id = ? AND day = ? AND hour = ? AND provider = 'claude' AND model = ?",
-                     (count, seconds, now, device_id, day, hour, model))
-    for (day, model), (count, seconds) in daily.items():
-        conn.execute("UPDATE daily_tokens SET task_count = max(0, task_count + ?), task_seconds = max(0, task_seconds + ?),"
-                     " updated_at = ? WHERE device_id = ? AND day = ? AND provider = 'claude' AND model = ?",
-                     (count, seconds, now, device_id, day, model))
+    kept_from = history.meta(conn, "token_days_from") or ""  # App 清除歷史／延長保留期間時記的「還有每日 Token 的第一天」
+    changes: list[tuple[str, str, tuple, int, int]] = [
+        ("hourly_tokens", cutoffs[1], (device_id, day, hour, model), count, seconds)
+        for (day, hour, model), (count, seconds) in deltas.items()]
+    changes += [("daily_tokens", cutoffs[0], (device_id, day, model), count, seconds)
+                for (day, model), (count, seconds) in daily.items()]
+    for table, cutoff, key, count, seconds in changes:
+        hourly = table == "hourly_tokens"
+        where = "device_id = ? AND day = ?" + (" AND hour = ?" if hourly else "") + " AND provider = 'claude' AND model = ?"
+        updated = conn.execute(f"UPDATE {table} SET task_count = max(0, task_count + ?),"
+                               f" task_seconds = max(0, task_seconds + ?), updated_at = ? WHERE {where}",
+                               (count, seconds, now, *key)).rowcount
+        if not updated and count > 0 and seconds >= 0 and key[1] >= max(cutoff, kept_from):
+            conn.execute(f"INSERT INTO {table} (device_id, day{', hour' if hourly else ''}, provider, model, task_count,"
+                         f" task_seconds, updated_at) VALUES (?, ?{', ?' if hourly else ''}, 'claude', ?, ?, ?, ?)",
+                         (*key, count, seconds, now))
     for table, keys in (("daily_tokens", "day, model"), ("hourly_tokens", "day, hour, model")):
         match = " AND ".join(f"t.{k.strip()} = {table}.{k.strip()}" for k in keys.split(","))
         conn.execute(f"UPDATE {table} SET longest_task_seconds = COALESCE((SELECT MAX(t.seconds) FROM seen_tasks t"

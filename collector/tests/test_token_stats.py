@@ -613,6 +613,28 @@ class ClaudeTest(TokenStatsTestCase):
         self.scan()
         self.assertEqual(self.totals("claude")[5:], (3, 1100 + 900 + 1500))
 
+    def test_recount_adds_rows_for_tasks_that_move_to_another_hour_or_day(self):
+        # 第 2 輪審查 C-01：新規則把任務歸到提示那天、那個小時；那裡沒有 Token（提示在午夜前、回覆在午夜後）時要新增只有任務的列
+        prompt = T0 + HOUR + 37 * 60  # 台北 23:50:20
+        self.write(self.claude_file(), claude_user(prompt, origin="human"),
+                   claude_assistant("a1", prompt + 1200, out=1), claude_assistant("a2", prompt + 2400, out=1))
+        self.scan()
+        expected = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT day, hour FROM seen_tasks WHERE id = 'a1'").fetchone(), ("2026-09-21", 23))
+            # 舊版的樣子：任務記在回覆那天、那個小時，提示那天沒有列
+            c.execute("DELETE FROM daily_tokens WHERE day = '2026-09-21'")
+            c.execute("DELETE FROM hourly_tokens WHERE day = '2026-09-21'")
+            c.execute("UPDATE seen_tasks SET day = '2026-09-22', hour = 0, seconds = 1200 WHERE id = 'a1'")
+            for table in ("daily_tokens", "hourly_tokens"):
+                c.execute(f"UPDATE {table} SET task_count = 1, task_seconds = 1200, longest_task_seconds = 1200")
+            c.execute("DELETE FROM meta WHERE key = 'task_rules'")
+            c.commit()
+        self.scan()
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), expected)
+        self.scan()
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), expected)
+
     def test_recount_keeps_older_personal_record(self):
         # 審查 C-02：最長任務的個人紀錄早於略過界（每日資料已超過保留期間刪除）時保留
         self.old_rules_state()
