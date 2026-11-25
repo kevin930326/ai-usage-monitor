@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import time
@@ -318,6 +319,8 @@ class EnumerationTest(TokenStatsTestCase):
             self.project / SESSION / "subagents" / "agent-a1b2c3.jsonl": "claude:agent-a1b2c3",
             self.codex_file(): f"codex:{ROLLOUT}",
             self.codex / "archived_sessions" / f"rollout-2026-01-01T00-00-00-{OTHER}.jsonl": f"codex:{OTHER}",
+            # Codex 壓縮過的舊紀錄（ADR-0009 第 3 節）
+            self.sessions / f"rollout-2026-09-21T00-00-00-{SESSION}.jsonl.zst": f"codex:{SESSION}",
         }
         for p in allowed:
             self.write(p, "{}")
@@ -347,6 +350,9 @@ class EnumerationTest(TokenStatsTestCase):
             self.sessions / "rollout-customer-secret-project.jsonl",
             self.codex / "archived_sessions" / "rollout-2026-01-01.jsonl",
             self.codex / "archived_sessions" / "sub" / f"rollout-x-{OTHER}.jsonl",
+            self.codex / "archived_sessions" / f"rollout-x-{ROLLOUT.replace('a', 'b')}.jsonl.gz",
+            self.codex / "archived_sessions" / f"rollout-x-{ROLLOUT.replace('a', 'c')}.zst",
+            self.project / f"{OTHER}.jsonl.zst",  # Claude 沒有壓縮的紀錄
         ]
         for p in not_allowed:
             self.write(p, "{}")
@@ -355,7 +361,8 @@ class EnumerationTest(TokenStatsTestCase):
         os.symlink(outside, self.claude / "projects" / "linked-project")
         os.symlink(outside, self.project / SESSION / "linked-sub")
         os.symlink(outside, self.codex / "sessions" / "2026" / "10")
-        files = token_stats.list_files(self.dirs)
+        with mock.patch.object(token_stats, "zstd_backend", lambda: "stdlib"):
+            files = token_stats.list_files(self.dirs)
         self.assertEqual({f.key for f in files}, set(allowed.values()))
         self.assertEqual({f.path for f in files}, {str(p) for p in allowed})
 
@@ -759,8 +766,8 @@ class CodexTest(TokenStatsTestCase):
         # 列舉之後被換成另一個檔案（inode 不同）。舊檔移到紀錄資料夾外而不是刪除：
         # Linux 會立刻重用剛釋放的 inode，新檔可能與列舉到的檔案 inode 相同
         real_list = token_stats.list_files
-        def swapped(dirs):
-            files = real_list(dirs)
+        def swapped(dirs, *args):
+            files = real_list(dirs, *args)
             os.rename(self.codex_file(), Path(self.dir.name) / "moved-away.jsonl")
             self.write(self.codex_file(), codex_count(T0, inp=5, out=5))
             return files
@@ -1546,6 +1553,228 @@ class FormatChangeTest(TokenStatsTestCase):
         self.assertIsNone(token_stats.format_suspect(c(candidate_lines=20, bad_lines=4, token_lines=8)))
         self.assertIsNone(token_stats.format_suspect(c(candidate_lines=19, token_lines=19)))
         self.assertIsNone(token_stats.format_suspect(c(candidate_lines=30, token_lines=0)))
+
+
+# MARK: - Codex 壓縮紀錄（.jsonl.zst）
+
+
+def _zstd_cli() -> str | None:
+    for candidate in (shutil.which("zstd"), *system.executable_fallbacks("zstd")):
+        if candidate and system.is_launchable(candidate):
+            return candidate
+    return None
+
+
+def zstd_compress(data: bytes) -> bytes:
+    """測試用的壓縮：標準函式庫（Python 3.14 以上）或 zstd 指令。"""
+    module = token_stats._stdlib_zstd()
+    if module is not None:
+        return module.compress(data)
+    return subprocess.run([_zstd_cli(), "-q", "-c"], input=data, capture_output=True, check=True).stdout
+
+
+class CompressedCodexCases:
+    """以 `backend` 解壓（下面的子類別各測一種；這個環境沒有的那種略過）。"""
+    backend: str | None = None
+
+    def setUp(self):
+        if self.backend is None:
+            self.skipTest("這個環境沒有這種 zstd 解壓方式")
+        super().setUp()
+        patcher = mock.patch.object(token_stats, "zstd_backend", lambda: self.backend)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def zst_file(self, rid=ROLLOUT, folder=None):
+        return (folder or self.sessions) / f"rollout-2026-09-21T21-33-20-{rid}.jsonl.zst"
+
+    def write_zst(self, path: Path, *lines: str, newline=True, data: bytes | None = None):
+        if data is None:
+            data = ("\n".join(lines) + ("\n" if newline else "")).encode()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(zstd_compress(data))
+
+    def compress(self, plain: Path, keep=False) -> Path:
+        """Codex 的做法：寫一個新的 .jsonl.zst（不同 inode），再刪掉原檔。"""
+        target = plain.with_name(plain.name + ".zst")
+        self.write_zst(target, data=plain.read_bytes())
+        if not keep:
+            plain.unlink()
+        return target
+
+    def snapshot(self, path=None):
+        return [self.table(t, path) for t in ("daily_tokens", "hourly_tokens", "record_days", "record_days_cached")] \
+            + [self.records(path)]
+
+    def scan_row(self):
+        with self.db() as c:
+            return c.execute("SELECT size, offset, state FROM scan_state WHERE file_key LIKE 'codex%'").fetchone()
+
+    def test_compressed_rollout_is_read(self):
+        self.write_zst(self.zst_file(), codex_turn(), codex_noise(), codex_record("r1", T0, inp=100, cached=40, out=10),
+                       codex_task("turn_1", T0, T0 + 90, 90_000))
+        self.assertEqual([(f.key, f.compressed) for f in token_stats.list_files(self.dirs)],
+                         [(f"codex:{ROLLOUT}", True)])
+        result = self.scan()
+        self.assertEqual(result.counters.failed_files, 0)
+        self.assertEqual(self.totals("codex"), (60, 0, 40, 10, 0, 1, 90))
+        size, offset, state = self.scan_row()
+        self.assertEqual(offset, size)  # 讀完：offset 記成壓縮檔的大小，下一輪不再解壓
+        self.assertNotIn("zpos", state or "")
+        self.scan()
+        self.assertEqual(self.totals("codex"), (60, 0, 40, 10, 0, 1, 90))
+
+    def test_last_line_without_newline_is_counted(self):
+        self.write_zst(self.zst_file(), codex_turn(), codex_count(T0, inp=100, out=10),
+                       codex_count(T0 + 5, inp=300, out=30), newline=False)
+        self.scan()
+        self.assertEqual(self.totals("codex")[:4], (300, 0, 0, 30))
+
+    def test_compressing_a_read_rollout_counts_once(self):
+        """已讀過的 .jsonl 被換成 .jsonl.zst：先扣再重算，數字不變（含略過界以前、不會再加回來的舊日子）。"""
+        plain = self.codex_file()
+        self.write(plain, codex_turn(), codex_count(T0 - 120 * DAY, inp=1000, out=0),
+                   codex_task("old", T0 - 120 * DAY, T0 - 120 * DAY + 50, 50_000),
+                   codex_count(T0, inp=1500, out=7), codex_task("new", T0, T0 + 600, 600_000))
+        self.scan()
+        before = self.snapshot()
+        self.assertEqual(self.totals("codex"), (1500, 0, 0, 7, 0, 2, 650))
+        self.compress(plain, keep=True)  # 壓縮到一半：兩份都在時讀原檔
+        self.assertEqual([f.path for f in token_stats.list_files(self.dirs)], [str(plain)])
+        self.scan()
+        self.assertEqual(self.snapshot(), before)
+        plain.unlink()
+        result = self.scan()
+        self.assertEqual(result.counters.failed_files, 0)
+        self.assertEqual(self.snapshot(), before)
+        size, offset, _ = self.scan_row()
+        self.assertEqual(offset, size)
+        self.scan()
+        self.assertEqual(self.snapshot(), before)
+
+    def test_rest_of_a_partly_read_rollout_is_added_after_compression(self):
+        """收集器讀過前半、Codex 之後又寫了一些才壓縮：重算後與一次讀完整個檔案相同。"""
+        plain = self.codex_file()
+        self.write(plain, codex_turn(), codex_count(T0, inp=100, out=10))
+        self.scan()
+        self.write(plain, codex_count(T0 + 60, inp=400, out=40), codex_task("t", T0, T0 + 60, 60_000))
+        fresh = self.fresh((plain, "codex"))
+        self.compress(plain)
+        self.scan()
+        self.assertEqual(self.snapshot(), self.snapshot(fresh))
+        self.assertEqual(self.totals("codex"), (400, 0, 0, 40, 0, 1, 60))
+
+    def test_compressed_file_split_across_runs(self):
+        lines = [codex_turn()] + [codex_record(f"r{i}", T0 + i, inp=10 * (i + 1), out=1) for i in range(40)]
+        self.write_zst(self.zst_file(), *lines)
+        result = self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 10))
+        self.assertFalse(result.done)
+        _, offset, state = self.scan_row()
+        self.assertEqual(offset, 0)  # 還沒讀完：解壓後的位置記在 state
+        self.assertGreater(json.loads(state)["zpos"], 0)
+        for _ in range(10):
+            if self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 10)).done:
+                break
+        self.assertEqual(self.totals("codex")[:4], (sum(10 * (i + 1) for i in range(40)), 0, 0, 40))
+        size, offset, state = self.scan_row()
+        self.assertEqual(offset, size)
+        self.assertNotIn("zpos", state or "")
+
+    def test_broken_compressed_files_do_not_fail_the_scan(self):
+        self.write(self.codex_file(), codex_turn(), codex_record("r1", T0, inp=100, out=10))
+        broken = self.zst_file(OTHER)
+        broken.write_bytes(b"not zstd at all SECRET-PROMPT-TEXT\n")
+        result = self.scan()
+        self.assertEqual(result.counters.failed_files, 1)
+        self.assertEqual(self.totals("codex")[:4], (100, 0, 0, 10))
+        output = self.stderr.getvalue()
+        self.assertRegex(output, r"略過第 \d+ 個紀錄檔（ZstdError）")
+        self.assertNotIn("rollout-", output)
+        self.assertNotIn("SECRET", output)
+        # 已讀過的原檔被換成截斷的壓縮檔：整個交易回復，數字不變；下一輪再試一次
+        before = self.snapshot()
+        data = zstd_compress(self.codex_file().read_bytes())
+        self.zst_file().write_bytes(data[:-4])
+        self.codex_file().unlink()
+        broken.unlink()
+        result = self.scan()
+        self.assertEqual(result.counters.failed_files, 1)
+        self.assertEqual(self.snapshot(), before)
+        self.zst_file().write_bytes(data)  # 換成完整的檔案（不同大小）後正常重算
+        self.scan()
+        self.assertEqual(self.snapshot(), before)
+
+    def test_failure_while_skipping_the_read_part_closes_the_decompressor(self):
+        """接著讀時丟棄已處理的部分失敗（這裡是記錄的位置比內容長）：解壓器照樣關閉，交易回復（C-02）。"""
+        lines = [codex_turn()] + [codex_record(f"r{i}", T0 + i, inp=1, out=1) for i in range(20)]
+        self.write_zst(self.zst_file(), *lines)
+        self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 5))
+        before = self.snapshot()
+        with self.db() as c:
+            c.execute("UPDATE scan_state SET state = ? WHERE file_key LIKE 'codex%'", (json.dumps({"zpos": 10**9}),))
+            c.commit()
+        real_close = token_stats._Decompressed.close
+        with mock.patch.object(token_stats._Decompressed, "close", autospec=True, side_effect=real_close) as close:
+            result = self.scan()
+        self.assertEqual(close.call_count, 1)
+        self.assertEqual(result.counters.failed_files, 1)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(json.loads(self.scan_row()[2])["zpos"], 10**9)
+
+    def test_skipping_the_read_part_respects_the_time_budget(self):
+        """丟棄已處理的部分時時間用完：這一輪不讀、位置不變，之後照常讀完，結果與一次讀完相同（C-01）。"""
+        lines = [codex_turn()] + [codex_record(f"r{i}", T0 + i, inp=i + 1, out=1) for i in range(20)]
+        self.write_zst(self.zst_file(), *lines)
+        self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 5))
+        before, zpos = self.snapshot(), json.loads(self.scan_row()[2])["zpos"]
+
+        class Expires(token_stats.Budget):
+            """scan() 決定處理這個檔案之後就到時間"""
+            calls = 0
+
+            def exhausted(self):
+                self.calls += 1
+                return self.calls > 1
+
+        real_readline = token_stats._Decompressed.readline
+        with mock.patch.object(token_stats._Decompressed, "readline", autospec=True,
+                               side_effect=real_readline) as readline:
+            result = self.scan(budget=Expires())
+        self.assertEqual(readline.call_count, 0)  # 到時間後不再解壓
+        self.assertEqual(result.counters.failed_files, 0)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(json.loads(self.scan_row()[2])["zpos"], zpos)
+        self.scan()
+        self.assertEqual(self.totals("codex")[:4], (sum(range(1, 21)), 0, 0, 20))
+
+
+class CompressedCodexStdlibTest(CompressedCodexCases, TokenStatsTestCase):
+    backend = "stdlib" if token_stats._stdlib_zstd() is not None else None
+
+
+class CompressedCodexCommandTest(CompressedCodexCases, TokenStatsTestCase):
+    backend = _zstd_cli()
+
+
+class CompressedCodexWithoutDecompressorTest(TokenStatsTestCase):
+    def test_compressed_files_are_left_alone(self):
+        """找不到解壓方式：壓縮檔不列舉，已讀過的原檔被壓縮後數字不變；個數改變時只記一次日誌。"""
+        plain = self.codex_file()
+        self.write(plain, codex_turn(), codex_record("r1", T0, inp=100, out=10))
+        self.scan()
+        target = plain.with_name(plain.name + ".zst")
+        target.write_bytes(b"(\xb5/\xfd not read")  # 不會被開啟
+        plain.unlink()
+        with mock.patch.object(token_stats, "zstd_backend", lambda: None):
+            unread: list[str] = []
+            self.assertEqual(token_stats.list_files(self.dirs, unread), [])
+            self.assertEqual(unread, [f"codex:{ROLLOUT}"])
+            self.scan()
+            self.scan()
+        self.assertEqual(self.totals("codex")[:4], (100, 0, 0, 10))
+        self.assertEqual(self.stderr.getvalue().count("沒有讀，找不到解壓方式"), 1)
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'codex_zst_unread'").fetchone()[0], "1")
 
 
 if __name__ == "__main__":

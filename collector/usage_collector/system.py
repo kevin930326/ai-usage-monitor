@@ -34,7 +34,11 @@ def default_home(environ: Mapping[str, str] = os.environ, windows: bool = IS_WIN
 def executable_fallbacks(name: str, environ: Mapping[str, str] = os.environ, windows: bool = IS_WINDOWS) -> tuple[str, ...]:
     """config.json 與 PATH 都找不到時再試的常見安裝位置。
     macOS：ChatGPT.app 內附的 Codex CLI。Windows：Claude Code 的原生安裝（%USERPROFILE%\\.local\\bin）與
-    npm 全域安裝（%APPDATA%\\npm 的 .cmd）。"""
+    npm 全域安裝（%APPDATA%\\npm 的 .cmd）。
+    zstd（解壓 Codex 的 .jsonl.zst，ADR-0009 第 3 節）：macOS 為 Homebrew（Apple 晶片、Intel）與 MacPorts 的位置；
+    Windows 沒有固定位置，只找 PATH。"""
+    if name == "zstd":
+        return () if windows else ("/opt/homebrew/bin/zstd", "/usr/local/bin/zstd", "/opt/local/bin/zstd")
     if not windows:
         return ("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",) if name == "codex" else ()
     home = environ.get("USERPROFILE") or str(Path.home())

@@ -132,7 +132,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | 服務 | 檔案 | 只取的欄位 |
 |---|---|---|
 | Claude Code | `<claude>/projects/*/<uuid>.jsonl`、`<claude>/projects/*/<uuid>/subagents/*.jsonl` | assistant 行的時間、`message.id`／`requestId`、模型、四種 Token 數、是否為子代理；user 行的時間、`isMeta`、是否為子代理、內容**是否為** `tool_result`（只看型別） |
-| Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl` | `token_usage_record` 的 `response_id`、`usage`、時間；`token_count` 的累計用量與時間；`turn_context` 的模型；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` |
+| Codex CLI | `<codex>/sessions/YYYY/MM/DD/rollout-*.jsonl`、`<codex>/archived_sessions/rollout-*.jsonl`，以及兩處壓縮過的 `rollout-*.jsonl.zst`（以 Python 3.14 以上的標準函式庫或 `zstd` 指令在記憶體中解壓；都沒有時不讀，見 ADR-0009 第 3 節） | `token_usage_record` 的 `response_id`、`usage`、時間；`token_count` 的累計用量與時間；`turn_context` 的模型；`task_complete` 的 `turn_id`、開始與結束時間、`duration_ms` |
 
 不讀憑證、設定、`history.jsonl`、`tool-results/` 或上表以外的檔案。每一行先以位元組比對篩選，解析後立刻只取上表的欄位；資料庫只存數字、時間、服務、模型名稱（白名單，其他記為 `other`）與 ID，`file_key` 只用檔名中的 UUID。例外只記錄類別名稱與檔案序號。
 
