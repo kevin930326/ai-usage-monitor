@@ -799,7 +799,7 @@ def _pb_first(fields, number: int, kind: type):
     return None
 
 
-def _gemini_generation(data) -> tuple[tuple[int, int, int, int, int], str, int | None] | None:
+def _gemini_generation(data) -> tuple[tuple[int, ...], str, int | None] | None:
     """gen_metadata.data → （Token 向量、模型、最後一個步驟的編號）；不是一次生成的列回傳 None。
     欄位（Antigravity 的 ModelUsageStats）：2 input、3 output（含思考）、4 cache_write、5 cache_read、9 思考。"""
     if not isinstance(data, bytes):

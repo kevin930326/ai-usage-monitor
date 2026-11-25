@@ -277,7 +277,8 @@ class UploadTest(TokenSyncTestCase):
         mac.set_tokens(0, 100)
         mac.set_tokens(-1, 50, provider="codex", model="gpt-6.1-sol")
         mac.run(NOW)
-        self.assertEqual([[r["provider"] for r in b] for b in self.relay.uploads()], [["codex", "claude"], ["gemini"]])  # 依日期排序
+        batches = [[r["provider"] for r in b] for b in self.relay.uploads()]
+        self.assertEqual(batches, [["codex", "claude"], ["gemini"]])  # 其餘依日期排序
         self.assertEqual(self.relay.total(mac.relay_id), 157)
 
     def test_old_relay_rejecting_gemini_does_not_block_the_others(self):

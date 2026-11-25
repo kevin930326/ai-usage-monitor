@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest import mock
 
 from usage_collector import token_stats
+
 from .test_token_stats import DAY, SECRETS, T0, TokenStatsTestCase
 
 CONVERSATION = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
