@@ -34,7 +34,11 @@ MAX_LINE_BYTES = 4 * 1024 * 1024
 SKIP_CHUNK_BYTES = 1024 * 1024  # 丟棄過長的行時每次讀多少（每段都扣預算）
 CHUNK_BYTES = 64 * 1024 * 1024  # 每次執行最多處理的位元組（首次掃描分段）
 CHUNK_SECONDS = 15.0
-TASK_CAP_SECONDS = 6 * 3600  # Claude：超過 6 小時視為中斷，以 6 小時計
+# Claude 任務：兩筆回覆之間超過 1 小時沒有動靜（等你核准、等背景工作、離開電腦）時，那整段空檔不算進任務時間
+# （使用者 2026-11-26 決定，取代原本「超過 6 小時以 6 小時計」的上限）
+TASK_IDLE_SECONDS = 3600
+# 任務規則的版本：與資料庫的 meta.task_rules 不同時，Claude 的任務數字以新規則重算一次（`_recount_claude_tasks`）
+TASK_RULES = "2"
 LAST_SEEN_REFRESH = 86400  # 沒有變化的檔案一天更新一次 last_seen
 # 去重的時間窗（ADR-0014 第 1 節）：本機日期早於略過界 D（meta.seen_cutoff_day）的訊息、回應、任務與 Codex 累計差額
 # 不計算也不記錄；D 每次執行最多前進一天到 SEEN_DAYS 天前、只進不退，首次掃描完成前不設定。
@@ -541,18 +545,33 @@ def _claude_line(conn, totals: Totals, st: FileState, line: bytes, counters: Cou
         prompt = st.state.get("prompt")
         if not sidechain and isinstance(prompt, int):
             # 任務：真人提示 → 下一個真人提示之前最後一筆 assistant 行；以第一則回覆的 ID 當任務 ID
+            # 時間 = 最後一筆回覆 − 提示 − 超過 TASK_IDLE_SECONDS 的空檔（跨次掃描接著用 last、idle）
             task = st.state.setdefault("task", msg_id)
             st.state.setdefault("model", model)
-            _count_task(conn, totals, "claude", task, prompt, st.state["model"],
-                        min(ts - prompt, TASK_CAP_SECONDS))
+            last, idle = st.state.get("last"), st.state.get("idle")
+            last = last if type(last) is int else prompt
+            idle = idle if type(idle) is int else 0
+            if ts > last:
+                if ts - last > TASK_IDLE_SECONDS:
+                    idle += ts - last
+                last = ts
+            st.state["last"], st.state["idle"] = last, idle
+            _count_task(conn, totals, "claude", task, prompt, st.state["model"], last - prompt - idle)
     elif kind == "user":
         content = message.get("content")
         # 只判斷是否為 tool_result（型別），不讀文字
         tool_result = isinstance(content, list) and any(
             isinstance(c, dict) and c.get("type") == "tool_result" for c in content)
         meta = obj.get("isMeta") is True
+        # 對話壓縮後的摘要（時間戳可能是好幾小時前的）與自動送出的訊息（背景工作完成通知、其他工作階段的事件等）
+        # 不是真人提示：不切開任務，否則一個長任務被拆成好幾段。來源只看結構欄位 origin.kind（沒有時用 turnOrigin），不讀文字
+        compact_summary = obj.get("isCompactSummary") is True
+        origin = _dict(obj.get("origin")).get("kind")
+        if origin is None:
+            origin = obj.get("turnOrigin")
+        automated = isinstance(origin, str) and origin != "human"
         del obj, message, content
-        if ts is not None and not sidechain and not meta and not tool_result:
+        if ts is not None and not sidechain and not meta and not tool_result and not compact_summary and not automated:
             st.state = {"prompt": ts}
 
 
@@ -1129,6 +1148,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     cutoffs = (history.local_day(now - days * 86400) if days > 0 else "",
                history.local_day(now - min(days or history.HOURLY_TOKENS_DAYS, history.HOURLY_TOKENS_DAYS) * 86400))
     _seen_cutoff(conn)  # 「清除並重新掃描」後刪掉舊的略過界；每個檔案在自己的交易內再讀目前的值
+    _recount_claude_tasks(conn)
     conn.row_factory = sqlite3.Row
     rows = {r["file_key"]: r for r in conn.execute("SELECT * FROM scan_state")}
     conn.row_factory = None
@@ -1207,6 +1227,32 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                 conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('first_scan_done', '1')")
         _advance_seen_window(conn, now)
     return result
+
+
+def _recount_claude_tasks(conn: sqlite3.Connection) -> None:
+    """任務規則改變（`TASK_RULES`）後，把 Claude 的任務數字以新規則重算一次：清掉略過界 D 以後（含）這台電腦的
+    Claude 任務數字與 seen_tasks，Claude 紀錄檔從頭重讀。Token 以 seen_ids 去重，不會重複計入；D 以前的任務
+    重讀時本來就略過（ADR-0014），那些日子保留原本的數字，最長任務的紀錄以它們為底再由重讀往上加。"""
+    if history.meta(conn, "task_rules") == TASK_RULES:
+        return
+    with history._transaction(conn):
+        if history.meta(conn, "task_rules") == TASK_RULES:
+            return  # 另一個收集器剛重算過
+        cutoff = history.meta(conn, "seen_cutoff_day") or ""
+        device_id = history.meta(conn, "device_id") or ""
+        for table in ("daily_tokens", "hourly_tokens"):
+            conn.execute(f"UPDATE {table} SET task_count = 0, task_seconds = 0, longest_task_seconds = 0"
+                         " WHERE device_id = ? AND provider = 'claude' AND day >= ?", (device_id, cutoff))
+        conn.execute("DELETE FROM seen_tasks WHERE provider = 'claude'")
+        conn.execute("UPDATE scan_state SET offset = 0, state = NULL WHERE file_key LIKE 'claude:%'")
+        older = conn.execute("SELECT day, longest_task_seconds FROM daily_tokens WHERE device_id = ?"
+                             " AND provider = 'claude' AND longest_task_seconds > 0"
+                             " ORDER BY longest_task_seconds DESC, day LIMIT 1", (device_id,)).fetchone()
+        _set_record(conn, "longest_task_seconds:claude", older)
+        best = conn.execute("SELECT day, value FROM records WHERE key LIKE 'longest_task_seconds:%' AND value > 0"
+                            " ORDER BY value DESC, day LIMIT 1").fetchone()
+        _set_record(conn, "longest_task_seconds", best)
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_rules', ?)", (TASK_RULES,))
 
 
 def _cleared_meanwhile(conn: sqlite3.Connection, skipped: list[str]) -> bool:

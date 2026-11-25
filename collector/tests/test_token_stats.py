@@ -49,15 +49,23 @@ def claude_assistant(msg_id, ts, inp=0, cw=0, cr=0, out=0, model="claude-opus-5-
     return json.dumps(line, separators=(",", ":") if compact else (", ", ": "))
 
 
-def claude_user(ts, tool_result=False, meta=False, sidechain=False):
+def claude_user(ts, tool_result=False, meta=False, sidechain=False, compact_summary=False, origin=None,
+                turn_origin=None):
     content = ([{"type": "tool_result", "tool_use_id": "t", "content": "SECRET-TOOL-OUTPUT"}]
                if tool_result else "SECRET-PROMPT-TEXT please")
-    return json.dumps({
+    line = {
         "type": "user", "timestamp": iso(ts), "isMeta": meta, "isSidechain": sidechain,
         "cwd": "/Users/fake/secret-project-folder", "gitBranch": "secret-branch",
         "attachment": {"userEmail": "fake.person@example.com", "gitStatus": "M secret.txt"},
         "message": {"role": "user", "content": content},
-    })
+    }
+    if compact_summary:
+        line |= {"isCompactSummary": True, "isVisibleInTranscriptOnly": True}
+    if origin is not None:
+        line["origin"] = {"kind": origin}
+    if turn_origin is not None:
+        line["turnOrigin"] = turn_origin
+    return json.dumps(line)
 
 
 def codex_turn(model="gpt-6.1-sol"):
@@ -479,15 +487,97 @@ class ClaudeTest(TokenStatsTestCase):
         self.assertEqual((totals[5], totals[6]), (2, 150))
         self.assertEqual(self.records()["longest_task_seconds"][0], 120)
 
-    def test_task_split_across_scans_and_cap(self):
+    def test_compaction_and_automatic_messages_do_not_split_a_task(self):
+        # 實際紀錄（2026-11）：自動壓縮後的摘要、背景工作完成通知、其他工作階段的事件都寫成 type == "user" 的行，
+        # 以前被當成新的真人提示，一個 5 小時的任務被切成好幾段；壓縮摘要的時間戳還可能是好幾小時前的
+        m = 60
+        self.write(self.claude_file(),
+                   claude_user(T0, origin="human", turn_origin="human"),
+                   claude_assistant("a1", T0 + 10 * m, out=1),
+                   claude_user(T0 + 30 * m, compact_summary=True, turn_origin="human"),
+                   claude_assistant("a2", T0 + 50 * m, out=1),
+                   claude_user(T0 + 80 * m, origin="task-notification", turn_origin="task_notification"),
+                   claude_assistant("a3", T0 + 100 * m, out=1),
+                   claude_user(T0 + 110 * m, turn_origin="sdk"),  # 沒有 origin：看 turnOrigin
+                   claude_assistant("a4", T0 + 150 * m, out=1),
+                   # 時間戳比任務開始還早好幾個小時的摘要：不能當成任務的開始
+                   claude_user(T0 - 5 * HOUR, compact_summary=True, turn_origin="human"),
+                   claude_assistant("a5", T0 + 160 * m, out=1),
+                   claude_user(T0 + 170 * m, origin="human", turn_origin="human"),
+                   claude_assistant("b1", T0 + 170 * m + 30, out=1))
+        self.scan()
+        totals = self.totals("claude")
+        self.assertEqual((totals[5], totals[6]), (2, 160 * m + 30))
+        self.assertEqual(self.records()["longest_task_seconds"][0], 160 * m)
+
+    def test_older_logs_without_origin_still_split_on_user_lines(self):
+        # 舊版 Claude Code 沒有 origin／turnOrigin：照舊以 type == "user"（非工具結果、非 isMeta）切
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("a1", T0 + 60, out=1),
+                   claude_user(T0 + 100), claude_assistant("a2", T0 + 130, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 90))
+
+    def test_task_split_across_scans_and_idle_gaps(self):
         self.write(self.claude_file(), claude_user(T0), claude_assistant("a1", T0 + 60, out=1))
         self.scan()
         self.write(self.claude_file(), claude_assistant("a2", T0 + 200, out=1))
         self.scan()
         self.assertEqual(self.totals("claude")[5:], (1, 200))
-        self.write(self.claude_file(), claude_user(T0 + 300), claude_assistant("a3", T0 + 300 + 8 * HOUR, out=1))
+        # 10 小時、每 50 分鐘有回覆：沒有上限，全部算
+        start = T0 + 300
+        self.write(self.claude_file(), claude_user(start),
+                   *[claude_assistant(f"b{k}", start + k * 3000, out=1) for k in range(1, 13)])
         self.scan()
-        self.assertEqual(self.totals("claude")[5:], (2, 200 + 6 * HOUR))
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 10 * HOUR))
+        # 超過 1 小時的空檔整段不算（跨次掃描也記得）；剛好 1 小時的照算
+        last = start + 10 * HOUR
+        self.write(self.claude_file(), claude_assistant("c1", last + 3 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 10 * HOUR))
+        self.write(self.claude_file(), claude_assistant("c2", last + 4 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 11 * HOUR))
+        self.assertEqual(self.records()["longest_task_seconds"][0], 11 * HOUR)
+
+    def test_tasks_recounted_once_with_new_rules(self):
+        # 舊版（6 小時上限、壓縮摘要會切開任務）記下的數字：升級後只重算 Claude 的任務，Token 不變
+        self.write(self.claude_file(),
+                   claude_user(T0, origin="human"), claude_assistant("a1", T0 + 600, inp=3, out=1),
+                   claude_user(T0 - 8 * HOUR, compact_summary=True), claude_assistant("a2", T0 + 1000, out=2))
+        self.write(self.codex_file(), codex_turn(), codex_task("t1", T0, T0 + 2000, duration_ms=2_000_000))
+        self.scan()
+        expected = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.db() as c:
+            device = c.execute("SELECT value FROM meta WHERE key = 'device_id'").fetchone()[0]
+            cutoff = c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0]
+            self.assertLess("2026-01-01", cutoff)
+            for table in ("daily_tokens", "hourly_tokens"):
+                c.execute(f"UPDATE {table} SET task_count = 2, task_seconds = 21600 + 600,"
+                          " longest_task_seconds = 21600 WHERE provider = 'claude'")
+            c.execute("UPDATE seen_tasks SET seconds = 21600 WHERE provider = 'claude'")
+            c.executemany("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, 21600, '2026-09-21')",
+                          [("longest_task_seconds",), ("longest_task_seconds:claude",)])
+            # 略過界以前的日子：紀錄檔已不在，重讀時也會略過，保留原本的數字
+            c.execute("INSERT INTO daily_tokens (device_id, day, provider, model, task_count, task_seconds,"
+                      " longest_task_seconds, updated_at) VALUES (?, '2026-01-01', 'claude', 'other', 1, 1500, 1500, 0)",
+                      (device,))
+            c.execute("DELETE FROM meta WHERE key = 'task_rules'")
+            c.commit()
+        self.scan()
+        daily = [r for r in self.table("daily_tokens") if r[0] != "2026-01-01"]
+        self.assertEqual((daily, self.table("hourly_tokens")), expected)
+        self.assertEqual(self.totals("claude")[5:], (2, 1000 + 1500))
+        records = self.records()
+        self.assertEqual(records["longest_task_seconds:claude"], (1500, "2026-01-01"))
+        self.assertEqual(records["longest_task_seconds"], (2000, "2026-09-21"))
+        # 只重算一次：之後的掃描不再清掉
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+        self.write(self.claude_file(), claude_assistant("a3", T0 + 1100, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 1100 + 1500))
 
     def test_subagent_file_counts_tokens_only(self):
         self.write(self.project / SESSION / "subagents" / "agent-1.jsonl",
