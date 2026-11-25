@@ -19,12 +19,14 @@ struct ServiceStatusRow: Equatable, Identifiable {
         ServiceStatusSummary.explanation(health: health, quotaExhausted: quotaExhausted, provider: provider)
     }
 
-    /// 快照中的服務（依顯示順序）各一列
+    /// 快照中的服務（依顯示順序）各一列。沒有公開狀態頁的服務（Gemini）只在額度用完時列出：
+    /// 否則它的狀態永遠是「無法取得」，正常時那一行會一直多出「（其他無法取得）」
     static func rows(snapshot: UsageSnapshot, status: ServiceStatusFile?, now: Date) -> [ServiceStatusRow] {
-        snapshot.orderedProviderKeys.map { key in
-            ServiceStatusRow(provider: key, health: ServiceStatusSummary.health(status, provider: key, now: now),
-                             quotaExhausted: ServiceStatusSummary.quotaExhausted(snapshot, provider: key, now: now),
-                             incidentURL: status?.providers[key]?.disruptionLink)
+        snapshot.orderedProviderKeys.compactMap { key in
+            let exhausted = ServiceStatusSummary.quotaExhausted(snapshot, provider: key, now: now)
+            guard ServiceStatusPage.url(key) != nil || exhausted else { return nil }
+            return ServiceStatusRow(provider: key, health: ServiceStatusSummary.health(status, provider: key, now: now),
+                                    quotaExhausted: exhausted, incidentURL: status?.providers[key]?.disruptionLink)
         }
     }
 
@@ -75,7 +77,7 @@ struct ServiceStatusLine: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
-        .help(unknown ? "收集器每 5 分鐘讀一次 Anthropic 與 OpenAI 的公開狀態頁；目前沒有 30 分鐘內的結果" : "Anthropic 與 OpenAI 公開狀態頁的結果（收集器每 5 分鐘讀一次）")
+        .help(unknown ? "收集器每 5 分鐘讀一次 Anthropic 與 OpenAI 的公開狀態頁；目前沒有 30 分鐘內的結果" : "Anthropic 與 OpenAI 公開狀態頁的結果（收集器每 5 分鐘讀一次；Gemini 沒有公開狀態頁）")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
     }

@@ -187,7 +187,12 @@ describe("POST /tokens/daily", () => {
     const device = await addDevice();
     const res = await upload(device.key, []);
     assert.deepEqual(await res.json(), { device_id: device.device_id, accepted: 0 });
-    await upload(device.key, [row(), row({ provider: "codex", model: "gpt-6.1-sol" })]);
+    const res2 = await upload(device.key, [
+      row(),
+      row({ provider: "codex", model: "gpt-6.1-sol" }),
+      row({ provider: "gemini", model: "gemini-4-neon" }),
+    ]);
+    assert.equal(res2.status, 200);
     assert.equal(db.batches, 2);
     const data = await download();
     assert.match(String(data.devices[0].last_upload_at), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
@@ -242,7 +247,7 @@ describe("POST /tokens/daily", () => {
       row({ day: "2026/10/01" }),
       row({ day: daysAgo(401) }),
       row({ day: daysAgo(-2) }),
-      row({ provider: "gemini" }),
+      row({ provider: "bard" }),
       row({ model: "my secret project" }),
       row({ model: `claude-${"x".repeat(60)}` }),
       row({ input_tokens: -1 }),

@@ -4,11 +4,15 @@ import Foundation
 // 資料來自收集器寫的 history.sqlite3（`daily_tokens`、`hourly_tokens`、`records`；讀取層在 Mac App 的 HistoryStore）；
 // 這裡只有純計算，Linux 也能測試。日期是收集器以本機時區寫入的 `YYYY-MM-DD`。
 
-/// 全部／Claude／Codex 切換。
+/// 全部／Claude／Codex／Gemini 切換。
 public enum TokenScope: String, CaseIterable, Identifiable, Sendable {
     case all
     case claude
     case codex
+    case gemini
+
+    /// 有 Token 統計的服務，依 `ProviderInfo` 的固定順序（Gemini 來自 Antigravity 的對話紀錄，ADR-0023）
+    public static let providers = ["claude", "codex", "gemini"]
 
     public var id: String { rawValue }
 
@@ -17,6 +21,7 @@ public enum TokenScope: String, CaseIterable, Identifiable, Sendable {
         case .all: "全部"
         case .claude: "Claude"
         case .codex: "Codex"
+        case .gemini: "Gemini"
         }
     }
 
@@ -24,7 +29,7 @@ public enum TokenScope: String, CaseIterable, Identifiable, Sendable {
         self == .all || provider == rawValue
     }
 
-    /// `records` 的鍵：全部沒有後綴，各服務加 `:claude`／`:codex`
+    /// `records` 的鍵：全部沒有後綴，各服務加 `:claude`／`:codex`／`:gemini`
     public func recordKey(_ base: String) -> String {
         self == .all ? base : "\(base):\(rawValue)"
     }
@@ -182,7 +187,7 @@ public struct TokenStatsData: Equatable, Sendable {
 
     /// 這個範圍有資料的服務（給切換列決定要不要顯示）
     public var providers: [String] {
-        ["claude", "codex"].filter { p in
+        TokenScope.providers.filter { p in
             days.contains { $0.provider == p && $0.counts.value(.includingCacheRead) > 0 } || hasRecord(":\(p)")
         }
     }

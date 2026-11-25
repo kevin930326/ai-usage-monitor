@@ -69,7 +69,7 @@ Antigravity 開著時有一個官方的 `language_server`（`/Applications/Antig
 | 啟用 | 用過 Antigravity（`~/.gemini/antigravity` 存在，只看是否存在、不讀內容）就啟用：`detect-providers.sh`、`setup.py`、Windows 的 `install-task.ps1 -WithQuota`。沒有 `config.json` 或沒有 `enabled_providers` 時**不**啟用（維持舊版安裝只有 Claude、Codex 的行為） | Antigravity 沒開時無法得知登入狀態；沒用的人不該一直看到錯誤 |
 | 頻率 | 與其他服務相同，每 5 分鐘 | 使用者決定照一般服務處理 |
 
-App 端：服務順序 Claude、Codex、Gemini；識別色紫色（深色 `#A78BFA`、淺色 `#6D4FC9`），避開「全部」熱力圖的藍色；原創圖示「雙子」（兩個並排、部分重疊的圓，重疊的透鏡鏤空），不收錄 Google 的 Gemini 標誌（設計 skill 第 2、3 節）。Mac 瀏海的額度卡片在有 Gemini 時多一欄。鎖定畫面卡片、動態島展開版面與中型小工具高約 160pt，只放得下兩個服務：三個服務時只列剩餘最少的兩個（`UsageActivityState.compactProviders`，有錯誤的服務排在後面），剩餘最少的額度一定在裡面；iPhone App、大型小工具、Mac 與手錶照常列出全部。
+App 端：服務順序 Claude、Codex、Gemini；識別色紫色（深色 `#A78BFA`、淺色 `#6D4FC9`），避開「全部」熱力圖的藍色；原創圖示「四芒星」（凹邊、腰身飽滿的單色四芒星；最初是兩個重疊的圓「雙子」，使用者希望更接近 Gemini 的印象後改成這個），不收錄 Google 的 Gemini 標誌（細腰、漸層的那個）（設計 skill 第 2、3 節）。Mac 瀏海的額度卡片在有 Gemini 時多一欄。鎖定畫面卡片、動態島展開版面與中型小工具高約 160pt，只放得下兩個服務：三個服務時只列剩餘最少的兩個（`UsageActivityState.compactProviders`，有錯誤的服務排在後面），剩餘最少的額度一定在裡面；iPhone App、大型小工具、Mac 與手錶照常列出全部。
 
 ## 後果
 

@@ -37,6 +37,8 @@ from .paths import CONFIG_PATH
 UPLOAD_INTERVAL = 3600
 DOWNLOAD_INTERVAL = 3600
 BATCH_ROWS = 400
+GEMINI = "gemini"
+GEMINI_RETRY = 86400  # 中繼不認得 gemini 時，隔多久再試
 MAX_BATCHES = 5  # 一次執行最多 2,000 列；首次上傳一年的資料分幾輪（每 5 分鐘一輪）
 TIME_BUDGET = 60  # 秒：一次執行花在上傳的時間上限（排程的執行時間上限是 4 分鐘）
 BACKOFF = (300, 900, 3600, 21600)
@@ -130,11 +132,13 @@ def _until(now: int) -> str:
     return time.strftime("%Y-%m-%d", time.gmtime(now + 86400))
 
 
-def pending_rows(conn: sqlite3.Connection, since: str,
-                 until: str = "9999-12-31") -> list[tuple[tuple[str, str, str], tuple[int, ...], str]]:
+def pending_rows(conn: sqlite3.Connection, since: str, until: str = "9999-12-31",
+                 now: int | None = None) -> list[tuple[tuple[str, str, str], tuple[int, ...], str]]:
     """本機 device_id、`since`～`until`、和上次成功上傳時不同的列：[(（day, provider, model）, 數值, 雜湊)]。
-    中繼會拒絕的列（日期超出範圍、數值超過上限）不列入：一列被拒整批都會被拒，其他的列就永遠傳不上去。"""
+    中繼會拒絕的列（日期超出範圍、數值超過上限）不列入：一列被拒整批都會被拒，其他的列就永遠傳不上去。
+    Gemini 的列排在最後、單獨成批：還沒更新的中繼不認得 gemini（422），這時 `GEMINI_RETRY` 內不再列入（ADR-0023）。"""
     device_id = history.meta(conn, "device_id") or ""
+    skip_gemini = now is not None and now < _meta_int(conn, "gemini_upload_after")
     uploaded = {(d, p, m): h for d, p, m, h in conn.execute("SELECT day, provider, model, hash FROM upload_state")}
     result = []
     for row in conn.execute(f"SELECT day, provider, model, {', '.join(FIELDS)} FROM daily_tokens"
@@ -142,8 +146,11 @@ def pending_rows(conn: sqlite3.Connection, since: str,
                             (device_id, since, until)):
         key, values = (row[0], row[1], row[2]), tuple(int(v) for v in row[3:])
         digest = _row_hash(row)
+        if skip_gemini and key[1] == GEMINI:
+            continue
         if uploaded.get(key) != digest and _valid_key(key[1], key[2]) and all(0 <= v <= MAX_VALUE for v in values):
             result.append((key, values, digest))
+    result.sort(key=lambda r: r[0][1] == GEMINI)  # 穩定排序：其餘維持日期、服務、模型的順序
     return result
 
 
@@ -168,21 +175,30 @@ def _adopt_device_id(conn: sqlite3.Connection, relay_id: str) -> bool:
 def upload(conn: sqlite3.Connection, url: str, key: str, now: int) -> bool:
     """上傳有變動的列；回傳是否還有沒傳完的列（下一輪接著傳）。失敗時丟出例外，已成功的批次保留進度。"""
     since, until = history.local_day(now - SYNC_DAYS * 86400), _until(now)
-    pending = pending_rows(conn, since, until)
+    pending = pending_rows(conn, since, until, now)
     if not pending and history.meta(conn, "relay_device_id"):
         return False
     started = time.monotonic()
     for _ in range(MAX_BATCHES):
-        batch = pending[:BATCH_ROWS]
+        gemini = pending[0][0][1] == GEMINI if pending else False
+        batch = [r for r in pending[:BATCH_ROWS] if (r[0][1] == GEMINI) == gemini]
         rows = [{"day": k[0], "provider": k[1], "model": k[2], **dict(zip(FIELDS, values))} for k, values, _ in batch]
-        response = request_json(f"{url}/tokens/daily", {"Authorization": f"Bearer {key}"}, body={"rows": rows})
+        try:
+            response = request_json(f"{url}/tokens/daily", {"Authorization": f"Bearer {key}"}, body={"rows": rows})
+        except HTTPStatusError as e:
+            if not (gemini and e.status == 422):
+                raise
+            # 中繼還是舊版（不認得 gemini）：其他服務已傳完，Gemini 一天後再試；不算失敗
+            with history._transaction(conn):
+                _set_meta(conn, gemini_upload_after=now + GEMINI_RETRY)
+            return False
         relay_id = response.get("device_id") if isinstance(response, dict) else None
         if not isinstance(relay_id, str) or not _DEVICE_RE.match(relay_id) or response.get("accepted") != len(rows):
             raise ProviderError("回應格式不對")
         with history._transaction(conn):
             changed = _adopt_device_id(conn, relay_id)
             _mark_uploaded(conn, batch, now)
-        pending = pending_rows(conn, since, until) if changed else pending[len(batch):]
+        pending = pending_rows(conn, since, until, now) if changed else pending[len(batch):]
         if not pending:
             return False
         if time.monotonic() - started > TIME_BUDGET:
@@ -429,7 +445,7 @@ def status(path: Path | None = None) -> dict:
                 "sync_status", "sync_last_success")
         result: dict = {k: history.meta(conn, k) for k in keys}
         now = int(time.time())
-        result["pending_rows"] = len(pending_rows(conn, history.local_day(now - SYNC_DAYS * 86400), _until(now)))
+        result["pending_rows"] = len(pending_rows(conn, history.local_day(now - SYNC_DAYS * 86400), _until(now), now))
         result["devices"] = conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0]
         return result
     finally:

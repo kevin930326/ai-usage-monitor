@@ -117,7 +117,7 @@ public sealed record ProviderWindow(string Provider, UsageWindow Window)
 public static class ProviderInfo
 {
     public const string NoProvidersTitle = "沒有啟用任何服務";
-    public const string NoProvidersHint = "在這台電腦或 Mac 登入 Claude Code 或 Codex CLI 後，重新執行收集器的安裝腳本（-WithQuota）。";
+    public const string NoProvidersHint = "在這台電腦或 Mac 登入 Claude Code 或 Codex CLI（或用過 Antigravity）後，重新執行收集器的安裝腳本（-WithQuota）。";
 
     public static string DisplayName(string key) => key switch
     {

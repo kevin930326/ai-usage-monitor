@@ -93,7 +93,7 @@ internal static class RingDrawing
     }
 }
 
-/// <summary>原創的服務圖示（設計 skill 第 2 節，viewBox 0 0 24 24）：Claude 八芒星、Codex 六瓣圓雲（中間鏤空 >_）、Gemini 雙子（兩個重疊的圓，透鏡鏤空）。</summary>
+/// <summary>原創的服務圖示（設計 skill 第 2 節，viewBox 0 0 24 24）：Claude 八芒星、Codex 六瓣圓雲（中間鏤空 >_）、Gemini 四芒星（凹邊、飽滿的腰身）。</summary>
 internal static class ProviderIcons
 {
     public static readonly Geometry Claude = CreateClaude();
@@ -133,10 +133,11 @@ internal static class ProviderIcons
 
     private static Geometry CreateGemini()
     {
-        // 兩個半徑 7 的圓，圓心 (8.5,12)、(15.5,12)；重疊的透鏡鏤空（Xor）
-        var left = new EllipseGeometry(new Point(8.5, 12), 7, 7);
-        var right = new EllipseGeometry(new Point(15.5, 12), 7, 7);
-        return Frozen(Geometry.Combine(left, right, GeometryCombineMode.Xor, null));
+        // 原創四芒星：尖端在上下左右，四邊是向內凹的二次曲線（控制點往外 2.2，腰身飽滿）
+        var star = Geometry.Parse("M12 1 Q14.2 9.8 23 12 Q14.2 14.2 12 23 Q9.8 14.2 1 12 Q9.8 9.8 12 1Z");
+        // 實心＋0.7 寬、圓角接合的同色描邊（同 Claude）
+        var outline = star.GetWidenedPathGeometry(new Pen(Brushes.Black, 0.7) { LineJoin = PenLineJoin.Round });
+        return Frozen(Geometry.Combine(star, outline, GeometryCombineMode.Union, null));
     }
 
     private static Geometry Frozen(Geometry g)

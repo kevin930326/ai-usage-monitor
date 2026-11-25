@@ -60,9 +60,9 @@ export const TOKEN_FIELDS = [
   "task_seconds",
   "longest_task_seconds",
 ] as const;
-const PROVIDERS = ["claude", "codex"];
+const PROVIDERS = ["claude", "codex", "gemini"];
 // 與收集器的 token_stats.normalize_model 相同（ADR-0009 第 4 節）；其他名稱收集器已記為 other
-const MODEL = /^(claude-|gpt-|codex-|o[0-9])[a-z0-9._-]*$/;
+const MODEL = /^(claude-|gpt-|codex-|o[0-9]|gemini-)[a-z0-9._-]*$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DEVICE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 // 裝置名稱會顯示在 Mac 面板：只收短的單行文字
@@ -129,7 +129,7 @@ export function dayInRange(day: string, now: number): boolean {
 function sanitizeRow(r: unknown, now: number): Result<TokenRow> {
   if (!isObject(r)) return { ok: false, error: "每一列必須是物件" };
   if (!isDay(r.day) || !dayInRange(r.day, now)) return { ok: false, error: `day 必須是 ${OLDEST_DAYS} 天內到明天的日期` };
-  if (typeof r.provider !== "string" || !PROVIDERS.includes(r.provider)) return { ok: false, error: "provider 只能是 claude 或 codex" };
+  if (typeof r.provider !== "string" || !PROVIDERS.includes(r.provider)) return { ok: false, error: "provider 只能是 claude、codex 或 gemini" };
   const model = r.model;
   if (typeof model !== "string" || model.length > 64 || (model !== "other" && !MODEL.test(model))) {
     return { ok: false, error: "model 名稱不合法" };

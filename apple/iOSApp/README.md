@@ -1,6 +1,6 @@
 # iOS App
 
-讀取[中繼 API](../../relay/) 並顯示 Claude 與 Codex 的剩餘額度。資料模型、解析與顏色規則來自 [UsageKit](../UsageKit/)。
+讀取[中繼 API](../../relay/) 並顯示 Claude、Codex 與 Gemini 的剩餘額度。資料模型、解析與顏色規則來自 [UsageKit](../UsageKit/)。
 
 | 畫面 | 內容 |
 |---|---|
