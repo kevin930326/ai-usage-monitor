@@ -192,10 +192,11 @@ def _google_products(incident: dict) -> list[str]:
 
 def parse_google(data: object) -> dict:
     """Google Cloud 的 incidents.json（陣列）縮成與 Statuspage 相同的欄位：沒有 `end` 的相關事故為進行中；
-    整體狀態取最嚴重的事故，元件是受影響的相關產品（都算「可能影響」）。"""
+    整體狀態與元件（受影響的相關產品，都算「可能影響」）由所有相關事故決定，事故清單依影響程度由重到輕排列後
+    才套用筆數上限，資訊公告不會擠掉中斷事故（usage.json 只放前 3 筆）。"""
     if not isinstance(data, list):
         raise ProviderError("狀態頁格式不符")
-    incidents: list[dict] = []
+    found: list[tuple[dict, list[str]]] = []
     affected: dict[str, str] = {}
     order = ("none", "minor", "major", "critical")
     worst = "none"
@@ -204,22 +205,24 @@ def parse_google(data: object) -> dict:
             continue
         products = _google_products(i)
         name = _text(i.get("external_desc"))
-        if not products or not name or len(incidents) >= MAX_ITEMS:
+        if not products or not name:
             continue
         status_impact = i.get("status_impact")
         impact = GOOGLE_IMPACT.get(status_impact, "minor") if isinstance(status_impact, str) else "minor"
         if impact != "none" and i.get("severity") == "high":
             impact = order[min(order.index(impact) + 1, len(order) - 1)]
         incident_id = _incident_id(i.get("id"))
-        incidents.append({"name": name, "impact": impact,
-                          "url": f"{PAGES['gemini']}/incidents/{incident_id}" if incident_id else None,
-                          "started_at": _aware_iso(i.get("begin"))})
+        found.append(({"name": name, "impact": impact,
+                       "url": f"{PAGES['gemini']}/incidents/{incident_id}" if incident_id else None,
+                       "started_at": _aware_iso(i.get("begin"))}, products))
         worst = max(worst, impact, key=order.index)
         if impact != "none":
             for product in products:
                 state = "major_outage" if impact in ("major", "critical") else "partial_outage"
                 if affected.get(product) != "major_outage":
                     affected[product] = state
+    # 穩定排序：同等級保留狀態頁的順序
+    incidents = [i for i, _ in sorted(found, key=lambda f: -order.index(f[0]["impact"]))][:MAX_ITEMS]
     return {
         "indicator": worst,
         "description": None,

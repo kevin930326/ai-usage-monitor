@@ -177,18 +177,38 @@ class GoogleTest(unittest.TestCase):
         self.assertTrue(data["incidents_checked"])
         self.assertIsNone(data["error"])
         self.assertEqual([(i["name"], i["impact"], i["url"]) for i in data["incidents"]], [
-            ("Antigravity requests failing", "minor", "https://status.cloud.google.com/incidents/aaa"),
             ("Renamed product", "major", "https://status.cloud.google.com/incidents/ddd"),
-            ("Information only", "none", "https://status.cloud.google.com/incidents/eee"),
+            ("Antigravity requests failing", "minor", "https://status.cloud.google.com/incidents/aaa"),
             ("Weird id", "minor", None),
+            ("Information only", "none", "https://status.cloud.google.com/incidents/eee"),
         ])
-        self.assertEqual(data["incidents"][0]["started_at"], "2026-10-24T02:05:00Z")
+        self.assertEqual(data["incidents"][1]["started_at"], "2026-10-24T02:05:00Z")
         self.assertEqual(data["components"], [
             {"name": "Google Antigravity", "status": "major_outage", "related": True},
             {"name": "Gemini Code Assist", "status": "partial_outage", "related": True},
         ])
         self.assertNotIn("long body", json.dumps(data))
         self.assertNotIn("BigQuery", json.dumps(data))
+
+    def test_information_notices_do_not_hide_an_outage(self):
+        """審查 C-01：資訊公告再多也不會擠掉後面的中斷；整體狀態與輸入順序無關，usage.json 的前 3 筆含中斷"""
+        notices = [google(f"n{k}", f"Notice {k}", [CODE_ASSIST], impact="SERVICE_INFORMATION") for k in range(10)]
+        outage = google("out", "Antigravity down", [ANTIGRAVITY], impact="SERVICE_OUTAGE")
+        for data in (notices + [outage], [outage] + notices, notices[:3] + [outage] + notices[3:]):
+            with self.subTest(position=data.index(outage)):
+                parsed = service_status.parse_google(data)
+                self.assertEqual(parsed["indicator"], "major")
+                self.assertEqual(parsed["components"],
+                                 [{"name": "Google Antigravity", "status": "major_outage", "related": True}])
+                self.assertEqual(len(parsed["incidents"]), service_status.MAX_ITEMS)
+                self.assertEqual(parsed["incidents"][0]["name"], "Antigravity down")
+                with tempfile.TemporaryDirectory() as d:
+                    path = Path(d) / "service-status.json"
+                    path.write_text(json.dumps({"schema_version": 1, "updated_at": service_status.iso_utc(NOW),
+                                                "providers": {"gemini": parsed}}))
+                    snap = {"providers": {"gemini": {"error": None, "windows": []}}}
+                    service_status.annotate(snap, path, now=NOW)
+                self.assertEqual(snap["providers"]["gemini"]["incidents"][0]["impact"], "major")
 
     def test_quiet_and_bad_format(self):
         self.assertEqual(service_status.parse_google([])["indicator"], "none")
