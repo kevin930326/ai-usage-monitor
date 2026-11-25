@@ -1704,6 +1704,23 @@ class CompressedCodexCases:
         self.scan()
         self.assertEqual(self.snapshot(), before)
 
+    def test_failure_while_skipping_the_read_part_closes_the_decompressor(self):
+        """接著讀時丟棄已處理的部分失敗（這裡是記錄的位置比內容長）：解壓器照樣關閉，交易回復（C-02）。"""
+        lines = [codex_turn()] + [codex_record(f"r{i}", T0 + i, inp=1, out=1) for i in range(20)]
+        self.write_zst(self.zst_file(), *lines)
+        self.scan(budget=token_stats.Budget(bytes_left=len(lines[1]) * 5))
+        before = self.snapshot()
+        with self.db() as c:
+            c.execute("UPDATE scan_state SET state = ? WHERE file_key LIKE 'codex%'", (json.dumps({"zpos": 10**9}),))
+            c.commit()
+        real_close = token_stats._Decompressed.close
+        with mock.patch.object(token_stats._Decompressed, "close", autospec=True, side_effect=real_close) as close:
+            result = self.scan()
+        self.assertEqual(close.call_count, 1)
+        self.assertEqual(result.counters.failed_files, 1)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(json.loads(self.scan_row()[2])["zpos"], 10**9)
+
 
 class CompressedCodexStdlibTest(CompressedCodexCases, TokenStatsTestCase):
     backend = "stdlib" if token_stats._stdlib_zstd() is not None else None

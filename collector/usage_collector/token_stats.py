@@ -807,11 +807,13 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
         elif st.offset == size:
             at_end = True  # 已經讀完（從頭重算時 offset 是 0，不會走到這裡，除非是空檔）
         else:
-            src = reader = _Decompressed(fh, zstd_backend() or "")
-            reader.skip(st.state.pop("zpos", 0))
-            st.offset = reader.tell()
-        try:
-            at_end = at_end or _read_lines(conn, f, src, st, totals, budget, counters)
+            src = _Decompressed(fh, zstd_backend() or "")
+            st.offset = st.state.pop("zpos", 0)
+        try:  # 丟棄已處理的部分也在裡面：任何例外（含中斷）都會結束並回收 zstd
+            if isinstance(src, _Decompressed):
+                src.skip(st.offset)
+            if not at_end:
+                at_end = _read_lines(conn, f, src, st, totals, budget, counters)
         finally:
             if src is not fh:
                 src.close()
