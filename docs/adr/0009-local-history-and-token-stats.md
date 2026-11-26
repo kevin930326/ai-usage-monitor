@@ -88,7 +88,7 @@ CREATE TABLE scan_state (
   offset     INTEGER NOT NULL,  -- 已處理到的位元組（只處理到最後一個完整的換行）
   source     TEXT,              -- Codex：record / token_count（第 4 節）
   last_total TEXT,              -- Codex 用 token_count 時，上一筆累計值（JSON 數字陣列）
-  state      TEXT,              -- 跨次掃描要接著用的狀態（JSON）：Claude 進行中任務的開始時間、第一則回覆的 ID 與模型；
+  state      TEXT,              -- 跨次掃描要接著用的狀態（JSON）：Claude 進行中任務的開始時間、第一則回覆的 ID、模型、最後一筆回覆的時間與已扣掉的空檔；
                                 -- Codex 目前的模型（turn_context）
   last_seen  INTEGER NOT NULL   -- 超過 90 天沒看到這個檔案就刪除該列
 );
@@ -192,7 +192,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 - **Codex 的重算**：每個檔案計入的數字同時記在 `file_tokens`。累計差值只在「從上次的位置接著讀」時正確，所以以下兩種情況都**先從 `daily_tokens`／`hourly_tokens` 扣掉該檔在 `file_tokens` 的貢獻、清空該檔的 `file_tokens` 與 `last_total`，再從頭重掃該檔**（同一個交易內完成）：(1) 檔案被改寫（第 7 節）；(2) 已用 `token_count` 的檔案之後出現 `token_usage_record`（來源改為 record）。來源一旦是 record 就不再改回。以測試驗證：截斷、改寫、compaction 後重掃、先只有 `token_count` 再追加重疊或不重疊的 record，結果都與一次讀完整個檔案相同，重複執行不改變統計。
 - **日期與時區**：以紀錄的 `timestamp` 換算成**掃描當下**的本機時區取日期與小時；之後改時區不回頭重算。限制：旅行或另一台電腦在不同時區時，第二層合併的「同一天」不是同一個 24 小時（ADR-0011 第 1 節）。
 - **模型名稱**：前綴白名單 `claude-`、`gpt-`、`codex-`、`o` 加數字（例如 `o4-mini`），且只含 `[a-z0-9._-]`、最長 64 字；其他（自訂別名、proxy、`<synthetic>`）一律記為 `other`。第二層會上傳模型名稱，所以用白名單而不是字元集。
-- **任務時間**：Codex 用 `task_complete.duration_ms`（沒有時用 `completed_at − started_at`）。Claude：同一檔、非 sidechain，從一個「真人提示」（`type == "user"`、不是 `tool_result`、不是 `isMeta`）到下一個真人提示之前最後一筆 assistant 行的時間差；超過 6 小時視為中斷，以 6 小時計；sidechain（子代理）只計 Token、不另算任務。任務歸到**開始**那天。
+- **任務時間**：Codex 用 `task_complete.duration_ms`（沒有時用 `completed_at − started_at`）。Claude：同一檔、非 sidechain，從一個「真人提示」（`type == "user"`、不是 `tool_result`、不是 `isMeta`、不是對話壓縮的摘要 `isCompactSummary`，而且來源 `origin.kind`（沒有時用 `turnOrigin`）沒有或是 `human`：背景工作完成通知、其他工作階段的事件等自動送出的訊息不算；2026-11-26 修正，之前一個長任務會在每次壓縮與通知時被切開，壓縮摘要的時間戳還可能是好幾小時前的）到下一個真人提示之前最後一筆 assistant 行的時間差，扣掉其間任何超過 1 小時沒有動靜的空檔（提示到第一筆回覆、兩筆回覆之間都算；等你核准、等背景工作、離開電腦；整段不算，剛好 1 小時的照算）；不設上限（使用者 2026-11-26 決定，取代原本「超過 6 小時以 6 小時計」）。規則改變時以 `meta.task_rules` 記版本，收集器以新規則重算一次：範圍是開始時的略過界 D 以後（`meta.task_recount_from`，重算期間 D 不前進），Claude 主紀錄檔從頭重讀（Token 以 `seen_ids` 去重不變），新規則的任務先記在暫存表 `task_recount`、重讀到的舊任務開頭記在 `task_recount_seen`，全部讀完才在一個交易內換上：只取代重讀到的舊任務（紀錄檔已被刪除的照舊保留），每日／每小時的列以差額更新（任務改歸到沒有列的日期、小時或模型時新增只有任務的列，但不新增保留期間以外或 `meta.token_days_from` 以前的日子），最長任務的個人紀錄保留範圍以前的舊值，也不從 `meta.token_days_from` 以前的任務算回「清除歷史」清掉的紀錄；重算中有主紀錄檔打不開、被換掉或處理失敗時先不換上、下一輪再試，最多等 1 小時（`meta.task_recount_waiting`），之後照樣換上，那個檔案的舊任務和已刪除的一樣保留；換上前顯示的數字不變（審查 C-01、C-02、C-04，第 2、3 輪）；sidechain（子代理）只計 Token、不另算任務。任務歸到**開始**那天。
 - **連續使用天數**：當天任一服務的 Token > 0 即算使用。
 - **「本週」與「上週」**：本機時間星期一 00:00 起算的日曆週（Token 統計）；額度相關的「本週走勢」則對齊各額度自己的重置時間。
 - **額度消耗**（ADR-0011 第一層）：同一額度相鄰兩筆 `used_pct` 的正差值；`resets_at` 改變（超過 10 分鐘，或一筆有、一筆沒有），或 `used_pct` 下降到舊值的一半以下（含一半）時視為重置，該段以新值計。其他的下降是服務小幅下修（例如 Claude 的整數 % 四捨五入改變），不算重置、該段的消耗記 0、近期速度不從那裡重新起算（使用者 2026-10-24 決定，night3 的 F-02 選項 (b)；小幅下修後又用回原值以上時，回升的部分照算，可能略為高估）。兩次收集之間沒有 `collector_runs` 紀錄超過 15 分鐘的時段標記為「沒有紀錄」。限制：Claude 的 `used_pct` 是整數（ADR-0006），每小時的消耗多數為 0 或 1 個百分點，熱力圖解析度較粗。
@@ -276,4 +276,4 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 1. 保留期間預設 1 年；保留期間不套用到 `records`（個人紀錄）與 `seen_ids`（去重表）（第 5 節）。
 2. Token：資料庫與上傳格式分開存 `input`、`cache_write`、`cache_read`、`output`；「本週 Token」等主數字 = `input + cache_write + output`，滑鼠移上去顯示 `cache_read`（第 4 節）。
-3. Claude 任務時間：同一檔、非 sidechain，從真人提示到下一個真人提示之前最後一筆 assistant 行，上限 6 小時（第 4 節）。
+3. Claude 任務時間：同一檔、非 sidechain，從真人提示（不含壓縮摘要與自動送出的訊息）到下一個真人提示之前最後一筆 assistant 行，扣掉其間超過 1 小時的空檔（含提示到第一筆回覆），不設上限（第 4 節）。

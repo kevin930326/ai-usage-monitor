@@ -49,15 +49,23 @@ def claude_assistant(msg_id, ts, inp=0, cw=0, cr=0, out=0, model="claude-opus-5-
     return json.dumps(line, separators=(",", ":") if compact else (", ", ": "))
 
 
-def claude_user(ts, tool_result=False, meta=False, sidechain=False):
+def claude_user(ts, tool_result=False, meta=False, sidechain=False, compact_summary=False, origin=None,
+                turn_origin=None):
     content = ([{"type": "tool_result", "tool_use_id": "t", "content": "SECRET-TOOL-OUTPUT"}]
                if tool_result else "SECRET-PROMPT-TEXT please")
-    return json.dumps({
+    line = {
         "type": "user", "timestamp": iso(ts), "isMeta": meta, "isSidechain": sidechain,
         "cwd": "/Users/fake/secret-project-folder", "gitBranch": "secret-branch",
         "attachment": {"userEmail": "fake.person@example.com", "gitStatus": "M secret.txt"},
         "message": {"role": "user", "content": content},
-    })
+    }
+    if compact_summary:
+        line |= {"isCompactSummary": True, "isVisibleInTranscriptOnly": True}
+    if origin is not None:
+        line["origin"] = {"kind": origin}
+    if turn_origin is not None:
+        line["turnOrigin"] = turn_origin
+    return json.dumps(line)
 
 
 def codex_turn(model="gpt-6.1-sol"):
@@ -479,15 +487,331 @@ class ClaudeTest(TokenStatsTestCase):
         self.assertEqual((totals[5], totals[6]), (2, 150))
         self.assertEqual(self.records()["longest_task_seconds"][0], 120)
 
-    def test_task_split_across_scans_and_cap(self):
+    def test_compaction_and_automatic_messages_do_not_split_a_task(self):
+        # 實際紀錄（2026-11）：自動壓縮後的摘要、背景工作完成通知、其他工作階段的事件都寫成 type == "user" 的行，
+        # 以前被當成新的真人提示，一個 5 小時的任務被切成好幾段；壓縮摘要的時間戳還可能是好幾小時前的
+        m = 60
+        self.write(self.claude_file(),
+                   claude_user(T0, origin="human", turn_origin="human"),
+                   claude_assistant("a1", T0 + 10 * m, out=1),
+                   claude_user(T0 + 30 * m, compact_summary=True, turn_origin="human"),
+                   claude_assistant("a2", T0 + 50 * m, out=1),
+                   claude_user(T0 + 80 * m, origin="task-notification", turn_origin="task_notification"),
+                   claude_assistant("a3", T0 + 100 * m, out=1),
+                   claude_user(T0 + 110 * m, turn_origin="sdk"),  # 沒有 origin：看 turnOrigin
+                   claude_assistant("a4", T0 + 150 * m, out=1),
+                   # 時間戳比任務開始還早好幾個小時的摘要：不能當成任務的開始
+                   claude_user(T0 - 5 * HOUR, compact_summary=True, turn_origin="human"),
+                   claude_assistant("a5", T0 + 160 * m, out=1),
+                   claude_user(T0 + 170 * m, origin="human", turn_origin="human"),
+                   claude_assistant("b1", T0 + 170 * m + 30, out=1))
+        self.scan()
+        totals = self.totals("claude")
+        self.assertEqual((totals[5], totals[6]), (2, 160 * m + 30))
+        self.assertEqual(self.records()["longest_task_seconds"][0], 160 * m)
+
+    def test_older_logs_without_origin_still_split_on_user_lines(self):
+        # 舊版 Claude Code 沒有 origin／turnOrigin：照舊以 type == "user"（非工具結果、非 isMeta）切
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("a1", T0 + 60, out=1),
+                   claude_user(T0 + 100), claude_assistant("a2", T0 + 130, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 90))
+
+    def test_task_split_across_scans_and_idle_gaps(self):
         self.write(self.claude_file(), claude_user(T0), claude_assistant("a1", T0 + 60, out=1))
         self.scan()
         self.write(self.claude_file(), claude_assistant("a2", T0 + 200, out=1))
         self.scan()
         self.assertEqual(self.totals("claude")[5:], (1, 200))
-        self.write(self.claude_file(), claude_user(T0 + 300), claude_assistant("a3", T0 + 300 + 8 * HOUR, out=1))
+        # 10 小時、每 50 分鐘有回覆：沒有上限，全部算
+        start = T0 + 300
+        self.write(self.claude_file(), claude_user(start),
+                   *[claude_assistant(f"b{k}", start + k * 3000, out=1) for k in range(1, 13)])
         self.scan()
-        self.assertEqual(self.totals("claude")[5:], (2, 200 + 6 * HOUR))
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 10 * HOUR))
+        # 超過 1 小時的空檔整段不算（跨次掃描也記得）；剛好 1 小時的照算
+        last = start + 10 * HOUR
+        self.write(self.claude_file(), claude_assistant("c1", last + 3 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 10 * HOUR))
+        self.write(self.claude_file(), claude_assistant("c2", last + 4 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 200 + 11 * HOUR))
+        self.assertEqual(self.records()["longest_task_seconds"][0], 11 * HOUR)
+
+    def test_gap_before_the_first_reply_is_idle_too(self):
+        # 使用者的定義（2026-11-26）：從提示起，中間任何超過 1 小時沒有動靜的空檔都不算；剛好 1 小時照算
+        self.write(self.claude_file(),
+                   claude_user(T0), claude_assistant("a1", T0 + 2 * HOUR, out=1),
+                   claude_assistant("a2", T0 + 2 * HOUR + 600, out=1),
+                   claude_user(T0 + 3 * HOUR), claude_assistant("b1", T0 + 4 * HOUR, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (2, 600 + HOUR))
+
+    def old_rules_state(self, model="claude-opus-5-5"):
+        """舊版（6 小時上限、壓縮摘要會切開任務）記下的樣子：a1 被切成 a1（600 秒）與 a2（假的 6 小時）兩段；
+        另有一個紀錄檔已被刪除的任務 x1，與略過界以前的舊日子。回傳以新規則一次讀完的每日／每小時表。"""
+        self.write(self.claude_file(),
+                   claude_user(T0, origin="human"), claude_assistant("a1", T0 + 600, inp=3, out=1),
+                   claude_user(T0 - 8 * HOUR, compact_summary=True), claude_assistant("a2", T0 + 1000, out=2))
+        self.write(self.codex_file(), codex_turn(), codex_task("t1", T0, T0 + 2000, duration_ms=2_000_000))
+        self.scan()
+        expected = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.db() as c:
+            device = c.execute("SELECT value FROM meta WHERE key = 'device_id'").fetchone()[0]
+            self.assertLess("2026-01-01", c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0])
+            day, hour = c.execute("SELECT day, hour FROM seen_tasks WHERE id = 'a1'").fetchone()
+            c.execute("UPDATE seen_tasks SET seconds = 600 WHERE id = 'a1'")
+            c.execute("INSERT INTO seen_tasks (provider, id, day, hour, model, seconds) VALUES ('claude', 'a2', ?, ?, ?, 21600)",
+                      (day, hour, model))
+            for table in ("daily_tokens", "hourly_tokens"):
+                c.execute(f"UPDATE {table} SET task_count = 2, task_seconds = 22200, longest_task_seconds = 21600"
+                          " WHERE provider = 'claude'")
+            # 紀錄檔已被 Claude Code 刪除的任務（略過界以後）：重讀不到，要原樣保留
+            c.execute("INSERT INTO seen_tasks (provider, id, day, hour, model, seconds)"
+                      " VALUES ('claude', 'x1', '2026-09-20', 9, ?, 900)", (model,))
+            for table, extra in (("daily_tokens", ""), ("hourly_tokens", "9")):
+                cols = "device_id, day, " + ("hour, " if extra else "") + "provider, model, output_tokens, task_count," \
+                       " task_seconds, longest_task_seconds, updated_at"
+                vals = "?, '2026-09-20', " + ("9, " if extra else "") + "'claude', ?, 5, 1, 900, 900, 0"
+                c.execute(f"INSERT INTO {table} ({cols}) VALUES ({vals})", (device, model))
+            # 略過界以前的日子：紀錄檔已不在，保留原本的數字
+            c.execute("INSERT INTO daily_tokens (device_id, day, provider, model, task_count, task_seconds,"
+                      " longest_task_seconds, updated_at) VALUES (?, '2026-01-01', 'claude', 'other', 1, 1500, 1500, 0)",
+                      (device,))
+            c.executemany("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, 21600, ?)",
+                          [("longest_task_seconds", day), ("longest_task_seconds:claude", day)])
+            c.execute("DELETE FROM meta WHERE key = 'task_rules'")
+            c.commit()
+        return expected
+
+    def without_extra_days(self, rows):
+        return [r for r in rows if r[0] not in ("2026-01-01", "2026-09-20")]
+
+    def test_tasks_recounted_once_with_new_rules(self):
+        expected = self.old_rules_state()
+        tokens = self.totals("claude")[:5]
+        self.scan()
+        self.assertEqual((self.without_extra_days(self.table("daily_tokens")),
+                          self.without_extra_days(self.table("hourly_tokens"))), expected)
+        self.assertEqual(self.totals("claude")[:5], tokens)  # Token 不變
+        self.assertEqual(self.totals("claude")[5:], (3, 1000 + 900 + 1500))
+        records = self.records()
+        self.assertEqual(records["longest_task_seconds:claude"], (1500, "2026-01-01"))
+        self.assertEqual(records["longest_task_seconds"], (2000, "2026-09-21"))
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertEqual(c.execute("SELECT id, seconds FROM seen_tasks WHERE provider = 'claude' ORDER BY id").fetchall(),
+                             [("a1", 1000), ("x1", 900)])
+            tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            self.assertFalse(tables & {"task_recount", "task_recount_seen"})
+        # 只重算一次：之後照常累加
+        self.write(self.claude_file(), claude_assistant("a3", T0 + 1100, out=1))
+        self.scan()
+        self.assertEqual(self.totals("claude")[5:], (3, 1100 + 900 + 1500))
+
+    def test_recount_adds_rows_for_tasks_that_move_to_another_hour_or_day(self):
+        # 第 2 輪審查 C-01：新規則把任務歸到提示那天、那個小時；那裡沒有 Token（提示在午夜前、回覆在午夜後）時要新增只有任務的列
+        prompt = T0 + HOUR + 37 * 60  # 台北 23:50:20
+        self.write(self.claude_file(), claude_user(prompt, origin="human"),
+                   claude_assistant("a1", prompt + 1200, out=1), claude_assistant("a2", prompt + 2400, out=1))
+        self.scan()
+        expected = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.db() as c:
+            self.assertEqual(c.execute("SELECT day, hour FROM seen_tasks WHERE id = 'a1'").fetchone(), ("2026-09-21", 23))
+            # 舊版的樣子：任務記在回覆那天、那個小時，提示那天沒有列
+            c.execute("DELETE FROM daily_tokens WHERE day = '2026-09-21'")
+            c.execute("DELETE FROM hourly_tokens WHERE day = '2026-09-21'")
+            c.execute("UPDATE seen_tasks SET day = '2026-09-22', hour = 0, seconds = 1200 WHERE id = 'a1'")
+            for table in ("daily_tokens", "hourly_tokens"):
+                c.execute(f"UPDATE {table} SET task_count = 1, task_seconds = 1200, longest_task_seconds = 1200")
+            c.execute("DELETE FROM meta WHERE key = 'task_rules'")
+            c.commit()
+        self.scan()
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), expected)
+        self.scan()
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), expected)
+
+    def test_clear_and_rescan_during_recount_cancels_it(self):
+        # 第 2 輪審查 C-02：重算還沒讀完時 App「清除並重新掃描」：重新掃描以新規則從頭算，
+        # 不能再以舊的範圍略過略過界以前、紀錄檔還在的任務
+        self.old_rules_state()
+        self.write(self.claude_file(f"{SESSION[:-1]}9"), claude_user(T0 - 100 * DAY, origin="human"),
+                   claude_assistant("old1", T0 - 100 * DAY + 700, out=1))
+        self.scan(budget=token_stats.Budget(bytes_left=300))
+        with self.db() as c:
+            self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            # 與 HistoryStore.clear(rescan: true) 相同的刪除
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached",
+                          "scan_state", "seen_ids", "seen_tasks", "file_tokens"):
+                c.execute(f"DELETE FROM {table}")
+            c.execute("DELETE FROM meta WHERE key IN ('first_scan_progress', 'first_scan_done', 'token_bad_lines',"
+                      " 'token_long_lines', 'token_days_from', 'seen_cutoff_day')")
+            c.commit()
+        for _ in range(50):
+            if self.scan().done:
+                break
+        files = [(p, "claude") for p in self.project.glob("*.jsonl")] + [(p, "codex") for p in self.sessions.glob("*.jsonl")]
+        fresh = self.fresh(*files)
+        for table in ("daily_tokens", "hourly_tokens", "seen_tasks"):
+            self.assertEqual(self.table(table), self.table(table, fresh), table)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+            tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            self.assertFalse(tables & {"task_recount", "task_recount_seen"})
+
+    def test_recount_swap_is_fast_with_many_tasks(self):
+        # 第 2 輪審查 C-03：換上時的最長任務不能逐列查 seen_tasks（2 萬個任務、90 天 × 3 個模型的每小時列，
+        # 逐列子查詢約 8 秒；彙總後不到 0.1 秒）。門檻放寬，避免忙碌的機器誤判
+        self.scan()
+        days = [(date(2026, 9, 1) + timedelta(days=i)).isoformat() for i in range(90)]
+        models = ("claude-a", "claude-b", "claude-c")
+        with self.db() as c:
+            device = c.execute("SELECT value FROM meta WHERE key = 'device_id'").fetchone()[0]
+            c.executemany("INSERT INTO hourly_tokens (device_id, day, hour, provider, model, updated_at)"
+                          " VALUES (?, ?, ?, 'claude', ?, 0)",
+                          [(device, d, h, m) for d in days for h in range(24) for m in models])
+            c.executemany("INSERT INTO daily_tokens (device_id, day, provider, model, updated_at) VALUES (?, ?, 'claude', ?, 0)",
+                          [(device, d, m) for d in days for m in models])
+            tasks = [(f"t{i}", days[i % 90], i % 24, models[i % 3], 1 + i % 5000) for i in range(20_000)]
+            c.executemany("INSERT INTO seen_tasks (provider, id, day, hour, model, seconds) VALUES ('claude', ?, ?, ?, ?, ?)",
+                          tasks)
+            c.execute("CREATE TABLE task_recount (id TEXT PRIMARY KEY, day TEXT NOT NULL, hour INTEGER NOT NULL,"
+                      " model TEXT NOT NULL, seconds INTEGER NOT NULL)")
+            c.execute("CREATE TABLE task_recount_seen (id TEXT PRIMARY KEY)")
+            c.executemany("INSERT INTO task_recount (id, day, hour, model, seconds) VALUES (?, ?, ?, ?, ?)", tasks)
+            c.executemany("INSERT INTO task_recount_seen (id) VALUES (?)", [(t[0],) for t in tasks])
+            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_recount_from', '')")
+            c.commit()
+        conn = history.connect(self.path)
+        try:
+            started = time.monotonic()
+            with history._transaction(conn):
+                token_stats._finish_recount(conn, T0, ("", ""))
+            self.assertLess(time.monotonic() - started, 2.0)
+        finally:
+            conn.close()
+        with self.db() as c:
+            # 舊任務與重算結果相同：次數不變，最長任務每一列都重算了
+            self.assertEqual(c.execute("SELECT MAX(longest_task_seconds), COUNT(*), SUM(task_count) FROM daily_tokens"
+                                       " WHERE provider = 'claude' AND longest_task_seconds > 0").fetchone(), (5000, 90, 0))
+
+    def test_recount_keeps_older_personal_record(self):
+        # 審查 C-02：最長任務的個人紀錄早於略過界（每日資料已超過保留期間刪除）時保留
+        self.old_rules_state()
+        with self.db() as c:
+            c.executemany("INSERT OR REPLACE INTO records (key, value, day) VALUES (?, 20000, '2024-03-01')",
+                          [("longest_task_seconds",), ("longest_task_seconds:claude",)])
+            c.commit()
+        self.scan()
+        records = self.records()
+        self.assertEqual(records["longest_task_seconds:claude"], (20000, "2024-03-01"))
+        self.assertEqual(records["longest_task_seconds"], (20000, "2024-03-01"))
+
+    def clear_history(self, now=T0 + DAY):
+        """與 HistoryStore.clear(rescan: false) 相同：刪掉歷史與個人紀錄、保留去重表，今天以前的日子不再算回來"""
+        with self.db() as c:
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached"):
+                c.execute(f"DELETE FROM {table}")
+            c.execute("UPDATE file_tokens SET input_tokens = 0, cache_write_tokens = 0, cache_read_tokens = 0,"
+                      " output_tokens = 0, reasoning_tokens = 0")
+            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('token_days_from', ?)",
+                      (token_stats.history.local_day(now),))
+            c.commit()
+
+    def assert_cleared_records_stay_cleared(self, between):
+        self.old_rules_state()
+        if between:
+            self.assertFalse(self.scan(budget=token_stats.Budget(bytes_left=300)).done)
+        self.clear_history()
+        for _ in range(50):
+            if self.scan().done:
+                break
+        self.scan()
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+        self.assertEqual({k: v for k, v in self.records().items() if k.startswith("longest_task")}, {})
+        self.assertEqual(self.table("daily_tokens"), [])
+        self.assertEqual(self.table("hourly_tokens"), [])
+
+    def test_recount_does_not_bring_back_records_cleared_before_it(self):
+        # 第 3 輪審查 C-02：「清除歷史」（不重新掃描）後，重算不能從保留的去重表把清掉的最長任務紀錄算回來
+        self.assert_cleared_records_stay_cleared(between=False)
+
+    def test_recount_does_not_bring_back_records_cleared_during_it(self):
+        # 第 3 輪審查 C-02：清除發生在兩輪重算之間也一樣
+        self.assert_cleared_records_stay_cleared(between=True)
+
+    @contextmanager
+    def unopenable(self, path):
+        """這個紀錄檔打不開（權限、暫時被鎖住）；其他檔案照常"""
+        real = os.open
+
+        def fake(file, *args, **kwargs):
+            if os.fspath(file) == os.fspath(path):
+                raise PermissionError(13, "Permission denied")
+            return real(file, *args, **kwargs)
+        with mock.patch.object(token_stats.os, "open", fake):
+            yield
+
+    def test_recount_waits_for_a_file_that_could_not_be_opened(self):
+        # 第 3 輪審查 C-01：重算中某個紀錄檔這一輪打不開，不能就此換上（它的舊任務會永久留著舊規則的時間）；
+        # 下一輪讀得到時再換上，結果與一次讀完相同
+        expected = self.old_rules_state()
+        before = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.unopenable(self.claude_file()):
+            self.assertTrue(self.scan().done)
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), before)
+        with self.db() as c:
+            self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone())
+        self.scan(now=T0 + DAY + 600)
+        self.assertEqual((self.without_extra_days(self.table("daily_tokens")),
+                          self.without_extra_days(self.table("hourly_tokens"))), expected)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT 1 FROM seen_tasks WHERE id = 'a2'").fetchone())
+
+    def test_recount_stops_waiting_for_a_file_that_stays_unopenable(self):
+        # 一直打不開（例如權限被改掉）時不會永遠等：等滿 TASK_RECOUNT_WAIT_SECONDS 就換上，
+        # 那個檔案的舊任務和已刪除的紀錄檔一樣原樣保留
+        self.old_rules_state()
+        with self.unopenable(self.claude_file()):
+            self.scan()
+            self.scan(now=T0 + DAY + token_stats.TASK_RECOUNT_WAIT_SECONDS - 1)
+            with self.db() as c:
+                self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.scan(now=T0 + DAY + token_stats.TASK_RECOUNT_WAIT_SECONDS)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_waiting'").fetchone())
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+            self.assertEqual(c.execute("SELECT seconds FROM seen_tasks WHERE id = 'a2'").fetchone()[0], 21600)
+
+    def test_recount_in_small_batches_changes_nothing_until_done(self):
+        # 審查 C-04：分好幾輪讀完；期間顯示的數字不變、略過界不前進，讀完後與一次重算相同
+        expected = self.old_rules_state()
+        before = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.db() as c:
+            cutoff = c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0]
+        for i in range(1, 200):
+            result = self.scan(budget=token_stats.Budget(bytes_left=300), now=T0 + DAY + i * DAY)
+            if result.done:
+                break
+            self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), before)
+            with self.db() as c:
+                self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'seen_cutoff_day'").fetchone()[0], cutoff)
+                self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone()[0], cutoff)
+        self.assertGreater(i, 2)
+        self.assertEqual((self.without_extra_days(self.table("daily_tokens")),
+                          self.without_extra_days(self.table("hourly_tokens"))), expected)
+        self.assertEqual(self.totals("claude")[5:], (3, 1000 + 900 + 1500))
 
     def test_subagent_file_counts_tokens_only(self):
         self.write(self.project / SESSION / "subagents" / "agent-1.jsonl",

@@ -147,7 +147,7 @@ codex app-server --listen stdio://   # 送出 initialize → initialized → acc
 | `file_tokens` | 每個 Codex 紀錄檔對加總的貢獻；檔案被改寫或改用 `token_usage_record` 時先扣掉再重算 |
 
 - 主數字（「Token」）= `input + cache_write + output`，`cache_read` 不計入。
-- Claude 以 `message.id` 去重，串流被切在兩次掃描之間時補差額；`--resume` 與舊副本靠 `seen_ids` 跨檔去重。任務：真人提示到下一個真人提示之前最後一則回覆，上限 6 小時。
+- Claude 以 `message.id` 去重，串流被切在兩次掃描之間時補差額；`--resume` 與舊副本靠 `seen_ids` 跨檔去重。任務：真人提示到下一個真人提示之前最後一則回覆，扣掉其間超過 1 小時沒有動靜的空檔（含提示到第一筆回覆），不設上限；對話壓縮的摘要與自動送出的訊息（`origin.kind`／`turnOrigin` 不是 `human`，例如背景工作完成通知）不算真人提示，不會切開任務。
 - Codex 每個檔案只用一種來源：有 `token_usage_record` 就用它（以 `response_id` 去重），否則用 `token_count` 相鄰兩筆累計值的正差值（變小時視為 compaction，重新起算）。
 - 首次掃描每次執行最多處理 64 MB 或 15 秒，進度寫在 `meta.first_scan_progress`，完成時 `meta.first_scan_done = 1`；以 `nice` 執行。無法解析與過長（> 4 MB）的行略過並計數（`meta.token_bad_lines`、`token_long_lines`）。
 - 與額度歷史一樣是附加功能：資料庫被鎖住時整次放棄、只記一行日誌，不影響 `usage.json`、上傳與結束碼。
