@@ -713,6 +713,40 @@ class ClaudeTest(TokenStatsTestCase):
         self.assertEqual(records["longest_task_seconds:claude"], (20000, "2024-03-01"))
         self.assertEqual(records["longest_task_seconds"], (20000, "2024-03-01"))
 
+    def clear_history(self, now=T0 + DAY):
+        """與 HistoryStore.clear(rescan: false) 相同：刪掉歷史與個人紀錄、保留去重表，今天以前的日子不再算回來"""
+        with self.db() as c:
+            for table in ("daily_tokens", "hourly_tokens", "records", "record_days", "record_days_cached"):
+                c.execute(f"DELETE FROM {table}")
+            c.execute("UPDATE file_tokens SET input_tokens = 0, cache_write_tokens = 0, cache_read_tokens = 0,"
+                      " output_tokens = 0, reasoning_tokens = 0")
+            c.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('token_days_from', ?)",
+                      (token_stats.history.local_day(now),))
+            c.commit()
+
+    def assert_cleared_records_stay_cleared(self, between):
+        self.old_rules_state()
+        if between:
+            self.assertFalse(self.scan(budget=token_stats.Budget(bytes_left=300)).done)
+        self.clear_history()
+        for _ in range(50):
+            if self.scan().done:
+                break
+        self.scan()
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+        self.assertEqual({k: v for k, v in self.records().items() if k.startswith("longest_task")}, {})
+        self.assertEqual(self.table("daily_tokens"), [])
+        self.assertEqual(self.table("hourly_tokens"), [])
+
+    def test_recount_does_not_bring_back_records_cleared_before_it(self):
+        # 第 3 輪審查 C-02：「清除歷史」（不重新掃描）後，重算不能從保留的去重表把清掉的最長任務紀錄算回來
+        self.assert_cleared_records_stay_cleared(between=False)
+
+    def test_recount_does_not_bring_back_records_cleared_during_it(self):
+        # 第 3 輪審查 C-02：清除發生在兩輪重算之間也一樣
+        self.assert_cleared_records_stay_cleared(between=True)
+
     def test_recount_in_small_batches_changes_nothing_until_done(self):
         # 審查 C-04：分好幾輪讀完；期間顯示的數字不變、略過界不前進，讀完後與一次重算相同
         expected = self.old_rules_state()

@@ -1290,7 +1290,9 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
     - 每日／每小時的任務次數與時間以差額更新；任務改歸到沒有列的日期、小時或模型時新增只有任務的列（審查 2-C01），
       但超過保留期間、或早於 meta.token_days_from（「清除歷史」清掉的日子）時不新增，清掉的日子不會跑回來。
       最長任務以這台電腦範圍內所有任務重算。
-    - 最長任務的個人紀錄：範圍以前的舊紀錄保留（不受保留期間影響，審查 C-02），範圍內以重算的任務為準。"""
+    - 最長任務的個人紀錄：範圍以前的舊紀錄保留（不受保留期間影響，審查 C-02），範圍內以重算的任務為準；
+      但不看 meta.token_days_from 以前的任務：「清除歷史」刪了紀錄、保留去重表，
+      不能從去重表把清掉的紀錄算回來（第 3 輪 C-02）。"""
     start = history.meta(conn, "task_recount_from") or ""
     device_id = history.meta(conn, "device_id") or ""
     deltas: dict[tuple[str, int, str], list[int]] = {}
@@ -1343,8 +1345,10 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
         row = conn.execute("SELECT day, value FROM records WHERE key = ?", (key,)).fetchone()
         return row if row is not None and row[1] > 0 else None
 
+    since = max(start, kept_from)  # 以重算的任務為準的第一天；之前沿用舊紀錄（清除歷史後就沒有舊紀錄）
+
     def before(row):
-        return row is not None and row[0] is not None and row[0] < start
+        return row is not None and row[0] is not None and row[0] < since
 
     def best(*rows):
         rows = [r for r in rows if r is not None and r[1] > 0]
@@ -1355,7 +1359,7 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
         conn.execute("SELECT day, longest_task_seconds FROM daily_tokens WHERE device_id = ? AND provider = 'claude'"
                      " AND day < ? ORDER BY longest_task_seconds DESC, day LIMIT 1", (device_id, start)).fetchone(),
         conn.execute("SELECT day, seconds FROM seen_tasks WHERE provider = 'claude' AND day >= ?"
-                     " ORDER BY seconds DESC, day LIMIT 1", (start,)).fetchone())
+                     " ORDER BY seconds DESC, day LIMIT 1", (since,)).fetchone())
     _set_record(conn, "longest_task_seconds:claude", claude)
     overall = record("longest_task_seconds")
     _set_record(conn, "longest_task_seconds", best(
