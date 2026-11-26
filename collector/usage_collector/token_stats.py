@@ -39,6 +39,9 @@ CHUNK_SECONDS = 15.0
 TASK_IDLE_SECONDS = 3600
 # 任務規則的版本：與資料庫的 meta.task_rules 不同時，Claude 的任務以新規則重算一次（`_start_recount`、`_finish_recount`）
 TASK_RULES = "2"
+# 重算中有 Claude 主紀錄檔打不開、被換掉或處理失敗時先不換上、下一輪再試；從第一次等起最多等這麼久，
+# 之後照樣換上（那個檔案的舊任務和已刪除的紀錄檔一樣原樣保留），權限被改掉的檔案不會讓重算永遠停著（第 3 輪 C-01）
+TASK_RECOUNT_WAIT_SECONDS = 3600
 LAST_SEEN_REFRESH = 86400  # 沒有變化的檔案一天更新一次 last_seen
 # 去重的時間窗（ADR-0014 第 1 節）：本機日期早於略過界 D（meta.seen_cutoff_day）的訊息、回應、任務與 Codex 累計差額
 # 不計算也不記錄；D 每次執行最多前進一天到 SEEN_DAYS 天前、只進不退，首次掃描完成前不設定。
@@ -488,6 +491,7 @@ class Counters:
     bad_lines: int = 0
     long_lines: int = 0
     failed_files: int = 0
+    unopened: int = 0  # 打不開或不是列舉到的那一個（被換掉）而沒有處理的檔案
     # 紀錄格式改變的偵測（ADR-0009 第 9 節）：讀了多少位元組、多少行通過位元組篩選、多少行計入了 Token
     bytes_read: int = 0
     candidate_lines: int = 0
@@ -811,10 +815,12 @@ def _process(conn: sqlite3.Connection, f: LogFile, row, totals: Totals, budget: 
     try:
         fd = os.open(f.path, system.OPEN_READ_FLAGS)
     except OSError:
+        counters.unopened += 1
         return st.offset
     with os.fdopen(fd, "rb") as fh:
         opened = os.fstat(fh.fileno())
         if system.file_identity(opened) != (f.device, f.inode):
+            counters.unopened += 1
             return st.offset
         # 大小與時間都用開檔後的 fstat：列舉在交易外，另一個收集器之後處理過新內容時，
         # 列舉時的 mtime 會比它寫下的舊，拿來比會把正常的附加誤判成改寫、整檔重算（審查 C-01）
@@ -1171,6 +1177,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
     done_bytes = 0
     stale = []
     skipped = []  # 交易外判斷沒變而略過的檔案
+    unread = 0  # 這次沒能讀的 Claude 主紀錄檔（打不開、被換掉、處理失敗）：重算中有這種檔案時先不換上
     for index, f in enumerate(files, 1):
         row = rows.get(f.key)
         # Gemini（SQLite）要時間完全相同：改寫既有的頁時大小不變、時間變了（審查 C-01）
@@ -1205,6 +1212,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
                 except _SwitchToRecord:
                     continue
             result.counters.add(counters)
+            unread += bool(counters.unopened) and _recounted(f)
             done_bytes += min(offset, f.size)
             result.processed += 1
             changed = True
@@ -1213,6 +1221,7 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
         except Exception as e:
             # 不記錄檔名、路徑或例外訊息（JSONDecodeError 等的訊息會帶出原文）
             result.counters.failed_files += 1
+            unread += _recounted(f)
             log(f"Token 統計略過第 {index} 個紀錄檔（{type(e).__name__}）")
     total_bytes = sum(f.size for f in files)
     result.done = not budget.exhausted()
@@ -1221,8 +1230,14 @@ def scan(conn: sqlite3.Connection, files: list[LogFile], now: int | None = None,
         if stale:
             conn.executemany("UPDATE scan_state SET last_seen = ?, mtime = ? WHERE file_key = ?", stale)
         if result.done and history.meta(conn, "task_recount_from") is not None:
-            _finish_recount(conn, now, cutoffs)  # 所有紀錄檔都讀到檔尾了
-            changed = True
+            waiting = history.meta(conn, "task_recount_waiting")
+            since = int(waiting) if waiting is not None and waiting.isdigit() else None
+            if unread and (since is None or now - since < TASK_RECOUNT_WAIT_SECONDS):
+                if since is None:
+                    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_recount_waiting', ?)", (str(now),))
+            else:
+                _finish_recount(conn, now, cutoffs)  # 所有紀錄檔都讀到檔尾了（或等夠久了）
+                changed = True
         if changed:
             _update_records(conn)
         c = result.counters
@@ -1282,6 +1297,11 @@ def _start_recount(conn: sqlite3.Connection) -> None:
                      " WHERE file_key LIKE 'claude:%' AND file_key NOT LIKE 'claude:agent-%'")
         conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('task_recount_from', ?)",
                      (history.meta(conn, "seen_cutoff_day") or "",))
+
+
+def _recounted(f: LogFile) -> bool:
+    """任務規則改變時要重讀的檔案：Claude 的主紀錄檔（子代理檔不含任務）"""
+    return f.key.startswith("claude:") and not f.key.startswith("claude:agent-")
 
 
 def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]) -> None:
@@ -1372,7 +1392,7 @@ def _finish_recount(conn: sqlite3.Connection, now: int, cutoffs: tuple[str, str]
 def _drop_recount(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE IF EXISTS task_recount")
     conn.execute("DROP TABLE IF EXISTS task_recount_seen")
-    conn.execute("DELETE FROM meta WHERE key = 'task_recount_from'")
+    conn.execute("DELETE FROM meta WHERE key IN ('task_recount_from', 'task_recount_waiting')")
 
 
 def _cleared_meanwhile(conn: sqlite3.Connection, skipped: list[str]) -> bool:

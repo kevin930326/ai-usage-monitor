@@ -747,6 +747,53 @@ class ClaudeTest(TokenStatsTestCase):
         # 第 3 輪審查 C-02：清除發生在兩輪重算之間也一樣
         self.assert_cleared_records_stay_cleared(between=True)
 
+    @contextmanager
+    def unopenable(self, path):
+        """這個紀錄檔打不開（權限、暫時被鎖住）；其他檔案照常"""
+        real = os.open
+
+        def fake(file, *args, **kwargs):
+            if os.fspath(file) == os.fspath(path):
+                raise PermissionError(13, "Permission denied")
+            return real(file, *args, **kwargs)
+        with mock.patch.object(token_stats.os, "open", fake):
+            yield
+
+    def test_recount_waits_for_a_file_that_could_not_be_opened(self):
+        # 第 3 輪審查 C-01：重算中某個紀錄檔這一輪打不開，不能就此換上（它的舊任務會永久留著舊規則的時間）；
+        # 下一輪讀得到時再換上，結果與一次讀完相同
+        expected = self.old_rules_state()
+        before = (self.table("daily_tokens"), self.table("hourly_tokens"))
+        with self.unopenable(self.claude_file()):
+            self.assertTrue(self.scan().done)
+        self.assertEqual((self.table("daily_tokens"), self.table("hourly_tokens")), before)
+        with self.db() as c:
+            self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone())
+        self.scan(now=T0 + DAY + 600)
+        self.assertEqual((self.without_extra_days(self.table("daily_tokens")),
+                          self.without_extra_days(self.table("hourly_tokens"))), expected)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT 1 FROM seen_tasks WHERE id = 'a2'").fetchone())
+
+    def test_recount_stops_waiting_for_a_file_that_stays_unopenable(self):
+        # 一直打不開（例如權限被改掉）時不會永遠等：等滿 TASK_RECOUNT_WAIT_SECONDS 就換上，
+        # 那個檔案的舊任務和已刪除的紀錄檔一樣原樣保留
+        self.old_rules_state()
+        with self.unopenable(self.claude_file()):
+            self.scan()
+            self.scan(now=T0 + DAY + token_stats.TASK_RECOUNT_WAIT_SECONDS - 1)
+            with self.db() as c:
+                self.assertIsNotNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.scan(now=T0 + DAY + token_stats.TASK_RECOUNT_WAIT_SECONDS)
+        with self.db() as c:
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_from'").fetchone())
+            self.assertIsNone(c.execute("SELECT value FROM meta WHERE key = 'task_recount_waiting'").fetchone())
+            self.assertEqual(c.execute("SELECT value FROM meta WHERE key = 'task_rules'").fetchone()[0],
+                             token_stats.TASK_RULES)
+            self.assertEqual(c.execute("SELECT seconds FROM seen_tasks WHERE id = 'a2'").fetchone()[0], 21600)
+
     def test_recount_in_small_batches_changes_nothing_until_done(self):
         # 審查 C-04：分好幾輪讀完；期間顯示的數字不變、略過界不前進，讀完後與一次重算相同
         expected = self.old_rules_state()
